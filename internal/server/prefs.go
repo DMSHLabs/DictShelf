@@ -64,6 +64,7 @@ type DictPref struct {
 // phone that reaches this same server too, and localStorage — keyed by origin
 // — would hand them 15px there, and again the first time SERVER_PORT changes.
 type UIPrefs struct {
+	UpdateChannel           string `json:"updateChannel,omitempty"` // release, prerelease or beta; empty defaults to release
 	ResultCacheLimitGB      int    `json:"resultCacheLimitGB,omitempty"`
 	ResultCacheNoLimit      bool   `json:"resultCacheNoLimit,omitempty"`
 	SearchReturnCache       string `json:"searchReturnCache,omitempty"`
@@ -211,6 +212,11 @@ func (u *UIPrefs) normalize() {
 	case "exact", "contains", "fts":
 	default: // prefix, and what a hand edit may carry (the retired "fuzzy", D16)
 		u.Mode = ""
+	}
+	switch u.UpdateChannel {
+	case "release", "prerelease", "beta":
+	default:
+		u.UpdateChannel = "release"
 	}
 }
 

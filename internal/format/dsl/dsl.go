@@ -40,11 +40,13 @@ func init() {
 	readFn := func(path string) (dict.Reader, error) { return NewArticleReader(path) }
 	dict.RegisterFormat(".dsl", openFn)
 	dict.RegisterReader(".dsl", readFn)
-	// Compressed DSL. Registered as the full ".dsl.dz" suffix (not bare ".dz")
-	// so a StarDict ".dict.dz" companion is never matched here; Open/NewReader
-	// handle the gunzip. matchKey prefers this longest suffix.
+	// Compressed DSL spellings are registered as full suffixes (not bare .dz/.dz2)
+	// so StarDict companions are never matched here; the reader detects their
+	// encoding from contents. matchKey prefers these over shorter suffixes.
 	dict.RegisterFormat(".dsl.dz", openFn)
 	dict.RegisterReader(".dsl.dz", readFn)
+	dict.RegisterFormat(".dsl.dz2", openFn)
+	dict.RegisterReader(".dsl.dz2", readFn)
 	dict.RegisterReaderVersion("dsl", ReaderVersion)
 	// O8: a prepared DSL reaches its media through the path alone. No Fetcher -
 	// DSL keeps nothing inside the .dsl itself, so there is no location to
@@ -155,7 +157,7 @@ func MediaSources(srcPath string) []resource.Source {
 	// this dictionary, and is deleted with it, while every image inside it
 	// 404s.
 	bases := []string{srcPath}
-	if strings.EqualFold(filepath.Ext(srcPath), ".dz") {
+	if strings.EqualFold(filepath.Ext(srcPath), ".dz") || strings.EqualFold(filepath.Ext(srcPath), ".dz2") {
 		bases = append(bases, strings.TrimSuffix(srcPath, filepath.Ext(srcPath)))
 	}
 	if st := dict.Stem(srcPath); st != srcPath {

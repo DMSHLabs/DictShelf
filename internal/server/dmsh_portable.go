@@ -31,6 +31,7 @@ func (s *Server) createPortable(argument string) (any, error) {
 		Action       string `json:"action"`
 		Path         string `json:"path"`
 		Dictionaries bool   `json:"dictionaries"`
+		InPlace      bool   `json:"inPlace"`
 	}
 	if err := json.Unmarshal([]byte(argument), &req); err != nil {
 		return nil, err
@@ -43,11 +44,45 @@ func (s *Server) createPortable(argument string) (any, error) {
 		s.jobs.cancel(portableJobKey)
 		st, _ := s.jobs.status(portableJobKey)
 		return st, nil
+	case "source":
+		exe, err := os.Executable()
+		if err != nil {
+			return nil, err
+		}
+		dir, err := filepath.EvalSymlinks(filepath.Dir(exe))
+		if err != nil {
+			return nil, err
+		}
+		return map[string]string{"Path": dir}, nil
+	case "checkWrite":
+		exe, err := os.Executable()
+		if err != nil {
+			return nil, err
+		}
+		dir, err := filepath.EvalSymlinks(filepath.Dir(exe))
+		if err != nil {
+			return nil, err
+		}
+		return map[string]bool{"Writable": portableCanWrite(dir) == nil}, nil
 	case "start":
 	default:
 		return nil, errors.New("invalid portable action")
 	}
-	if strings.TrimSpace(req.Path) == "" {
+	exe, err := os.Executable()
+	if err != nil {
+		return nil, err
+	}
+	var source string
+	if req.InPlace {
+		source, err = filepath.EvalSymlinks(filepath.Dir(exe))
+		if err != nil {
+			return nil, err
+		}
+		if err = portableCanWrite(source); err != nil {
+			return nil, fmt.Errorf("cannot write to application folder: %w", err)
+		}
+		req.Path = filepath.Join(source, "Portable")
+	} else if strings.TrimSpace(req.Path) == "" {
 		return nil, errors.New("choose an output folder")
 	}
 	target, err := filepath.Abs(req.Path)
@@ -59,11 +94,7 @@ func (s *Server) createPortable(argument string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	source, err := filepath.EvalSymlinks(string(s.User))
-	if err != nil {
-		return nil, err
-	}
-	exe, err := os.Executable()
+	profile, err := filepath.EvalSymlinks(string(s.User))
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +108,7 @@ func (s *Server) createPortable(argument string) (any, error) {
 			roots = append(roots, p)
 		}
 	}
-	for _, p := range append([]string{source, store.DefaultDBDir(), s.LemmaDir}, roots...) {
+	for _, p := range append([]string{profile, store.DefaultDBDir(), s.LemmaDir}, roots...) {
 		if p == "" {
 			continue
 		}
@@ -92,15 +123,24 @@ func (s *Server) createPortable(argument string) (any, error) {
 			return nil, fmt.Errorf("output folder overlaps source: %s", p)
 		}
 	}
-	if rows, e := os.ReadDir(target); e == nil {
-		if len(rows) != 0 {
-			return nil, errors.New("choose an empty output folder")
+	if !req.InPlace {
+		if rows, e := os.ReadDir(target); e == nil {
+			if len(rows) != 0 {
+				return nil, errors.New("choose an empty output folder")
+			}
+		} else if !os.IsNotExist(e) {
+			return nil, e
 		}
-	} else if !os.IsNotExist(e) {
-		return nil, e
+	} else if portableWithin(target, filepath.Dir(exe)) || portableWithin(filepath.Dir(exe), target) {
+		return nil, errors.New("portable output folder overlaps the application folder")
 	}
 	st, started := s.jobs.start(portableJobKey, 0, jobStatus{}, func(j *job) {
-		err := s.buildPortable(j, source, exe, target, roots)
+		var err error
+		if req.InPlace {
+			err = s.buildPortableInPlace(j, profile, exe, target, roots)
+		} else {
+			err = s.buildPortable(j, profile, exe, target, roots)
+		}
 		if err != nil {
 			j.update(func(st *jobStatus) {
 				st.Canceled = errors.Is(err, context.Canceled)
@@ -114,6 +154,99 @@ func (s *Server) createPortable(argument string) (any, error) {
 		return nil, errors.New("portable creation is already running")
 	}
 	return st, nil
+}
+
+func portableCanWrite(dir string) error {
+	f, err := os.CreateTemp(dir, ".dictshelf-write-check-*")
+	if err != nil {
+		return err
+	}
+	name := f.Name()
+	if err = f.Close(); err != nil {
+		_ = os.Remove(name)
+		return err
+	}
+	return os.Remove(name)
+}
+
+func (s *Server) buildPortableInPlace(j *job, source, exe, target string, roots []string) error {
+	if err := os.MkdirAll(target, 0755); err != nil {
+		return err
+	}
+	data := filepath.Dir(target)
+	type copyTask struct {
+		src, dst string
+		excluded map[string]bool
+		replace  bool
+	}
+	var tasks []copyTask
+	excluded := map[string]bool{strings.ToLower(filepath.Clean(exe)): true}
+	if s.reg != nil {
+		for _, root := range s.reg.Roots() {
+			if path, e := filepath.EvalSymlinks(root.Path); e == nil && portableWithin(source, path) && !strings.EqualFold(source, path) {
+				excluded[strings.ToLower(path)] = true
+			}
+		}
+	}
+	tasks = append(tasks, copyTask{src: source, dst: data, excluded: excluded})
+	tasks = append(tasks, copyTask{src: exe, dst: filepath.Join(target, filepath.Base(exe))})
+	for _, item := range []struct{ src, name string }{{store.DefaultDBDir(), "db"}, {s.LemmaDir, "lemmas"}} {
+		if item.src == "" {
+			continue
+		}
+		if _, e := os.Stat(item.src); os.IsNotExist(e) {
+			continue
+		}
+		dst := filepath.Join(data, item.name)
+		if portableWithin(source, item.src) && strings.EqualFold(filepath.Clean(item.src), filepath.Join(source, item.name)) {
+			continue
+		}
+		tasks = append(tasks, copyTask{src: item.src, dst: dst, replace: true})
+	}
+	dictionaries := filepath.Join(data, "Dictionaries")
+	if err := os.MkdirAll(dictionaries, 0755); err != nil {
+		return err
+	}
+	layout := portableLayout(roots)
+	for i, root := range roots {
+		tasks = append(tasks, copyTask{src: root, dst: filepath.Join(dictionaries, layout[i])})
+	}
+	cfg := filepath.Join(data, config.Name)
+	if s.ConfigPath != "" && !strings.EqualFold(s.ConfigPath, filepath.Join(source, config.Name)) {
+		tasks = append(tasks, copyTask{src: s.ConfigPath, dst: cfg})
+	}
+	j.update(func(st *jobStatus) { st.Stage = "counting"; st.Done = 0; st.Total = 0 })
+	for _, task := range tasks {
+		if err := portableCopyExcept(j, task.src, task.dst, map[string]bool{}, task.excluded, true); err != nil {
+			return err
+		}
+	}
+	j.update(func(st *jobStatus) { st.Stage = "copying"; st.Current = "" })
+	for _, task := range tasks {
+		if task.replace {
+			if err := os.RemoveAll(task.dst); err != nil {
+				return err
+			}
+		}
+		if err := portableCopyExcept(j, task.src, task.dst, map[string]bool{}, task.excluded, false); err != nil {
+			return err
+		}
+	}
+	if len(roots) > 0 {
+		if err := config.SaveKeyRaw(cfg, "DICT_DIR", config.FormatList([]string{"Dictionaries"})); err != nil {
+			return err
+		}
+	}
+	for _, item := range []struct{ key, value string }{{"DB_DIR", config.QuoteTOML("db")}, {"LEMMA_DIR", config.QuoteTOML("lemmas")}} {
+		if err := config.SaveKeyRaw(cfg, item.key, item.value); err != nil {
+			return err
+		}
+	}
+	if err := j.ctx.Err(); err != nil {
+		return err
+	}
+	j.update(func(st *jobStatus) { st.Done = st.Total; st.Result = target })
+	return nil
 }
 
 func portableResolveTarget(p string) (string, error) {

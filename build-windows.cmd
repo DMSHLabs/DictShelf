@@ -4,7 +4,7 @@ rem SPDX-License-Identifier: GPL-3.0-or-later
 setlocal EnableExtensions DisableDelayedExpansion
 
 rem ============================================================
-rem DictShelf Windows builds: [cli|server|installer]
+rem DictShelf Windows builds: [cli|server|installer] [--channel release|pre-release|beta]
 rem
 rem   (no args)             listenerless Windows WebView app: DictShelf.exe
 rem   cli                  console CLI: DictShelf-cli.exe (does not start a server)
@@ -70,9 +70,22 @@ set "WINDOW_MODE=gui"
 set "WINDOW_LDFLAGS=-H windowsgui"
 set "OUTPUT_EXE=DictShelf.exe"
 set "DEFAULT_SERVE=1"
+set "CHANNEL=release"
+set "CHANNEL_SPECIFIED="
+set "NEED_CHANNEL="
 
 if not "%~1"=="" for %%A in (%*) do (
-    if /i "%%A"=="installer" (
+    if defined NEED_CHANNEL (
+        set "CHANNEL=%%A"
+        set "CHANNEL_SPECIFIED=1"
+        set "NEED_CHANNEL="
+    ) else if /i "%%A"=="--channel" (
+        if defined CHANNEL_SPECIFIED (
+            echo ERROR: specify --channel only once.
+            exit /b 1
+        )
+        set "NEED_CHANNEL=1"
+    ) else if /i "%%A"=="installer" (
         set "BUILD_TYPE=installer"
     ) else if /i "%%A"=="cli" (
         set "BUILD_TYPE=cli"
@@ -88,9 +101,18 @@ if not "%~1"=="" for %%A in (%*) do (
         set "DEFAULT_SERVE=1"
     ) else (
         echo ERROR: unknown option "%%A".
-        echo Usage: build-windows.cmd [cli^|server^|installer]
+        echo Usage: build-windows.cmd [cli^|server^|installer] [--channel release^|pre-release^|beta]
         exit /b 1
     )
+)
+if defined NEED_CHANNEL (
+    echo ERROR: --channel needs a value: release, pre-release or beta.
+    exit /b 1
+)
+if defined CHANNEL_SPECIFIED if /i not "%CHANNEL%"=="release" if /i not "%CHANNEL%"=="pre-release" if /i not "%CHANNEL%"=="beta" (
+    echo ERROR: unknown update channel "%CHANNEL%".
+    echo Usage: build-windows.cmd [cli^|server^|installer] [--channel release^|pre-release^|beta]
+    exit /b 1
 )
 
 rem Packaging reuses the desktop binary built by the default invocation. This
@@ -103,6 +125,8 @@ if /i "%BUILD_TYPE%"=="installer" (
     )
     set "VERSION="
     for /f "tokens=2" %%V in ('DictShelf.exe --version') do if not defined VERSION set "VERSION=%%V"
+    call :check_channel
+    if errorlevel 1 exit /b 1
     call :find_iscc
     if errorlevel 1 exit /b 1
     call :make_installer
@@ -150,8 +174,15 @@ if not defined VERSION (
 rem CI supplies the release tag so installer metadata matches the published artifact.
 if defined WUDICT_VERSION set "VERSION=%WUDICT_VERSION%"
 
+if defined CHANNEL_SPECIFIED call :stamp_channel
+if errorlevel 1 exit /b 1
+
 echo DictShelf version:
 echo   %VERSION%
+if defined CHANNEL_SPECIFIED (
+    echo Update channel:
+    echo   %CHANNEL%
+)
 echo.
 
 rem ------------------------------------------------------------
@@ -332,6 +363,38 @@ echo   %OUTPUT_EXE% --help            every command and flag
 echo.
 
 endlocal
+exit /b 0
+
+:stamp_channel
+echo(%VERSION%| findstr /i /c:"beta" >nul
+if /i "%CHANNEL%"=="beta" (
+    if errorlevel 1 set "VERSION=%VERSION%-beta.1"
+) else if /i "%CHANNEL%"=="pre-release" (
+    if not errorlevel 1 (
+        echo ERROR: a Beta version cannot be built in the Pre-release channel.
+        exit /b 1
+    )
+    echo(%VERSION%| findstr /i /c:"-pre" >nul
+    if errorlevel 1 set "VERSION=%VERSION%-pre"
+) else if not errorlevel 1 (
+    echo ERROR: a Beta version cannot be built in the Release channel.
+    exit /b 1
+)
+exit /b 0
+
+:check_channel
+if not defined CHANNEL_SPECIFIED exit /b 0
+echo(%VERSION%| findstr /i /c:"beta" >nul
+if /i "%CHANNEL%"=="beta" (
+    if errorlevel 1 (
+        echo ERROR: the existing DictShelf.exe is not stamped as Beta.
+        echo   Rebuild it with: build-windows.cmd --channel beta
+        exit /b 1
+    )
+) else if not errorlevel 1 (
+    echo ERROR: the existing DictShelf.exe is stamped as Beta, not %CHANNEL%.
+    exit /b 1
+)
 exit /b 0
 
 rem ============================================================

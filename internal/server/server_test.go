@@ -512,14 +512,11 @@ func TestSetupFlow(t *testing.T) {
 	s := New(reg)
 	s.ConfigPath = filepath.Join(t.TempDir(), "wudict.toml")
 
-	// missing folder → setup page, not the app
+	// An empty collection now starts on the regular, usable main screen.
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, newRequest("GET", "/", nil))
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "<title>Edit Folders</title>") {
-		t.Fatalf("expected setup page, got %d", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), "does not exist") {
-		t.Errorf("missing-folder reason not shown")
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `id="panel"`) || strings.Contains(rec.Body.String(), "<title>Edit Folders</title>") {
+		t.Fatalf("expected main page with empty collection, got %d", rec.Code)
 	}
 
 	// validate a folder without dictionaries
@@ -673,8 +670,8 @@ func TestSetupConsentFlow(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, newRequest("GET", "/", nil))
-	if !strings.Contains(rec.Body.String(), "<title>Edit Folders</title>") {
-		t.Fatal("prepared dictionaries must not suppress the setup page")
+	if !strings.Contains(rec.Body.String(), `id="panel"`) || strings.Contains(rec.Body.String(), "<title>Edit Folders</title>") {
+		t.Fatal("prepared dictionaries must not replace the main page")
 	}
 
 	// the page offers them, without enrolling anything

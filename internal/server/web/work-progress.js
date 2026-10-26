@@ -23,29 +23,29 @@
   style.textContent += `html.server-work-active #bulkIndexStatus,html.server-work-active #reindexLine,html.server-work-active #clearDatabaseStatus,html.server-work-active #clearDatabaseProgress{display:none!important}`;
   style.textContent += `[data-work-locked]{opacity:.45!important;pointer-events:none!important;cursor:default!important}`;
   style.textContent += `#serverWorkNotice .work-summary{display:flex;align-items:center;gap:8px;flex:1 1 100%;min-width:0}#serverWorkNotice .work-toggle{flex:none;width:1.8em;padding:0!important;font-size:1.2em;line-height:1.2}#serverWorkNotice .work-summary-text{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}#serverWorkNotice .work-pulse,#serverWorkNotice .work-task-progress{height:4px;overflow:hidden;border-radius:9px;background:color-mix(in srgb,var(--accent,#865000) 18%,transparent)}#serverWorkNotice .work-pulse{flex:1 1 100%;min-width:100%;margin:0 0 0 0}#serverWorkNotice .work-pulse::after{content:"";display:block;width:42%;height:100%;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--accent,#865000) 72%,transparent),transparent);animation:work-pulse 1.8s ease-in-out infinite}#serverWorkNotice .work-task-list{flex:1 1 100%;min-width:0;max-height:min(32vh,280px);overflow-y:auto;overscroll-behavior:contain}#serverWorkNotice .work-task-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 8px;padding:5px 0;border-top:1px solid color-mix(in srgb,var(--line,#b9a98e) 60%,transparent)}#serverWorkNotice .work-task-label{min-width:0;overflow-wrap:anywhere}#serverWorkNotice .work-task-progress{grid-column:1/-1}#serverWorkNotice .work-task-progress>span{display:block;height:100%;background:var(--accent,#865000)}#serverWorkNotice .work-task-stop{grid-column:2;grid-row:1;font-size:.9em;padding:1px 7px}@keyframes work-pulse{0%{transform:translateX(-110%)}100%{transform:translateX(240%)}}@media(prefers-reduced-motion:reduce){#serverWorkNotice .work-pulse::after{animation:none;width:100%;background:color-mix(in srgb,var(--accent,#865000) 38%,transparent)}}`;
-  style.textContent += `#serverWorkNotice .work-task-progress>span[data-indeterminate]{width:42%!important;opacity:1!important;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--accent,#865000) 72%,transparent),transparent)!important;animation:work-pulse 1.8s ease-in-out infinite}@media(prefers-reduced-motion:reduce){#serverWorkNotice .work-task-progress>span[data-indeterminate]{width:100%!important;animation:none;background:color-mix(in srgb,var(--accent,#865000) 38%,transparent)!important}}`;
+  style.textContent += `#serverWorkNotice .work-task-progress>span[data-indeterminate]{width:100%!important;opacity:1!important;background:color-mix(in srgb,var(--accent,#865000) 38%,transparent)!important;animation:none!important}`;
   style.textContent += `#serverWorkNotice .work-single-progress{display:block;flex:1 1 100%;width:100%;height:12px;box-sizing:border-box;overflow:hidden;border-radius:9px;background:color-mix(in srgb,var(--accent,#865000) 18%,transparent)}#serverWorkNotice .work-single-progress[hidden]{display:none}#serverWorkNotice .work-single-progress>span{display:block;height:100%;background:var(--accent,#865000);transition:width .12s linear}`;
-  style.textContent += `#serverWorkNotice .work-summary{display:grid;grid-template-columns:max-content minmax(0,1fr);align-items:center;gap:8px;width:100%;box-sizing:border-box}#serverWorkNotice .work-toggle{grid-column:1;grid-row:1;box-sizing:border-box;width:max-content;max-width:100%;min-width:0;flex:none;white-space:normal;text-align:center;overflow-wrap:anywhere;padding-inline:8px!important}#serverWorkNotice .work-summary-text{grid-column:2;grid-row:1}#serverWorkNotice .work-pulse-row{grid-column:1/-1;grid-row:2;display:flex;align-items:center;gap:8px;min-width:0;width:100%}#serverWorkNotice .work-pulse{flex:1 1 auto;width:auto;min-width:0;max-width:none;height:12px;box-sizing:border-box;margin:0}#serverWorkNotice .work-pulse::after{width:42%}#serverWorkNotice .work-stop-all{flex:none;white-space:nowrap;overflow-wrap:normal}#serverWorkNotice .work-task-list{display:block;flex:0 1 100%;align-self:stretch;width:100%;height:auto;min-height:1.5em;box-sizing:border-box}#serverWorkNotice .work-task-label{grid-column:1/-1;display:flex;justify-content:flex-start;align-items:baseline;gap:2px 6px;flex-wrap:wrap;min-width:0}#serverWorkNotice .work-task-name{flex:0 1 auto;min-width:0;white-space:normal;overflow-wrap:anywhere}#serverWorkNotice .work-task-count{flex:none;white-space:nowrap;font-variant-numeric:tabular-nums}#serverWorkNotice .work-task-progress{grid-column:1;grid-row:2;height:12px;width:100%;box-sizing:border-box}#serverWorkNotice .work-task-stop{grid-column:2;grid-row:2;flex:none;white-space:nowrap;overflow-wrap:normal;font-size:.9em;padding:1px 7px}#serverWorkNotice .work-task-progress>span[data-indeterminate]{width:42%!important}`;
-  style.textContent += `#serverWorkNotice .work-summary[hidden],#serverWorkNotice .work-task-list[hidden]{display:none!important}`;
-  style.textContent += `@media(prefers-reduced-motion:reduce){#serverWorkNotice .work-task-progress>span[data-indeterminate],#serverWorkNotice .work-pulse::after{display:none!important}}`;
+  style.textContent += `#serverWorkNotice .work-summary{display:grid;grid-template-columns:max-content max-content minmax(0,1fr);align-items:center;gap:8px;width:100%;box-sizing:border-box}#serverWorkNotice .work-toggle{grid-column:1;grid-row:1;box-sizing:border-box;width:max-content;max-width:100%;min-width:0;flex:none;white-space:normal;text-align:center;overflow-wrap:anywhere;padding-inline:8px!important}#serverWorkNotice .work-parallel-count{grid-column:2;grid-row:1;white-space:nowrap;font-variant-numeric:tabular-nums}#serverWorkNotice .work-summary-text{grid-column:3;grid-row:1}#serverWorkNotice .work-pulse-row{grid-column:1/-1;grid-row:2;display:flex;align-items:center;gap:8px;min-width:0;width:100%}#serverWorkNotice .work-pulse{flex:1 1 auto;width:auto;min-width:0;max-width:none;height:12px;box-sizing:border-box;margin:0}#serverWorkNotice .work-pulse::after{width:42%}#serverWorkNotice .work-stop-all{flex:none;white-space:nowrap;overflow-wrap:normal}#serverWorkNotice .work-task-list{display:block;flex:0 1 100%;align-self:stretch;width:100%;height:auto;min-height:1.5em;box-sizing:border-box}#serverWorkNotice .work-task-label{grid-column:1/-1;display:flex;justify-content:flex-start;align-items:baseline;gap:2px 6px;flex-wrap:wrap;min-width:0}#serverWorkNotice .work-task-name{flex:0 1 auto;min-width:0;white-space:normal;overflow-wrap:anywhere}#serverWorkNotice .work-task-count{flex:none;white-space:nowrap;font-variant-numeric:tabular-nums}#serverWorkNotice .work-task-progress{grid-column:1;grid-row:2;height:12px;width:100%;box-sizing:border-box}#serverWorkNotice .work-task-stop{grid-column:2;grid-row:2;flex:none;white-space:nowrap;overflow-wrap:normal;font-size:.9em;padding:1px 7px}#serverWorkNotice .work-task-progress>span[data-indeterminate]{width:42%!important}`;
+  style.textContent += `#serverWorkNotice .work-summary[hidden],#serverWorkNotice .work-task-list[hidden]{display:none!important}#serverWorkNotice .work-pulse::after{animation:none!important;width:100%;background:color-mix(in srgb,var(--accent,#865000) 38%,transparent)}`;
+  style.textContent += ``;
   document.head.append(style);
   const backing = document.createElement('div');
   backing.id = 'serverWorkBacking'; backing.hidden = true; backing.setAttribute('aria-hidden','true');
   const box = document.createElement('div');
   box.id = 'serverWorkNotice'; box.hidden = true; box.setAttribute('role', 'status');
   const spinner = document.createElement('span'), text = document.createElement('span'), button = document.createElement('button');
-  const summary = document.createElement('div'), toggle = document.createElement('button'), summaryText = document.createElement('span');
+  const summary = document.createElement('div'), toggle = document.createElement('button'), parallelCount = document.createElement('span'), summaryText = document.createElement('span');
   const pulseRow = document.createElement('div'), pulse = document.createElement('div'), stopAll = document.createElement('button'), taskList = document.createElement('div');
   const singleProgress=document.createElement('div'),singleProgressBar=document.createElement('span');
   spinner.className = 'work-spinner'; spinner.setAttribute('aria-hidden','true');
   button.type = 'button';
   summary.className='work-summary';summary.hidden=true;
-  toggle.type='button';toggle.className='work-toggle';toggle.setAttribute('aria-expanded','false');
+  toggle.type='button';toggle.className='work-toggle';toggle.setAttribute('aria-expanded','false');parallelCount.className='work-parallel-count';parallelCount.setAttribute('aria-hidden','true');
   summaryText.className='work-summary-text';pulseRow.className='work-pulse-row';pulse.className='work-pulse';pulse.setAttribute('aria-hidden','true');
   stopAll.type='button';stopAll.className='work-stop-all';
   singleProgress.className='work-single-progress';singleProgress.hidden=true;singleProgress.setAttribute('role','progressbar');singleProgress.setAttribute('aria-valuemin','0');singleProgressBar.style.width='0%';singleProgress.append(singleProgressBar);
   taskList.className='work-task-list';taskList.hidden=true;
-  pulseRow.append(pulse,stopAll);summary.append(toggle,summaryText,pulseRow);box.append(spinner,text,button,singleProgress,summary,taskList);document.body.append(backing,box);
+  pulseRow.append(pulse,stopAll);summary.append(toggle,parallelCount,summaryText,pulseRow);box.append(spinner,text,button,singleProgress,summary,taskList);document.body.append(backing,box);
   let status = null, pending = false, starting = false, refreshSequence = 0, waiting = 0;
   const tasks=new Map(),renderedProgress=new Map();let nextTaskID=0,expanded=false,indexTaskID=0,renderQueued=false;
   // The main page may already have a startup loading task when this deferred
@@ -81,7 +81,7 @@
     type=String(type||'work').slice(0,64);
     let id;
     do{id=(nextTaskID+1)>>>0;nextTaskID=id}while(id===0||tasks.has(id));
-    tasks.set(id,{id,type,label:String(label||''),message:'',done:Math.max(0,Number(options.done)||0),total:Math.max(0,Number(options.total)||0),children:Array.isArray(options.children)?options.children.map(child=>typeof child==='string'?{label:child}:child).filter(child=>child&&child.label).map(child=>({label:String(child.label),done:Math.max(0,Number(child.done)||0),total:Math.max(0,Number(child.total)||0),percent:Number.isFinite(child.percent)?Math.max(0,Math.min(100,Number(child.percent))):null,active:typeof child.active==='boolean'?child.active:undefined,stop:typeof child.stop==='function'?child.stop:null,stopRequested:!!child.stopRequested})):[],stop:options.stop||null,stopRequested:!!options.stopRequested});
+    tasks.set(id,{id,type,label:String(label||''),message:'',singleWhenAlone:options.singleWhenAlone!==false,done:Math.max(0,Number(options.done)||0),total:Math.max(0,Number(options.total)||0),children:Array.isArray(options.children)?options.children.map(child=>typeof child==='string'?{label:child}:child).filter(child=>child&&child.label).map(child=>({label:String(child.label),done:Math.max(0,Number(child.done)||0),total:Math.max(0,Number(child.total)||0),percent:Number.isFinite(child.percent)?Math.max(0,Math.min(100,Number(child.percent))):null,active:typeof child.active==='boolean'?child.active:undefined,stop:typeof child.stop==='function'?child.stop:null,stopRequested:!!child.stopRequested})):[],stop:options.stop||null,stopRequested:!!options.stopRequested});
     const task=tasks.get(id);task.dictionaryDone=Math.max(0,Number(options.dictionaryDone)||0);task.dictionaryTotal=Math.max(0,Number(options.dictionaryTotal)||0);task.elapsedMs=Math.max(0,Number(options.elapsedMs)||0);
     if(Array.isArray(options.children))task.children=task.children.map((child,index)=>({...child,elapsedMs:Math.max(0,Number(options.children[index]?.elapsedMs)||0)}));
     rememberTaskProgress(task);renderTasks();return id;
@@ -89,6 +89,7 @@
   function taskUpdate(id,patch={}){
     const task=tasks.get(Number(id));if(!task||!patch||typeof patch!=='object')return false;
     for(const key of ['type','label','message'])if(Object.hasOwn(patch,key))task[key]=String(patch[key]||'');
+    if(Object.hasOwn(patch,'singleWhenAlone'))task.singleWhenAlone=patch.singleWhenAlone!==false;
     if(Object.hasOwn(patch,'children'))task.children=Array.isArray(patch.children)?patch.children.map(child=>typeof child==='string'?{label:child}:child).filter(child=>child&&child.label).map(child=>({label:String(child.label),done:Math.max(0,Number(child.done)||0),total:Math.max(0,Number(child.total)||0),percent:Number.isFinite(child.percent)?Math.max(0,Math.min(100,Number(child.percent))):null,active:typeof child.active==='boolean'?child.active:undefined,stop:typeof child.stop==='function'?child.stop:null,stopRequested:!!child.stopRequested})):[];
     if(Object.hasOwn(patch,'children')&&Array.isArray(patch.children))task.children=task.children.map((child,index)=>({...child,elapsedMs:Math.max(0,Number(patch.children[index]?.elapsedMs)||0)}));
     if(Object.hasOwn(patch,'done'))task.done=Math.max(0,Number(patch.done)||0);
@@ -138,10 +139,10 @@
     // Wildcards is an aggregate operation even when its child rows are between
     // updates (or only one dictionary is selected). Keep its disclosure stable
     // so a progress refresh cannot replace the Show tasks control mid-click.
-    const multiple=detailCount>1||active.some(task=>task.type==='wildcards');
+    const multiple=detailCount>1||active.some(task=>task.type==='wildcards'||(task.type==='indexing'&&task.children?.length));
     box.hidden=!running;backing.hidden=!running;
     document.documentElement.classList.toggle('server-work-active',running);
-    const single=active.length===1&&!multiple;box.classList.toggle('work-multiple',multiple&&running);
+    const single=active.length===1&&!multiple&&active[0].singleWhenAlone;box.classList.toggle('work-multiple',multiple&&running);
     spinner.hidden=!single;text.hidden=!single;button.hidden=!single||!active[0]?.stop;
     const singleBrowse=single&&active[0].type==='browse'&&active[0].total>0;
     singleProgress.hidden=!singleBrowse;
@@ -159,6 +160,8 @@
     }else if(multiple){
       const counts=new Map();for(const task of active)counts.set(task.type,(counts.get(task.type)||0)+1);
       const activeCount=trackedChildren?activeChildren:detailCount;
+      parallelCount.textContent=` ${window.wudictI18n.number(activeCount)}:`;
+      parallelCount.hidden=false;
       if(active.length===1&&['indexing','rescan'].includes(active[0].type)){
         const task=active[0],progress=task.children.filter(child=>child.active&&child.total>0);
         const done=progress.reduce((sum,child)=>sum+child.done,0),total=progress.reduce((sum,child)=>sum+child.total,0),parts=[];
@@ -193,7 +196,7 @@
         return row;
         }));
       }
-    }
+    }else parallelCount.hidden=true;
     if(!running)expanded=false;
     if(!running&&taskList.childElementCount)taskList.replaceChildren();
     place();
