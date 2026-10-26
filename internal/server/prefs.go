@@ -238,6 +238,7 @@ func facetIDs(in []string) []string {
 // are ignored by JSON decoding and disappear on the next save.
 type prefsFile struct {
 	DSLTitleRepairs *bool                   `json:"dslTitleRepairs,omitempty"`
+	IndexingMode    string                  `json:"indexingMode,omitempty"`
 	IndexDefaults   *indexOptions           `json:"indexDefaults,omitempty"`
 	IndexMigrated   map[string]bool         `json:"indexMigrated,omitempty"` // completed legacy receipt migrations, per source
 	DSLKnown        map[string]bool         `json:"dslKnown,omitempty"`
@@ -276,6 +277,21 @@ func (p *Prefs) dslTitleRepairs() (bool, bool) {
 		return true, false
 	}
 	return *f.DSLTitleRepairs, true
+}
+
+func (p *Prefs) indexingMode() (string, bool) {
+	f, _ := p.data()
+	if f.IndexingMode != "pipeline" && f.IndexingMode != "parallel-dictionaries-single-worker" {
+		return "", false
+	}
+	return f.IndexingMode, true
+}
+
+func (p *Prefs) setIndexingMode(mode string) error {
+	if mode != "pipeline" && mode != "parallel-dictionaries-single-worker" {
+		return errors.New("invalid indexing mode")
+	}
+	return p.mutate(func(f *prefsFile) { f.IndexingMode = mode })
 }
 
 // maxPrefsBytes bounds state.json: thousands of dictionaries' worth, and a

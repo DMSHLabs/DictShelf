@@ -246,7 +246,7 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 		if decoder.Decode(&diagnostic) != nil || decoder.Decode(new(any)) != io.EOF {
 			return nil, errors.New("invalid diagnostic")
 		}
-		if err := recordBrowseDiagnostic(diagnostic); err != nil {
+		if err := s.recordBrowseDiagnostic(diagnostic); err != nil {
 			return nil, err
 		}
 		return map[string]bool{"recorded": true}, nil

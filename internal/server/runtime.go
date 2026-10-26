@@ -5,10 +5,12 @@
 package server
 
 import (
+	"fmt"
 	"path/filepath"
 
 	"github.com/wuweidict/wudict/internal/config"
 	dslformat "github.com/wuweidict/wudict/internal/format/dsl"
+	"github.com/wuweidict/wudict/internal/indexconst"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/morph"
 	"github.com/wuweidict/wudict/internal/search"
@@ -48,6 +50,28 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 	}
 	user := UserDir(userDir)
 	prefs := LoadPrefs(user.State())
+	mode, modeSaved := prefs.indexingMode()
+	modeSource := "state"
+	if !modeSaved {
+		mode = "pipeline"
+		modeSource = "default"
+		if userDir != "" {
+			legacySettings, readErr := readUserStorage(filepath.Join(userDir, SettingsFile))
+			if readErr != nil {
+				logx.Warn("could not restore indexing mode from %s: %v", SettingsFile, readErr)
+			} else if legacyMode := legacySettings["wudict_indexing_mode"]; validIndexingMode(legacyMode) {
+				mode = legacyMode
+				modeSource = "settings"
+			}
+		}
+		if err := prefs.setIndexingMode(mode); err != nil {
+			logx.Warn("could not persist indexing mode: %v", err)
+		}
+	}
+	if _, busy := indexconst.SetMode(mode); busy {
+		return nil, fmt.Errorf("cannot restore indexing mode while dictionary indexing is active")
+	}
+	logx.System("indexing mode restored mode=%s source=%s", mode, modeSource)
 	dslRepairs := true
 	if saved, ok := prefs.dslTitleRepairs(); ok {
 		dslRepairs = saved
