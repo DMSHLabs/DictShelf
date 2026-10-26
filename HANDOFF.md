@@ -25,6 +25,13 @@ was looked up in user32.dll; it belongs to kernel32.dll. The lookup is fixed,
 and `build-windows.cmd` now builds and verifies DictShelf.exe. Native UI behavior
 remains to be checked on the desktop.
 
+Windows System Settings now has a Hot keys section before System. It configures
+global show/hide and clipboard lookup; the settings and main-window size live in
+`state.json`. Clipboard lookup restores the main window and searches the first
+clipboard word in Exact + lemmatization (`=+`) mode. The default shortcuts are
+`Ctrl+Shift+F11` and `Ctrl+Shift+F12`. The window restores its last saved size.
+Windows UI behavior still needs desktop verification.
+
 ## Product identity
 
 - Product: DictShelf; publisher: DMSH Labs. Android ID, Java package and Gradle namespace: `com.dmshlabs.dictshelf`; Windows artifacts: `DictShelf.exe`, `DictShelf-cli.exe`, `DictShelf-server.exe`; macOS bundle ID and launchd label: `com.dmshlabs.dictshelf`; Linux user unit: `dictshelf.service`.

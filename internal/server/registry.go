@@ -387,6 +387,13 @@ func currentIndexLimit() chan struct{} {
 	return indexLimit
 }
 
+func indexLaneForContext(ctx context.Context) chan struct{} {
+	if indexconst.CurrentMode() == indexconst.ModeAuto && indexconst.IngestMode(ctx) == indexconst.ModeParallelDictionariesSingleWorker {
+		return parallelDictionaryIndexLimit
+	}
+	return currentIndexLimit()
+}
+
 // acquire blocks until a slot of sem is free and returns what frees it. The
 // release is bound to the channel the slot was taken from.
 func acquire(sem chan struct{}) (release func()) {
@@ -1997,7 +2004,7 @@ func (e *entry) setFeatures(want features, progress store.Progress, force ...boo
 }
 
 func (e *entry) setFeaturesContext(ctx context.Context, want features, progress store.Progress, force ...bool) error {
-	defer acquire(currentIndexLimit())()
+	defer acquire(indexLaneForContext(ctx))()
 	// The user ticked a box and is watching a progress bar: the longest
 	// user-visible operation the app has keeps every core it started with,
 	// and the Android shell keeps its foreground service up (power.go).

@@ -10,9 +10,11 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
+	"github.com/wuweidict/wudict/internal/indexconst"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/store"
 )
@@ -169,12 +171,19 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 	defer j.update(func(st *jobStatus) {
 		st.Current, st.CurrentDone, st.CurrentTotal = "", 0, 0
 	})
-	runIndexTasks(todo, j.canceled, func(e *entry) {
-		release := acquire(currentIndexLimit())
+	process := func(e *entry, mode indexconst.Mode) {
+		lane := currentIndexLimit()
+		if indexconst.CurrentMode() == indexconst.ModeAuto {
+			lane = parallelDictionaryIndexLimit
+		}
+		release := acquire(lane)
 		defer release()
 		ctx, cancel, ok := j.beginDictionary(e.ID)
 		if !ok {
 			return
+		}
+		if indexconst.CurrentMode() == indexconst.ModeAuto {
+			ctx = indexconst.WithIngestMode(ctx, mode)
 		}
 		defer func() {
 			j.finishDictionary(e.ID, cancel)
@@ -212,7 +221,26 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 		if err != nil {
 			logx.Warn("could not rebuild %s: %v", filepath.Base(e.Path), err)
 		}
-	})
+	}
+	if indexconst.CurrentMode() == indexconst.ModeAuto {
+		indexModeMu.Lock()
+		indexTaskQueuesActive.Add(1)
+		indexModeMu.Unlock()
+		defer indexTaskQueuesActive.Add(-1)
+		budget := max(1, runtime.NumCPU()-1)
+		items := make([]pendingDictionaryIndex, len(todo))
+		for i, e := range todo {
+			items[i] = pendingDictionaryIndex{entry: e}
+		}
+		small, heavy := orderAutomaticIndexes(items, budget)
+		logx.System("automatic rebuild queue started dictionaries=%d small=%d pipeline=%d processor_budget=%d", len(items), small, heavy, budget)
+		queue := newPriorityDictionaryQueue(items, nil)
+		started := time.Now()
+		runHybridPriorityDictionaryQueue(queue, budget, j.canceled, func(item pendingDictionaryIndex) { process(item.entry, item.mode) })
+		logx.System("automatic rebuild queue finished dictionaries=%d elapsed_ms=%d", len(items), time.Since(started).Milliseconds())
+	} else {
+		runIndexTasks(todo, j.canceled, func(e *entry) { process(e, indexconst.CurrentMode()) })
+	}
 	if j.canceled() {
 		j.update(func(st *jobStatus) { st.Canceled = true })
 	}

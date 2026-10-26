@@ -246,11 +246,23 @@ type prefsFile struct {
 	DSLRemoved      map[string]bool         `json:"dslRemoved,omitempty"`
 	Damaged         map[string]string       `json:"damagedSources,omitempty"` // source path → size:mtime signature
 	Language        string                  `json:"language,omitempty"`       // interface language choice: system, en or ru; never the dictionary language
+	DesktopHotkeys  desktopHotkeys          `json:"desktopHotkeys,omitempty"`
+	DesktopWindow   desktopWindowSize       `json:"desktopWindow,omitempty"`
 
 	Groups  []DictionaryGroup `json:"groups,omitempty"`
 	Version int               `json:"version"`
 	UI      *UIPrefs          `json:"ui,omitempty"`
 	Dicts   []DictPref        `json:"dicts"` // array ORDER is the user's order
+}
+
+type desktopHotkeys struct {
+	Show      string `json:"show,omitempty"`
+	Translate string `json:"translate,omitempty"`
+}
+
+type desktopWindowSize struct {
+	Width  int `json:"width,omitempty"`
+	Height int `json:"height,omitempty"`
 }
 
 // Prefs is the state file (state.json), an ownedFile (ownedfile.go): read
@@ -281,17 +293,29 @@ func (p *Prefs) dslTitleRepairs() (bool, bool) {
 
 func (p *Prefs) indexingMode() (string, bool) {
 	f, _ := p.data()
-	if f.IndexingMode != "pipeline" && f.IndexingMode != "parallel-dictionaries-single-worker" {
+	if f.IndexingMode != "pipeline" && f.IndexingMode != "parallel-dictionaries-single-worker" && f.IndexingMode != "auto" {
 		return "", false
 	}
 	return f.IndexingMode, true
 }
 
 func (p *Prefs) setIndexingMode(mode string) error {
-	if mode != "pipeline" && mode != "parallel-dictionaries-single-worker" {
+	if mode != "pipeline" && mode != "parallel-dictionaries-single-worker" && mode != "auto" {
 		return errors.New("invalid indexing mode")
 	}
 	return p.mutate(func(f *prefsFile) { f.IndexingMode = mode })
+}
+
+func (p *Prefs) desktopHotkeys() desktopHotkeys { f, _ := p.data(); return f.DesktopHotkeys }
+func (p *Prefs) setDesktopHotkeys(value desktopHotkeys) error {
+	return p.mutate(func(f *prefsFile) { f.DesktopHotkeys = value })
+}
+func (p *Prefs) desktopWindowSize() desktopWindowSize { f, _ := p.data(); return f.DesktopWindow }
+func (p *Prefs) setDesktopWindowSize(value desktopWindowSize) error {
+	if value.Width < 480 || value.Height < 320 || value.Width > 10000 || value.Height > 10000 {
+		return errors.New("invalid desktop window size")
+	}
+	return p.mutate(func(f *prefsFile) { f.DesktopWindow = value })
 }
 
 // maxPrefsBytes bounds state.json: thousands of dictionaries' worth, and a

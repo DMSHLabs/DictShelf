@@ -74,7 +74,7 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 		ctx = context.Background()
 	}
 	srcMeta := r.Meta()
-	trace := newIndexTrace(srcMeta.Path, dbPath, plan)
+	trace := newIndexTraceContext(ctx, srcMeta.Path, dbPath, plan)
 	trace.dictionary = srcMeta.Name
 	trace.format = srcMeta.Format
 	defer func() {

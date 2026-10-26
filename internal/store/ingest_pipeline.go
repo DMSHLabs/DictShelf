@@ -94,6 +94,11 @@ func (p *ingestPool) begin(parent context.Context) *ingestSession {
 	// Spawn for the machine, even if Android is backgrounded at start. The
 	// active limit below follows GOMAXPROCS when the app returns to foreground.
 	wanted := indexconst.IngestWorkerLimitForMode(runtime.NumCPU(), 1)
+	if indexconst.CurrentMode() == indexconst.ModeAuto {
+		// Small dictionary scans leave this pool later; create the lanes once
+		// and let workerLimit account for their changing CPU use.
+		wanted = indexconst.IngestWorkerLimit(runtime.NumCPU(), 1)
+	}
 	for int(p.workers.Load()) < wanted {
 		p.workers.Add(1)
 		go p.worker()
@@ -496,8 +501,8 @@ func readIngestEntries(s *ingestSession, r dict.Reader, plan Plan, redirects cha
 // scanIngestEntries is the only SQLite writer. Results may finish out of
 // order, but article IDs, aliases and progress are written in source order.
 func scanIngestEntries(ctx context.Context, r dict.Reader, plan Plan, total int, progress Progress, rows *ingestRowWriter, trace *indexTrace) (id, subEntries, linkCount int64, err error) {
-	mode := indexconst.BeginIngest()
-	defer indexconst.EndIngest()
+	mode, autoSingle := indexconst.BeginIngestContext(ctx)
+	defer indexconst.EndIngestContext(autoSingle)
 	if mode == indexconst.ModeParallelDictionariesSingleWorker {
 		return scanIngestEntriesSequential(ctx, r, plan, total, progress, rows, trace)
 	}

@@ -39,9 +39,11 @@ var (
 	desktopWindowAddress    string
 	desktopWindowStarting   bool
 	desktopWindowHidden     atomic.Bool
+	desktopWindowRequest    func(context.Context, string, string) (any, error)
 	windowDwmapi            = syscall.NewLazyDLL("dwmapi.dll")
 	windowUser32            = syscall.NewLazyDLL("user32.dll")
 	procShowWindow          = windowUser32.NewProc("ShowWindow")
+	procIsIconic            = windowUser32.NewProc("IsIconic")
 	windowDwmSetAttribute   = windowDwmapi.NewProc("DwmSetWindowAttribute")
 	windowShell32           = syscall.NewLazyDLL("shell32.dll")
 	windowBrowseForFolder   = windowShell32.NewProc("SHBrowseForFolderW")
@@ -50,9 +52,37 @@ var (
 	windowGetOpenFileName   = windowComdlg32.NewProc("GetOpenFileNameW")
 	windowOle32             = syscall.NewLazyDLL("ole32.dll")
 	windowCoTaskMemFree     = windowOle32.NewProc("CoTaskMemFree")
+	windowRegisterHotKey    = windowUser32.NewProc("RegisterHotKey")
+	windowUnregisterHotKey  = windowUser32.NewProc("UnregisterHotKey")
+	windowOpenClipboard     = windowUser32.NewProc("OpenClipboard")
+	windowGetClipboardData  = windowUser32.NewProc("GetClipboardData")
+	windowCloseClipboard    = windowUser32.NewProc("CloseClipboard")
+	windowGlobalLock        = syscall.NewLazyDLL("kernel32.dll").NewProc("GlobalLock")
+	windowGlobalUnlock      = syscall.NewLazyDLL("kernel32.dll").NewProc("GlobalUnlock")
+	windowGlobalSize        = syscall.NewLazyDLL("kernel32.dll").NewProc("GlobalSize")
+	windowGetWindowRect     = windowUser32.NewProc("GetWindowRect")
 )
 
 var desktopCloseToTray atomic.Bool
+var desktopHotkeyMu sync.Mutex
+var desktopHotkeySeq uint32
+var desktopHotkeyActions = map[int]desktopHotkeyAction{}
+var desktopHotkeyWindow uintptr
+var desktopWindowSaveMu sync.Mutex
+var desktopWindowSaveTimer *time.Timer
+
+type desktopWindowRect struct{ Left, Top, Right, Bottom int32 }
+
+type desktopHotkeyAction struct {
+	sequence []desktopHotkeyChord
+	action   int
+	id       int
+}
+
+type desktopHotkeyChord struct {
+	key  uint32
+	mods uint32
+}
 
 // openDesktopWindow opens the local reader on a dedicated Windows UI thread.
 // The tray keeps the main thread; WebView2 owns the locked thread below.
@@ -100,6 +130,7 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 		return true
 	}
 	desktopCloseToTray.Store(true)
+	desktopWindowRequest = desktopRequest
 	webview.SetCloseToTrayHook(func(hwnd uintptr) bool {
 		if desktopWindowHidden.Load() || !desktopCloseToTray.Load() {
 			return desktopWindowHidden.Load()
@@ -108,6 +139,32 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 		procShowWindow.Call(hwnd, swHide)
 		desktopWindowHidden.Store(true)
 		return true
+	})
+	webview.SetHotkeyHandler(desktopHandleHotkey)
+	webview.SetWindowSizeHandler(func(hwnd uintptr, width, height int) {
+		if width < 480 || height < 320 {
+			return
+		}
+		desktopWindowSaveMu.Lock()
+		if desktopWindowSaveTimer != nil {
+			desktopWindowSaveTimer.Stop()
+		}
+		desktopWindowSaveTimer = time.AfterFunc(500*time.Millisecond, func() {
+			var rect desktopWindowRect
+			if ok, _, _ := windowGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect))); ok == 0 {
+				return
+			}
+			payload, _ := json.Marshal(map[string]int{"width": int(rect.Right - rect.Left), "height": int(rect.Bottom - rect.Top)})
+			desktopWindowMu.Lock()
+			request := desktopWindowRequest
+			desktopWindowMu.Unlock()
+			if request != nil {
+				if _, err := request(context.Background(), "setDesktopWindowSize", string(payload)); err != nil {
+					logx.Warn("could not save desktop window size: %v", err)
+				}
+			}
+		})
+		desktopWindowSaveMu.Unlock()
 	})
 	desktopWindowStarting = true
 	desktopWindowMu.Unlock()
@@ -126,11 +183,24 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	}()
 	log.Printf("WebView2 startup: creating window; profile=%q", profile)
 	initialColor, customCaptionColor := desktopInitialWindowColors(desktopRequest)
+	windowWidth, windowHeight := 1120, 820
+	if desktopRequest != nil {
+		if value, err := desktopRequest(context.Background(), "desktopWindowSize", ""); err == nil {
+			if size, ok := value.(map[string]any); ok {
+				if n, ok := size["width"].(float64); ok && n >= 480 && n <= 10000 {
+					windowWidth = int(n)
+				}
+				if n, ok := size["height"].(float64); ok && n >= 320 && n <= 10000 {
+					windowHeight = int(n)
+				}
+			}
+		}
+	}
 	webviewStarted := time.Now()
 	w := webview.NewWithOptions(webview.WebViewOptions{
 		DataPath:  profile,
 		AutoFocus: true,
-		WindowOptions: webview.WindowOptions{Title: "DictShelf", Width: 1120, Height: 820, IconId: 101, Center: true,
+		WindowOptions: webview.WindowOptions{Title: "DictShelf", Width: uint(windowWidth), Height: uint(windowHeight), IconId: 101, Center: true,
 			BackgroundColor: initialColor, CaptionColor: customCaptionColor, StartupSplash: true},
 	})
 	if w == nil {
@@ -169,6 +239,20 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		desktopCloseToTray.Store(enabled)
 		return nil
 	})
+	_ = w.Bind("wudictGetHotkeys", func() any {
+		if desktopRequest == nil {
+			return map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+Shift+F12"}
+		}
+		value, err := desktopRequest(context.Background(), "desktopHotkeys", "")
+		if err != nil {
+			return map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+Shift+F12"}
+		}
+		return value
+	})
+	_ = w.Bind("wudictSetHotkeys", func(kind, sequence string) bool {
+		return desktopSetHotkeys(uintptr(w.Window()), kind, sequence)
+	})
+	desktopApplySavedHotkeys(uintptr(w.Window()), desktopRequest)
 	_ = w.Bind("wudictHideWindow", func() error {
 		w.Dispatch(func() {
 			const swHide = 0
@@ -599,6 +683,277 @@ func errorText(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+func desktopSetHotkeys(hwnd uintptr, kind, value string) bool {
+	return desktopSetHotkeysValue(hwnd, kind, value, true)
+}
+
+func desktopSetHotkeysValue(hwnd uintptr, kind, value string, persist bool) bool {
+	sequence, ok := parseDesktopHotkey(value)
+	if !ok || hwnd == 0 || kind != "show" && kind != "translate" {
+		return false
+	}
+	desktopHotkeyMu.Lock()
+	defer desktopHotkeyMu.Unlock()
+	desktopHotkeyWindow = hwnd
+	action := 0
+	if kind == "translate" {
+		action = 1
+	}
+	old, hadOld := desktopHotkeyActions[action]
+	if hadOld && len(old.sequence) == len(sequence) {
+		same := true
+		for i := range sequence {
+			if old.sequence[i] != sequence[i] {
+				same = false
+				break
+			}
+		}
+		if same {
+			return true
+		}
+	}
+	if hadOld {
+		for i := range old.sequence {
+			windowUnregisterHotKey.Call(hwnd, uintptr(old.id+i))
+		}
+		delete(desktopHotkeyActions, action)
+	}
+	id := int(desktopHotkeySeq)
+	registered := make([]desktopHotkeyChord, 0, len(sequence))
+	for i, chord := range sequence {
+		keyID := id + i
+		const modNoRepeat = 0x4000
+		ok, _, _ := windowRegisterHotKey.Call(hwnd, uintptr(keyID), uintptr(chord.mods|modNoRepeat), uintptr(chord.key))
+		if ok == 0 {
+			for j := range registered {
+				windowUnregisterHotKey.Call(hwnd, uintptr(id+j))
+			}
+			if hadOld {
+				desktopSetHotkeysRestore(hwnd, old)
+			}
+			return false
+		}
+		registered = append(registered, chord)
+	}
+	if current, exists := desktopHotkeyActions[1-action]; exists {
+		for _, a := range current.sequence {
+			for _, b := range sequence {
+				if a == b {
+					for i := range registered {
+						windowUnregisterHotKey.Call(hwnd, uintptr(id+i))
+					}
+					if hadOld {
+						desktopSetHotkeysRestore(hwnd, old)
+					}
+					return false
+				}
+			}
+		}
+	}
+	desktopHotkeySeq++
+	desktopHotkeyActions[action] = desktopHotkeyAction{sequence: registered, action: action, id: id}
+	if persist && desktopWindowRequest != nil {
+		stored := map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+Shift+F12"}
+		if raw, err := desktopWindowRequest(context.Background(), "desktopHotkeys", ""); err == nil {
+			b, _ := json.Marshal(raw)
+			_ = json.Unmarshal(b, &stored)
+		}
+		if kind == "show" {
+			stored["show"] = value
+		} else {
+			stored["translate"] = value
+		}
+		b, _ := json.Marshal(stored)
+		if _, err := desktopWindowRequest(context.Background(), "setDesktopHotkeys", string(b)); err != nil {
+			logx.Warn("could not save global hot keys: %v", err)
+		}
+	}
+	return true
+}
+
+func desktopApplySavedHotkeys(hwnd uintptr, request func(context.Context, string, string) (any, error)) {
+	values := map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+Shift+F12"}
+	if request != nil {
+		if raw, err := request(context.Background(), "desktopHotkeys", ""); err == nil {
+			b, _ := json.Marshal(raw)
+			_ = json.Unmarshal(b, &values)
+		}
+	}
+	for _, item := range []struct{ kind, key string }{{"show", values["show"]}, {"translate", values["translate"]}} {
+		if item.key == "" {
+			continue
+		}
+		sequence, ok := parseDesktopHotkey(item.key)
+		if !ok {
+			logx.Warn("ignoring invalid saved %s hot key", item.kind)
+			continue
+		}
+		// Defaults are loaded without rewriting state.json; registration is still
+		// done through the same conflict checks as a user edit.
+		if !desktopRegisterHotkey(hwnd, item.kind, sequence, item.key) {
+			logx.Warn("could not register saved %s hot key", item.kind)
+		}
+	}
+}
+
+func desktopRegisterHotkey(hwnd uintptr, kind string, sequence []desktopHotkeyChord, value string) bool {
+	return desktopSetHotkeysValue(hwnd, kind, value, false)
+}
+
+func desktopSetHotkeysRestore(hwnd uintptr, old desktopHotkeyAction) {
+	const modNoRepeat = 0x4000
+	for i, chord := range old.sequence {
+		windowRegisterHotKey.Call(hwnd, uintptr(old.id+i), uintptr(chord.mods|modNoRepeat), uintptr(chord.key))
+	}
+	desktopHotkeyActions[old.action] = old
+}
+
+func parseDesktopHotkey(value string) ([]desktopHotkeyChord, bool) {
+	parts := strings.Split(value, ",")
+	if len(parts) < 1 || len(parts) > 2 {
+		return nil, false
+	}
+	if len(parts) != 1 {
+		return nil, false
+	}
+	result := make([]desktopHotkeyChord, 0, len(parts))
+	for _, part := range parts {
+		var chord desktopHotkeyChord
+		for _, token := range strings.Split(strings.TrimSpace(part), "+") {
+			switch strings.ToLower(strings.TrimSpace(token)) {
+			case "ctrl", "control":
+				chord.mods |= 0x0002
+			case "alt":
+				chord.mods |= 0x0001
+			case "shift":
+				chord.mods |= 0x0004
+			case "win", "meta":
+				chord.mods |= 0x0008
+			default:
+				if chord.key != 0 {
+					return nil, false
+				}
+				chord.key = desktopVirtualKey(strings.TrimSpace(token))
+			}
+		}
+		if chord.key == 0 || chord.mods == 0 {
+			return nil, false
+		}
+		result = append(result, chord)
+	}
+	return result, true
+}
+
+func desktopVirtualKey(key string) uint32 {
+	if len(key) == 1 {
+		b := key[0]
+		if b >= 'a' && b <= 'z' {
+			return uint32(b - 'a' + 'A')
+		}
+		if b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' {
+			return uint32(b)
+		}
+	}
+	if strings.HasPrefix(strings.ToLower(key), "f") {
+		if n, err := strconv.Atoi(key[1:]); err == nil && n >= 1 && n <= 24 {
+			return uint32(0x70 + n - 1)
+		}
+	}
+	keys := map[string]uint32{"space": 0x20, "tab": 0x09, "escape": 0x1B, "enter": 0x0D, "insert": 0x2D, "delete": 0x2E, "home": 0x24, "end": 0x23, "up": 0x26, "down": 0x28, "left": 0x25, "right": 0x27, "pageup": 0x21, "pagedown": 0x22, "backspace": 0x08}
+	return keys[strings.ToLower(key)]
+}
+
+func desktopHandleHotkey(hwnd uintptr, id, lparam uintptr) bool {
+	desktopHotkeyMu.Lock()
+	var action desktopHotkeyAction
+	ok := false
+	part := -1
+	for _, candidate := range desktopHotkeyActions {
+		for i := range candidate.sequence {
+			if candidate.id+i == int(id) {
+				action = candidate
+				part = i
+				ok = true
+				break
+			}
+		}
+		if ok {
+			break
+		}
+	}
+	if !ok {
+		desktopHotkeyMu.Unlock()
+		return false
+	}
+	if part != 0 {
+		ok = false
+	}
+	desktopHotkeyMu.Unlock()
+	if !ok {
+		return false
+	}
+	switch action.action {
+	case 0:
+		if desktopWindowHidden.Swap(false) || func() bool { iconic, _, _ := procIsIconic.Call(hwnd); return iconic != 0 }() {
+			restoreAndFocusWindow(hwnd)
+		} else {
+			procShowWindow.Call(hwnd, 0)
+			desktopWindowHidden.Store(true)
+		}
+	case 1:
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			desktopHotkeyMu.Lock()
+			hwnd := desktopHotkeyWindow
+			desktopHotkeyMu.Unlock()
+			desktopWindowMu.Lock()
+			w := desktopWindow
+			desktopWindowMu.Unlock()
+			if w == nil {
+				return
+			}
+			iconic, _, _ := procIsIconic.Call(hwnd)
+			if (desktopWindowHidden.Swap(false) || iconic != 0) && hwnd != 0 {
+				restoreAndFocusWindow(hwnd)
+			}
+			clipboard := desktopReadClipboardText()
+			if clipboard == "" {
+				return
+			}
+			b, _ := json.Marshal(clipboard)
+			w.DispatchJavaScript("window.wudictHotkeyLookup&&window.wudictHotkeyLookup(" + string(b) + ")")
+		}()
+	}
+	return true
+}
+
+func desktopReadClipboardText() string {
+	const cfUnicodeText = 13
+	if ok, _, _ := windowOpenClipboard.Call(0); ok == 0 {
+		return ""
+	}
+	defer windowCloseClipboard.Call()
+	h, _, _ := windowGetClipboardData.Call(cfUnicodeText)
+	if h == 0 {
+		return ""
+	}
+	p, _, _ := windowGlobalLock.Call(h)
+	if p == 0 {
+		return ""
+	}
+	defer windowGlobalUnlock.Call(h)
+	size, _, _ := windowGlobalSize.Call(h)
+	if size < 2 || size > 1<<20 {
+		return ""
+	}
+	buf := unsafe.Slice((*uint16)(unsafe.Pointer(p)), int(size/2))
+	i := 0
+	for i < len(buf) && buf[i] != 0 {
+		i++
+	}
+	return syscall.UTF16ToString(buf[:i])
 }
 
 // chooseDesktopFolder shows Windows' native folder browser and returns a
