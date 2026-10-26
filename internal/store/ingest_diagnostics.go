@@ -50,8 +50,8 @@ func logIngestParallelism(event, dictionary, job string) {
 		return
 	}
 	s := sharedIngestPool.snapshot()
-	logx.System("ingest_parallelism event=%s job=%s dictionary=%q logical_cpus=%d gomaxprocs=%d power=%s active_procs=%d demand_holds=%d power_limit_reason=%s dictionary_limit=%d active_dictionaries=%d workers_created=%d worker_limit=%d worker_limit_reason=%s workers_running=%d inline_preparing=%d queued_batches=%d in_flight_batches=%d ready_batches=%d outstanding_batches=%d memory_used_bytes=%d memory_budget_bytes=%d",
-		event, job, dictionary, s.logicalCPUs, s.gomaxprocs, s.power, s.activeProcs, s.demandHolds, s.powerLimitReason,
+	logx.System("ingest_parallelism event=%s job=%s dictionary=%q mode=%s logical_cpus=%d gomaxprocs=%d power=%s active_procs=%d demand_holds=%d power_limit_reason=%s dictionary_limit=%d active_dictionaries=%d workers_created=%d worker_limit=%d worker_limit_reason=%s workers_running=%d inline_preparing=%d queued_batches=%d in_flight_batches=%d ready_batches=%d outstanding_batches=%d memory_used_bytes=%d memory_budget_bytes=%d",
+		event, job, dictionary, indexconst.ModeName(), s.logicalCPUs, s.gomaxprocs, s.power, s.activeProcs, s.demandHolds, s.powerLimitReason,
 		s.dictionaryLimit, s.activeDictionaries, s.workersCreated, s.workerLimit, s.workerLimitReason, s.workersRunning, s.inlinePreparing,
 		s.queuedBatches, s.inFlightBatches, s.readyBatches, s.outstandingBatches, s.usedBytes, s.memoryBudget)
 }
@@ -61,7 +61,7 @@ func (p *ingestPool) snapshot() ingestParallelismSnapshot {
 	policy := ingestParallelismPolicyState.Load()
 	s := ingestParallelismSnapshot{
 		logicalCPUs: logical, gomaxprocs: gomax,
-		dictionaryLimit: indexconst.IndexDictionaryLimit(logical),
+		dictionaryLimit: indexconst.IndexDictionaryLimitForMode(logical),
 		workersCreated:  int(p.workers.Load()), workersRunning: int(p.running.Load()),
 		inlinePreparing: int(p.inlineRunning.Load()), usedBytes: p.usedBytes.Load(), memoryBudget: p.memCapacity.Load(),
 		power: "active", powerLimitReason: "runtime_default",
@@ -91,13 +91,15 @@ func (p *ingestPool) snapshot() ingestParallelismSnapshot {
 		s.workerLimit = p.workerLimit(s.activeDictionaries)
 	}
 	s.workerLimitReason = "worker_pool_available"
-	if gomax < logical {
+	if indexconst.CurrentMode() == indexconst.ModeParallelDictionariesSingleWorker {
+		s.workerLimitReason = "benchmark_single_worker_per_dictionary"
+	} else if gomax < logical {
 		s.workerLimitReason = "gomaxprocs_runtime_cap"
 	} else if s.workerLimit == 0 {
 		s.workerLimitReason = "reader_writer_and_ui_processors_reserved"
 	} else if s.activeDictionaries > 0 && s.workerLimit < s.workersCreated {
 		s.workerLimitReason = "reader_writer_and_ui_processors_reserved"
-	} else if s.workerLimit < indexconst.IngestWorkerLimit(logical, max(1, s.activeDictionaries)) {
+	} else if s.workerLimit < indexconst.IngestWorkerLimitForMode(logical, max(1, s.activeDictionaries)) {
 		s.workerLimitReason = "worker_pool_size_cap"
 	}
 	return s

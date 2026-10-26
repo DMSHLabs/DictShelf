@@ -147,10 +147,11 @@ final class GoBridge {
         return result;
     }
 
-    static void browseDiagnostic(String payload) {
+    static String browseDiagnostic(String payload) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         String result = nativeBrowseDiagnostic(payload);
         if (result == null) throw new IllegalStateException("Could not record Browse timing");
+        return result;
     }
 
     static String about(String origin, String dictionary) {
