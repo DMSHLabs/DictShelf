@@ -24,13 +24,17 @@ func IndexLog() ([]byte, error)                  { return logx.SystemSnapshot() 
 
 type indexTrace struct {
 	id          string
+	dictionary  string
+	format      string
+	plan        Plan
+	entries     int
 	stage       string
 	start, last time.Time
 	done, total int
 }
 
 func newIndexTrace(src, target string, plan Plan) *indexTrace {
-	x := &indexTrace{id: fmt.Sprintf("%d-%d", os.Getpid(), indexLogID.Add(1)), start: time.Now()}
+	x := &indexTrace{id: fmt.Sprintf("%d-%d", os.Getpid(), indexLogID.Add(1)), start: time.Now(), plan: plan}
 	IndexDiagnostic("job=%s start source=%q target=%q headwords=true contains=%v fulltext=%v runtime=%s platform=%s/%s ingest_version=%d", x.id, src, target, plan.Contains, plan.FullText, runtime.Version(), runtime.GOOS, runtime.GOARCH, IngestVersion)
 	x.phase("open database")
 	return x
@@ -48,8 +52,17 @@ func (x *indexTrace) progress(done, total int) {
 	}
 	x.last = time.Now()
 	IndexDiagnostic("job=%s stage=%q progress=%d/%d elapsed=%s", x.id, x.stage, done, total, time.Since(x.start).Round(time.Millisecond))
+	logIngestParallelism("progress", x.dictionary, x.id)
 }
 
 func (x *indexTrace) finish(err error) {
-	IndexDiagnostic("job=%s finish stage=%q progress=%d/%d elapsed=%s error=%q", x.id, x.stage, x.done, x.total, time.Since(x.start).Round(time.Millisecond), fmt.Sprint(err))
+	elapsed := time.Since(x.start)
+	status := "success"
+	if err != nil {
+		status = "error"
+	}
+	IndexDiagnostic("job=%s finish stage=%q progress=%d/%d elapsed=%s elapsed_ms=%d dictionary=%q format=%q mode=shared_pipeline status=%s entries=%d contains=%v fulltext=%v error=%q",
+		x.id, x.stage, x.done, x.total, elapsed.Round(time.Millisecond), elapsed.Milliseconds(),
+		x.dictionary, x.format, status, x.entries, x.plan.Contains, x.plan.FullText, fmt.Sprint(err))
+	logIngestParallelism("finish", x.dictionary, x.id)
 }

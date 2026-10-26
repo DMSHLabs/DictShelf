@@ -123,8 +123,14 @@ return button appears left of the arrows in the bottom status bar of the Android
 WebView. All Android app pages, API operations and article media now use Go/JNI;
 local HTTP remains for browser and explicit server launch modes on other platforms.
 
-From Windows cmd, `build-android.cmd release` makes the FOSS release APK and
-`build-android.cmd debug` makes the FOSS debug APK. The second argument
+From Windows cmd, `build-android.cmd release` makes the FOSS arm64 release APK,
+`build-android.cmd debug` makes the FOSS debug APK, and
+`build-android.cmd all` makes release APKs for arm64-v8a, armeabi-v7a, and
+universal (both ARM ABIs in one APK). The optional ABI argument can select one
+release directly, for example `build-android.cmd release armeabi-v7a` or
+`build-android.cmd release universal`. Run these from the local Git checkout at
+`D:\Projects\Android\DictShelf\`. The `all` command keeps all three files in
+`android\app\build\outputs\apk\all\`. The second argument
 (`original` or `sh`) is retired and produces an error. Gradle's FOSS and Play
 tasks still work, including `assemblePlayRelease` and `bundlePlayRelease`.
 The APKs are named
@@ -149,6 +155,12 @@ the build passes `-PemuX86=1` — which only the debug source set does — so a
 release APK stays arm64 and nothing else. Arm64-v8a emulator images are not an
 alternative: on an x86 host they run under full emulation, slower than the
 translation they would be replacing.
+
+The GitHub Actions workflow **Build Android APK** always checks out `dev` and
+builds the same three FOSS release APKs. It uploads them together as an Actions
+artifact. When release publishing is selected and signing secrets are present,
+it also attaches all three APKs to the GitHub Release. Missing signing secrets
+produce unsigned release APKs in the Actions artifact.
 
 The old `_sh` application ID and this ID are separate Android apps. Android
 does not move preferences, prepared dictionaries, or app-owned files between

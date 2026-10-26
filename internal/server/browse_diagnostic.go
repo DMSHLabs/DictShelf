@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/wuweidict/wudict/internal/store"
 )
 
 var browseFindStreamsActive atomic.Int64
@@ -138,6 +139,7 @@ type browseDiagnostic struct {
 	Status                 int    `json:"status"`
 	Restored               bool   `json:"restored"`
 	StreamAlphabet         bool   `json:"streamAlphabet"`
+	Enabled                bool   `json:"enabled"`
 	Active                 int    `json:"active"`
 	Completed              int    `json:"completed"`
 	Dictionaries           int    `json:"dictionaries"`
@@ -202,6 +204,10 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 }
 
 func recordBrowseDiagnostic(d browseDiagnostic) error {
+	if d.Event == "index_parallelism_diagnostics" {
+		store.SetIngestParallelismDiagnostics(d.Enabled)
+		return nil
+	}
 	if d.Event == "browse_return_route" {
 		switch d.Stage {
 		case "browse_page_loaded", "close_clicked", "main_page_loaded", "apply_url_has_query", "apply_url_no_query",
@@ -387,4 +393,4 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 	return nil
 }
 
-func bounded(n, max int) bool { return n >= 0 && n <= max }
+func bounded(n int, max int64) bool { return n >= 0 && int64(n) <= max }

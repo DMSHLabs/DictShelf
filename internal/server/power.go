@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 
 	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/wuweidict/wudict/internal/store"
 	"github.com/wuweidict/wudict/internal/sysmem"
 )
 
@@ -94,6 +95,7 @@ func SetActiveProcs(n int) {
 	}
 	activeProcs.Store(int32(n))
 	runtime.GOMAXPROCS(n)
+	updateIngestParallelismPolicy(CurrentPower())
 }
 
 // demandHold counts operations a person is currently waiting on: an index
@@ -167,12 +169,18 @@ func emitBusy(busy bool) {
 func applyProcs(p Power) {
 	n := int(activeProcs.Load())
 	if n < 1 {
+		updateIngestParallelismPolicy(p)
 		return
 	}
 	if p != PowerActive && demandHold.Load() == 0 {
 		n = 1 // a background process must never look like a busy one
 	}
 	runtime.GOMAXPROCS(n)
+	updateIngestParallelismPolicy(p)
+}
+
+func updateIngestParallelismPolicy(p Power) {
+	store.SetIngestParallelismPolicy(p.String(), int(activeProcs.Load()), int(demandHold.Load()))
 }
 
 // memLimitConfigured is the ceiling the configuration asked for, which is not

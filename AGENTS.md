@@ -4,6 +4,8 @@ On this Windows machine, Go cgo uses MinGW GCC configured as `GCC_PATH` in `buil
 
 # Working in this checkout
 
+- Canonical local Git checkout: `D:\Projects\Android\DictShelf\`. Use this path when locating or describing the repository; `D:\Projects\Android\wudict2\` is not the active checkout.
+
 - Read `CLAUDE.md` for the existing project map and conventions; consult the relevant sections of `docs/SPEC.md` before implementation. Do not duplicate those documents here.
 - `HANDOFF.md` is the current state of this fork — branch, what remains, architecture facts, what is not verified. It is short on purpose (~400 lines): read it whole before planning. Everything else is read only when the task needs it: `docs/handoff-archive.md` is the per-session history (grep it, never whole — its index lists every section by date, and the commit messages carry the same narratives), and `docs/WINDOWS-VERIFY.md` holds this machine's build, test and emulator recipes plus the tests that fail on clean HEAD. When a session ends, update `HANDOFF.md` in place — refresh the branch/commit state, move finished items out of "what remains", add facts worth carrying over — but never past that cap: a session's narrative belongs in its commit message (or the archive), and anything derivable from the code with a grep belongs in neither.
 - For Android fork identity, server startup, builds, and current verification, start with `docs/ANDROID-FORK.md`. For the separate UI work and its device checks, use `docs/ANDROID-UI-HANDOFF.md`.

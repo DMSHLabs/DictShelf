@@ -19,11 +19,15 @@ if (providers.gradleProperty('appVariant').isPresent()) {
 // binary dies with SIGSEGV inside the translated code, a hello-world included
 // - so an x86_64 libwudict.so is the only way to run the app there.
 //
-// A property, not a "does the file exist" test, because the extra lib sits
-// OUTSIDE every default source dir (see sourceSets below): without the flag it
-// is invisible to all variants, which is what keeps a release APK arm64-only
-// (D52) no matter what is lying around on disk.
+// A property, not a "does the file exist" test, because the extra x86 lib sits
+// OUTSIDE every default source dir (see sourceSets below). ABI filters below
+// select only the libraries intended for each APK output.
 def emuX86 = providers.gradleProperty('emuX86').isPresent()
+def androidAbis = providers.gradleProperty('androidAbis').isPresent()
+        ? providers.gradleProperty('androidAbis').get().split(',').collect { it.trim() }
+        : (emuX86 ? ['arm64-v8a', 'x86_64'] : ['arm64-v8a'])
+def apkAbiName = providers.gradleProperty('apkAbiName').orElse(
+        androidAbis.size() > 1 ? 'universal' : androidAbis[0]).get()
 
 // Same stamp the Makefile puts into the Go binary: git describe, or "dev".
 // build-android.yml overrides versionName with the release TAG; versionCode is
@@ -98,6 +102,9 @@ android {
         // vector adaptive icon needs no PNG fallbacks at 26+.
         minSdk 26
         targetSdk 36
+        ndk {
+            androidAbis.each { abiFilters it }
+        }
         versionCode(project.hasProperty('versionCode') ? project.property('versionCode') as int : gitCount())
         versionName(appVersion)
     }
@@ -216,7 +223,7 @@ androidComponents {
         // -PemuX86=1 is inert and the name must not claim otherwise. (This hook
         // runs for EVERY variant, release ones included, even when only
         // assembleFossDebug was asked for - so it must never throw.)
-        def abi = emuX86 && variant.buildType == 'debug' ? 'arm64-v8a-x86_64' : 'arm64-v8a'
+        def abi = emuX86 && variant.buildType == 'debug' ? 'arm64-v8a-x86_64' : apkAbiName
         def suffix = variant.buildType == 'release'
                 ? (apkSigned ? '' : '-unsigned')
                 : "-${variant.buildType}"

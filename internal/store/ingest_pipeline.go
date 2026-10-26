@@ -67,15 +67,16 @@ type ingestSession struct {
 // The pool owns only CPU preparation. Each session keeps its own source reader
 // and SQLite writer. Workers select dictionary queues in round-robin order.
 type ingestPool struct {
-	registryMu  sync.Mutex                       // begins and ends publish immutable session snapshots
-	sessions    atomic.Pointer[[]*ingestSession] // readers never hold the registry lock
-	cursor      atomic.Uint64
-	running     atomic.Int32
-	workers     atomic.Int32
-	wakeMu      sync.Mutex
-	wake        chan struct{}
-	usedBytes   atomic.Int64
-	memCapacity atomic.Int64
+	registryMu    sync.Mutex                       // begins and ends publish immutable session snapshots
+	sessions      atomic.Pointer[[]*ingestSession] // readers never hold the registry lock
+	cursor        atomic.Uint64
+	running       atomic.Int32
+	inlineRunning atomic.Int32
+	workers       atomic.Int32
+	wakeMu        sync.Mutex
+	wake          chan struct{}
+	usedBytes     atomic.Int64
+	memCapacity   atomic.Int64
 }
 
 var sharedIngestPool = ingestPool{wake: make(chan struct{})}
@@ -253,6 +254,8 @@ func (p *ingestPool) takeReadyOrInline(s *ingestSession) (preparedIngestBatch, b
 	default:
 	}
 	if item := p.takeInline(s); item != nil {
+		p.inlineRunning.Add(1)
+		defer p.inlineRunning.Add(-1)
 		return prepareIngestBatch(item), true
 	}
 	return preparedIngestBatch{}, false
@@ -492,8 +495,9 @@ func readIngestEntries(s *ingestSession, r dict.Reader, plan Plan, redirects cha
 
 // scanIngestEntries is the only SQLite writer. Results may finish out of
 // order, but article IDs, aliases and progress are written in source order.
-func scanIngestEntries(ctx context.Context, r dict.Reader, plan Plan, total int, progress Progress, rows *ingestRowWriter) (id, subEntries, linkCount int64, err error) {
+func scanIngestEntries(ctx context.Context, r dict.Reader, plan Plan, total int, progress Progress, rows *ingestRowWriter, trace *indexTrace) (id, subEntries, linkCount int64, err error) {
 	s := sharedIngestPool.begin(ctx)
+	logIngestParallelism("start", trace.dictionary, trace.id)
 	redirects := make(chan ingestRedirect, ingestQueueEntries)
 	done := make(chan ingestReaderResult, 1)
 	go readIngestEntries(s, r, plan, redirects, done)
