@@ -1083,6 +1083,7 @@
   "system.browseDiagnostics": "Record Browse and Wildcards progress timings",
   "system.dictionaryListDiagnostics": "Record dictionary list and picker timings",
   "system.dictionaryCacheDiagnostics": "Log dictionary page cache sizes",
+  "system.indexParallelismDiagnostics": "Record indexing workers and limit reasons",
   "system.folderDiagnostics": "Record folder and indexing details",
   "system.advanced": "Advanced",
   "system.restore": "Restore defaults",

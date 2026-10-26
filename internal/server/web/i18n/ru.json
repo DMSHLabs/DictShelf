@@ -1095,6 +1095,7 @@
   "system.browseDiagnostics": "Записывать замеры Browse и прогресса Wildcards",
   "system.dictionaryListDiagnostics": "Записывать время списка словарей и его открытия",
   "system.dictionaryCacheDiagnostics": "Записывать размер кэша страниц словарей",
+  "system.indexParallelismDiagnostics": "Записывать потоки индексации и причины ограничений",
   "system.folderDiagnostics": "Записывать подробности папок и индексации",
   "system.advanced": "Дополнительно",
   "system.restore": "Восстановить значения по умолчанию",

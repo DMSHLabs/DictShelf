@@ -4,19 +4,27 @@
 package com.dmshlabs.dictshelf;
 
 import android.app.Activity;
+import android.app.ActivityManager;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.os.Process;
 import android.provider.DocumentsContract;
 import android.widget.Toast;
 import java.io.ByteArrayOutputStream;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
 import org.json.JSONObject;
 
 final class SystemLogExport {
@@ -47,18 +55,15 @@ final class SystemLogExport {
             synchronized (EXPORT_LOCK) {
                 try {
                     ByteArrayOutputStream snapshot = new ByteArrayOutputStream();
+                    byte[] goLog;
                     try {
-                        snapshot.write(goSnapshot());
+                        goLog = goSnapshot();
                     } catch (Exception e) {
                         SystemLog.warn("wudict", "Go system log unavailable during export", e);
-                        snapshot.write(("DictShelf System Log\nGo system log unavailable: " + e.getClass().getSimpleName() + "\n").getBytes(StandardCharsets.UTF_8));
+                        goLog = ("DictShelf System Log\nGo system log unavailable: " + e.getClass().getSimpleName() + "\n").getBytes(StandardCharsets.UTF_8);
                     }
-                    snapshot.write(("\n--- Android environment ---\n"
-                            + "App: " + BuildConfig.VERSION_NAME + "\n"
-                            + "Android: " + Build.VERSION.RELEASE + " (SDK " + Build.VERSION.SDK_INT + ")\n"
-                            + "Build: " + Build.DISPLAY + "\n"
-                            + "Device: " + Build.MANUFACTURER + " " + Build.MODEL + "\n"
-                            + "\n--- Android events (UTC) ---\n").getBytes(StandardCharsets.UTF_8));
+                    snapshot.write(withAndroidEnvironment(goLog, a));
+                    snapshot.write("\n--- Android events (UTC) ---\n".getBytes(StandardCharsets.UTF_8));
                     snapshot.write(SystemLog.snapshot());
                     byte[] output = snapshot.toByteArray();
                     if (output.length == 0) throw new java.io.IOException("Diagnostic snapshot is empty");
@@ -93,5 +98,70 @@ final class SystemLogExport {
         byte[] bytes = value.optString("content", "").getBytes(StandardCharsets.UTF_8);
         if (bytes.length > 5 * 1024 * 1024) throw new java.io.IOException("Go system log exceeds size limit");
         return bytes;
+    }
+
+    private static byte[] withAndroidEnvironment(byte[] goLog, Activity activity) {
+        String text = new String(goLog, StandardCharsets.UTF_8);
+        String serverMarker = "\n\n--- Server ---\n";
+        int serverAt = text.indexOf(serverMarker);
+        String prefix = serverAt < 0 ? text : text.substring(0, serverAt);
+        String server = serverAt < 0 ? "\n\n--- Server ---\n" : text.substring(serverAt);
+        String environment = "\n\n--- Android environment ---\n"
+                + "App: " + BuildConfig.VERSION_NAME + "\n"
+                + "Android: " + Build.VERSION.RELEASE + " (SDK " + Build.VERSION.SDK_INT + ")\n"
+                + "Android build: " + Build.DISPLAY + "\n"
+                + "Device: " + Build.MANUFACTURER + " " + Build.MODEL + "\n"
+                + "CPU hardware: " + Build.HARDWARE + "\n"
+                + "Supported ABIs: " + String.join(", ", Build.SUPPORTED_ABIS) + "\n"
+                + "Process bitness: " + (Process.is64Bit() ? "64-bit" : "32-bit") + "\n"
+                + "Logical processors (JVM): " + Runtime.getRuntime().availableProcessors() + "\n"
+                + "Online processors (sysfs): " + ShellPrefs.availableCpuCores() + "\n"
+                + "Physical CPU cores (sysfs topology): " + physicalCpuCoreCount() + "\n"
+                + androidMemoryInfo(activity);
+        if (!server.isEmpty()) {
+            server = "\n--- Server ---\n" + server.substring(serverMarker.length());
+        }
+        return (prefix + environment + server).getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static String androidMemoryInfo(Activity activity) {
+        ActivityManager manager = (ActivityManager) activity.getSystemService(Context.ACTIVITY_SERVICE);
+        if (manager == null) return "Physical memory: unavailable\n";
+        ActivityManager.MemoryInfo info = new ActivityManager.MemoryInfo();
+        manager.getMemoryInfo(info);
+        return "Physical memory total: " + formatMemory(info.totalMem) + "\n"
+                + "Physical memory available: " + formatMemory(info.availMem) + "\n"
+                + "App memory class: " + manager.getMemoryClass() + " MiB\n"
+                + "App large memory class: " + manager.getLargeMemoryClass() + " MiB\n";
+    }
+
+    private static String formatMemory(long bytes) {
+        return String.format(Locale.ROOT, "%.1f GiB (%d bytes)", bytes / (1024.0 * 1024.0 * 1024.0), bytes);
+    }
+
+    private static int physicalCpuCoreCount() {
+        File cpuRoot = new File("/sys/devices/system/cpu");
+        File[] cpus = cpuRoot.listFiles((dir, name) -> name.matches("cpu[0-9]+"));
+        if (cpus == null) return -1;
+        Set<String> cores = new HashSet<>();
+        for (File cpu : cpus) {
+            File topology = new File(cpu, "topology");
+            String core = readTrimmed(new File(topology, "core_id"));
+            if (core == null) continue;
+            String cluster = readTrimmed(new File(topology, "cluster_id"));
+            String physicalPackage = readTrimmed(new File(topology, "physical_package_id"));
+            cores.add((physicalPackage == null ? "0" : physicalPackage) + ":"
+                    + (cluster == null ? "" : cluster) + ":" + core);
+        }
+        return cores.isEmpty() ? -1 : cores.size();
+    }
+
+    private static String readTrimmed(File file) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            String value = reader.readLine();
+            return value == null || value.trim().isEmpty() ? null : value.trim();
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 }

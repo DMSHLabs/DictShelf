@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -48,10 +49,12 @@ func runIndexDictionaryGroups(groups [][]indexOperation, stopped func() bool, ru
 			name = group[0].Dict
 		}
 		count := active.Add(1)
+		started := time.Now()
 		logx.System("index dictionary started dictionary=%q active=%d workers=%d", name, count, workers)
 		defer func() {
 			count := active.Add(-1)
-			logx.System("index dictionary worker released dictionary=%q active=%d", name, count)
+			elapsed := time.Since(started)
+			logx.System("index dictionary worker released dictionary=%q active=%d elapsed=%s elapsed_ms=%d", name, count, elapsed.Round(time.Millisecond), elapsed.Milliseconds())
 		}()
 		run(group)
 	})
@@ -62,6 +65,7 @@ func runIndexTasks[T any](items []T, stopped func() bool, run func(T)) {
 	if len(items) == 0 {
 		return
 	}
+	startedAt := time.Now()
 	workers := cap(currentIndexLimit())
 	if workers < 1 {
 		workers = 1
@@ -69,7 +73,8 @@ func runIndexTasks[T any](items []T, stopped func() bool, run func(T)) {
 	if workers > len(items) {
 		workers = len(items)
 	}
-	logx.System("index task queue started tasks=%d workers=%d", len(items), workers)
+	logx.System("index task queue started tasks=%d workers=%d dictionary_worker_limit=%d logical_cpus=%d gomaxprocs=%d worker_limit_source=IndexDictionaryLimit(runtime.NumCPU())",
+		len(items), workers, cap(currentIndexLimit()), runtime.NumCPU(), runtime.GOMAXPROCS(0))
 	queue := make(chan T, len(items))
 	var wg sync.WaitGroup
 	var started atomic.Int32
@@ -91,7 +96,8 @@ func runIndexTasks[T any](items []T, stopped func() bool, run func(T)) {
 	}
 	close(queue)
 	wg.Wait()
-	logx.System("index task queue finished tasks_started=%d tasks_queued=%d", started.Load(), len(items))
+	elapsed := time.Since(startedAt)
+	logx.System("index task queue finished tasks_started=%d tasks_queued=%d elapsed=%s elapsed_ms=%d", started.Load(), len(items), elapsed.Round(time.Millisecond), elapsed.Milliseconds())
 }
 
 func groupIndexOperations(operations []indexOperation) [][]indexOperation {
