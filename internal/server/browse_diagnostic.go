@@ -199,7 +199,7 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "invalid diagnostic", http.StatusBadRequest)
 		return
 	}
-	if err := recordBrowseDiagnostic(d); err != nil {
+	if err := s.recordBrowseDiagnostic(d); err != nil {
 		status := http.StatusBadRequest
 		if errors.Is(err, errIndexingModeBusy) {
 			status = http.StatusConflict
@@ -212,21 +212,7 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 
 func recordBrowseDiagnostic(d browseDiagnostic) error {
 	if d.Event == "indexing_mode" {
-		indexModeMu.Lock()
-		defer indexModeMu.Unlock()
-		if indexTaskQueuesActive.Load() != 0 {
-			return errIndexingModeBusy
-		}
-		changed, busy := indexconst.SetMode(d.Mode)
-		if busy {
-			return errIndexingModeBusy
-		}
-		if !changed {
-			return errors.New("invalid indexing mode")
-		}
-		logx.System("indexing mode changed mode=%s dictionary_worker_limit=%d logical_cpus=%d gomaxprocs=%d",
-			indexconst.ModeName(), cap(currentIndexLimit()), runtime.NumCPU(), runtime.GOMAXPROCS(0))
-		return nil
+		return setIndexingMode(d.Mode, nil)
 	}
 	if d.Event == "index_parallelism_diagnostics" {
 		store.SetIngestParallelismDiagnostics(d.Enabled)
@@ -414,6 +400,49 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 	}
 	logx.System("browse_diag event=%s dict=%q page=%d words=%d page_heap_est_bytes=%d page_json_bytes=%d cache_pages=%d cache_heap_est_bytes=%d cache_json_bytes=%d cache_stored_pages=%d cache_stored_bytes=%d total_pages=%d all_pages_heap_est_bytes=%d letters=%d bytes=%d read_ms=%d fetch_ms=%d total_ms=%d words_ms=%d strip_build_ms=%d strip_mark_ms=%d status=%d restored=%t stream_alphabet=%t",
 		d.Event, d.Dict, d.Page, d.Words, d.PageBytes, d.PageJSONBytes, d.CachePages, d.CacheBytes, d.CacheJSONBytes, d.CacheStoredPages, d.CacheStoredBytes, d.TotalPages, d.EstimatedAllPagesBytes, d.Letters, d.Bytes, d.ReadMS, d.FetchMS, d.TotalMS, d.WordsMS, d.StripBuildMS, d.StripMarkMS, d.Status, d.Restored, d.StreamAlphabet)
+	return nil
+}
+
+func validIndexingMode(mode string) bool {
+	return mode == "pipeline" || mode == "parallel-dictionaries-single-worker"
+}
+
+func (s *Server) recordBrowseDiagnostic(d browseDiagnostic) error {
+	if d.Event != "indexing_mode" {
+		return recordBrowseDiagnostic(d)
+	}
+	var prefs *Prefs
+	if s.User != "" && s.reg != nil {
+		prefs = s.reg.prefs
+	}
+	return setIndexingMode(d.Mode, prefs)
+}
+
+func setIndexingMode(mode string, prefs *Prefs) error {
+	if !validIndexingMode(mode) {
+		return errors.New("invalid indexing mode")
+	}
+	indexModeMu.Lock()
+	defer indexModeMu.Unlock()
+	if indexTaskQueuesActive.Load() != 0 {
+		return errIndexingModeBusy
+	}
+	previous := indexconst.ModeName()
+	changed, busy := indexconst.SetMode(mode)
+	if busy {
+		return errIndexingModeBusy
+	}
+	if !changed {
+		return errors.New("invalid indexing mode")
+	}
+	if prefs != nil {
+		if err := prefs.setIndexingMode(mode); err != nil {
+			indexconst.SetMode(previous)
+			return err
+		}
+	}
+	logx.System("indexing mode changed mode=%s dictionary_worker_limit=%d logical_cpus=%d gomaxprocs=%d",
+		indexconst.ModeName(), cap(currentIndexLimit()), runtime.NumCPU(), runtime.GOMAXPROCS(0))
 	return nil
 }
 
