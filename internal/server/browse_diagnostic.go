@@ -8,17 +8,20 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"runtime"
 	"runtime/metrics"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/wuweidict/wudict/internal/indexconst"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/store"
 )
 
 var browseFindStreamsActive atomic.Int64
+var errIndexingModeBusy = errors.New("cannot change indexing mode while indexing is active")
 var browseMemoryMonitor struct {
 	sync.Mutex
 	stop chan struct{}
@@ -197,13 +200,34 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := recordBrowseDiagnostic(d); err != nil {
-		http.Error(w, "invalid diagnostic", http.StatusBadRequest)
+		status := http.StatusBadRequest
+		if errors.Is(err, errIndexingModeBusy) {
+			status = http.StatusConflict
+		}
+		http.Error(w, err.Error(), status)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func recordBrowseDiagnostic(d browseDiagnostic) error {
+	if d.Event == "indexing_mode" {
+		indexModeMu.Lock()
+		defer indexModeMu.Unlock()
+		if indexTaskQueuesActive.Load() != 0 {
+			return errIndexingModeBusy
+		}
+		changed, busy := indexconst.SetMode(d.Mode)
+		if busy {
+			return errIndexingModeBusy
+		}
+		if !changed {
+			return errors.New("invalid indexing mode")
+		}
+		logx.System("indexing mode changed mode=%s dictionary_worker_limit=%d logical_cpus=%d gomaxprocs=%d",
+			indexconst.ModeName(), cap(currentIndexLimit()), runtime.NumCPU(), runtime.GOMAXPROCS(0))
+		return nil
+	}
 	if d.Event == "index_parallelism_diagnostics" {
 		store.SetIngestParallelismDiagnostics(d.Enabled)
 		return nil

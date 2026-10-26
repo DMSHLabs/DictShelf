@@ -1119,6 +1119,8 @@ window.wudictFontScale=(function(){
     <label class="sys-row"><input type="checkbox" id="sysDictionaryListDiagnostics"><span class="sys-label">{{T:system.dictionaryListDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysDictionaryCacheDiagnostics"><span class="sys-label">{{T:system.dictionaryCacheDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysIndexParallelismDiagnostics"><span class="sys-label">{{T:system.indexParallelismDiagnostics}}</span></label>
+    <label class="sys-row sys-num sys-indexing-mode"><span class="sys-label">{{T:system.indexingMode}}</span><span class="sys-indexing-mode-select"><select id="sysIndexingMode"><option value="pipeline">{{T:system.indexingModePipeline}}</option><option value="parallel-dictionaries-single-worker">{{T:system.indexingModeParallel}}</option></select></span></label>
+    <p class="sys-hint">{{T:system.indexingModeHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysFolderDiagnostics"><span class="sys-label">{{T:system.folderDiagnostics}}</span></label>
 
     <!-- Advanced FOLDS, and starts folded (the reader's ask, 2026-09-28). Two
@@ -4336,6 +4338,7 @@ function sysPaint(state){
   $("sysDictionaryListDiagnostics").checked=dictionaryListDiagnosticsEnabled();
   $("sysDictionaryCacheDiagnostics").checked=dictionaryCacheDiagnosticsEnabled();
   $("sysIndexParallelismDiagnostics").checked=indexParallelismDiagnosticsEnabled();
+  $("sysIndexingMode").value=indexingModePreference();
   $("sysFolderDiagnostics").checked=folderDiagnosticsEnabled();
   const box=$("sysAdvanced");
   box.replaceChildren();
@@ -4675,6 +4678,16 @@ async function showDesktopSysSettings(){
   indexParallelismDiagnostics.addEventListener("change",()=>setIndexParallelismDiagnostics(indexParallelismDiagnostics.checked));
   const indexParallelismText=document.createElement("span");indexParallelismText.className="sys-label";indexParallelismText.textContent=tx("system.indexParallelismDiagnostics");
   indexParallelismLabel.append(indexParallelismDiagnostics,indexParallelismText);body.append(indexParallelismLabel);
+  const indexingModeLabel=document.createElement("label");indexingModeLabel.className="sys-row sys-num sys-indexing-mode";
+  const indexingModeText=document.createElement("span");indexingModeText.className="sys-label";indexingModeText.textContent=tx("system.indexingMode");
+  const indexingModeSelectWrap=document.createElement("span");indexingModeSelectWrap.className="sys-indexing-mode-select";
+  const indexingModeSelect=document.createElement("select");indexingModeSelect.id="desktopSysIndexingMode";
+  for(const [value,key] of [["pipeline","system.indexingModePipeline"],["parallel-dictionaries-single-worker","system.indexingModeParallel"]]){
+    const option=document.createElement("option");option.value=value;option.textContent=tx(key);indexingModeSelect.append(option);
+  }
+  indexingModeSelect.value=indexingModePreference();indexingModeSelect.addEventListener("change",()=>setIndexingMode(indexingModeSelect.value,indexingModeSelect));
+  indexingModeSelectWrap.append(indexingModeSelect);indexingModeLabel.append(indexingModeText,indexingModeSelectWrap);body.append(indexingModeLabel);
+  const indexingModeHint=document.createElement("p");indexingModeHint.className="sys-hint";indexingModeHint.textContent=tx("system.indexingModeHint");body.append(indexingModeHint);
   const dictionaryListLabel=document.createElement("label");dictionaryListLabel.className="sys-row";
   const dictionaryListDiagnostics=document.createElement("input");dictionaryListDiagnostics.type="checkbox";dictionaryListDiagnostics.checked=dictionaryListDiagnosticsEnabled();
   dictionaryListDiagnostics.addEventListener("change",()=>setDictionaryListDiagnostics(dictionaryListDiagnostics.checked));
@@ -4795,15 +4808,24 @@ if(browseArticleDiagContext){
 logBrowseArticleTransition("app_script_ready");
 function dictionaryListDiagnosticsEnabled(){try{return localStorage.getItem("wudict_dictionary_list_diagnostics")==="1"}catch(_){return false}}
 function sendBrowseDiagnostic(payload){
-  if(window.wudictAndroidGo){try{window.wudictAndroidGo.browseDiagnostic(JSON.stringify(payload))}catch(_){}return Promise.resolve()}
-  if(typeof window.wudictNativeCall==="function")return window.wudictNativeCall("browseDiagnostic",JSON.stringify(payload)).catch(()=>{});
-  return fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,body:JSON.stringify(payload)}).catch(()=>{});
+  if(window.wudictAndroidGo){try{return Promise.resolve(!!window.wudictAndroidGo.browseDiagnostic(JSON.stringify(payload)))}catch(_){return Promise.resolve(false)}}
+  if(typeof window.wudictNativeCall==="function")return window.wudictNativeCall("browseDiagnostic",JSON.stringify(payload)).then(()=>true,()=>false);
+  return fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,body:JSON.stringify(payload)}).then(response=>response.ok,()=>false);
 }
 function setDictionaryListDiagnostics(on){try{if(on)localStorage.setItem("wudict_dictionary_list_diagnostics","1");else localStorage.removeItem("wudict_dictionary_list_diagnostics")}catch(_){}}
 function dictionaryCacheDiagnosticsEnabled(){try{return localStorage.getItem("wudict_dictionary_cache_diagnostics")==="1"}catch(_){return false}}
 function setDictionaryCacheDiagnostics(on){try{if(on)localStorage.setItem("wudict_dictionary_cache_diagnostics","1");else localStorage.removeItem("wudict_dictionary_cache_diagnostics")}catch(_){}}
 function indexParallelismDiagnosticsEnabled(){try{return localStorage.getItem("wudict_index_parallelism_diagnostics")==="1"}catch(_){return false}}
 function setIndexParallelismDiagnostics(on){try{if(on)localStorage.setItem("wudict_index_parallelism_diagnostics","1");else localStorage.removeItem("wudict_index_parallelism_diagnostics")}catch(_){}sendBrowseDiagnostic({event:"index_parallelism_diagnostics",enabled:!!on})}
+function indexingModePreference(){try{return localStorage.getItem("wudict_indexing_mode")==="parallel-dictionaries-single-worker"?"parallel-dictionaries-single-worker":"pipeline"}catch(_){return "pipeline"}}
+async function setIndexingMode(mode,select){
+  const previous=indexingModePreference();
+  if(!await sendBrowseDiagnostic({event:"indexing_mode",mode})){
+    select.value=previous;sysNote(tx("system.indexingModeBusy"));return;
+  }
+  try{localStorage.setItem("wudict_indexing_mode",mode)}catch(_){}
+  sysNote("");
+}
 function folderDiagnosticsEnabled(){try{return localStorage.getItem("wudict_folder_diagnostics")==="1"}catch(_){return false}}
 function setFolderDiagnostics(on){try{if(on)localStorage.setItem("wudict_folder_diagnostics","1");else localStorage.removeItem("wudict_folder_diagnostics")}catch(_){}}
 function sysLogChange(){
@@ -4838,6 +4860,7 @@ $("sysLogBase").addEventListener("change",sysLogChange);
 $("sysLogWeb").addEventListener("change",sysLogChange);
 $("sysBrowseDiagnostics").addEventListener("change",e=>setBrowseDiagnostics(e.target.checked));
 $("sysIndexParallelismDiagnostics").addEventListener("change",e=>setIndexParallelismDiagnostics(e.target.checked));
+$("sysIndexingMode").addEventListener("change",e=>setIndexingMode(e.target.value,e.target));
 $("sysMergedFTS").addEventListener("change",e=>setWildcardSearchIndexEnabled("fts",e.target.checked));
 $("sysMergedTrigram").addEventListener("change",e=>setWildcardSearchIndexEnabled("trigram",e.target.checked));
 $("sysBrowseArticleDiagnostics").addEventListener("change",e=>setBrowseArticleDiagnostics(e.target.checked));
@@ -4846,6 +4869,7 @@ $("sysDictionaryListDiagnostics").addEventListener("change",e=>setDictionaryList
 $("sysDictionaryCacheDiagnostics").addEventListener("change",e=>setDictionaryCacheDiagnostics(e.target.checked));
 $("sysFolderDiagnostics").addEventListener("change",e=>setFolderDiagnostics(e.target.checked));
 sendBrowseDiagnostic({event:"index_parallelism_diagnostics",enabled:indexParallelismDiagnosticsEnabled()});
+sendBrowseDiagnostic({event:"indexing_mode",mode:indexingModePreference()});
 /* Restore defaults: one tap clears every Advanced row at once, which is why it
    is confirmed. Clearing writes nothing anywhere else - it withdraws the
    overrides, and "follow the settings file" is what an absent override is. */

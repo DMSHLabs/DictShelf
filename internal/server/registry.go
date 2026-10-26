@@ -378,8 +378,12 @@ func (u *upgraded) Close() error {
 // limiter sized from the machine's logical processors. Per-entry ingestMu
 // keeps operations for the same dictionary in sequence.
 var indexLimit = make(chan struct{}, indexconst.IndexDictionaryLimit(runtime.NumCPU()))
+var parallelDictionaryIndexLimit = make(chan struct{}, max(1, runtime.NumCPU()-1))
 
 func currentIndexLimit() chan struct{} {
+	if indexconst.CurrentMode() == indexconst.ModeParallelDictionariesSingleWorker {
+		return parallelDictionaryIndexLimit
+	}
 	return indexLimit
 }
 

@@ -5,12 +5,14 @@ package store
 
 import (
 	"fmt"
-	"github.com/wuweidict/wudict/internal/logx"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sync/atomic"
 	"time"
+
+	"github.com/wuweidict/wudict/internal/indexconst"
+	"github.com/wuweidict/wudict/internal/logx"
 )
 
 const indexLogLimit = logx.SystemLogLimit
@@ -61,8 +63,8 @@ func (x *indexTrace) finish(err error) {
 	if err != nil {
 		status = "error"
 	}
-	IndexDiagnostic("job=%s finish stage=%q progress=%d/%d elapsed=%s elapsed_ms=%d dictionary=%q format=%q mode=shared_pipeline status=%s entries=%d contains=%v fulltext=%v error=%q",
+	IndexDiagnostic("job=%s finish stage=%q progress=%d/%d elapsed=%s elapsed_ms=%d dictionary=%q format=%q mode=%s status=%s entries=%d contains=%v fulltext=%v error=%q",
 		x.id, x.stage, x.done, x.total, elapsed.Round(time.Millisecond), elapsed.Milliseconds(),
-		x.dictionary, x.format, status, x.entries, x.plan.Contains, x.plan.FullText, fmt.Sprint(err))
+		x.dictionary, x.format, indexconst.ModeName(), status, x.entries, x.plan.Contains, x.plan.FullText, fmt.Sprint(err))
 	logIngestParallelism("finish", x.dictionary, x.id)
 }

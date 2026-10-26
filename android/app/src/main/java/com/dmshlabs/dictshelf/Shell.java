@@ -448,8 +448,8 @@ final class Shell {
             return GoBridge.browseFindPage(query);
         }
 
-        @JavascriptInterface public void browseDiagnostic(String payload) {
-            GoBridge.browseDiagnostic(payload);
+        @JavascriptInterface public String browseDiagnostic(String payload) {
+            return GoBridge.browseDiagnostic(payload);
         }
 
         @JavascriptInterface public String about(String origin, String dictionary) {
