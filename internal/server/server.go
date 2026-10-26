@@ -512,15 +512,6 @@ func (s *Server) indexPage(disableStyle bool) ([]byte, string) {
 func (s *Server) indexPageFor(disableStyle bool, acceptLanguage string) ([]byte, string) {
 	choice := s.reg.prefs.Language()
 	language := s.reg.prefs.ResolvedLanguage(acceptLanguage)
-	// first-run: no dictionaries yet → serve the setup page instead. No
-	// validator here: this body is a function of registry state that nothing
-	// versions, so an ETag would be a promise we cannot keep. The wudict
-	// howto counts: with it listed the app has something to show, and the
-	// page opens on it instead, with the way to add dictionaries on top.
-	if s.reg.Count() == 0 {
-		page := setupPage(s.reg.Dirs(), 0, s.pagePresetLinks(), language)
-		return s.renderUserUIChoice(page, language, choice), ""
-	}
 	// "no-cache" means REVALIDATE, not "never store" - and revalidation needs
 	// something to revalidate against. Without a validator the browser had no
 	// way to ask "still the same?", so every load, every reload, re-sent the
@@ -648,8 +639,7 @@ func (s *Server) pageForLanguage(dayTag, nightTag, presetLinks, language, choice
 	return s.styledPage, s.styledETag
 }
 
-// handleSetupPage serves the folder editor on demand (the same page first run
-// shows). Reachable at any time so "which folders am I scanning?" is always
+// handleSetupPage serves the folder editor on demand. Reachable at any time so "which folders am I scanning?" is always
 // answerable from the app itself, never only from a terminal.
 func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

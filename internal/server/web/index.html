@@ -1002,7 +1002,13 @@ window.wudictFontScale=(function(){
 <dialog id="portableDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="portableTitle">
 <h2 id="portableTitle">{{T:portable.title}}</h2>
 <p>{{T:portable.hint}}</p>
+<div class="portable-options">
+  <label class="portable-option"><input type="radio" name="portableDestination" id="portableInPlace" value="in-place"><span>{{T:portable.inPlace}}</span></label>
+  <p id="portablePermissionHint" class="portable-permission-hint" hidden>{{T:portable.noWrite}}</p>
+  <p id="portableSourcePath" class="portable-source-path"></p>
+  <label class="portable-option"><input type="radio" name="portableDestination" id="portableOutput" value="output" checked><span>{{T:portable.outputOption}}</span></label>
 <div class="portable-path"><label for="portablePath">{{T:export.folder}}</label><input type="text" id="portablePath" autocomplete="off" spellcheck="false"><button type="button" class="btn" id="portableFolder" aria-label="{{T:pages.chooseFolder}}" hidden>📁</button></div>
+</div>
 <label class="portable-check"><input type="checkbox" id="portableDictionaries"> {{T:portable.dictionaries}}</label>
 <progress id="portableProgress" max="100" hidden aria-label="{{T:portable.title}}"></progress>
 <p id="portableStatus" role="status" aria-live="polite"></p>
@@ -1093,6 +1099,12 @@ window.wudictFontScale=(function(){
     <p class="sys-hint">{{T:system.messagesHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysInfo"><span class="sys-label">{{T:system.showInfo}}</span></label>
 
+    <h3 class="sys-head">{{T:system.updates}}</h3>
+    <p class="sys-hint">{{T:system.updatesHint}}</p>
+    <label class="sys-row sys-num"><span class="sys-label">{{T:system.updateChannel}}</span><span class="panel-select-wrap panel-dropdown"><select id="sysUpdateChannel"><option value="release">{{T:system.updateRelease}}</option><option value="prerelease">{{T:system.updatePrerelease}}</option><option value="beta">{{T:system.updateBeta}}</option></select></span></label>
+    <div class="group-toolbar sys-action-spaced"><button type="button" class="btn" id="sysCheckUpdates">{{T:system.checkUpdates}}</button></div>
+    <p class="sys-note" id="sysUpdateNote" aria-live="polite"></p>
+
     <div id="sysAccessSection">
       <h3 class="sys-head">{{T:system.access}}</h3>
       <p class="sys-hint">{{T:system.accessHint}}</p>
@@ -1115,6 +1127,10 @@ window.wudictFontScale=(function(){
     <label class="sys-row"><input type="checkbox" id="sysMergedFTS"><span class="sys-label">{{T:system.mergedFTS}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysMergedTrigram"><span class="sys-label">{{T:system.mergedTrigram}}</span></label>
 
+    <h3 class="sys-head" id="sysIndexingHeading">{{T:system.indexing}}</h3>
+    <label class="sys-row sys-num sys-indexing-mode"><span class="sys-label">{{T:system.indexingMode}}</span><span class="panel-select-wrap panel-dropdown sys-indexing-mode-select"><select id="sysIndexingMode"><option value="pipeline">{{T:system.indexingModePipeline}}</option><option value="parallel-dictionaries-single-worker">{{T:system.indexingModeParallel}}</option><option value="auto">{{T:system.indexingModeAuto}}</option><option value="auto2">{{T:system.indexingModeAuto2}}</option></select></span></label>
+    <p class="sys-hint">{{T:system.indexingModeHint}}</p>
+
     <h3 class="sys-head">{{T:system.logFile}}</h3>
     <p class="sys-hint">{{T:system.logHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysLogEnabled"><span class="sys-label">{{T:system.logEnable}}</span></label>
@@ -1126,8 +1142,6 @@ window.wudictFontScale=(function(){
     <label class="sys-row"><input type="checkbox" id="sysDictionaryListDiagnostics"><span class="sys-label">{{T:system.dictionaryListDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysDictionaryCacheDiagnostics"><span class="sys-label">{{T:system.dictionaryCacheDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysIndexParallelismDiagnostics"><span class="sys-label">{{T:system.indexParallelismDiagnostics}}</span></label>
-    <label class="sys-row sys-num sys-indexing-mode"><span class="sys-label">{{T:system.indexingMode}}</span><span class="sys-indexing-mode-select"><select id="sysIndexingMode"><option value="pipeline">{{T:system.indexingModePipeline}}</option><option value="parallel-dictionaries-single-worker">{{T:system.indexingModeParallel}}</option><option value="auto">{{T:system.indexingModeAuto}}</option><option value="auto2">{{T:system.indexingModeAuto2}}</option></select></span></label>
-    <p class="sys-hint">{{T:system.indexingModeHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysFolderDiagnostics"><span class="sys-label">{{T:system.folderDiagnostics}}</span></label>
 
     <!-- Advanced FOLDS, and starts folded (the reader's ask, 2026-09-28). Two
@@ -1832,9 +1846,11 @@ async function loadPrefs(){
        the same call the removed `sortMine` got. The field is still WRITTEN
        (below, always false), because it is upstream's. */
     if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyArticleFont(st.ui.fontFamily||"charis",false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false);applyDictIcons(!st.ui.dictIconsOff,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll;prefOrderModeKnown=typeof st.ui.customOrder==="boolean";prefCustomOrder=!!st.ui.customOrder;
+      updateChannel=st.ui.updateChannel||"release";
       resultCacheLimitGB=Number(st.ui.resultCacheLimitGB)||defaultResultCacheLimitGB();resultCacheNoLimit=!!st.ui.resultCacheNoLimit;syncResultCacheLimitUI();
       searchReturnCacheStorage=st.ui.searchReturnCache==="memory"?"memory":"disk";syncSearchReturnCacheUI();
       combinedDictionaryLimit=Math.max(1,Math.min(Number(st.ui.combinedDictionaryLimit)||defaultCombinedDictionaryLimit,maxCombinedDictionaryLimit));syncCombinedDictionaryLimitUI()}
+    scheduleUpdateCheck();
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
     prefOrder=rows.map(d=>d.id);prefPinned=rows.filter(d=>d.pinned).map(d=>d.id);
     dictTitles=new Map(rows.filter(d=>d.title).map(d=>[d.id,d.title]));
@@ -1847,7 +1863,7 @@ async function loadPrefs(){
 /* Debounced, and silent when nothing actually changed — dragging a card emits
    a move per hovered row, and startup normalisation re-sends a list that is
    usually identical to the one we just read. */
-let prefsTimer=null,prefsSent=null;
+let prefsTimer=null,prefsSent=null,updateChannel="release";
 function defaultResultCacheLimitGB(){return window.wudictAndroidShell?2:8}
 let resultCacheLimitGB=defaultResultCacheLimitGB(),resultCacheNoLimit=false;
 let searchReturnCacheStorage="disk";
@@ -1890,7 +1906,7 @@ function savePrefs(now){
   // that no longer exist.
   const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:d.name||d.path.split("/").pop(),title:dictTitles.get(d.id)||"",pinned:prefPinned.includes(d.id)})),
     ui:{fontSize:articleFS,fontWeight:articleFW,fontFamily:articleFont,hlOff:!hlOn,speakOff:!speakOn,dictIconsOff:!dictIconsOn,fastFirst:!orderFirst,hideUnmarkedExamples,customOrder:prefCustomOrder,
-      resultCacheLimitGB,resultCacheNoLimit,combinedDictionaryLimit,searchReturnCache:searchReturnCacheStorage}});
+      resultCacheLimitGB,resultCacheNoLimit,combinedDictionaryLimit,searchReturnCache:searchReturnCacheStorage,updateChannel}});
   if(body===prefsSent)return;
   prefsSent=body;
   apiFetch("/api/prefs",{method:"PUT",headers:{"Content-Type":"application/json"},body})
@@ -3068,12 +3084,15 @@ if(window.wudictWindowsShell&&!window.wudictAndroidShell){
 let portablePolling=false,portableRunning=false,portableCompletedPath=null,portableCompletedResult=null;
 const portablePathKey=path=>path.trim().replace(/\//g,'\\').replace(/\\+$/,'').toLowerCase();
 function portablePathChanged(){
- $('portableCreate').disabled=portableRunning||(portableCompletedPath!==null&&portablePathKey($('portablePath').value)===portableCompletedPath);
+ $('portablePath').disabled=portableRunning||$('portableInPlace').checked;
+ $('portableFolder').disabled=portableRunning||$('portableInPlace').checked;
+ const path=$('portableInPlace').checked?$('portableSourcePath').dataset.target:$('portablePath').value;
+ $('portableCreate').disabled=portableRunning||(!path&&!$('portableInPlace').checked)||(portableCompletedPath!==null&&portablePathKey(path)===portableCompletedPath);
 }
 const portableCall=(action,options={})=>window.wudictNativeCall('createPortable',JSON.stringify({action,...options}));
 function portableBusy(busy){
  portableRunning=busy;
- for(const id of ['portablePath','portableFolder','portableDictionaries','portableCreate'])$(id).disabled=busy;
+ for(const id of ['portableDictionaries','portableInPlace','portableOutput'])$(id).disabled=busy||($(id).id==='portableInPlace'&&$('portableInPlace').dataset.allowed==='0');
  $('portableStop').hidden=!busy;
  portablePathChanged();
 }
@@ -3098,13 +3117,21 @@ async function portableFollow(){
  finally{portablePolling=false}
 }
 $('portableTool').hidden=!window.wudictWindowsShell;
-$('openPortable').onclick=()=>{hidePanel();$('portableFolder').hidden=typeof window.wudictPickFolder!=='function';portableBusy(true);$('portableDialog').showModal();portableFollow()};
+$('openPortable').onclick=async()=>{
+ hidePanel();$('portableFolder').hidden=typeof window.wudictPickFolder!=='function';portableBusy(true);$('portableDialog').showModal();
+ try{const source=await portableCall('source');$('portableSourcePath').textContent=source.Path;$('portableSourcePath').dataset.target=source.Path;$('portableInPlace').checked=false;$('portableOutput').checked=true;
+  const probe=await portableCall('checkWrite');const allowed=!!probe.Writable;$('portableInPlace').dataset.allowed=allowed?'1':'0';$('portableInPlace').disabled=!allowed;
+  $('portablePermissionHint').hidden=allowed;$('portablePermissionHint').textContent=allowed?'':tx('portable.noWrite');
+ }catch(error){$('portableInPlace').dataset.allowed='0';$('portableInPlace').disabled=true;$('portablePermissionHint').hidden=false;$('portablePermissionHint').textContent=tx('portable.noWrite')}
+ portableBusy(false);portablePathChanged();portableFollow();
+};
 $('portablePath').oninput=portablePathChanged;
+$('portableInPlace').onchange=portablePathChanged;$('portableOutput').onchange=portablePathChanged;
 $('portableFolder').onclick=()=>window.wudictPickFolder(path=>{if(path){$('portablePath').value=path;portablePathChanged()}});
 $('portableClose').onclick=()=>$('portableDialog').close();
 $('portableCreate').onclick=async()=>{
  portableShowStatus({Running:true,Stage:'counting'});
- try{await portableCall('start',{path:$('portablePath').value.trim(),dictionaries:$('portableDictionaries').checked});portableFollow()}
+ try{await portableCall('start',{path:$('portablePath').value.trim(),inPlace:$('portableInPlace').checked,dictionaries:$('portableDictionaries').checked});portableFollow()}
  catch(error){portableBusy(false);$('portableProgress').hidden=true;$('portableStatus').textContent=tx('portable.failed',{error:error.message})}
 };
 $('portableStop').onclick=async()=>{try{await portableCall('stop');portableFollow()}catch(error){$('portableStatus').textContent=tx('portable.failed',{error:error.message})}};
@@ -4331,6 +4358,7 @@ function sysRead(){
 function sysPaint(state){
   const accessSection=$("sysAccessSection");
   if(accessSection)accessSection.hidden=state.serverAvailable===false;
+  $("sysUpdateChannel").value=state.updateChannel||"release";
   for(const pair of [["sysToolbar",state.toolbar],["sysShare",state.share],
       ["sysLink",state.link],["sysReader",state.reader],["sysInfo",state.info],["sysKey",state.key]]){
     $(pair[0]).checked=!!pair[1];
@@ -4671,6 +4699,11 @@ async function showDesktopSysSettings(){
   const dialog=$("desktopSysSettings"),body=$("desktopSysBody");
   if(!desktopSystemNodes)desktopSystemNodes={
     info:$("sysInfo").parentElement,
+    updatesHeading:$("sysUpdateChannel").closest(".sys-row").previousElementSibling.previousElementSibling,
+    updatesHint:$("sysUpdateChannel").closest(".sys-row").previousElementSibling,
+    updateChannel:$("sysUpdateChannel").closest(".sys-row"),
+    checkUpdates:$("sysCheckUpdates").parentElement,
+    updateNote:$("sysUpdateNote"),
     resultCacheHeading:$("sysResultCacheHeading"),
     resultCacheHint:$("sysResultCacheHint"),
     resultCacheRow:$("sysResultCacheLimited").closest(".sys-row"),
@@ -4709,6 +4742,9 @@ async function showDesktopSysSettings(){
   const messagesHint=document.createElement("p");messagesHint.className="sys-hint";
   messagesHint.textContent=tx("system.messagesHint");body.append(messagesHint);
   body.append(desktopSystemNodes.info);
+  body.append(desktopSystemNodes.updatesHeading,desktopSystemNodes.updatesHint,desktopSystemNodes.updateChannel,desktopSystemNodes.checkUpdates,desktopSystemNodes.updateNote);
+  try{const response=await apiFetch("/api/prefs");const updatePrefs=await response.json();updateChannel=updatePrefs.ui?.updateChannel||"release"}catch(_){updateChannel="release"}
+  $("sysUpdateChannel").value=updateChannel;
   $("sysInfo").checked=!quietMessages;
   const cacheHeading=document.createElement("h3");cacheHeading.className="sys-head";
   cacheHeading.textContent=tx("system.cache");body.append(cacheHeading);
@@ -4724,6 +4760,18 @@ async function showDesktopSysSettings(){
     desktopSystemNodes.searchFTS,desktopSystemNodes.searchTrigram);
   $("sysMergedFTS").checked=wildcardSearchIndexEnabled("fts");
   $("sysMergedTrigram").checked=wildcardSearchIndexEnabled("trigram");
+  const indexingHeading=document.createElement("h3");indexingHeading.className="sys-head";
+  indexingHeading.textContent=tx("system.indexing");body.append(indexingHeading);
+  const indexingModeLabel=document.createElement("label");indexingModeLabel.className="sys-row sys-num sys-indexing-mode";
+  const indexingModeText=document.createElement("span");indexingModeText.className="sys-label";indexingModeText.textContent=tx("system.indexingMode");
+  const indexingModeSelectWrap=document.createElement("span");indexingModeSelectWrap.className="panel-select-wrap panel-dropdown sys-indexing-mode-select";
+  const indexingModeSelect=document.createElement("select");indexingModeSelect.id="desktopSysIndexingMode";
+  for(const [value,key] of [["pipeline","system.indexingModePipeline"],["parallel-dictionaries-single-worker","system.indexingModeParallel"],["auto","system.indexingModeAuto"],["auto2","system.indexingModeAuto2"]]){
+    const option=document.createElement("option");option.value=value;option.textContent=tx(key);indexingModeSelect.append(option);
+  }
+  indexingModeSelect.value=indexingModePreference();indexingModeSelect.addEventListener("change",()=>setIndexingMode(indexingModeSelect.value,indexingModeSelect));
+  indexingModeSelectWrap.append(indexingModeSelect);indexingModeLabel.append(indexingModeText,indexingModeSelectWrap);body.append(indexingModeLabel);
+  const indexingModeHint=document.createElement("p");indexingModeHint.className="sys-hint";indexingModeHint.textContent=tx("system.indexingModeHint");body.append(indexingModeHint);
   const logHeading=document.createElement("h3");logHeading.className="sys-head";
   logHeading.textContent=tx("system.logFile");body.append(logHeading);
   const logHint=document.createElement("p");logHint.className="sys-hint";
@@ -4752,16 +4800,6 @@ async function showDesktopSysSettings(){
   indexParallelismDiagnostics.addEventListener("change",()=>setIndexParallelismDiagnostics(indexParallelismDiagnostics.checked));
   const indexParallelismText=document.createElement("span");indexParallelismText.className="sys-label";indexParallelismText.textContent=tx("system.indexParallelismDiagnostics");
   indexParallelismLabel.append(indexParallelismDiagnostics,indexParallelismText);body.append(indexParallelismLabel);
-  const indexingModeLabel=document.createElement("label");indexingModeLabel.className="sys-row sys-num sys-indexing-mode";
-  const indexingModeText=document.createElement("span");indexingModeText.className="sys-label";indexingModeText.textContent=tx("system.indexingMode");
-  const indexingModeSelectWrap=document.createElement("span");indexingModeSelectWrap.className="sys-indexing-mode-select";
-  const indexingModeSelect=document.createElement("select");indexingModeSelect.id="desktopSysIndexingMode";
-  for(const [value,key] of [["pipeline","system.indexingModePipeline"],["parallel-dictionaries-single-worker","system.indexingModeParallel"],["auto","system.indexingModeAuto"],["auto2","system.indexingModeAuto2"]]){
-    const option=document.createElement("option");option.value=value;option.textContent=tx(key);indexingModeSelect.append(option);
-  }
-  indexingModeSelect.value=indexingModePreference();indexingModeSelect.addEventListener("change",()=>setIndexingMode(indexingModeSelect.value,indexingModeSelect));
-  indexingModeSelectWrap.append(indexingModeSelect);indexingModeLabel.append(indexingModeText,indexingModeSelectWrap);body.append(indexingModeLabel);
-  const indexingModeHint=document.createElement("p");indexingModeHint.className="sys-hint";indexingModeHint.textContent=tx("system.indexingModeHint");body.append(indexingModeHint);
   const dictionaryListLabel=document.createElement("label");dictionaryListLabel.className="sys-row";
   const dictionaryListDiagnostics=document.createElement("input");dictionaryListDiagnostics.type="checkbox";dictionaryListDiagnostics.checked=dictionaryListDiagnosticsEnabled();
   dictionaryListDiagnostics.addEventListener("change",()=>setDictionaryListDiagnostics(dictionaryListDiagnostics.checked));
@@ -4788,6 +4826,68 @@ $("sysToolbar").addEventListener("change",e=>sysSwitch("toolbar",e.target.checke
 $("sysShare").addEventListener("change",e=>sysSwitch("share",e.target.checked));
 $("sysLink").addEventListener("change",e=>sysSwitch("link",e.target.checked));
 $("sysReader").addEventListener("change",e=>sysSwitch("reader",e.target.checked));
+$("sysUpdateChannel").addEventListener("change",e=>{
+  const channel=["release","prerelease","beta"].includes(e.target.value)?e.target.value:"release";
+  updateChannel=channel;
+  if(window.wudictAndroidShell)sysSet({action:"set",field:"updateChannel",value:channel});
+  else savePrefs(true);
+  $("sysUpdateNote").textContent="";
+  try{localStorage.removeItem("dictshelf_update_check_"+channel)}catch(_){}
+  setTimeout(()=>checkForUpdates(true),500);
+});
+function scheduleUpdateCheck(){
+  try{
+    const key="dictshelf_update_check_"+updateChannel,day=new Date().toISOString().slice(0,10);
+    if(localStorage.getItem(key)===day)return;
+    localStorage.setItem(key,day);
+  }catch(_){}
+  setTimeout(()=>checkForUpdates(true),2500);
+}
+async function checkForUpdates(silent=false){
+  const note=$("sysUpdateNote");
+  if(!silent)note.textContent=tx("system.checkingUpdates");
+  try{
+    const r=await fetch("https://api.github.com/repos/DMSHLabs/DictShelf/releases?per_page=100",{headers:{Accept:"application/vnd.github+json"}});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const releases=await r.json();
+    const currentRaw=document.querySelector(".ver")?.textContent||"0.0.0";
+    const current=(currentRaw.match(/(?:dictshelf|wudict2)-v?(\d+\.\d+\.\d+(?:[-+][0-9a-z.-]+)?)/i)||[])[1]||currentRaw.replace(/^v/i,"");
+    const versionParts=v=>{const core=v.split(/[+-]/,1)[0].split("-",1)[0];return core.split(".").slice(0,3).map(n=>Number.parseInt(n,10)||0)};
+    const isNewer=v=>{
+      const a=versionParts(v),b=versionParts(current);
+      for(let i=0;i<3;i++){if(a[i]!==b[i])return a[i]>b[i]}
+      if(/beta/i.test(v)&&/beta/i.test(current)){
+        const suffix=x=>(x.match(/beta\D*(\d+)/i)||[])[1]||"0";
+        return Number(suffix(v))>Number(suffix(current));
+      }
+      return /beta/i.test(current)&&!/beta/i.test(v);
+    };
+    let update=null;
+    for(const release of releases){
+      if(release.draft)continue;
+      const version=(String(release.tag_name||"").match(/(?:dictshelf|wudict2)-v?(\d+\.\d+\.\d+(?:[-+][0-9a-z.-]+)?)/i)||[])[1];
+      if(!version||!isNewer(version))continue;
+      const beta=/beta/i.test(version);
+      if(updateChannel==="beta"?!beta:updateChannel==="prerelease"?(!release.prerelease||beta):(release.prerelease||beta))continue;
+      update={version,url:release.html_url};break;
+    }
+    if(!update){if(!silent)note.textContent=tx("system.noUpdates");return}
+    const message=tx("system.updateAvailable",{version:update.version});
+    if(silent){
+      const safeURL=String(update.url||"");
+      const action=safeURL.startsWith("https://github.com/DMSHLabs/DictShelf/releases/")
+        ?` <a href="${esc(safeURL)}" target="_blank" rel="noopener">${esc(tx("system.viewRelease"))}</a>`:"";
+      setStatus(esc(message)+action);return;
+    }
+    note.replaceChildren();
+    note.append(document.createTextNode(message+" "));
+    const link=document.createElement("a");link.href=update.url;link.target="_blank";link.rel="noopener";link.textContent=tx("system.viewRelease");note.append(link);
+  }catch(e){
+    if(silent){try{localStorage.removeItem("dictshelf_update_check_"+updateChannel)}catch(_){}}
+    else note.textContent=tx("system.updateCheckFailed",{error:window.wudictI18n.errorText(e.message)});
+  }
+}
+$("sysCheckUpdates").addEventListener("click",checkForUpdates);
 $("sysInfo").addEventListener("change",e=>{
   quietMessages=!e.target.checked;
   if(window.wudictAndroidShell)sysSwitch("info",e.target.checked);
@@ -6080,8 +6180,8 @@ function updateIndexingTask(html,activeDicts){
   const content=document.createElement("div");content.innerHTML=indexingTaskMessage;
   const message=content.textContent.trim();
   const stopRequested=globalStopLabel===tx("dictUI.bulkStopping")||globalStopLabel===tx("dictUI.stopping");
-  if(indexingTaskID)window.wudictTasks.update(indexingTaskID,{message,stop:globalStopAction,stopRequested,...(activeDicts!==undefined?{children:activeDictionaryRows(activeDicts)}:{})});
-  else indexingTaskID=window.wudictTasks.start("indexing",message,{stop:globalStopAction,stopRequested,children:activeDictionaryRows(activeDicts)});
+  if(indexingTaskID)window.wudictTasks.update(indexingTaskID,{message,stop:globalStopAction,stopRequested,singleWhenAlone:false,...(activeDicts!==undefined?{children:activeDictionaryRows(activeDicts)}:{})});
+  else indexingTaskID=window.wudictTasks.start("indexing",message,{stop:globalStopAction,stopRequested,singleWhenAlone:false,children:activeDictionaryRows(activeDicts)});
 }
 function finishIndexingTask(){
   if(indexingTaskID)window.wudictTasks?.finish(indexingTaskID);
@@ -8492,9 +8592,9 @@ async function doSearch(ev){
       $("out").replaceChildren();liveSearchBoxes=null;refreshLivePicker();
       livePickerSearching=false;
       setBusy(false); // nothing was ever sent; both branches below are statements
-       if(settled)setStatus(groupHasMembers?esc(tx("search.groupUnavailable",{name:lbl}))
-              :lbl?esc(tx("search.groupEmpty",{name:lbl}))
-              :esc(tx("search.noDicts")));
+       if(settled&&groupHasMembers)setStatus(esc(tx("search.groupUnavailable",{name:lbl})));
+       else if(settled&&lbl)setStatus(esc(tx("search.groupEmpty",{name:lbl})));
+       else if(settled){$("out").replaceChildren();const addLink=document.createElement("a");addLink.href="#";addLink.id="addDictionariesLink";addLink.textContent=tx("search.addDictionaries");addLink.addEventListener("click",event=>{event.preventDefault();window.openFoldersDialog?.(event.currentTarget,cfgInfo)});setStatus(esc(tx("search.noDicts"))+" "+addLink.outerHTML+".");}
        else clearStatusForResults(); // startup progress is shown only by the task manager
       if(!settled&&phase!=="failed")staleSearch=true;
       return;

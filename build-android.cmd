@@ -4,7 +4,7 @@ rem SPDX-License-Identifier: GPL-3.0-or-later
 setlocal EnableExtensions DisableDelayedExpansion
 
 rem ============================================================
-rem DictShelf Android FOSS build: [debug|release|all] [intel]
+rem DictShelf Android FOSS build: [debug|release|all] [intel|ABI] [--channel release|pre-release|beta]
 rem
 rem   intel  also ship the x86_64 Go/JNI bridge, so the same APK runs on the
 rem          x86_64 emulator as well as on arm64 hardware. Debug only:
@@ -25,6 +25,28 @@ if exist "%~dp0build-android.local.bat" (
 
 set "BUILD_TYPE=%~1"
 set "ABI_TOKEN=%~2"
+set "CHANNEL=release"
+set "CHANNEL_SPECIFIED="
+set "CHANNEL_ARGS="
+if /i "%~1"=="--channel" (
+    set "BUILD_TYPE=debug"
+    set "ABI_TOKEN="
+    set "CHANNEL=%~2"
+    set "CHANNEL_SPECIFIED=1"
+) else if /i "%~2"=="--channel" (
+    set "ABI_TOKEN="
+    set "CHANNEL=%~3"
+    set "CHANNEL_SPECIFIED=1"
+) else if /i "%~3"=="--channel" (
+    set "CHANNEL=%~4"
+    set "CHANNEL_SPECIFIED=1"
+)
+if defined CHANNEL_SPECIFIED if /i not "%CHANNEL%"=="release" if /i not "%CHANNEL%"=="pre-release" if /i not "%CHANNEL%"=="beta" (
+    echo ERROR: unknown update channel "%CHANNEL%".
+    echo Usage: build-android.cmd [debug^|release^|all] [intel^|ABI] [--channel release^|pre-release^|beta]
+    exit /b 1
+)
+if defined CHANNEL_SPECIFIED set "CHANNEL_ARGS=--channel %CHANNEL%"
 
 if /i "%BUILD_TYPE%"=="all" (
     set "ALL_APK_DIR=android\app\build\outputs\apk\all"
@@ -38,15 +60,15 @@ if /i "%BUILD_TYPE%"=="all" (
         "android\app\build\outputs\apk\all\dictshelf-android-universal-foss.apk"
         "android\app\build\outputs\apk\all\dictshelf-android-universal-foss-unsigned.apk"
     ) do if exist "%%~fF" del /q "%%~fF"
-    call "%~f0" release arm64-v8a
+    call "%~f0" release arm64-v8a %CHANNEL_ARGS%
     if errorlevel 1 exit /b 1
     call :stage_all_apk arm64-v8a
     if errorlevel 1 exit /b 1
-    call "%~f0" release armeabi-v7a
+    call "%~f0" release armeabi-v7a %CHANNEL_ARGS%
     if errorlevel 1 exit /b 1
     call :stage_all_apk armeabi-v7a
     if errorlevel 1 exit /b 1
-    call "%~f0" release universal
+    call "%~f0" release universal %CHANNEL_ARGS%
     if errorlevel 1 exit /b 1
     call :stage_all_apk universal
     if errorlevel 1 exit /b 1
@@ -79,7 +101,7 @@ if /i "%BUILD_TYPE%"=="debug" (
     )
 ) else (
     echo ERROR: unknown build type "%BUILD_TYPE%".
-    echo Usage: build-android.cmd [debug^|release^|all] [intel^|arm64-v8a^|armeabi-v7a^|universal]
+    echo Usage: build-android.cmd [debug^|release^|all] [intel^|arm64-v8a^|armeabi-v7a^|universal] [--channel release^|pre-release^|beta]
     exit /b 1
 )
 
@@ -102,7 +124,7 @@ if defined ABI_TOKEN (
         set "EMU_X86=1"
     ) else (
         echo ERROR: unknown option "%ABI_TOKEN%".
-        echo Usage: build-android.cmd [debug^|release^|all] [intel^|arm64-v8a^|armeabi-v7a^|universal]
+        echo Usage: build-android.cmd [debug^|release^|all] [intel^|arm64-v8a^|armeabi-v7a^|universal] [--channel release^|pre-release^|beta]
         exit /b 1
     )
     if defined EMU_X86 (
@@ -233,8 +255,29 @@ rem   set WUDICT_VERSION=wudict2-v3.8.0
 rem Without an override, use the version derived from this checkout's Git history.
 if defined WUDICT_VERSION set "VERSION=%WUDICT_VERSION%"
 
+rem An explicitly selected channel stamps a classifier into preview builds.
+rem GitHub still decides whether a published release is marked Pre-release.
+if defined CHANNEL_SPECIFIED (
+    echo(%VERSION%| findstr /i /c:"beta" >nul
+    if /i "%CHANNEL%"=="beta" (
+        if errorlevel 1 set "VERSION=%VERSION%-beta.1"
+    ) else if /i "%CHANNEL%"=="pre-release" (
+        if not errorlevel 1 (
+            echo ERROR: a Beta version cannot be built in the Pre-release channel.
+            exit /b 1
+        )
+        echo(%VERSION%| findstr /i /c:"-pre" >nul
+        if errorlevel 1 set "VERSION=%VERSION%-pre"
+    ) else if not errorlevel 1 (
+        echo ERROR: a Beta version cannot be built in the Release channel.
+        exit /b 1
+    )
+)
+
 echo DictShelf version:
 echo   %VERSION%
+echo Update channel:
+echo   %CHANNEL%
 echo.
 
 rem ------------------------------------------------------------

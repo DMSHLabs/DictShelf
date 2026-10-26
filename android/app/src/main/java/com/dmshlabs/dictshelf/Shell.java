@@ -266,6 +266,9 @@ final class Shell {
         reply.put("reader", ShellPrefs.opensApp(c, ShellPrefs.READER));
         reply.put("info", ShellPrefs.infoMessages(c));
         reply.put("serverAvailable", false);
+        org.json.JSONObject prefs = new org.json.JSONObject(GoBridge.prefsSnapshot());
+        org.json.JSONObject uiPrefs = prefs.optJSONObject("ui");
+        reply.put("updateChannel", uiPrefs == null ? "release" : uiPrefs.optString("updateChannel", "release"));
         reply.put("logEnabled", SystemLog.enabled());
         reply.put("logBaseEvents", SystemLog.baseEvents());
         reply.put("logWebEvents", SystemLog.detailedEvents());
@@ -849,6 +852,13 @@ final class Shell {
                                 ShellPrefs.set(a, ShellPrefs.READER, request.getBoolean("value"));
                             } else if ("info".equals(field)) {
                                 ShellPrefs.set(a, ShellPrefs.INFO_MESSAGES, request.getBoolean("value"));
+                            } else if ("updateChannel".equals(field)) {
+                                String channel = request.getString("value");
+                                if (!java.util.Arrays.asList("release", "prerelease", "beta").contains(channel))
+                                    throw new IllegalArgumentException("Unknown update channel");
+                                org.json.JSONObject patch = new org.json.JSONObject().put("ui", new org.json.JSONObject().put("updateChannel", channel));
+                                if (!new org.json.JSONObject(GoBridge.savePrefs(patch.toString())).optBoolean("ok"))
+                                    throw new IllegalStateException("Could not save update channel");
                             } else if ("override".equals(field)) {
                                 ShellPrefs.Override o = ShellPrefs.byKey(request.getString("key"));
                                 // An absent or null value is "follow the
