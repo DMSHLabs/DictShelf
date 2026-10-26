@@ -225,7 +225,7 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 			value.Show = "Ctrl+Shift+F11"
 		}
 		if value.Translate == "" {
-			value.Translate = "Ctrl+Shift+F12"
+			value.Translate = "Ctrl+C, Ctrl+C"
 		}
 		return value, nil
 	case "setDesktopHotkeys":

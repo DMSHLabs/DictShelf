@@ -52,36 +52,63 @@ var (
 	windowGetOpenFileName   = windowComdlg32.NewProc("GetOpenFileNameW")
 	windowOle32             = syscall.NewLazyDLL("ole32.dll")
 	windowCoTaskMemFree     = windowOle32.NewProc("CoTaskMemFree")
-	windowRegisterHotKey    = windowUser32.NewProc("RegisterHotKey")
-	windowUnregisterHotKey  = windowUser32.NewProc("UnregisterHotKey")
+	windowSetWindowsHookEx  = windowUser32.NewProc("SetWindowsHookExW")
+	windowCallNextHookEx    = windowUser32.NewProc("CallNextHookEx")
+	windowUnhookWindowsHook = windowUser32.NewProc("UnhookWindowsHookEx")
 	windowOpenClipboard     = windowUser32.NewProc("OpenClipboard")
 	windowGetClipboardData  = windowUser32.NewProc("GetClipboardData")
+	windowClipboardSequence = windowUser32.NewProc("GetClipboardSequenceNumber")
 	windowCloseClipboard    = windowUser32.NewProc("CloseClipboard")
 	windowGlobalLock        = syscall.NewLazyDLL("kernel32.dll").NewProc("GlobalLock")
 	windowGlobalUnlock      = syscall.NewLazyDLL("kernel32.dll").NewProc("GlobalUnlock")
 	windowGlobalSize        = syscall.NewLazyDLL("kernel32.dll").NewProc("GlobalSize")
 	windowGetWindowRect     = windowUser32.NewProc("GetWindowRect")
+	windowSendInput         = windowUser32.NewProc("SendInput")
+	windowGetAsyncKeyState  = windowUser32.NewProc("GetAsyncKeyState")
+	windowGetModuleHandle   = syscall.NewLazyDLL("kernel32.dll").NewProc("GetModuleHandleW")
 )
 
 var desktopCloseToTray atomic.Bool
 var desktopHotkeyMu sync.Mutex
-var desktopHotkeySeq uint32
+var desktopHotkeySeq uint32 = 1
 var desktopHotkeyActions = map[int]desktopHotkeyAction{}
 var desktopHotkeyWindow uintptr
+var desktopHotkeyCaptureActive bool
+var desktopKeyboardHook uintptr
+var desktopKeyboardHookReady bool
+var desktopHookCallback = syscall.NewCallback(desktopKeyboardHookProc)
+var desktopSwallowedKeysMu sync.Mutex
+var desktopSwallowedKeyUps = map[uint32]bool{}
 var desktopWindowSaveMu sync.Mutex
 var desktopWindowSaveTimer *time.Timer
 
 type desktopWindowRect struct{ Left, Top, Right, Bottom int32 }
 
 type desktopHotkeyAction struct {
-	sequence []desktopHotkeyChord
-	action   int
-	id       int
+	sequence  []desktopHotkeyChord
+	action    int
+	id        int
+	waiting   bool
+	waitToken uint64
+	copySeq   uint32
 }
 
 type desktopHotkeyChord struct {
 	key  uint32
 	mods uint32
+}
+
+type desktopKeyboardInput struct {
+	Vk, Scan    uint16
+	Flags, Time uint32
+	ExtraInfo   uintptr
+}
+
+type desktopInput struct {
+	Type uint32
+	_    uint32 // alignment for the INPUT union on 64-bit Windows
+	Ki   desktopKeyboardInput
+	Pad  [8]byte // INPUT's union is the size of MOUSEINPUT on 64-bit Windows
 }
 
 // openDesktopWindow opens the local reader on a dedicated Windows UI thread.
@@ -140,7 +167,6 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 		desktopWindowHidden.Store(true)
 		return true
 	})
-	webview.SetHotkeyHandler(desktopHandleHotkey)
 	webview.SetWindowSizeHandler(func(hwnd uintptr, width, height int) {
 		if width < 480 || height < 320 {
 			return
@@ -220,6 +246,9 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		}
 		return
 	}
+	if !desktopInstallKeyboardHook() {
+		logx.Warn("could not install the layout-independent global hot-key listener")
+	}
 	log.Printf("WebView2 startup: window and runtime initialized in %s", time.Since(webviewStarted).Round(time.Millisecond))
 	w.Init(`window.__wudictDocumentFirstScriptMs=performance.now()`)
 	_ = w.Bind("wudictGetCloseToTray", func() bool {
@@ -241,16 +270,19 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	})
 	_ = w.Bind("wudictGetHotkeys", func() any {
 		if desktopRequest == nil {
-			return map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+Shift+F12"}
+			return map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+C, Ctrl+C"}
 		}
 		value, err := desktopRequest(context.Background(), "desktopHotkeys", "")
 		if err != nil {
-			return map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+Shift+F12"}
+			return map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+C, Ctrl+C"}
 		}
 		return value
 	})
 	_ = w.Bind("wudictSetHotkeys", func(kind, sequence string) bool {
 		return desktopSetHotkeys(uintptr(w.Window()), kind, sequence)
+	})
+	_ = w.Bind("wudictSetHotkeyCapture", func(enabled bool) {
+		desktopSetHotkeyCapture(uintptr(w.Window()), enabled)
 	})
 	desktopApplySavedHotkeys(uintptr(w.Window()), desktopRequest)
 	_ = w.Bind("wudictHideWindow", func() error {
@@ -491,6 +523,7 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	}
 	w.Run()
 	log.Printf("WebView2 window loop returned")
+	desktopUninstallKeyboardHook()
 	close(done)
 	w.Destroy()
 	desktopWindowMu.Lock()
@@ -500,6 +533,139 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	if onClose != nil {
 		onClose()
 	}
+}
+
+type desktopKeyboardEvent struct {
+	VirtualKey uint32
+	ScanCode   uint32
+	Flags      uint32
+	Time       uint32
+	ExtraInfo  uintptr
+}
+
+func desktopInstallKeyboardHook() bool {
+	if desktopKeyboardHook != 0 {
+		return true
+	}
+	module, _, _ := windowGetModuleHandle.Call(0)
+	hook, _, _ := windowSetWindowsHookEx.Call(13, desktopHookCallback, module, 0)
+	if hook == 0 {
+		return false
+	}
+	desktopKeyboardHook = hook
+	desktopKeyboardHookReady = true
+	return true
+}
+
+func desktopUninstallKeyboardHook() {
+	if desktopKeyboardHook != 0 {
+		windowUnhookWindowsHook.Call(desktopKeyboardHook)
+		desktopKeyboardHook = 0
+	}
+	desktopKeyboardHookReady = false
+}
+
+func desktopKeyboardHookProc(code int, message, data uintptr) uintptr {
+	if code < 0 {
+		result, _, _ := windowCallNextHookEx.Call(0, uintptr(code), message, data)
+		return result
+	}
+	const (
+		wmKeyDown     = 0x0100
+		wmKeyUp       = 0x0101
+		wmSysKeyDown  = 0x0104
+		wmSysKeyUp    = 0x0105
+		llkhfExtended = 0x01
+		llkhfInjected = 0x10
+		llkhfUp       = 0x80
+	)
+	if data == 0 {
+		return 0
+	}
+	event := *(*desktopKeyboardEvent)(unsafe.Pointer(data))
+	if event.Flags&llkhfInjected != 0 {
+		result, _, _ := windowCallNextHookEx.Call(0, uintptr(code), message, data)
+		return result
+	}
+	scanCode := event.ScanCode
+	if event.Flags&llkhfExtended != 0 {
+		scanCode |= 0x100
+	}
+	if message == wmKeyUp || message == wmSysKeyUp || event.Flags&llkhfUp != 0 {
+		desktopSwallowedKeysMu.Lock()
+		swallow := desktopSwallowedKeyUps[scanCode]
+		delete(desktopSwallowedKeyUps, scanCode)
+		desktopSwallowedKeysMu.Unlock()
+		if swallow {
+			return 1
+		}
+		result, _, _ := windowCallNextHookEx.Call(0, uintptr(code), message, data)
+		return result
+	}
+	if message != wmKeyDown && message != wmSysKeyDown {
+		result, _, _ := windowCallNextHookEx.Call(0, uintptr(code), message, data)
+		return result
+	}
+	desktopSwallowedKeysMu.Lock()
+	if desktopSwallowedKeyUps[scanCode] {
+		desktopSwallowedKeysMu.Unlock()
+		return 1
+	}
+	desktopSwallowedKeysMu.Unlock()
+	desktopHotkeyMu.Lock()
+	if desktopHotkeyCaptureActive || !desktopKeyboardHookReady {
+		desktopHotkeyMu.Unlock()
+		result, _, _ := windowCallNextHookEx.Call(0, uintptr(code), message, data)
+		return result
+	}
+	mods := desktopCurrentModifierMask()
+	var hotkeyID int
+	for _, action := range desktopHotkeyActions {
+		if len(action.sequence) == 0 {
+			continue
+		}
+		first := action.sequence[0]
+		if first.key == scanCode && first.mods == mods {
+			hotkeyID = action.id
+			break
+		}
+		if len(action.sequence) == 2 && action.waiting {
+			second := action.sequence[1]
+			if second.key == scanCode && second.mods == mods {
+				hotkeyID = action.id + 1
+				break
+			}
+		}
+	}
+	hwnd := desktopHotkeyWindow
+	desktopHotkeyMu.Unlock()
+	if hotkeyID == 0 {
+		result, _, _ := windowCallNextHookEx.Call(0, uintptr(code), message, data)
+		return result
+	}
+	desktopSwallowedKeysMu.Lock()
+	desktopSwallowedKeyUps[scanCode] = true
+	desktopSwallowedKeysMu.Unlock()
+	desktopHandleHotkey(hwnd, uintptr(hotkeyID), 0)
+	return 1
+}
+
+func desktopCurrentModifierMask() uint32 {
+	var mods uint32
+	for _, key := range []struct{ flag, vk uint32 }{{0x0002, 0x11}, {0x0004, 0x10}, {0x0001, 0x12}} {
+		state, _, _ := windowGetAsyncKeyState.Call(uintptr(key.vk))
+		if int16(state) < 0 {
+			mods |= key.flag
+		}
+	}
+	for _, vk := range []uint32{0x5B, 0x5C} {
+		state, _, _ := windowGetAsyncKeyState.Call(uintptr(vk))
+		if int16(state) < 0 {
+			mods |= 0x0008
+			break
+		}
+	}
+	return mods
 }
 
 // desktopInitialWindowColors reads the durable appearance before WebView2
@@ -691,7 +857,7 @@ func desktopSetHotkeys(hwnd uintptr, kind, value string) bool {
 
 func desktopSetHotkeysValue(hwnd uintptr, kind, value string, persist bool) bool {
 	sequence, ok := parseDesktopHotkey(value)
-	if !ok || hwnd == 0 || kind != "show" && kind != "translate" {
+	if !ok || hwnd == 0 || !desktopKeyboardHookReady || kind != "show" && kind != "translate" {
 		return false
 	}
 	desktopHotkeyMu.Lock()
@@ -715,35 +881,14 @@ func desktopSetHotkeysValue(hwnd uintptr, kind, value string, persist bool) bool
 		}
 	}
 	if hadOld {
-		for i := range old.sequence {
-			windowUnregisterHotKey.Call(hwnd, uintptr(old.id+i))
-		}
 		delete(desktopHotkeyActions, action)
 	}
 	id := int(desktopHotkeySeq)
-	registered := make([]desktopHotkeyChord, 0, len(sequence))
-	for i, chord := range sequence {
-		keyID := id + i
-		const modNoRepeat = 0x4000
-		ok, _, _ := windowRegisterHotKey.Call(hwnd, uintptr(keyID), uintptr(chord.mods|modNoRepeat), uintptr(chord.key))
-		if ok == 0 {
-			for j := range registered {
-				windowUnregisterHotKey.Call(hwnd, uintptr(id+j))
-			}
-			if hadOld {
-				desktopSetHotkeysRestore(hwnd, old)
-			}
-			return false
-		}
-		registered = append(registered, chord)
-	}
+	registered := append([]desktopHotkeyChord(nil), sequence...)
 	if current, exists := desktopHotkeyActions[1-action]; exists {
 		for _, a := range current.sequence {
 			for _, b := range sequence {
 				if a == b {
-					for i := range registered {
-						windowUnregisterHotKey.Call(hwnd, uintptr(id+i))
-					}
 					if hadOld {
 						desktopSetHotkeysRestore(hwnd, old)
 					}
@@ -752,10 +897,10 @@ func desktopSetHotkeysValue(hwnd uintptr, kind, value string, persist bool) bool
 			}
 		}
 	}
-	desktopHotkeySeq++
+	desktopHotkeySeq += uint32(len(sequence))
 	desktopHotkeyActions[action] = desktopHotkeyAction{sequence: registered, action: action, id: id}
 	if persist && desktopWindowRequest != nil {
-		stored := map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+Shift+F12"}
+		stored := map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+C, Ctrl+C"}
 		if raw, err := desktopWindowRequest(context.Background(), "desktopHotkeys", ""); err == nil {
 			b, _ := json.Marshal(raw)
 			_ = json.Unmarshal(b, &stored)
@@ -774,7 +919,7 @@ func desktopSetHotkeysValue(hwnd uintptr, kind, value string, persist bool) bool
 }
 
 func desktopApplySavedHotkeys(hwnd uintptr, request func(context.Context, string, string) (any, error)) {
-	values := map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+Shift+F12"}
+	values := map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+C, Ctrl+C"}
 	if request != nil {
 		if raw, err := request(context.Background(), "desktopHotkeys", ""); err == nil {
 			b, _ := json.Marshal(raw)
@@ -803,19 +948,31 @@ func desktopRegisterHotkey(hwnd uintptr, kind string, sequence []desktopHotkeyCh
 }
 
 func desktopSetHotkeysRestore(hwnd uintptr, old desktopHotkeyAction) {
-	const modNoRepeat = 0x4000
-	for i, chord := range old.sequence {
-		windowRegisterHotKey.Call(hwnd, uintptr(old.id+i), uintptr(chord.mods|modNoRepeat), uintptr(chord.key))
-	}
 	desktopHotkeyActions[old.action] = old
+}
+
+func desktopSetHotkeyCapture(hwnd uintptr, enabled bool) {
+	desktopHotkeyMu.Lock()
+	defer desktopHotkeyMu.Unlock()
+	if desktopHotkeyCaptureActive == enabled {
+		return
+	}
+	desktopHotkeyCaptureActive = enabled
+	for _, action := range desktopHotkeyActions {
+		if len(action.sequence) == 0 {
+			continue
+		}
+		if enabled {
+			action.waiting = false
+			action.waitToken++
+			desktopHotkeyActions[action.action] = action
+		}
+	}
 }
 
 func parseDesktopHotkey(value string) ([]desktopHotkeyChord, bool) {
 	parts := strings.Split(value, ",")
 	if len(parts) < 1 || len(parts) > 2 {
-		return nil, false
-	}
-	if len(parts) != 1 {
 		return nil, false
 	}
 	result := make([]desktopHotkeyChord, 0, len(parts))
@@ -835,7 +992,7 @@ func parseDesktopHotkey(value string) ([]desktopHotkeyChord, bool) {
 				if chord.key != 0 {
 					return nil, false
 				}
-				chord.key = desktopVirtualKey(strings.TrimSpace(token))
+				chord.key = desktopPhysicalScanCode(strings.TrimSpace(token))
 			}
 		}
 		if chord.key == 0 || chord.mods == 0 {
@@ -846,22 +1003,47 @@ func parseDesktopHotkey(value string) ([]desktopHotkeyChord, bool) {
 	return result, true
 }
 
-func desktopVirtualKey(key string) uint32 {
+func desktopPhysicalScanCode(key string) uint32 {
+	letters := map[byte]uint32{
+		'A': 0x1E, 'B': 0x30, 'C': 0x2E, 'D': 0x20, 'E': 0x12, 'F': 0x21,
+		'G': 0x22, 'H': 0x23, 'I': 0x17, 'J': 0x24, 'K': 0x25, 'L': 0x26,
+		'M': 0x32, 'N': 0x31, 'O': 0x18, 'P': 0x19, 'Q': 0x10, 'R': 0x13,
+		'S': 0x1F, 'T': 0x14, 'U': 0x16, 'V': 0x2F, 'W': 0x11, 'X': 0x2D,
+		'Y': 0x15, 'Z': 0x2C,
+	}
 	if len(key) == 1 {
 		b := key[0]
 		if b >= 'a' && b <= 'z' {
-			return uint32(b - 'a' + 'A')
+			b -= 'a' - 'A'
 		}
-		if b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' {
-			return uint32(b)
+		if scan, ok := letters[b]; ok {
+			return scan
+		}
+		digits := map[byte]uint32{'1': 0x02, '2': 0x03, '3': 0x04, '4': 0x05, '5': 0x06, '6': 0x07, '7': 0x08, '8': 0x09, '9': 0x0A, '0': 0x0B}
+		if scan, ok := digits[b]; ok {
+			return scan
 		}
 	}
 	if strings.HasPrefix(strings.ToLower(key), "f") {
 		if n, err := strconv.Atoi(key[1:]); err == nil && n >= 1 && n <= 24 {
-			return uint32(0x70 + n - 1)
+			if n <= 10 {
+				return uint32(0x3B + n - 1)
+			}
+			if n == 11 {
+				return 0x57
+			}
+			if n == 12 {
+				return 0x58
+			}
+			return uint32(0x64 + n - 13)
 		}
 	}
-	keys := map[string]uint32{"space": 0x20, "tab": 0x09, "escape": 0x1B, "enter": 0x0D, "insert": 0x2D, "delete": 0x2E, "home": 0x24, "end": 0x23, "up": 0x26, "down": 0x28, "left": 0x25, "right": 0x27, "pageup": 0x21, "pagedown": 0x22, "backspace": 0x08}
+	keys := map[string]uint32{
+		"space": 0x39, "tab": 0x0F, "escape": 0x01, "enter": 0x1C, "backspace": 0x0E,
+		"insert": 0x152, "delete": 0x153, "home": 0x147, "end": 0x14F,
+		"up": 0x148, "down": 0x150, "left": 0x14B, "right": 0x14D,
+		"pageup": 0x149, "pagedown": 0x151,
+	}
 	return keys[strings.ToLower(key)]
 }
 
@@ -871,13 +1053,10 @@ func desktopHandleHotkey(hwnd uintptr, id, lparam uintptr) bool {
 	ok := false
 	part := -1
 	for _, candidate := range desktopHotkeyActions {
-		for i := range candidate.sequence {
-			if candidate.id+i == int(id) {
-				action = candidate
-				part = i
-				ok = true
-				break
-			}
+		if candidate.id == int(id) {
+			action, part, ok = candidate, 0, true
+		} else if len(candidate.sequence) == 2 && candidate.waiting && candidate.id+1 == int(id) {
+			action, part, ok = candidate, 1, true
 		}
 		if ok {
 			break
@@ -887,13 +1066,52 @@ func desktopHandleHotkey(hwnd uintptr, id, lparam uintptr) bool {
 		desktopHotkeyMu.Unlock()
 		return false
 	}
-	if part != 0 {
-		ok = false
+	if len(action.sequence) == 2 {
+		current := desktopHotkeyActions[action.action]
+		if current.waiting && part == 0 && action.sequence[1] != action.sequence[0] {
+			current.waiting = false
+			current.waitToken++
+			desktopHotkeyActions[action.action] = current
+			desktopHotkeyMu.Unlock()
+			if action.action == 1 {
+				desktopSendHotkeyChord(desktopHotkeyChord{key: 0x2E, mods: 0x0002}, true)
+			} else {
+				desktopSendHotkeyChord(action.sequence[0], false)
+			}
+			return true
+		}
+		if !current.waiting {
+			current.waiting = true
+			current.waitToken++
+			waitToken := current.waitToken
+			if action.action == 1 {
+				sequence, _, _ := windowClipboardSequence.Call()
+				current.copySeq = uint32(sequence)
+			}
+			desktopHotkeyActions[action.action] = current
+			desktopHotkeyMu.Unlock()
+			if action.action == 1 {
+				desktopSendHotkeyChord(desktopHotkeyChord{key: 0x2E, mods: 0x0002}, true)
+			} else {
+				desktopSendHotkeyChord(action.sequence[0], false)
+			}
+			go func(actionKey, actionID int, waitToken uint64) {
+				time.Sleep(900 * time.Millisecond)
+				desktopHotkeyMu.Lock()
+				defer desktopHotkeyMu.Unlock()
+				current, exists := desktopHotkeyActions[actionKey]
+				if exists && current.id == actionID && current.waiting && current.waitToken == waitToken {
+					current.waiting = false
+					desktopHotkeyActions[actionKey] = current
+				}
+			}(action.action, action.id, waitToken)
+			return true
+		}
+		current.waiting = false
+		current.waitToken++
+		desktopHotkeyActions[action.action] = current
 	}
 	desktopHotkeyMu.Unlock()
-	if !ok {
-		return false
-	}
 	switch action.action {
 	case 0:
 		if desktopWindowHidden.Swap(false) || func() bool { iconic, _, _ := procIsIconic.Call(hwnd); return iconic != 0 }() {
@@ -903,8 +1121,36 @@ func desktopHandleHotkey(hwnd uintptr, id, lparam uintptr) bool {
 			desktopWindowHidden.Store(true)
 		}
 	case 1:
+		copySeq := action.copySeq
+		if len(action.sequence) == 1 {
+			sequence, _, _ := windowClipboardSequence.Call()
+			copySeq = uint32(sequence)
+			desktopSendHotkeyChord(desktopHotkeyChord{key: 0x2E, mods: 0x0002}, true)
+		} else {
+			desktopWindowHidden.Store(false)
+			restoreAndFocusWindow(hwnd)
+		}
 		go func() {
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(60 * time.Millisecond)
+			if copySeq != 0 {
+				deadline := time.Now().Add(500 * time.Millisecond)
+				for time.Now().Before(deadline) {
+					sequence, _, _ := windowClipboardSequence.Call()
+					if uint32(sequence) != copySeq {
+						break
+					}
+					time.Sleep(20 * time.Millisecond)
+				}
+				sequence, _, _ := windowClipboardSequence.Call()
+				if uint32(sequence) == copySeq {
+					if len(action.sequence) == 1 && hwnd != 0 {
+						desktopWindowHidden.Store(false)
+						restoreAndFocusWindow(hwnd)
+					}
+					return
+				}
+			}
+			clipboard := desktopReadClipboardText()
 			desktopHotkeyMu.Lock()
 			hwnd := desktopHotkeyWindow
 			desktopHotkeyMu.Unlock()
@@ -914,11 +1160,10 @@ func desktopHandleHotkey(hwnd uintptr, id, lparam uintptr) bool {
 			if w == nil {
 				return
 			}
-			iconic, _, _ := procIsIconic.Call(hwnd)
-			if (desktopWindowHidden.Swap(false) || iconic != 0) && hwnd != 0 {
+			if len(action.sequence) == 1 && hwnd != 0 {
+				desktopWindowHidden.Store(false)
 				restoreAndFocusWindow(hwnd)
 			}
-			clipboard := desktopReadClipboardText()
 			if clipboard == "" {
 				return
 			}
@@ -927,6 +1172,82 @@ func desktopHandleHotkey(hwnd uintptr, id, lparam uintptr) bool {
 		}()
 	}
 	return true
+}
+
+func desktopSendHotkeyChord(chord desktopHotkeyChord, suppressExtraModifiers bool) {
+	const (
+		inputKeyboard = 1
+		keyEventUp    = 0x0002
+	)
+	modifiers := []uint16{}
+	emulatedModifiers := []uint16{}
+	extraModifiers := []uint16{}
+	if suppressExtraModifiers {
+		for _, mod := range []struct {
+			flag uint32
+			vk   uint16
+		}{{0x0001, 0x12}, {0x0004, 0x10}, {0x0008, 0x5B}, {0x0008, 0x5C}} {
+			if chord.mods&mod.flag == 0 {
+				state, _, _ := windowGetAsyncKeyState.Call(uintptr(mod.vk))
+				if int16(state) < 0 {
+					extraModifiers = append(extraModifiers, mod.vk)
+				}
+			}
+		}
+	}
+	for _, mod := range []struct {
+		flag uint32
+		vk   uint16
+	}{{0x0001, 0x12}, {0x0002, 0x11}, {0x0004, 0x10}, {0x0008, 0x5B}} {
+		if chord.mods&mod.flag != 0 {
+			modifiers = append(modifiers, mod.vk)
+			state, _, _ := windowGetAsyncKeyState.Call(uintptr(mod.vk))
+			if int16(state) >= 0 {
+				emulatedModifiers = append(emulatedModifiers, mod.vk)
+			}
+		}
+	}
+	// Reassert modifiers in the injected sequence because the hook consumes the
+	// non-modifier key. Release only modifiers we synthesized.
+	inputs := make([]desktopInput, 0, len(extraModifiers)*2+len(modifiers)*2+2)
+	for _, vk := range extraModifiers {
+		inputs = append(inputs, desktopInput{Type: inputKeyboard, Ki: desktopKeyboardInput{Vk: vk, Flags: keyEventUp}})
+	}
+	for _, vk := range modifiers {
+		inputs = append(inputs, desktopInput{Type: inputKeyboard, Ki: desktopKeyboardInput{Vk: vk}})
+	}
+	inputs = append(inputs,
+		desktopPhysicalKeyInput(chord.key, false),
+		desktopPhysicalKeyInput(chord.key, true),
+	)
+	for i := len(emulatedModifiers) - 1; i >= 0; i-- {
+		inputs = append(inputs, desktopInput{Type: inputKeyboard, Ki: desktopKeyboardInput{Vk: emulatedModifiers[i], Flags: keyEventUp}})
+	}
+	for i := len(extraModifiers) - 1; i >= 0; i-- {
+		inputs = append(inputs, desktopInput{Type: inputKeyboard, Ki: desktopKeyboardInput{Vk: extraModifiers[i]}})
+	}
+	sent, _, _ := windowSendInput.Call(uintptr(len(inputs)), uintptr(unsafe.Pointer(&inputs[0])), unsafe.Sizeof(inputs[0]))
+	if sent != uintptr(len(inputs)) {
+		logx.Warn("could not replay the first hot key chord to the active application")
+	}
+}
+
+func desktopPhysicalKeyInput(scanCode uint32, keyUp bool) desktopInput {
+	const (
+		keyEventUp        = 0x0002
+		keyEventScanCode  = 0x0008
+		keyEventExtended  = 0x0001
+		extendedScanMask  = 0x0100
+		scanCodeValueMask = 0x00FF
+	)
+	flags := uint32(keyEventScanCode)
+	if scanCode&extendedScanMask != 0 {
+		flags |= keyEventExtended
+	}
+	if keyUp {
+		flags |= keyEventUp
+	}
+	return desktopInput{Type: 1, Ki: desktopKeyboardInput{Scan: uint16(scanCode & scanCodeValueMask), Flags: flags}}
 }
 
 func desktopReadClipboardText() string {

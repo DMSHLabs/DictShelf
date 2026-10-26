@@ -388,7 +388,7 @@ func currentIndexLimit() chan struct{} {
 }
 
 func indexLaneForContext(ctx context.Context) chan struct{} {
-	if indexconst.CurrentMode() == indexconst.ModeAuto && indexconst.IngestMode(ctx) == indexconst.ModeParallelDictionariesSingleWorker {
+	if indexconst.IsAutomaticMode(indexconst.CurrentMode()) && indexconst.IngestMode(ctx) == indexconst.ModeParallelDictionariesSingleWorker {
 		return parallelDictionaryIndexLimit
 	}
 	return currentIndexLimit()

@@ -167,7 +167,7 @@ func runHybridPriorityDictionaryQueue(q *priorityDictionaryQueue, budget int, st
 	}
 }
 
-func classifyAutomaticIndex(item *pendingDictionaryIndex, budget int) {
+func classifyAutomaticIndex(item *pendingDictionaryIndex, budget int, strategy indexconst.Mode) {
 	path := item.entry.Path
 	var size int64
 	if info, err := os.Stat(path); err == nil {
@@ -198,14 +198,22 @@ func classifyAutomaticIndex(item *pendingDictionaryIndex, budget int) {
 	item.score = max(int64(entries), size/512)
 	if heavy {
 		item.mode = indexconst.ModePipeline
-		item.cost = min(4, budget)
+		item.cost = automaticPipelineCost(strategy, budget)
 	}
-	logx.System("automatic indexing classified source=%q format=%q entries=%d source_bytes=%d mode=%s processor_cost=%d", path, format, entries, size, indexconst.ModeString(item.mode), item.cost)
+	logx.System("automatic indexing classified strategy=%s source=%q format=%q entries=%d source_bytes=%d mode=%s processor_cost=%d", indexconst.ModeString(strategy), path, format, entries, size, indexconst.ModeString(item.mode), item.cost)
 }
 
-func orderAutomaticIndexes(items []pendingDictionaryIndex, budget int) (small, heavy int) {
+func automaticPipelineCost(strategy indexconst.Mode, budget int) int {
+	reserved := 4
+	if strategy == indexconst.ModeAuto2 {
+		reserved = 3
+	}
+	return min(reserved, max(1, budget))
+}
+
+func orderAutomaticIndexes(items []pendingDictionaryIndex, budget int, strategy indexconst.Mode) (small, heavy int) {
 	for i := range items {
-		classifyAutomaticIndex(&items[i], budget)
+		classifyAutomaticIndex(&items[i], budget, strategy)
 		if items[i].mode == indexconst.ModePipeline {
 			heavy++
 		} else {
@@ -517,7 +525,7 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 		}
 		var err error
 		lane := currentIndexLimit()
-		if indexconst.CurrentMode() == indexconst.ModeAuto {
+		if indexconst.IsAutomaticMode(indexconst.CurrentMode()) {
 			ctx = indexconst.WithIngestMode(ctx, item.mode)
 			lane = parallelDictionaryIndexLimit
 		}
@@ -578,9 +586,9 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 	}
 	mode := indexconst.CurrentMode()
 	budget := max(1, runtime.NumCPU()-1)
-	if mode == indexconst.ModeAuto {
-		small, heavy := orderAutomaticIndexes(pending, budget)
-		logx.System("automatic index queue started dictionaries=%d small=%d pipeline=%d processor_budget=%d", len(pending), small, heavy, budget)
+	if indexconst.IsAutomaticMode(mode) {
+		small, heavy := orderAutomaticIndexes(pending, budget, mode)
+		logx.System("automatic index queue started strategy=%s dictionaries=%d small=%d pipeline=%d processor_budget=%d", indexconst.ModeString(mode), len(pending), small, heavy, budget)
 		if queueJob != nil {
 			queueJob.update(func(st *jobStatus) {
 				st.QueuedDicts = st.QueuedDicts[:0]
@@ -606,10 +614,10 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 		r.priorityMu.Unlock()
 	}()
 	stopped := func() bool { return queueJob != nil && queueJob.canceled() }
-	if mode == indexconst.ModeAuto {
+	if indexconst.IsAutomaticMode(mode) {
 		started := time.Now()
 		runHybridPriorityDictionaryQueue(queue, budget, stopped, process)
-		logx.System("automatic index queue finished dictionaries=%d elapsed_ms=%d", len(pending), time.Since(started).Milliseconds())
+		logx.System("automatic index queue finished strategy=%s dictionaries=%d elapsed_ms=%d", indexconst.ModeString(mode), len(pending), time.Since(started).Milliseconds())
 	} else {
 		workers := min(cap(currentIndexLimit()), len(pending))
 		runPriorityDictionaryQueue(queue, workers, stopped, process)

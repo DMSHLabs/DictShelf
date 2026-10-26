@@ -293,14 +293,14 @@ func (p *Prefs) dslTitleRepairs() (bool, bool) {
 
 func (p *Prefs) indexingMode() (string, bool) {
 	f, _ := p.data()
-	if f.IndexingMode != "pipeline" && f.IndexingMode != "parallel-dictionaries-single-worker" && f.IndexingMode != "auto" {
+	if f.IndexingMode != "pipeline" && f.IndexingMode != "parallel-dictionaries-single-worker" && f.IndexingMode != "auto" && f.IndexingMode != "auto2" {
 		return "", false
 	}
 	return f.IndexingMode, true
 }
 
 func (p *Prefs) setIndexingMode(mode string) error {
-	if mode != "pipeline" && mode != "parallel-dictionaries-single-worker" && mode != "auto" {
+	if mode != "pipeline" && mode != "parallel-dictionaries-single-worker" && mode != "auto" && mode != "auto2" {
 		return errors.New("invalid indexing mode")
 	}
 	return p.mutate(func(f *prefsFile) { f.IndexingMode = mode })
