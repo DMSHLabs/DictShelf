@@ -72,7 +72,7 @@ split_commits = false
 # `v2.6-4-g627d338` (git-describe output) and the bare `1.3` (duplicate of
 # v1.3 pointing at a different commit); allows v0.1-style, v3.7.1 and
 # prereleases like v3.7.0-rc.1 / v3.7.2-alpha.1.
-tag_pattern = '^v[0-9]+\.[0-9]+(\.[0-9]+)?$'
+tag_pattern = '^(dictshelf-|wudict2-)?v[0-9]+\.[0-9]+(\.[0-9]+)?$'
 # An array of regex based parsers to modify commit messages prior to further
 # processing (runs BEFORE conventional parsing and commit_parsers).
 commit_preprocessors = [

@@ -65,6 +65,7 @@ type DictPref struct {
 // — would hand them 15px there, and again the first time SERVER_PORT changes.
 type UIPrefs struct {
 	UpdateChannel           string `json:"updateChannel,omitempty"` // release, prerelease or beta; empty defaults to release
+	UpdateNotificationsOff  bool   `json:"updateNotificationsOff,omitempty"` // notifications are on unless disabled
 	ResultCacheLimitGB      int    `json:"resultCacheLimitGB,omitempty"`
 	ResultCacheNoLimit      bool   `json:"resultCacheNoLimit,omitempty"`
 	SearchReturnCache       string `json:"searchReturnCache,omitempty"`

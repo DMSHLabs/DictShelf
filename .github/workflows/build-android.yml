@@ -18,12 +18,16 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. wudict2-v0.12.0); blank = next version: +0.0.1 for a pre-release, +0.1.0 for a release"
+        description: "Release tag (e.g. dictshelf-v1.02.01); blank = generate from the selected channel"
         required: false
-      prerelease:
-        description: "Mark the release as a pre-release"
-        type: boolean
-        default: false
+      channel:
+        description: "Release channel"
+        type: choice
+        options:
+          - release
+          - pre-release
+          - beta
+        default: release
       draft:
         description: "Create the release as a draft (nothing is downloadable until it is published)"
         type: boolean
@@ -88,17 +92,7 @@ jobs:
         run: |
           VERSION="${{ inputs.tag }}"
           if [ -z "$VERSION" ]; then
-            # A blank field takes the next version, not the last one:
-            # tools/next-tag.sh owns the rule (D168) - a pre-release takes the
-            # next patch (0.11.1 → 0.11.2), a release the next minor with the
-            # patch reset (0.11.2 → 0.12.0) - and it reuses the tag an earlier
-            # workflow of the SAME release created, so Android, Windows and
-            # the native builds land in one release instead of one each.
-            if [ "${{ inputs.prerelease }}" = "true" ]; then
-              VERSION="$(sh tools/next-tag.sh --prerelease)"
-            else
-              VERSION="$(sh tools/next-tag.sh --release)"
-            fi
+            VERSION="$(sh tools/next-tag.sh --${{ inputs.channel }})"
           fi
 
           # versionCode is NOT passed: app/build.gradle derives it from commits
@@ -224,21 +218,21 @@ jobs:
             git config user.email "github-actions[bot]@users.noreply.github.com"
             # The message keeps the shape of every hand-made tag in this
             # repository (wuDict2 v0.11.1), so the two are one line in a log.
-            git tag -a "${TAG}" -m "wuDict2 ${TAG#wudict2-}"
+            git tag -a "${TAG}" -m "DictShelf ${TAG}"
             git push origin "${TAG}"
             echo "Tag ${TAG} pushed."
           fi
 
       - name: Create or update GitHub release
         if: ${{ inputs.publish_release && steps.signing.outputs.enabled == 'true' }}
-        # The two dispatch checkboxes. They apply when the release is CREATED;
+        # The channel and draft selection apply when the release is CREATED;
         # on one that already exists they are only ever ADDED, never cleared.
         # Three workflows publish into the same tag, so the second to arrive
         # must not un-draft what the first staged, and a re-upload of assets
         # onto an older release must not strip its pre-release marker.
         run: |
           FLAGS=()
-          [ "${{ inputs.prerelease }}" = "true" ] && FLAGS+=(--prerelease)
+          [ "${{ inputs.channel }}" != "release" ] && FLAGS+=(--prerelease)
           [ "${{ inputs.draft }}" = "true" ] && FLAGS+=(--draft)
           if gh release view "${TAG}" > /dev/null 2>&1; then
             echo "Release ${TAG} exists - replacing assets."
@@ -254,3 +248,10 @@ jobs:
               --title "${{ github.event.repository.name }} ${TAG}" \
               --generate-notes "${FLAGS[@]}"
           fi
+
+      - name: Refresh static update catalogue
+        if: ${{ inputs.publish_release && steps.signing.outputs.enabled == 'true' && inputs.draft == false }}
+        run: |
+          set -euo pipefail
+          gh api --paginate repos/DMSHLabs/DictShelf/releases --jq '.[]' | jq -s '.' | python3 tools/update-catalog.py
+          sh tools/publish-update-catalog.sh update-catalog.json

@@ -251,7 +251,7 @@ if not defined VERSION (
 )
 
 rem Set WUDICT_VERSION to build the same named release as CI, for example:
-rem   set WUDICT_VERSION=wudict2-v3.8.0
+rem   set WUDICT_VERSION=dictshelf-v1.02.01
 rem Without an override, use the version derived from this checkout's Git history.
 if defined WUDICT_VERSION set "VERSION=%WUDICT_VERSION%"
 

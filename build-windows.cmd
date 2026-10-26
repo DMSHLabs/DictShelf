@@ -539,9 +539,9 @@ if not defined SETUP (
     exit /b 1
 )
 
-rem Both v1.2.3 and this fork's wudict2-v1.2.3 tags provide the numeric
-rem installer version. Unversioned development builds still read 0.0.0.
-echo %VERSION% | findstr /r /c:"^v[0-9]" /c:"^wudict2-v[0-9]" >nul
+rem Version tags provide the numeric installer version. Unversioned
+rem development builds still read 0.0.0.
+echo %VERSION% | findstr /r /c:"^v[0-9]" /c:"^dictshelf-v[0-9]" /c:"^wudict2-v[0-9]" >nul
 if errorlevel 1 (
     echo.
     echo Note: the installer's file name and numeric version read 0.0.0 because

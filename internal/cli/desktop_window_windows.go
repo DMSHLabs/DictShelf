@@ -249,6 +249,7 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	if !desktopInstallKeyboardHook() {
 		logx.Warn("could not install the layout-independent global hot-key listener")
 	}
+	bindWindowsUpdater(w)
 	log.Printf("WebView2 startup: window and runtime initialized in %s", time.Since(webviewStarted).Round(time.Millisecond))
 	w.Init(`window.__wudictDocumentFirstScriptMs=performance.now()`)
 	_ = w.Bind("wudictGetCloseToTray", func() bool {
