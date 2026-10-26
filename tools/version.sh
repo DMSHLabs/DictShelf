@@ -31,7 +31,7 @@ case $name in ''|*/*|*[!A-Za-z0-9._-]*) name=DictShelf ;; esac
 
 # The numeric form: take the tag part of `git describe`
 # (v1.2.3-4-gdeadbee-dirty -> 1.2.3) and pad to exactly three fields.
-num=$(printf '%s' "$ver" | sed -e 's/^[vV]//' -e 's/^\([0-9.]*\).*/\1/')
+num=$(printf '%s' "$ver" | sed -e 's/^[dD][iI][cC][tT][sS][hH][eE][lL][fF]-//' -e 's/^[wW][uU][dD][iI][cC][tT]2-//' -e 's/^[vV]//' -e 's/^\([0-9.]*\).*/\1/')
 case $num in ''|.*|*[!0-9.]*) num=0.0.0 ;; esac
 num=$(printf '%s' "$num" | awk -F. '{printf "%s.%s.%s", ($1==""?0:$1), ($2==""?0:$2), ($3==""?0:$3)}')
 

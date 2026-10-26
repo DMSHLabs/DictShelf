@@ -283,7 +283,7 @@ window.wudictFontScale=(function(){
      to a magnifier. -->
 <button type="button" class="btn tools" id="wideBtn" title="{{T:search.wide}}" aria-label="{{T:search.wide}}">⇔</button>
 <button type="button" class="btn tools" id="expandBtn" title="{{T:search.expand}}" aria-label="{{T:search.expand}}" aria-pressed="false">⊞</button>
-<button type="button" class="btn tools" id="panelBtn" title="{{T:panel.settings}}" aria-label="{{T:panel.settings}}">☰</button>
+<button type="button" class="btn tools" id="panelBtn" title="{{T:panel.settings}}" aria-label="{{T:panel.settings}}">☰<span id="panelUpdateBadge" class="panel-update-badge" aria-hidden="true" hidden>!</span></button>
 </form>
 </header>
 
@@ -894,6 +894,20 @@ window.wudictFontScale=(function(){
   <p class="sys-hint">{{T:hotkeys.hint}}</p>
 </details>
 
+<details class="sect" id="updateSection" data-panel-section="update" open>
+  <summary class="sect-h">{{T:panel.updateSection}}</summary>
+  <div class="facts update-notifications-row">
+    <label class="rowlabel" for="updateNotifications"><input class="panel-checkbox" type="checkbox" id="updateNotifications"> {{T:system.notifyUpdates}}</label>
+  </div>
+  <div class="facts update-channel-row">
+    <label class="rowlabel" for="updateChannel">{{T:system.updateChannel}}</label>
+    <span class="panel-select-wrap panel-dropdown"><select id="updateChannel" aria-label="{{T:system.updateChannel}}"><option value="release">{{T:system.updateRelease}}</option><option value="prerelease">{{T:system.updatePrerelease}}</option><option value="beta">{{T:system.updateBeta}}</option></select></span>
+  </div>
+  <p id="updateStatus" class="panel-update-status" role="status" aria-live="polite" hidden></p>
+  <div class="facts update-install-row"><button type="button" class="btn" id="installUpdate" hidden>{{T:system.updateAction}}</button></div>
+  <div class="facts update-check-row"><button type="button" class="btn" id="checkUpdates">{{T:system.checkUpdates}}</button></div>
+</details>
+
 <details class="sect" id="sysSection" hidden data-panel-section="system" open>
   <summary class="sect-h">{{T:panel.system}}</summary>
   <!-- The shell's own settings, which until now lived only on the screen the
@@ -1098,12 +1112,6 @@ window.wudictFontScale=(function(){
     <h3 class="sys-head">{{T:system.messages}}</h3>
     <p class="sys-hint">{{T:system.messagesHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysInfo"><span class="sys-label">{{T:system.showInfo}}</span></label>
-
-    <h3 class="sys-head">{{T:system.updates}}</h3>
-    <p class="sys-hint">{{T:system.updatesHint}}</p>
-    <label class="sys-row sys-num"><span class="sys-label">{{T:system.updateChannel}}</span><span class="panel-select-wrap panel-dropdown"><select id="sysUpdateChannel"><option value="release">{{T:system.updateRelease}}</option><option value="prerelease">{{T:system.updatePrerelease}}</option><option value="beta">{{T:system.updateBeta}}</option></select></span></label>
-    <div class="group-toolbar sys-action-spaced"><button type="button" class="btn" id="sysCheckUpdates">{{T:system.checkUpdates}}</button></div>
-    <p class="sys-note" id="sysUpdateNote" aria-live="polite"></p>
 
     <div id="sysAccessSection">
       <h3 class="sys-head">{{T:system.access}}</h3>
@@ -1847,9 +1855,11 @@ async function loadPrefs(){
        (below, always false), because it is upstream's. */
     if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyArticleFont(st.ui.fontFamily||"charis",false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false);applyDictIcons(!st.ui.dictIconsOff,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll;prefOrderModeKnown=typeof st.ui.customOrder==="boolean";prefCustomOrder=!!st.ui.customOrder;
       updateChannel=st.ui.updateChannel||"release";
+      updateNotifications=!st.ui.updateNotificationsOff;
       resultCacheLimitGB=Number(st.ui.resultCacheLimitGB)||defaultResultCacheLimitGB();resultCacheNoLimit=!!st.ui.resultCacheNoLimit;syncResultCacheLimitUI();
       searchReturnCacheStorage=st.ui.searchReturnCache==="memory"?"memory":"disk";syncSearchReturnCacheUI();
       combinedDictionaryLimit=Math.max(1,Math.min(Number(st.ui.combinedDictionaryLimit)||defaultCombinedDictionaryLimit,maxCombinedDictionaryLimit));syncCombinedDictionaryLimitUI()}
+    syncUpdateControls();restoreCachedUpdate();
     scheduleUpdateCheck();
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
     prefOrder=rows.map(d=>d.id);prefPinned=rows.filter(d=>d.pinned).map(d=>d.id);
@@ -1863,7 +1873,8 @@ async function loadPrefs(){
 /* Debounced, and silent when nothing actually changed — dragging a card emits
    a move per hovered row, and startup normalisation re-sends a list that is
    usually identical to the one we just read. */
-let prefsTimer=null,prefsSent=null,updateChannel="release";
+let prefsTimer=null,prefsSent=null,updateChannel="release",updateNotifications=true;
+let updateAvailable=null,updateStatusMessage="",updateManualResult=false,updateStarting=false;
 function defaultResultCacheLimitGB(){return window.wudictAndroidShell?2:8}
 let resultCacheLimitGB=defaultResultCacheLimitGB(),resultCacheNoLimit=false;
 let searchReturnCacheStorage="disk";
@@ -1906,7 +1917,8 @@ function savePrefs(now){
   // that no longer exist.
   const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:d.name||d.path.split("/").pop(),title:dictTitles.get(d.id)||"",pinned:prefPinned.includes(d.id)})),
     ui:{fontSize:articleFS,fontWeight:articleFW,fontFamily:articleFont,hlOff:!hlOn,speakOff:!speakOn,dictIconsOff:!dictIconsOn,fastFirst:!orderFirst,hideUnmarkedExamples,customOrder:prefCustomOrder,
-      resultCacheLimitGB,resultCacheNoLimit,combinedDictionaryLimit,searchReturnCache:searchReturnCacheStorage,updateChannel}});
+      resultCacheLimitGB,resultCacheNoLimit,combinedDictionaryLimit,searchReturnCache:searchReturnCacheStorage,updateChannel,
+      updateNotificationsOff:!updateNotifications}});
   if(body===prefsSent)return;
   prefsSent=body;
   apiFetch("/api/prefs",{method:"PUT",headers:{"Content-Type":"application/json"},body})
@@ -2419,6 +2431,7 @@ function extraExampleCSS(){
 function applyHideUnmarkedExamples(on,persist=true){
   hideUnmarkedExamples=!!on;
   $("hideUnmarkedExamples").checked=hideUnmarkedExamples;
+  settingsToggleSync($("hideUnmarkedExamples"));
   articleRefresh();
   if(persist)savePrefs();
 }
@@ -4358,7 +4371,9 @@ function sysRead(){
 function sysPaint(state){
   const accessSection=$("sysAccessSection");
   if(accessSection)accessSection.hidden=state.serverAvailable===false;
-  $("sysUpdateChannel").value=state.updateChannel||"release";
+  updateChannel=state.updateChannel||updateChannel;
+  if(typeof state.updateNotifications==="boolean")updateNotifications=state.updateNotifications;
+  syncUpdateControls();
   for(const pair of [["sysToolbar",state.toolbar],["sysShare",state.share],
       ["sysLink",state.link],["sysReader",state.reader],["sysInfo",state.info],["sysKey",state.key]]){
     $(pair[0]).checked=!!pair[1];
@@ -4383,7 +4398,65 @@ function sysPaint(state){
   for(const row of state.rows||[])box.appendChild(sysRowBuild(row));
   $("sysAdvBar").hidden=sysRows.length===0;
   if(sysRows.length===0)$("sysAdvBody").hidden=true;
+  syncSystemSettingSwitches($("sysSettings"));
   sysEffectPaint();
+}
+function syncSystemSettingSwitches(root){
+  if(!root)return;
+  for(const input of root.querySelectorAll('input[type="checkbox"]')){
+    const row=input.closest(".sys-row");
+    if(!row)continue;
+    if(row.classList.contains("sys-switch-ready")){
+      const buttons=row.querySelectorAll(".settings-toggle-option"),group=row.querySelector(".settings-toggle");
+      if(buttons.length===2){buttons[0].setAttribute("aria-pressed",String(input.checked));buttons[1].setAttribute("aria-pressed",String(!input.checked));buttons[0].disabled=buttons[1].disabled=input.disabled}
+      if(group)group.setAttribute("aria-disabled",String(input.disabled));
+      continue;
+    }
+    const label=row.querySelector(":scope > .sys-label");
+    if(label?.contains(input)){
+      const caption=document.createElement("span");caption.textContent=label.textContent.trim();
+      label.replaceChildren(caption);label.after(input);
+    }else if(label&&input.parentElement===row){label.after(input)}
+    const group=document.createElement("span");group.className="settings-toggle";group.setAttribute("role","group");
+    const caption=label?.textContent.trim()||input.getAttribute("aria-label")||"";group.setAttribute("aria-label",caption);
+    const setButton=document.createElement("button"),clearButton=document.createElement("button");
+    for(const [button,on,key] of [[setButton,true,"panel.on"],[clearButton,false,"panel.off"]]){
+      button.type="button";button.className="settings-toggle-option";button.textContent=tx(key);button.setAttribute("aria-pressed",String(input.checked===on));
+      button.addEventListener("click",event=>{event.preventDefault();event.stopPropagation();if(input.disabled)return;input.checked=on;input.dispatchEvent(new Event("change",{bubbles:true}));sync()});
+      group.append(button);
+    }
+    function sync(){setButton.setAttribute("aria-pressed",String(input.checked));clearButton.setAttribute("aria-pressed",String(!input.checked));group.setAttribute("aria-disabled",String(input.disabled));setButton.disabled=clearButton.disabled=input.disabled}
+    input.classList.add("settings-switch-source");input.tabIndex=-1;input.setAttribute("aria-hidden","true");input.addEventListener("change",sync);
+    row.classList.add("sys-switch-ready");row.append(group);sync();
+  }
+}
+function settingsToggleBuild(input,caption){
+  const group=document.createElement("span");group.className="settings-toggle";group.setAttribute("role","group");group.setAttribute("aria-label",caption||input.getAttribute("aria-label")||"");
+  const yes=document.createElement("button"),no=document.createElement("button");
+  for(const [button,on,key] of [[yes,true,"panel.on"],[no,false,"panel.off"]]){
+    button.type="button";button.className="settings-toggle-option";button.textContent=tx(key);
+    button.addEventListener("click",event=>{event.preventDefault();event.stopPropagation();if(input.disabled)return;input.checked=on;input.dispatchEvent(new Event("change",{bubbles:true}));sync()});
+    group.append(button);
+  }
+  function sync(){yes.setAttribute("aria-pressed",String(input.checked));no.setAttribute("aria-pressed",String(!input.checked));yes.disabled=no.disabled=input.disabled;group.setAttribute("aria-disabled",String(input.disabled))}
+  input.classList.add("settings-switch-source");input.tabIndex=-1;input.setAttribute("aria-hidden","true");input.addEventListener("change",sync);
+  group._sync=sync;sync();return group;
+}
+function settingsToggleSync(input){input?.parentElement?.querySelector(".settings-toggle")?._sync?.()}
+function syncPreferenceSwitches(){
+  for(const id of ["ignoreDiacritics","hideUnmarkedExamples","updateNotifications","appearanceColorOn"]){
+    const input=$(id);if(!input||input.dataset.settingsToggleReady)continue;
+    const label=input.closest("label")||document.querySelector('label[for="'+id+'"]'),caption=label?.textContent.trim()||label?.getAttribute("aria-label")||input.getAttribute("aria-label")||"";
+    const group=settingsToggleBuild(input,caption);input.dataset.settingsToggleReady="1";
+    if(id==="appearanceColorOn"){input.after(group);continue}
+    if(label?.classList.contains("examples-extra")){
+      const text=label.textContent.trim(),name=document.createElement("span");name.className="settings-toggle-label";name.textContent=text;
+      label.replaceChildren(name,input,group);label.classList.add("settings-switch-row");
+    }else if(label){
+      const host=label.closest(".facts"),name=document.createElement("span");name.className="rowlabel";name.textContent=caption;
+      label.replaceWith(name,input,group);host?.classList.add("settings-switch-row");
+    }
+  }
 }
 function sysRowBuild(row){
   const wrap=document.createElement("div");
@@ -4699,11 +4772,6 @@ async function showDesktopSysSettings(){
   const dialog=$("desktopSysSettings"),body=$("desktopSysBody");
   if(!desktopSystemNodes)desktopSystemNodes={
     info:$("sysInfo").parentElement,
-    updatesHeading:$("sysUpdateChannel").closest(".sys-row").previousElementSibling.previousElementSibling,
-    updatesHint:$("sysUpdateChannel").closest(".sys-row").previousElementSibling,
-    updateChannel:$("sysUpdateChannel").closest(".sys-row"),
-    checkUpdates:$("sysCheckUpdates").parentElement,
-    updateNote:$("sysUpdateNote"),
     resultCacheHeading:$("sysResultCacheHeading"),
     resultCacheHint:$("sysResultCacheHint"),
     resultCacheRow:$("sysResultCacheLimited").closest(".sys-row"),
@@ -4742,9 +4810,6 @@ async function showDesktopSysSettings(){
   const messagesHint=document.createElement("p");messagesHint.className="sys-hint";
   messagesHint.textContent=tx("system.messagesHint");body.append(messagesHint);
   body.append(desktopSystemNodes.info);
-  body.append(desktopSystemNodes.updatesHeading,desktopSystemNodes.updatesHint,desktopSystemNodes.updateChannel,desktopSystemNodes.checkUpdates,desktopSystemNodes.updateNote);
-  try{const response=await apiFetch("/api/prefs");const updatePrefs=await response.json();updateChannel=updatePrefs.ui?.updateChannel||"release"}catch(_){updateChannel="release"}
-  $("sysUpdateChannel").value=updateChannel;
   $("sysInfo").checked=!quietMessages;
   const cacheHeading=document.createElement("h3");cacheHeading.className="sys-head";
   cacheHeading.textContent=tx("system.cache");body.append(cacheHeading);
@@ -4816,6 +4881,7 @@ async function showDesktopSysSettings(){
   const folderText=document.createElement("span");folderText.className="sys-label";folderText.textContent=tx("system.folderDiagnostics");
   folderLabel.append(folderDiagnostics,folderText);body.append(folderLabel);
   const desktopNote=document.createElement("p");desktopNote.className="sys-note";desktopNote.id="desktopSysNote";desktopNote.setAttribute("aria-live","polite");body.append(desktopNote);
+  syncSystemSettingSwitches(body);
 }
 $("editSysSettings").onclick=()=>window.wudictAndroidShell?showSysSettings():showDesktopSysSettings();
 $("desktopSysClose").onclick=()=>$("desktopSysSettings").close();
@@ -4826,68 +4892,160 @@ $("sysToolbar").addEventListener("change",e=>sysSwitch("toolbar",e.target.checke
 $("sysShare").addEventListener("change",e=>sysSwitch("share",e.target.checked));
 $("sysLink").addEventListener("change",e=>sysSwitch("link",e.target.checked));
 $("sysReader").addEventListener("change",e=>sysSwitch("reader",e.target.checked));
-$("sysUpdateChannel").addEventListener("change",e=>{
-  const channel=["release","prerelease","beta"].includes(e.target.value)?e.target.value:"release";
-  updateChannel=channel;
-  if(window.wudictAndroidShell)sysSet({action:"set",field:"updateChannel",value:channel});
-  else savePrefs(true);
-  $("sysUpdateNote").textContent="";
-  try{localStorage.removeItem("dictshelf_update_check_"+channel)}catch(_){}
-  setTimeout(()=>checkForUpdates(true),500);
-});
-function scheduleUpdateCheck(){
+function updateAvailableKey(channel=updateChannel){return "dictshelf_update_available_"+channel}
+function syncUpdateControls(){
+  const notifications=$("updateNotifications"),channel=$("updateChannel");
+  if(notifications)notifications.checked=updateNotifications;
+  settingsToggleSync(notifications);
+  if(channel){channel.value=updateChannel;channel.disabled=!updateNotifications}
+  renderUpdateNotice();
+}
+function renderUpdateNotice(){
+  const badge=$("panelUpdateBadge"),button=$("panelBtn"),note=$("updateStatus"),install=$("installUpdate");
+  if(!badge||!button||!note||!install)return;
+  const marked=!!updateAvailable&&updateNotifications;
+  badge.hidden=!marked;
+  const label=tx(marked?"panel.settingsUpdateAvailable":"panel.settings");
+  button.setAttribute("aria-label",label);button.title=label;
+  note.replaceChildren();
+  const showUpdate=!!updateAvailable&&(updateNotifications||updateManualResult);
+  const showMessage=!!updateStatusMessage&&(updateNotifications||updateManualResult);
+  note.hidden=!showUpdate&&!showMessage;
+  install.hidden=true;
+  if(showUpdate){
+    const versionLink=document.createElement("a");versionLink.href=updateAvailable.url;versionLink.target="_blank";versionLink.rel="noopener";
+    versionLink.textContent=tx("system.updateAvailable",{version:updateAvailable.version});versionLink.title=tx("system.viewRelease");
+    versionLink.addEventListener("click",()=>setTimeout(clearUpdateAvailable,0));note.append(versionLink);
+    if(/^https:\/\/github\.com\/DMSHLabs\/DictShelf\/releases\//.test(updateAvailable.url)){
+      const validAsset=asset=>asset&&typeof asset.url==="string"&&typeof asset.sha256==="string"&&/^[0-9a-f]{64}$/i.test(asset.sha256);
+      install.hidden=!window.wudictWindowsShell||(!validAsset(updateAvailable.windowsInstaller)&&!validAsset(updateAvailable.windowsPortable));
+      install.disabled=updateStarting;
+      install.textContent=tx(updateStarting?"system.updatePreparing":"system.updateAction");
+    }
+  }else if(showMessage){note.textContent=updateStatusMessage}
+}
+function restoreCachedUpdate(){
+  updateAvailable=null;updateStatusMessage="";updateManualResult=false;
   try{
-    const key="dictshelf_update_check_"+updateChannel,day=new Date().toISOString().slice(0,10);
+    const item=JSON.parse(localStorage.getItem(updateAvailableKey())||"null");
+    if(item&&typeof item.version==="string"&&typeof item.url==="string"&&
+       /^https:\/\/github\.com\/DMSHLabs\/DictShelf\/releases\//.test(item.url)&&
+       versionIsNewer(item.version,currentAppVersion()))updateAvailable=item;
+    else if(item)localStorage.removeItem(updateAvailableKey());
+  }catch(_){}
+  renderUpdateNotice();
+}
+function clearUpdateAvailable(){
+  updateAvailable=null;
+  try{localStorage.removeItem(updateAvailableKey())}catch(_){}
+  renderUpdateNotice();
+}
+function saveUpdateSetting(field,value){
+  if(window.wudictAndroidShell)return !!sysSet({action:"set",field,value});
+  if(!prefsReady){savePrefs(true);return false}
+  savePrefs(true);return true;
+}
+$("updateNotifications").addEventListener("change",e=>{
+  const previous=updateNotifications;updateNotifications=e.target.checked;updateStatusMessage="";updateManualResult=false;
+  syncUpdateControls();
+  if(!saveUpdateSetting("updateNotifications",updateNotifications)){
+    updateNotifications=previous;syncUpdateControls();return;
+  }
+  if(updateNotifications)scheduleUpdateCheck(true);
+});
+$("updateChannel").addEventListener("change",e=>{
+  const previous=updateChannel;
+  updateChannel=["release","prerelease","beta"].includes(e.target.value)?e.target.value:"release";
+  updateStatusMessage="";updateManualResult=false;restoreCachedUpdate();syncUpdateControls();
+  if(!saveUpdateSetting("updateChannel",updateChannel)){
+    updateChannel=previous;restoreCachedUpdate();syncUpdateControls();return;
+  }
+  if(updateNotifications)scheduleUpdateCheck(true);
+});
+let updateCheckTimer=null;
+function scheduleUpdateCheck(force=false){
+  if(!updateNotifications)return;
+  const key="dictshelf_update_check_"+updateChannel,day=new Date().toISOString().slice(0,10);
+  try{
+    if(force)localStorage.removeItem(key);
     if(localStorage.getItem(key)===day)return;
     localStorage.setItem(key,day);
   }catch(_){}
-  setTimeout(()=>checkForUpdates(true),2500);
+  clearTimeout(updateCheckTimer);
+  updateCheckTimer=setTimeout(()=>{updateCheckTimer=null;if(updateNotifications)checkForUpdates(true)},2500);
+}
+function scheduleNextUpdateCheck(){
+  if(!updateNotifications)return;
+  clearTimeout(updateCheckTimer);
+  updateCheckTimer=setTimeout(()=>{updateCheckTimer=null;if(updateNotifications)scheduleUpdateCheck(true)},24*60*60*1000);
+}
+function versionIsNewer(candidate,current){
+  const parse=value=>{
+    const match=String(value).match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9a-z.-]+))?$/i);
+    return match?{core:match.slice(1,4).map(n=>Number.parseInt(n,10)||0),suffix:(match[4]||"").toLowerCase()}:null;
+  };
+  const a=parse(candidate),b=parse(current);if(!a||!b)return false;
+  for(let i=0;i<3;i++)if(a.core[i]!==b.core[i])return a.core[i]>b.core[i];
+  if(!a.suffix)return !!b.suffix;
+  if(!b.suffix)return false;
+  const ap=a.suffix.match(/^([a-z-]+)\.(\d+)$/),bp=b.suffix.match(/^([a-z-]+)\.(\d+)$/);
+  if(ap&&bp&&ap[1]===bp[1])return Number(ap[2])>Number(bp[2]);
+  return a.suffix.localeCompare(b.suffix,undefined,{numeric:true})>0;
+}
+function currentAppVersion(){
+  const raw=(document.querySelector(".ver")?.textContent||"0.0.0").replace(/-\d+-g[0-9a-f]+(?:-dirty)?$/i,"");
+  return (raw.match(/(?:dictshelf|wudict2)-v?(\d+\.\d+\.\d+(?:[-+][0-9a-z.-]+)?)/i)||[])[1]||raw.replace(/^v/i,"");
 }
 async function checkForUpdates(silent=false){
-  const note=$("sysUpdateNote");
-  if(!silent)note.textContent=tx("system.checkingUpdates");
+  if(silent&&!updateNotifications)return;
+  updateManualResult=!silent;updateStatusMessage=silent?"":tx("system.checkingUpdates");renderUpdateNotice();
   try{
-    const r=await fetch("https://api.github.com/repos/DMSHLabs/DictShelf/releases?per_page=100",{headers:{Accept:"application/vnd.github+json"}});
-    if(!r.ok)throw new Error("HTTP "+r.status);
-    const releases=await r.json();
-    const currentRaw=document.querySelector(".ver")?.textContent||"0.0.0";
-    const current=(currentRaw.match(/(?:dictshelf|wudict2)-v?(\d+\.\d+\.\d+(?:[-+][0-9a-z.-]+)?)/i)||[])[1]||currentRaw.replace(/^v/i,"");
-    const versionParts=v=>{const core=v.split(/[+-]/,1)[0].split("-",1)[0];return core.split(".").slice(0,3).map(n=>Number.parseInt(n,10)||0)};
-    const isNewer=v=>{
-      const a=versionParts(v),b=versionParts(current);
-      for(let i=0;i<3;i++){if(a[i]!==b[i])return a[i]>b[i]}
-      if(/beta/i.test(v)&&/beta/i.test(current)){
-        const suffix=x=>(x.match(/beta\D*(\d+)/i)||[])[1]||"0";
-        return Number(suffix(v))>Number(suffix(current));
-      }
-      return /beta/i.test(current)&&!/beta/i.test(v);
-    };
-    let update=null;
-    for(const release of releases){
-      if(release.draft)continue;
-      const version=(String(release.tag_name||"").match(/(?:dictshelf|wudict2)-v?(\d+\.\d+\.\d+(?:[-+][0-9a-z.-]+)?)/i)||[])[1];
-      if(!version||!isNewer(version))continue;
-      const beta=/beta/i.test(version);
-      if(updateChannel==="beta"?!beta:updateChannel==="prerelease"?(!release.prerelease||beta):(release.prerelease||beta))continue;
-      update={version,url:release.html_url};break;
+    const r=await fetch("https://raw.githubusercontent.com/DMSHLabs/DictShelf/update-catalog/update-catalog.json?channel="+encodeURIComponent(updateChannel),{cache:"no-store"});
+    if(!r.ok&&r.status!==404)throw new Error("HTTP "+r.status);
+    const catalog=r.status===404?{schema:1,[updateChannel]:[]}:await r.json();
+    if(catalog.schema!==1||!Array.isArray(catalog[updateChannel]))throw new Error(tx("system.invalidUpdateCatalog"));
+    const current=currentAppVersion();
+    let found=null;
+    for(const entry of catalog[updateChannel]){
+      if(!entry||typeof entry.version!=="string"||typeof entry.url!=="string"||
+         !/^https:\/\/github\.com\/DMSHLabs\/DictShelf\/releases\/tag\//.test(entry.url))continue;
+      if(!versionIsNewer(entry.version,current))continue;
+      found={version:entry.version,url:entry.url};break;
     }
-    if(!update){if(!silent)note.textContent=tx("system.noUpdates");return}
-    const message=tx("system.updateAvailable",{version:update.version});
-    if(silent){
-      const safeURL=String(update.url||"");
-      const action=safeURL.startsWith("https://github.com/DMSHLabs/DictShelf/releases/")
-        ?` <a href="${esc(safeURL)}" target="_blank" rel="noopener">${esc(tx("system.viewRelease"))}</a>`:"";
-      setStatus(esc(message)+action);return;
-    }
-    note.replaceChildren();
-    note.append(document.createTextNode(message+" "));
-    const link=document.createElement("a");link.href=update.url;link.target="_blank";link.rel="noopener";link.textContent=tx("system.viewRelease");note.append(link);
+    updateAvailable=found;updateStatusMessage=found?"":(!silent?tx("system.noUpdates"):"");
+    if(found&&updateNotifications){try{localStorage.setItem(updateAvailableKey(),JSON.stringify(found))}catch(_){}}
+    else if(!found){try{localStorage.removeItem(updateAvailableKey())}catch(_){}}
+    if(!silent)updateManualResult=true;
+    renderUpdateNotice();
   }catch(e){
     if(silent){try{localStorage.removeItem("dictshelf_update_check_"+updateChannel)}catch(_){}}
-    else note.textContent=tx("system.updateCheckFailed",{error:window.wudictI18n.errorText(e.message)});
+    else{updateStatusMessage=tx("system.updateCheckFailed",{error:window.wudictI18n.errorText(e.message)});updateManualResult=true;renderUpdateNotice()}
   }
+  if(updateNotifications)scheduleNextUpdateCheck();
 }
-$("sysCheckUpdates").addEventListener("click",checkForUpdates);
+$("checkUpdates").addEventListener("click",()=>checkForUpdates(false));
+$("installUpdate").addEventListener("click",async()=>{
+  if(!updateAvailable||!window.wudictUpdateWindows)return;
+  updateStarting=true;updateStatusMessage="";renderUpdateNotice();
+  try{
+    await window.wudictUpdateWindows(JSON.stringify({
+      installer:updateAvailable.windowsInstaller||null,
+      portable:updateAvailable.windowsPortable||null,
+      portableFailure:tx("system.updatePortableFailed")
+    }));
+  }catch(error){
+    updateStarting=false;updateStatusMessage=tx("system.updateStartFailed",{error:window.wudictI18n.errorText(error.message)});
+    updateManualResult=true;renderUpdateNotice();
+  }
+});
+window.wudictUpdateFinished=function(ok,message,willClose){
+  updateStarting=false;
+  updateStatusMessage=ok?tx(willClose?"system.updatePortableStarted":"system.updateInstallerStarted"):
+    tx("system.updateStartFailed",{error:window.wudictI18n.errorText(message||"")});
+  updateManualResult=true;renderUpdateNotice();
+  if(willClose)setTimeout(()=>window.wudictWindowsExit?.(),400);
+  if(!ok){const button=$("installUpdate");button.disabled=false}
+};
 $("sysInfo").addEventListener("change",e=>{
   quietMessages=!e.target.checked;
   if(window.wudictAndroidShell)sysSwitch("info",e.target.checked);
@@ -5006,6 +5164,7 @@ function sysLogChange(){
   const options={enabled:$("sysLogEnabled").checked,
     baseEvents:$("sysLogBase").checked,webEvents:$("sysLogWeb").checked};
   $("sysLogBase").disabled=!options.enabled;$("sysLogWeb").disabled=!options.enabled;
+  syncSystemSettingSwitches($("sysSettings"));
   if(window.wudictAndroidShell){
     sysSet({action:"set",field:"log",...options});
     return;
@@ -11282,6 +11441,7 @@ function appearanceRender(state){
   document.documentElement.setAttribute("data-native-appearance","");
   $("appearanceColorOn").checked=!!state.colorEnabled;
   $("appearanceColorOn").disabled=!!state.image;
+  settingsToggleSync($("appearanceColorOn"));
   $("appearanceColor").value=String(state.color||"").replace(/^#/,"").toUpperCase();
   colorPickSync($("appearanceColor"),$("appearanceColorPick"));
   // Tiles, left to right: None, every image in the store, then "+". A
@@ -11789,6 +11949,7 @@ $("styler").addEventListener("keydown",e=>{
 // boot screen over. The config comes alongside rather than after, because the
 // cards need its home prefix to render paths as ~/… on the FIRST draw; run
 // concurrently it costs no extra latency, and it cannot reject.
+syncPreferenceSwitches();
 </script>
 <link rel="stylesheet" href="/assets/group-editor.css?v={{GROUPCSS}}">
 <dialog id="groupEditor" lang="{{T:locale}}" class="group-dialog panel-card workspace-dialog" aria-labelledby="groupTitle">

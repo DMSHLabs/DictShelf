@@ -269,6 +269,7 @@ final class Shell {
         org.json.JSONObject prefs = new org.json.JSONObject(GoBridge.prefsSnapshot());
         org.json.JSONObject uiPrefs = prefs.optJSONObject("ui");
         reply.put("updateChannel", uiPrefs == null ? "release" : uiPrefs.optString("updateChannel", "release"));
+        reply.put("updateNotifications", uiPrefs == null || !uiPrefs.optBoolean("updateNotificationsOff", false));
         reply.put("logEnabled", SystemLog.enabled());
         reply.put("logBaseEvents", SystemLog.baseEvents());
         reply.put("logWebEvents", SystemLog.detailedEvents());
@@ -859,6 +860,12 @@ final class Shell {
                                 org.json.JSONObject patch = new org.json.JSONObject().put("ui", new org.json.JSONObject().put("updateChannel", channel));
                                 if (!new org.json.JSONObject(GoBridge.savePrefs(patch.toString())).optBoolean("ok"))
                                     throw new IllegalStateException("Could not save update channel");
+                            } else if ("updateNotifications".equals(field)) {
+                                boolean enabled = request.getBoolean("value");
+                                org.json.JSONObject patch = new org.json.JSONObject().put("ui",
+                                        new org.json.JSONObject().put("updateNotificationsOff", !enabled));
+                                if (!new org.json.JSONObject(GoBridge.savePrefs(patch.toString())).optBoolean("ok"))
+                                    throw new IllegalStateException("Could not save update notification setting");
                             } else if ("override".equals(field)) {
                                 ShellPrefs.Override o = ShellPrefs.byKey(request.getString("key"));
                                 // An absent or null value is "follow the

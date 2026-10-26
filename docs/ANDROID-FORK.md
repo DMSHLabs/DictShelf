@@ -140,7 +140,7 @@ configured keystore produce an unsigned APK; do not treat that as installable.
 By default, the Windows command stamps the version from `git describe` into
 both the APK and its Go/JNI library. GitHub release builds use the selected or
 next release tag instead. To reproduce that exact version locally, set it
-before building, for example `set WUDICT_VERSION=wudict2-v0.13.0` and then run
+before building, for example `set WUDICT_VERSION=dictshelf-v1.02.01` and then run
 `build-android.cmd release`.
 
 `build-android.cmd debug intel` cross-compiles the in-process Go library
