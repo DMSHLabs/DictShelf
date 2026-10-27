@@ -491,7 +491,8 @@ function unesc(s){
    written: this page has no theme control, because a page they arrived at
    from the app should not be a second place to set one. */
 try{const t=localStorage.getItem("wudict_theme");
-  if(t&&t!=="auto")document.documentElement.setAttribute("data-theme",t)}catch(e){}
+  if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);
+  else if(!t)document.documentElement.setAttribute("data-theme","light")}catch(e){document.documentElement.setAttribute("data-theme","light")}
 
 let dictId="",state=null,last={p:1},poll=0,stripFor="",stripLettersPainted=0,stripMetricKey="",stripWidths=[],stripOffsets=[],stripTotalWidth=0,stripCurrentIndex=-1,stripCurrentPositionedIndex=-1,stripWindowStart=-1,stripWindowEnd=-1,stripFrame=0,stripMeasureFrame=0,stripMeasureGeneration=0,stripMeasureStarted=0,stripMeasureStartCount=0,stripMeasureChunks=0,chooserSearch=null,browsePageAbort=null,browseAlphabetTask=null,browsePageBusy=false;
 const browseAlphabetCache=new Map(),browseAlphabetPartial=new Map(),browsePageCache=new Map(),browsePageCacheMetrics=new Map(),browsePagePrefetches=new Map();

@@ -209,15 +209,20 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	}()
 	log.Printf("WebView2 startup: creating window; profile=%q", profile)
 	initialColor, customCaptionColor := desktopInitialWindowColors(desktopRequest)
-	windowWidth, windowHeight := 1120, 820
+	// Win32's CW_USEDEFAULT lets Windows choose the initial size and position.
+	// The WebView wrapper substitutes 640×480 for zero, so pass the Win32
+	// sentinel explicitly until a size has been saved.
+	const windowUseDefault = uint(0x80000000)
+	windowWidth, windowHeight := windowUseDefault, windowUseDefault
+	windowCenter := false
 	if desktopRequest != nil {
 		if value, err := desktopRequest(context.Background(), "desktopWindowSize", ""); err == nil {
 			if size, ok := value.(map[string]any); ok {
-				if n, ok := size["width"].(float64); ok && n >= 480 && n <= 10000 {
-					windowWidth = int(n)
-				}
-				if n, ok := size["height"].(float64); ok && n >= 320 && n <= 10000 {
-					windowHeight = int(n)
+				width, widthOK := size["width"].(float64)
+				height, heightOK := size["height"].(float64)
+				if widthOK && heightOK && width >= 480 && width <= 10000 && height >= 320 && height <= 10000 {
+					windowWidth, windowHeight = uint(width), uint(height)
+					windowCenter = true
 				}
 			}
 		}
@@ -226,7 +231,7 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	w := webview.NewWithOptions(webview.WebViewOptions{
 		DataPath:  profile,
 		AutoFocus: true,
-		WindowOptions: webview.WindowOptions{Title: "DictShelf", Width: uint(windowWidth), Height: uint(windowHeight), IconId: 101, Center: true,
+		WindowOptions: webview.WindowOptions{Title: "DictShelf", Width: windowWidth, Height: windowHeight, IconId: 101, Center: windowCenter,
 			BackgroundColor: initialColor, CaptionColor: customCaptionColor, StartupSplash: true},
 	})
 	if w == nil {
@@ -271,11 +276,11 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	})
 	_ = w.Bind("wudictGetHotkeys", func() any {
 		if desktopRequest == nil {
-			return map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+C, Ctrl+C"}
+			return map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+Shift+B, Ctrl+Shift+B"}
 		}
 		value, err := desktopRequest(context.Background(), "desktopHotkeys", "")
 		if err != nil {
-			return map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+C, Ctrl+C"}
+			return map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+Shift+B, Ctrl+Shift+B"}
 		}
 		return value
 	})
@@ -673,7 +678,7 @@ func desktopCurrentModifierMask() uint32 {
 // creates a visible window. This lets the native window and WebView blank
 // surface use the same paper while the runtime and first page initialize.
 func desktopInitialWindowColors(request func(context.Context, string, string) (any, error)) (background, caption string) {
-	dark := windowsPrefersDark()
+	dark := false
 	if request != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()
@@ -684,6 +689,8 @@ func desktopInitialWindowColors(request func(context.Context, string, string) (a
 					dark = true
 				case "light":
 					dark = false
+				case "auto":
+					dark = windowsPrefersDark()
 				}
 				key := "wudict_desktop_appearance_light"
 				if dark {
@@ -702,9 +709,9 @@ func desktopInitialWindowColors(request func(context.Context, string, string) (a
 		}
 	}
 	if dark {
-		return "#191A1C", ""
+		return "#1C1A17", "#1C1A17"
 	}
-	return "#FBFAF8", ""
+	return "#F4ECD8", "#F4ECD8"
 }
 
 func validWindowHexColor(value string) bool {
@@ -901,7 +908,7 @@ func desktopSetHotkeysValue(hwnd uintptr, kind, value string, persist bool) bool
 	desktopHotkeySeq += uint32(len(sequence))
 	desktopHotkeyActions[action] = desktopHotkeyAction{sequence: registered, action: action, id: id}
 	if persist && desktopWindowRequest != nil {
-		stored := map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+C, Ctrl+C"}
+		stored := map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+Shift+B, Ctrl+Shift+B"}
 		if raw, err := desktopWindowRequest(context.Background(), "desktopHotkeys", ""); err == nil {
 			b, _ := json.Marshal(raw)
 			_ = json.Unmarshal(b, &stored)
@@ -920,7 +927,7 @@ func desktopSetHotkeysValue(hwnd uintptr, kind, value string, persist bool) bool
 }
 
 func desktopApplySavedHotkeys(hwnd uintptr, request func(context.Context, string, string) (any, error)) {
-	values := map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+C, Ctrl+C"}
+	values := map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+Shift+B, Ctrl+Shift+B"}
 	if request != nil {
 		if raw, err := request(context.Background(), "desktopHotkeys", ""); err == nil {
 			b, _ := json.Marshal(raw)

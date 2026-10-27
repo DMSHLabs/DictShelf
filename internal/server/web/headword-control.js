@@ -29,10 +29,10 @@
   function threshold() {
     try {
       const saved = localStorage.getItem(thresholdKey);
-      if (saved === null) return 100000;
+      if (saved === null) return 50000;
       const value = Number(saved);
-      return thresholds.includes(value) ? value : 100000;
-    } catch (_) { return 100000; }
+      return thresholds.includes(value) ? value : 50000;
+    } catch (_) { return 50000; }
   }
   function setThreshold(value) {
     value = Number(value);

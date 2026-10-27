@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -64,7 +65,7 @@ type DictPref struct {
 // phone that reaches this same server too, and localStorage — keyed by origin
 // — would hand them 15px there, and again the first time SERVER_PORT changes.
 type UIPrefs struct {
-	UpdateChannel           string `json:"updateChannel,omitempty"`          // release, prerelease or beta; empty defaults to release
+	UpdateChannel           string `json:"updateChannel,omitempty"`          // release, prerelease or beta; Windows defaults to beta
 	UpdateNotificationsOff  bool   `json:"updateNotificationsOff,omitempty"` // notifications are on unless disabled
 	ResultCacheLimitGB      int    `json:"resultCacheLimitGB,omitempty"`
 	ResultCacheNoLimit      bool   `json:"resultCacheNoLimit,omitempty"`
@@ -96,7 +97,7 @@ type UIPrefs struct {
 	HLOff bool `json:"hlOff,omitempty"`
 
 	// Also fold [ex] zones when the Examples Hide layer is enabled.
-	HideUnmarkedExamples bool `json:"hideUnmarkedExamples,omitempty"`
+	HideUnmarkedExamples *bool `json:"hideUnmarkedExamples,omitempty"`
 
 	// ExampleBackgroundOff opts out of the default background tint on examples.
 	ExampleBackgroundOff bool `json:"exampleBackgroundOff,omitempty"`
@@ -187,6 +188,10 @@ func (u *UIPrefs) normalize() {
 	if u == nil {
 		return
 	}
+	if u.HideUnmarkedExamples == nil {
+		on := true
+		u.HideUnmarkedExamples = &on
+	}
 	if u.CombinedDictionaryLimit < 1 {
 		u.CombinedDictionaryLimit = indexconst.CombinedDictionaryLimitDefault
 	} else {
@@ -222,6 +227,9 @@ func (u *UIPrefs) normalize() {
 	case "release", "prerelease", "beta":
 	default:
 		u.UpdateChannel = "release"
+		if runtime.GOOS == "windows" {
+			u.UpdateChannel = "beta"
+		}
 	}
 }
 

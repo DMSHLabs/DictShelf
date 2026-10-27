@@ -127,9 +127,11 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
     var theme = localStorage.getItem("wudict_theme");
     if (theme === "light" || theme === "dark") {
       document.documentElement.setAttribute("data-theme", theme);
+    } else if (!theme) {
+      document.documentElement.setAttribute("data-theme", "light");
     }
   } catch (_) {
-    // Without storage, the existing CSS follows the system theme.
+    document.documentElement.setAttribute("data-theme", "light");
   }
 })();
 </script>
@@ -547,9 +549,16 @@ window.wudictFontScale=(function(){
     </div>
   </div>
   <div class="facts">
-    <label class="history-setting" for="searchPageSize">{{T:panel.resultPageSize}}
-      <input id="searchPageSize" type="number" min="5" max="500" step="5" inputmode="numeric" value="100" aria-label="{{T:panel.resultPageSize}}">
-    </label>
+    <div class="history-setting">
+      <label for="searchPageSize">{{T:panel.resultPageSize}}</label>
+      <span class="number-stepper" role="group" aria-label="{{T:panel.resultPageSize}}">
+        <input id="searchPageSize" class="number-stepper-input" type="number" min="5" max="500" step="5" inputmode="numeric" value="20" aria-label="{{T:panel.resultPageSize}}">
+        <span class="number-stepper-buttons">
+          <button type="button" class="number-step-button" data-search-page-step="1" aria-label="{{T:panel.increase}} {{T:panel.resultPageSize}}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 7.5 6 3l4 4.5z"/></svg></button>
+          <button type="button" class="number-step-button" data-search-page-step="-1" aria-label="{{T:panel.decrease}} {{T:panel.resultPageSize}}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2 4.5 4 4 4-4z"/></svg></button>
+        </span>
+      </span>
+    </div>
   </div>
   <p class="font-scale-hint">{{T:panel.resultPageSizeHint}}</p>
 </details>
@@ -1428,10 +1437,10 @@ async function requestPriorityIndex(state,button){
 }
 function normalizedSearchPortionSize(value){
   const n=Math.floor(Number(value));
-  return Number.isFinite(n)?Math.max(5,Math.min(500,Math.round(n/5)*5)):100;
+  return Number.isFinite(n)?Math.max(5,Math.min(500,Math.round(n/5)*5)):20;
 }
 function searchPortionSize(){
-  try{return normalizedSearchPortionSize(localStorage.getItem(SEARCH_PORTION_SIZE_KEY)||100)}catch(_){return 100}
+  try{return normalizedSearchPortionSize(localStorage.getItem(SEARCH_PORTION_SIZE_KEY)||20)}catch(_){return 20}
 }
 const searchPortionInput=$("searchPageSize");
 if(searchPortionInput){
@@ -1440,6 +1449,12 @@ if(searchPortionInput){
     const size=normalizedSearchPortionSize(searchPortionInput.value);
     searchPortionInput.value=String(size);
     try{localStorage.setItem(SEARCH_PORTION_SIZE_KEY,String(size))}catch(_){}
+  });
+  for(const button of document.querySelectorAll("[data-search-page-step]"))button.addEventListener("click",()=>{
+    const direction=Number(button.dataset.searchPageStep)||0;
+    const current=normalizedSearchPortionSize(searchPortionInput.value);
+    searchPortionInput.value=String(Math.max(5,Math.min(500,current+direction*5)));
+    searchPortionInput.dispatchEvent(new Event("change",{bubbles:true}));
   });
 }
 if(window.wudictAndroidGo){
@@ -1808,8 +1823,8 @@ async function loadPrefs(){
        (below, always false), because it is upstream's. */
     applyExampleBackground(st.ui?.exampleBackgroundOff!==true,false);
     applyExampleTextFade(!!st.ui?.fadeExampleText,false);
-    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyArticleFont(st.ui.fontFamily||"charis",false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false);applyDictIcons(!st.ui.dictIconsOff,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll;prefOrderModeKnown=typeof st.ui.customOrder==="boolean";prefCustomOrder=!!st.ui.customOrder;
-      updateChannel=st.ui.updateChannel||"release";
+    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyArticleFont(st.ui.fontFamily||"charis",false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(st.ui.hideUnmarkedExamples??true,false);applyDictIcons(!st.ui.dictIconsOff,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll;prefOrderModeKnown=typeof st.ui.customOrder==="boolean";prefCustomOrder=!!st.ui.customOrder;
+      updateChannel=st.ui.updateChannel||defaultUpdateChannel;
       updateNotifications=!st.ui.updateNotificationsOff;
       resultCacheLimitGB=Number(st.ui.resultCacheLimitGB)||defaultResultCacheLimitGB();resultCacheNoLimit=!!st.ui.resultCacheNoLimit;syncResultCacheLimitUI();
       searchReturnCacheStorage=st.ui.searchReturnCache==="memory"?"memory":"disk";syncSearchReturnCacheUI();
@@ -1828,7 +1843,8 @@ async function loadPrefs(){
 /* Debounced, and silent when nothing actually changed — dragging a card emits
    a move per hovered row, and startup normalisation re-sends a list that is
    usually identical to the one we just read. */
-let prefsTimer=null,prefsSent=null,updateChannel="release",updateNotifications=true;
+const defaultUpdateChannel=window.wudictWindowsShell===true?"beta":"release";
+let prefsTimer=null,prefsSent=null,updateChannel=defaultUpdateChannel,updateNotifications=true;
 let updateAvailable=null,updateStatusMessage="",updateManualResult=false,updateStarting=false;
 function defaultResultCacheLimitGB(){return window.wudictAndroidShell?2:8}
 let resultCacheLimitGB=defaultResultCacheLimitGB(),resultCacheNoLimit=false;
@@ -2006,7 +2022,7 @@ function applyTheme(t){
   syncAutoDark();
 }
 function themeIsDark(){
-  const t=localStorage.getItem("wudict_theme")||"auto";
+  const t=localStorage.getItem("wudict_theme")||"light";
   if(t==="dark")return true;
   if(t==="light")return false;
   return matchMedia("(prefers-color-scheme: dark)").matches;
@@ -2374,7 +2390,7 @@ let userArticleCSS="";
 // frameCSS() reads this - a declaration further down would be a TDZ
 // ReferenceError that kills the whole script before anything binds.
 let presetArticleCSS="";
-let hideUnmarkedExamples=false,dimExampleBackground=true,fadeExampleText=false;
+let hideUnmarkedExamples=true,dimExampleBackground=true,fadeExampleText=false;
 function applyExampleBackground(on,persist=true){
   dimExampleBackground=!!on;
   $("dimExampleBackground").checked=dimExampleBackground;
@@ -2510,7 +2526,7 @@ $("expandBtn").onclick=()=>{
    The stored values are unchanged - auto / light / dark - so nothing needs
    migrating and an older build reads the same key. */
 function applyThemeControls(){
-  const auto=(localStorage.getItem("wudict_theme")||"auto")==="auto";
+  const auto=(localStorage.getItem("wudict_theme")||"light")==="auto";
   const dark=themeIsDark();
   for(const b of document.querySelectorAll(".themeAuto"))
     b.setAttribute("aria-pressed",String(auto));
@@ -2535,7 +2551,7 @@ for(const b of document.querySelectorAll(".themeAuto"))b.onclick=()=>setTheme("a
 for(const b of document.querySelectorAll(".themeFlip"))
   b.onclick=()=>setTheme(themeIsDark()?"light":"dark");
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change",syncAutoDark);
-applyTheme(localStorage.getItem("wudict_theme")||"auto");
+applyTheme(localStorage.getItem("wudict_theme")||"light");
 
 /* The layers, at boot and not only when the sheet is opened. The server has
    already put the enabled ones in the page as <link>s, so the APP half looks
@@ -4615,10 +4631,10 @@ let desktopSystemNodes=null;
 async function desktopHotkeysLoad(){
   const show=$("hotkeyShowWindow"),translate=$("hotkeyTranslateClipboard");
   if(!show||!translate)return;
-  let stored={show:"Ctrl+Shift+F11",translate:"Ctrl+C, Ctrl+C"};
+  let stored={show:"Ctrl+Shift+F11",translate:"Ctrl+Shift+B, Ctrl+Shift+B"};
   try{stored=await window.wudictGetHotkeys()}catch(_){}
   show.value=stored.show||"Ctrl+Shift+F11";
-  translate.value=stored.translate||"Ctrl+C, Ctrl+C";
+  translate.value=stored.translate||"Ctrl+Shift+B, Ctrl+Shift+B";
   show.dataset.previous=show.value;translate.dataset.previous=translate.value;
   show.onkeydown=desktopHotkeyCapture;translate.onkeydown=desktopHotkeyCapture;
   show.onfocus=()=>{show.dataset.previous=show.value;window.wudictSetHotkeyCapture?.(true)};
@@ -4662,7 +4678,7 @@ function desktopHotkeySave(input,kind){
   const value=input.value.trim();
   if(typeof window.wudictSetHotkeys==="function"&&!window.wudictSetHotkeys(kind,value)){
     input.setCustomValidity(tx("hotkeys.invalid"));input.reportValidity();
-    input.value=input.dataset.previous||(kind==="show"?"Ctrl+Shift+F11":"Ctrl+C, Ctrl+C");return;
+    input.value=input.dataset.previous||(kind==="show"?"Ctrl+Shift+F11":"Ctrl+Shift+B, Ctrl+Shift+B");return;
   }
   input.setCustomValidity("");input.value=value;input.dataset.previous=value;
 }
@@ -11444,7 +11460,8 @@ function desktopAppearanceRequest(request){
   const night=request.night===undefined?themeIsDark():!!request.night;
   const key="wudict_desktop_appearance_"+(night?"dark":"light");
   let saved={};
-  try{saved=JSON.parse(localStorage.getItem(key)||"null")||{}}catch(_){}
+  let hasSavedAppearance=false;
+  try{const raw=localStorage.getItem(key);hasSavedAppearance=raw!==null;saved=JSON.parse(raw||"null")||{}}catch(_){}
   if(request.action==="set"){
     if(request.field==="image"){
       if(request.value&&!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(request.value))return null;
@@ -11462,7 +11479,9 @@ function desktopAppearanceRequest(request){
     saved.colorEnabled=true;
     try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}
   }
-  const state={colorEnabled:!!saved.colorEnabled,color:saved.color||"#F4ECD8",
+  const defaultColor=night?"#1C1A17":"#F4ECD8";
+  const state={colorEnabled:hasSavedAppearance?!!saved.colorEnabled:window.wudictWindowsShell===true,
+    color:saved.color||defaultColor,
     image:saved.image||"",images:(stylerFileRows||[]).filter(f=>/^image\//.test(f.type||"")).map(f=>f.name),
     edgeMode:0,edgeColor:"#F4ECD8",bars:0};
   if(night===themeIsDark()){
