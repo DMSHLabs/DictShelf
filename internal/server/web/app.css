@@ -10,21 +10,21 @@ html[data-desktop-image] { background-color:var(--paper-bg) !important;
   /* UI scale values are unitless factors; each rule applies rem or em. */
   /* ui-scale-defaults:start */
   --ui-font-base:1;
-  --ui-font-section:1;
-  --ui-font-title:1.15;
+  --ui-font-section:1.1;
+  --ui-font-title:1.2;
   --ui-font-addition:.9;
   --ui-hint-font-size:.8;
-  --ui-control-height:1.6;
-  --ui-control-font:.9;
+  --ui-control-height:1.75;
+  --ui-control-font:.8;
   --ui-hint-control-height:1;
   --ui-main-control-height:1.6;
   --ui-main-control-font:1.05;
   --ui-edit_control-height:1.8;
   --ui-edit_control-font:1;
-  --ui-section-space-before:0;
+  --ui-section-space-before:.2;
   --ui-section-space-after:.45;
   --ui-row-gap:.6;
-  --ui-addition-gap:.5;
+  --ui-addition-gap:.4;
   --ui-control-gap:.25;
   /* ui-scale-defaults:end */
   --sp-1:.382em; --sp-2:.618em; --sp-3:1em; --sp-4:1.618em; --sp-5:2.618em;
@@ -1687,8 +1687,9 @@ html[data-dict-icons-off] .dict-icon{display:none}
 #panel .facts.language-row>#languageBtn,
 #panel #looksChoice,
 #panel .headword-threshold-row>.threshold-select-wrap,
-#panel .article-font-select-wrap{height:calc(var(--ui-edit_control-height) * 1.5rem);min-height:calc(var(--ui-edit_control-height) * 1.5rem);
-  font-size:calc(var(--ui-edit_control-font) * 1rem)}
+#panel .article-font-select-wrap{height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
+  min-height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
+  font-size:calc(var(--ui-font-base) * 1rem)}
 .panel-dropdown::after{content:"";position:absolute;right:.55em;top:50%;transform:translateY(-50%);pointer-events:none;
   width:0;height:0;margin:0;border:4px solid transparent;border-top-color:var(--fg)}
 .panel-select-wrap{min-width:0}
@@ -1699,8 +1700,8 @@ html[data-dict-icons-off] .dict-icon{display:none}
   font-size:calc(var(--ui-control-font) * 1rem);line-height:1;
   appearance:none;-webkit-appearance:none;padding:0 1.8em 0 .55em}
 #panel .headword-threshold-row>.panel-select-wrap>select,
-#panel .article-font-select-wrap>select{height:calc(var(--ui-edit_control-height) * 1.5rem);
-  min-height:calc(var(--ui-edit_control-height) * 1.5rem);font-size:calc(var(--ui-edit_control-font) * 1rem)}
+#panel .article-font-select-wrap>select{height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
+  min-height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);font-size:calc(var(--ui-font-base) * 1rem)}
 /* A label for the control on its row, in the register the segs' labels use. */
 .facts .rowlabel{font-size:calc(var(--ui-font-base) * 1rem);line-height:1.2;color:var(--label-quiet)}
 /* The collection's count, on its own line under the heading: the answer to "is
@@ -1855,6 +1856,19 @@ html[data-dict-icons-off] .dict-icon{display:none}
 .facts .history-setting{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);font-size:calc(var(--ui-font-base) * 1rem)}
 #historyLength{box-sizing:border-box;width:4.5em;height:calc(var(--ui-control-height) * 1em);
   padding:0 .4em;font:inherit;line-height:1}
+.number-stepper{box-sizing:border-box;display:inline-flex;align-items:stretch;width:5.5em;height:calc(var(--ui-control-height) * 1em);
+  font:inherit;line-height:1;
+  overflow:hidden;border:1px solid var(--line);border-radius:8px;background:var(--bg-card);color:var(--label)}
+.number-stepper:focus-within{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}
+.number-stepper-input{box-sizing:border-box;flex:1;min-width:0;width:0;height:100%;margin:0;padding:0 .4em;border:0;border-radius:0;outline:0;
+  appearance:textfield;-moz-appearance:textfield;font:inherit;line-height:1;color:var(--fg);background:transparent}
+.number-stepper-input::-webkit-inner-spin-button,.number-stepper-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.number-stepper-buttons{box-sizing:border-box;display:grid;grid-template-rows:1fr 1fr;flex:none;width:1.5em;border-left:1px solid var(--line-soft)}
+.number-step-button{display:grid;place-items:center;min-width:0;min-height:0;margin:0;padding:0;border:0;border-radius:0;color:var(--label);background:transparent;cursor:pointer}
+.number-step-button:first-child{border-bottom:1px solid var(--line-soft)}
+.number-step-button:hover{color:var(--accent);background:var(--accent-soft)}
+.number-step-button:focus-visible{position:relative;z-index:1;outline:2px solid var(--focus);outline-offset:-2px}
+.number-step-button svg{display:block;width:.7em;height:.7em;fill:currentColor}
 .facts .act{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);height:calc(var(--ui-control-height) * 1em);box-sizing:border-box;
   font-family:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1;padding:0 .6em;margin:0;
   color:var(--label);background:var(--bg-card);

@@ -128,11 +128,11 @@ func TestPrefsHideUnmarkedExamples(t *testing.T) {
 			value = "true"
 		}
 		got := putPrefs(t, s, `{"ui":{"hideUnmarkedExamples":`+value+`}}`)
-		if got.UI == nil || got.UI.HideUnmarkedExamples != on {
+		if got.UI == nil || got.UI.HideUnmarkedExamples == nil || *got.UI.HideUnmarkedExamples != on {
 			t.Fatalf("response lost example folding setting: %+v", got.UI)
 		}
 		ui := LoadPrefs(state).UI()
-		if ui == nil || ui.HideUnmarkedExamples != on {
+		if ui == nil || ui.HideUnmarkedExamples == nil || *ui.HideUnmarkedExamples != on {
 			t.Fatalf("reload lost example folding setting: %+v", ui)
 		}
 	}
