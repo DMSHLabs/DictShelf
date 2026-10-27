@@ -1059,7 +1059,7 @@ html:not([data-shell-image]) #hotkeysSection .hotkey-row input{background-image:
 #panel .facts.settings-switch-row{display:flex;flex-wrap:nowrap;align-items:center;width:100%}
 #panel .facts.settings-switch-row>.rowlabel{flex:0 1 var(--rlcol,96px);min-width:0;white-space:normal}
 #panel .examples-extra.settings-switch-row{align-items:center;margin-block:calc(var(--ui-row-gap) * 1em)}
-#panel .examples-extra.settings-switch-row>.settings-toggle-label{flex:0 1 auto;min-width:0}
+#panel .examples-extra.settings-switch-row>.settings-toggle-label{flex:0 0 var(--example-switch-label-width,auto);min-width:0}
 #panel #examplesExtraRow+.facts{margin-top:calc(var(--ui-row-gap) * 1em)}
 #panel .facts.update-notifications-row.settings-switch-row{flex-wrap:nowrap}
 #panel .facts.update-notifications-row.settings-switch-row>.rowlabel{flex:0 1 auto;white-space:nowrap}
