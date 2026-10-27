@@ -43,12 +43,8 @@ html[data-shell-image] .lemma-list::-webkit-scrollbar-thumb:hover{background-col
 .lemma-dialog .lrow{display:flex;flex-wrap:wrap;align-items:center;gap:.5em;min-height:calc(var(--ui-control-height) * 1em);
   padding:.5em .618em;border-bottom:1px solid var(--line);font-size:calc(var(--ui-control-font) * 1rem)}
 .lemma-dialog .lrow:last-child{border-bottom:0}
-.lemma-dialog .lrow input[type=checkbox]{appearance:none;-webkit-appearance:none;position:relative;flex:none;width:calc(var(--ui-control-height) * 1em);
-  height:calc(var(--ui-control-height) * 1em);margin:0;padding:0;border:1.5px solid var(--fg);border-radius:4px;background:var(--bg);cursor:pointer}
-.lemma-dialog .lrow input[type=checkbox]:checked::after{content:"";position:absolute;left:35%;top:20%;width:25%;height:50%;
-  border:solid var(--fg);border-width:0 2px 2px 0;transform:rotate(45deg)}
-.lemma-dialog .lrow input[type=checkbox]:disabled{opacity:.5;cursor:default}
-.lemma-dialog .lrow input[type=checkbox]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.lemma-dialog .lrow input[type=checkbox]{--ds-checkbox-size:calc(var(--ui-control-height) * 1em);
+  --ds-checkbox-margin:0;--ds-checkbox-disabled-opacity:.5}
 .lemma-dialog .lrow .nm{flex:1 1 8em;min-width:0;color:var(--fg)}
 .lemma-dialog .lrow .cost{flex:none;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem);font-variant-numeric:tabular-nums}
 .lemma-dialog .lrow .st{flex:0 1 auto;min-width:min(9em,100%);max-width:100%;color:var(--label);text-align:right;font-size:calc(var(--ui-hint-font-size) * 1rem);overflow-wrap:anywhere}

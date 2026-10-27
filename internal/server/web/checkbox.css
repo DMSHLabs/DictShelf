@@ -1,0 +1,47 @@
+/**
+ * Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * Shared checkbox control. Set --ds-checkbox-* on a control or its container
+ * to adapt size, spacing, colours or the mark without redrawing the control.
+ */
+input[type="checkbox"]{
+  appearance:none;
+  -webkit-appearance:none;
+  box-sizing:border-box;
+  position:relative;
+  flex:none;
+  width:var(--ds-checkbox-size,20px);
+  height:var(--ds-checkbox-size,20px);
+  margin:var(--ds-checkbox-margin,0 .3em 0 0);
+  padding:0;
+  border:var(--ds-checkbox-border-width,1.5px) solid var(--ds-checkbox-border-color,var(--fg));
+  border-radius:var(--ds-checkbox-radius,4px);
+  background-color:var(--ds-checkbox-background,var(--paper-bg,var(--bg)));
+  vertical-align:middle;
+  cursor:pointer;
+}
+input[type="checkbox"]:checked::after{
+  content:"";
+  position:absolute;
+  left:var(--ds-checkbox-mark-left,35%);
+  top:var(--ds-checkbox-mark-top,10%);
+  width:var(--ds-checkbox-mark-width,25%);
+  height:var(--ds-checkbox-mark-height,45%);
+  border:solid var(--ds-checkbox-mark-color,var(--fg));
+  border-width:0 var(--ds-checkbox-mark-stroke,2px) var(--ds-checkbox-mark-stroke,2px) 0;
+  transform:rotate(45deg);
+}
+input[type="checkbox"]:focus-visible{
+  outline:var(--ds-checkbox-focus-width,2px) solid var(--ds-checkbox-focus-color,var(--accent));
+  outline-offset:var(--ds-checkbox-focus-offset,2px);
+}
+input[type="checkbox"]:disabled{
+  background-color:var(--ds-checkbox-disabled-background,var(--ds-checkbox-background,var(--paper-bg,var(--bg))));
+  border-color:var(--ds-checkbox-disabled-border-color,var(--ds-checkbox-border-color,var(--fg)));
+  opacity:var(--ds-checkbox-disabled-opacity,.55);
+  cursor:default;
+}
+input[type="checkbox"]:disabled:checked::after{
+  border-color:var(--ds-checkbox-disabled-mark-color,var(--ds-checkbox-mark-color,var(--fg)));
+}

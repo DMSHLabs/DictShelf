@@ -594,7 +594,8 @@ function wireIntake(dir){
     for(const cb of foldersDialogRoot.querySelectorAll("#cands input:not(:disabled)"))cb.checked=on;
   });
   $("dropJob").addEventListener("click",impCancel);
-  $("howtoCopy").addEventListener("click",howtoCopy);
+  const howtoCopyLink=$("howtoCopy");
+  if(howtoCopyLink)howtoCopyLink.addEventListener("click",howtoCopy);
   const d=$("drop");
   // dragover must be cancelled or the browser navigates to the file instead,
   // which on a drop of a 2 GB zip is a download of it.

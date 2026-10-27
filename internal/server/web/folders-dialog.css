@@ -47,17 +47,12 @@ html[data-shell-image] .folders-dialog-scroll code,html[data-shell-image] .folde
   margin:.3em 0;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:.5em .7em;
   font:calc(var(--ui-edit_control-font) * 1rem) var(--font);outline:none}
 .folders-dialog-scroll input[type=text]:focus,.folders-dialog-scroll .frow input:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}
-.folders-dialog-scroll input[type=checkbox]{appearance:none;-webkit-appearance:none;flex:none;width:20px;height:20px;margin:0;padding:0;
-  border:1.5px solid var(--fg);border-radius:4px;background-color:var(--bg);position:relative;cursor:pointer}
-.folders-dialog-scroll input[type=checkbox]:checked::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;
-  border:solid var(--fg);border-width:0 2px 2px 0;transform:rotate(45deg)}
-.folders-dialog-scroll input[type=checkbox]:disabled{opacity:.45;cursor:default}
-.folders-dialog-scroll input[type=checkbox]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.folders-dialog-scroll input[type=checkbox]{--ds-checkbox-margin:0;--ds-checkbox-disabled-opacity:.45}
 .folders-dialog-scroll .dsl-default-row{display:flex;flex-wrap:wrap;align-items:center;gap:.5em 1em;margin:.6em 0}
 .folders-dialog-scroll .dsl-default-row>div{display:flex;flex-wrap:wrap;gap:.5em 1em}
 .folders-dialog-scroll .dsl-default-row label{display:inline-flex;align-items:center;gap:.3em;min-height:calc(var(--ui-edit_control-height) * 1em);
   font-size:calc(var(--ui-edit_control-font) * 1rem)}
-.folders-dialog-scroll .dsl-default-row input[type=checkbox]{width:calc(var(--ui-edit_control-height) * 1em);height:calc(var(--ui-edit_control-height) * 1em)}
+.folders-dialog-scroll .dsl-default-row input[type=checkbox]{--ds-checkbox-size:calc(var(--ui-edit_control-height) * 1em)}
 .folders-dialog-scroll .frow{display:flex;align-items:center;gap:.4em}
 .folders-dialog-scroll .frow input{flex:1 1 0;min-width:0}
 .folders-dialog-scroll .frow .pick,.folders-dialog-scroll .frow .rm{box-sizing:border-box;display:grid;place-items:center;flex:none;

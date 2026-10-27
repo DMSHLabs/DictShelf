@@ -113,6 +113,9 @@ var pickJS = webAsset(pickJSSrc, jsAsset) // word-at-point for a double tap, loa
 //go:embed web/app.css
 var appCSS []byte // main page styles
 
+//go:embed web/checkbox.css
+var checkboxCSS []byte // one customizable checkbox control shared by every web surface
+
 //go:embed web/fonts/*
 var articleFontFiles embed.FS
 
@@ -555,6 +558,7 @@ func (s *Server) basePage() []byte {
 		page := strings.ReplaceAll(string(indexHTML), "{{VERSION}}", v)
 		page = strings.ReplaceAll(page, "{{FRAMEJS}}", assetTag(frameJS))
 		page = strings.ReplaceAll(page, "{{APPCSS}}", assetTag(appCSS))
+		page = strings.ReplaceAll(page, "{{CHECKBOXCSS}}", assetTag(checkboxCSS))
 		page = strings.ReplaceAll(page, "{{WORKSPACECSS}}", assetTag(workspaceCSS))
 		page = strings.ReplaceAll(page, "{{HISTORYCSS}}", assetTag(historyCSS))
 		page = strings.ReplaceAll(page, "{{HISTORYJS}}", assetTag(historyJS))
@@ -564,6 +568,7 @@ func (s *Server) basePage() []byte {
 		filterDialog = strings.ReplaceAll(filterDialog, "{{FILTERSDIALOGJS}}", assetTag(filtersDialogJS))
 		page = strings.ReplaceAll(page, "{{FILTERSDIALOG}}", filterDialog)
 		foldersDialog := strings.ReplaceAll(string(foldersDialogHTML), "{{SETUPJS}}", assetTag(setupJS))
+		foldersDialog = strings.ReplaceAll(foldersDialog, "{{CHECKBOXCSS}}", assetTag(checkboxCSS))
 		foldersDialog = strings.ReplaceAll(foldersDialog, "{{FOLDERSDIALOGCSS}}", assetTag(foldersDialogCSS))
 		page = strings.ReplaceAll(page, "{{FOLDERSDIALOG}}", foldersDialog)
 		lemmaDialog := strings.ReplaceAll(string(lemmaDialogHTML), "{{LEMMADIALOGCSS}}", assetTag(lemmaDialogCSS))
@@ -706,6 +711,7 @@ func setupPage(dirs []string, serving int, presetLinks string, language string) 
 		})
 	}
 	page := strings.ReplaceAll(strings.ReplaceAll(setupHTML, "{{INTRO}}", intro), "{{CSS}}", cssTag)
+	page = strings.ReplaceAll(page, "{{CHECKBOXCSS}}", assetTag(checkboxCSS))
 	page = strings.ReplaceAll(page, "{{WORKSPACECSS}}", assetTag(workspaceCSS))
 	page = strings.ReplaceAll(page, "{{SETUPJS}}", assetTag(setupJS))
 	return strings.ReplaceAll(page, "{{PRESETS}}", presetLinks)
@@ -736,6 +742,7 @@ func (s *Server) lemmasPageFor(acceptLanguage string) []byte {
 	// request rather than precomputed: the page carries {{T:…}} keys and is
 	// served in the reader's language.
 	page := bytes.ReplaceAll(lemmasHTML, []byte("{{CSS}}"), []byte(cssTag))
+	page = bytes.ReplaceAll(page, []byte("{{CHECKBOXCSS}}"), []byte(assetTag(checkboxCSS)))
 	page = bytes.ReplaceAll(page, []byte("{{WORKSPACECSS}}"), []byte(assetTag(workspaceCSS)))
 	page = bytes.ReplaceAll(page, []byte("{{LEMMASJS}}"), []byte(assetTag(lemmasJS)))
 	choice := s.reg.prefs.Language()
