@@ -42,6 +42,7 @@ def main() -> None:
         channel = "beta" if is_beta else "prerelease" if release.get("prerelease") else "release"
         entry = {"version": version, "url": url}
         assets = release.get("assets", [])
+        android_apks = {}
         if isinstance(assets, list):
             for asset in assets:
                 if not isinstance(asset, dict):
@@ -62,6 +63,21 @@ def main() -> None:
                     entry["windowsInstaller"] = {"url": asset_url}
                     if isinstance(digest, str) and digest.startswith("sha256:"):
                         entry["windowsInstaller"]["sha256"] = digest.removeprefix("sha256:")
+                elif name in {
+                    "dictshelf-android-arm64-v8a-foss.apk",
+                    "dictshelf-android-armeabi-v7a-foss.apk",
+                    "dictshelf-android-universal-foss.apk",
+                }:
+                    abi = {
+                        "dictshelf-android-arm64-v8a-foss.apk": "arm64-v8a",
+                        "dictshelf-android-armeabi-v7a-foss.apk": "armeabi-v7a",
+                        "dictshelf-android-universal-foss.apk": "universal",
+                    }[name]
+                    android_apks[abi] = {"url": asset_url}
+                    if isinstance(digest, str) and digest.startswith("sha256:"):
+                        android_apks[abi]["sha256"] = digest.removeprefix("sha256:")
+        if android_apks:
+            entry["androidApks"] = android_apks
         catalog[channel].append(entry)
 
     version_key = lambda item: tuple(

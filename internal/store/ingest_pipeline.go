@@ -502,7 +502,7 @@ func readIngestEntries(s *ingestSession, r dict.Reader, plan Plan, redirects cha
 // order, but article IDs, aliases and progress are written in source order.
 func scanIngestEntries(ctx context.Context, r dict.Reader, plan Plan, total int, progress Progress, rows *ingestRowWriter, trace *indexTrace) (id, subEntries, linkCount int64, err error) {
 	mode, autoSingle := indexconst.BeginIngestContext(ctx)
-	defer indexconst.EndIngestContext(autoSingle)
+	defer indexconst.EndIngestContext(mode, autoSingle)
 	if mode == indexconst.ModeParallelDictionariesSingleWorker {
 		return scanIngestEntriesSequential(ctx, r, plan, total, progress, rows, trace)
 	}

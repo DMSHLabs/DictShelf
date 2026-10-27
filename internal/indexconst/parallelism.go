@@ -15,13 +15,16 @@ const (
 	ModePipeline Mode = iota
 	ModeParallelDictionariesSingleWorker
 	ModeAuto
-	ModeAuto2
+	ModeAdaptive
 )
+
+const ModeAuto2 = ModeAdaptive // Legacy name for existing callers and tests.
 
 var activeMode atomic.Uint32
 var modeMu sync.Mutex
 var activeIngestScans int
 var activeAutoSingles atomic.Int32
+var activePipelineOverrides atomic.Int32
 
 type ingestModeKey struct{}
 
@@ -42,7 +45,7 @@ func IngestMode(ctx context.Context) Mode {
 }
 
 func IsAutomaticMode(mode Mode) bool {
-	return mode == ModeAuto || mode == ModeAuto2
+	return mode == ModeAuto || mode == ModeAdaptive
 }
 
 func ModeString(mode Mode) string {
@@ -51,8 +54,8 @@ func ModeString(mode Mode) string {
 		return "parallel-dictionaries-single-worker"
 	case ModeAuto:
 		return "auto"
-	case ModeAuto2:
-		return "auto2"
+	case ModeAdaptive:
+		return "adaptive"
 	default:
 		return "pipeline"
 	}
@@ -78,14 +81,20 @@ func BeginIngestContext(ctx context.Context) (Mode, bool) {
 	if autoSingle {
 		activeAutoSingles.Add(1)
 	}
+	if CurrentMode() == ModeParallelDictionariesSingleWorker && mode == ModePipeline {
+		activePipelineOverrides.Add(1)
+	}
 	modeMu.Unlock()
 	return mode, autoSingle
 }
 
-func EndIngestContext(autoSingle bool) {
+func EndIngestContext(mode Mode, autoSingle bool) {
 	modeMu.Lock()
 	if autoSingle {
 		activeAutoSingles.Add(-1)
+	}
+	if CurrentMode() == ModeParallelDictionariesSingleWorker && mode == ModePipeline {
+		activePipelineOverrides.Add(-1)
 	}
 	activeIngestScans--
 	modeMu.Unlock()
@@ -113,8 +122,8 @@ func SetMode(name string) (changed, busy bool) {
 	case "auto":
 		activeMode.Store(uint32(ModeAuto))
 		return true, false
-	case "auto2":
-		activeMode.Store(uint32(ModeAuto2))
+	case "adaptive", "auto2":
+		activeMode.Store(uint32(ModeAdaptive))
 		return true, false
 	default:
 		return false, false
@@ -149,7 +158,7 @@ func IngestWorkerLimit(logical, activeDictionaries int) int {
 // IngestWorkerLimitForMode disables shared entry preparation for the current
 // comparative run so each dictionary prepares its own batches inline.
 func IngestWorkerLimitForMode(logical, activeDictionaries int) int {
-	if CurrentMode() == ModeParallelDictionariesSingleWorker {
+	if CurrentMode() == ModeParallelDictionariesSingleWorker && activePipelineOverrides.Load() == 0 {
 		return 0
 	}
 	if IsAutomaticMode(CurrentMode()) {

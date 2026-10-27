@@ -30,7 +30,7 @@ const CLASS = "wu-xonly";
 // space was meant.
 
 const JUNK = /^[\s\p{P}\p{S}]*$/u;
-const MARKER = /^\s*[•‣⁃⁌⁍∙·\u25a0-\u25ff♦★☆☐☑☒❥❧➔➜➤➢→⇒*+\-–—]+\s*/u;
+const MARKER = /^\s*[•‣⁃⁌⁍∙·■□▣▤▥▪▫●○◦◉◎◌◍◆◇◈◊♦▲▼▶◀▸▹►▻▾▿⊙⊚⦿★☆✦✧✶✳⁕☐☑☒❥❧➔➜➤➢→⇒*+\-–—]+\s*/u;
 
 /* True when the paragraph holds at least one example and no text of its own.
    Text inside a link is skipped because the audio button lives there, and the

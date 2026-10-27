@@ -2166,6 +2166,7 @@ func (s *Server) startIngest(e *entry, q url.Values) string {
 	}
 	action, indexes := ingestAction(e, q)
 	s.jobs.start(key, 0, jobStatus{Action: action, Indexes: indexes}, func(j *job) {
+		ctx := adaptiveSingleIndexContext(j.ctx, e)
 		store.IndexDiagnostic("request start dictionary=%q source=%q contains=%v fulltext=%v media=%v rebuild=%v build=%q", e.probeName(), e.Path, want.Contains, want.FullText, want.Media, q.Get("rebuild") == "1", s.Version)
 		defer func() {
 			js, _ := s.jobs.status(key)
@@ -2180,7 +2181,7 @@ func (s *Server) startIngest(e *entry, q url.Values) string {
 			j.update(func(js *jobStatus) { js.Done, js.Total = int64(done), int64(total) })
 		}
 		if e.indexBlocked() {
-			if err := e.restoreIndexContext(j.ctx, store.Plan{FullText: want.FullText, Contains: want.Contains}, progress, currentIndexLimit()); err != nil {
+			if err := e.restoreIndexContext(ctx, store.Plan{FullText: want.FullText, Contains: want.Contains}, progress, currentIndexLimit()); err != nil {
 				j.update(func(js *jobStatus) {
 					if errors.Is(err, context.Canceled) && j.canceled() {
 						js.Canceled = true
@@ -2200,7 +2201,7 @@ func (s *Server) startIngest(e *entry, q url.Values) string {
 		}
 		if entryHasSelfIndex(e) && !isZIMPath(e.Path) {
 			store.IndexDiagnostic("skip ingest source=%q dictionary=%q reason=native-index", e.Path, e.probeName())
-		} else if err := e.setFeaturesContext(j.ctx, want, progress, q.Get("rebuild") == "1"); err != nil {
+		} else if err := e.setFeaturesContext(ctx, want, progress, q.Get("rebuild") == "1"); err != nil {
 			j.update(func(js *jobStatus) {
 				if errors.Is(err, context.Canceled) && j.canceled() {
 					js.Canceled = true

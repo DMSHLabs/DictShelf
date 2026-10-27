@@ -361,6 +361,11 @@ func (s *Server) startIndexWork(raw []byte, single, allowBaseDelete bool) (index
 			if !ok {
 				return
 			}
+			if len(groups) == 1 {
+				if e, err := s.reg.get(dictID); err == nil {
+					ctx = adaptiveSingleIndexContext(ctx, e)
+				}
+			}
 			trackJobDictionary(j, dictID, true)
 			defer func() {
 				j.finishDictionary(dictID, cancel)

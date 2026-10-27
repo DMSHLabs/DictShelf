@@ -49,6 +49,7 @@ public class MainActivity extends Activity {
     private TextView status;
     private WebView web;
     private Speech speech;           // read-aloud (D148); binds no engine until asked
+    private final AndroidUpdate androidUpdate = new AndroidUpdate();
 
     private volatile boolean gone;   // onDestroy ran: late runtime callbacks must not touch the views
     private boolean runtimeRetained;
@@ -691,11 +692,13 @@ public class MainActivity extends Activity {
         super.onStart();
         Power.enter(this);
         Notif.top(this); // a window the one permission ask can be made from
+        androidUpdate.onStart(this);
     }
 
     @Override
     protected void onStop() {
         super.onStop();
+        androidUpdate.onStop(this);
         // Sent now, while the process is still running: a cached app is frozen
         // by the platform shortly after this, and the child freezes with it.
         Power.exit(this);
