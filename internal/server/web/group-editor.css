@@ -364,7 +364,7 @@ dialog#articleFindDialog.group-dialog.panel-card{box-sizing:border-box;inset:0;m
 #articleFindDialog>label{display:flex;align-items:center;gap:.4em}
 #articleFindDialog input[type=text]{width:100%;box-sizing:border-box;min-width:0}
 html[data-shell-image] #articleFindDialog :is(input[type=text],input[type=checkbox]){background:transparent}
-#articleFindDialog .article-find-mode{flex-wrap:wrap;justify-content:space-between}
+#articleFindDialog .article-find-mode{flex-wrap:nowrap;justify-content:space-between;gap:.75em}
 #articleFindDialog select{max-width:100%;min-width:0}
 #articleFindDialog p{margin:0}
 #articleFindStatus:empty{display:none}

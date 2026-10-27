@@ -241,6 +241,10 @@ FOSS debug build for arm64 and x86_64 passed; emulator checks are pending.
 The GitHub APK verifier checks that neither FOSS nor Play resources contain a
 listen-address control; Android always uses the in-process Go/JNI bridge.
 
+On 2026-10-28, `build-android.cmd debug intel` passed after recognized reader
+lookups were set to default to `wordLemma` (`·ab·+`) when no explicit mode is
+provided. Emulator verification of the reader handoff remains pending.
+
 ## Unfinished work
 
 - Install the current DictShelf release on a device and test simultaneous wuDict
