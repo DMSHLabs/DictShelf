@@ -33,7 +33,9 @@
    larger than the glyph rows so its mark stays readable, and it hangs from the
    first text line rather than the row's top edge. */
 .headword-control-find-option-icon svg{display:block;width:1.4em;height:1.4em;margin-top:.05em}
-.headword-control-find-option-description{min-width:0;overflow-wrap:anywhere}
+.headword-control-find-option-copy{display:inline;min-width:0;overflow-wrap:anywhere}
+.headword-control-find-option-title{display:inline}
+.headword-control-find-option-hint{display:inline;margin-left:.3em;color:var(--label-quiet);font-size:calc(var(--ui-hint-font-size) * 1rem);font-weight:400}
 .headword-control-find-option:hover,.headword-control-find-option:focus-visible{outline:none;background:color-mix(in srgb,var(--accent) 14%,var(--bg))}
 .headword-control-find-option.is-selected{color:var(--accent);font-weight:600}
 .headword-control-history{position:fixed;z-index:1499;display:flex;flex-direction:column;min-width:0;max-width:calc(100vw - 1em);max-height:min(50vh,320px);overflow:auto;

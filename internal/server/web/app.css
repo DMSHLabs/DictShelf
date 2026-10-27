@@ -275,6 +275,7 @@ html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image
 #articleFindStrip[hidden]{display:none}
 #articleFindLabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
 #articleFindCount{flex:none;white-space:nowrap;font-size:.85em}
+#articleFindCount:disabled{opacity:.65;cursor:default}
 #articleFindStrip>button:not(#articleFindLabel){flex:none}
 #articleFindPrev,#articleFindNext{min-width:44px;min-height:44px}
 #articleFindNext{margin-left:var(--sp-2)}
@@ -679,24 +680,6 @@ summary .count{margin-left:auto;font-weight:400;color:var(--label-quiet);font-si
    the difference between "this phrase is not in the dictionary" and "here it
    is" (D102). Accent-coloured because it qualifies the result it precedes. */
 summary .rung{color:var(--accent)}
-/* Walking the matches of the section you are reading (markNav). It lives in
-   the sticky header because that is the only surface still on screen halfway
-   down a 27000px article, and because it moves through exactly what the count
-   beside it is counting. The chevrons carry a ~36px touch target on a 25px row
-   via padding plus a matching negative margin, so the finger gets its target
-   and the header keeps its height; ‹ › rather than words because the row also
-   holds a dictionary name that is allowed to wrap and this must never be what
-   pushes it to a second line. */
-summary .mnav{display:flex;align-items:center;gap:1px;margin-left:auto;font-weight:400}
-summary .mnav[hidden]{display:none}
-summary .mnav~.count{margin-left:var(--sp-1)} /* two auto margins would split the row */
-summary .mbtn{cursor:pointer;color:var(--label);font-size:16px;line-height:1;
-  padding:9px 7px;margin:-9px 0;border-radius:5px;user-select:none;
-  -webkit-tap-highlight-color:transparent}
-summary .mbtn:hover{color:var(--fg);background:var(--bg)}
-summary .mbtn:active{color:var(--accent)}
-summary .mpos{font-size:11px;color:var(--label-quiet);min-width:2.8em;text-align:center;
-  font-variant-numeric:tabular-nums}
 summary .search-pages{display:flex;align-items:center;gap:2px;font-weight:400;
   font-size:calc(var(--ui-font-addition) * 1rem);white-space:nowrap}
 summary .result-page-action{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;flex:none;
@@ -1210,16 +1193,16 @@ html[data-styled-selects] .themed-select-native{display:none}
 html[data-styled-selects] .themed-select-btn[data-themed-select]{display:flex}
 html[data-styled-selects] #webPickerGroup{display:none}
 html[data-styled-selects] #webPickerGroupBtn{display:flex}
-@media (min-width:601px){
-  html[data-styled-selects] #mode{display:none}
-  html[data-styled-selects] #modeMenuBtn{display:flex;width:auto;min-width:5em}
+html[data-styled-selects] #mode{display:none}
+html[data-styled-selects] #modeChip{display:none}
+html[data-styled-selects] #modeMenuBtn{display:flex;flex:none;width:auto;min-width:5em}
+@media(max-width:600px){
+  html[data-styled-selects] #modeMenuBtn{min-width:40px;max-width:none;padding:.45em .3em;font-size:11.5px}
 }
 .themed-select-menu{min-width:0}
-/* The mode button and the narrow-width mode chip wear the same mark the menu's
-   left column shows, and the article-text mode's mark is drawn, not typed: it is
-   sized here because their own font-size does not reach it. The chip types its
-   label smaller than the button does, so its drawn mark is stepped up to stay
-   readable inside the chip. */
+/* The custom mode button wears the same mark as the menu's left column. The
+   article-text mode mark is drawn rather than typed, so size it to match the
+   glyphs beside the menu descriptions. */
 .themed-select-btn svg{display:block;flex:none;width:1.15em;height:1.15em}
 #modeChip svg{display:block;flex:none;width:1.5em;height:1.5em}
 #modeMenu{max-height:calc(100vh - 12px);overflow:auto;padding:.2em;font-size:calc(var(--ui-edit_control-font) * 1rem)}

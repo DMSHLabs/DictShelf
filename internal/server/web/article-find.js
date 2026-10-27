@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-// Find in loaded articles. Ranges preserve dictionary markup, links and selections.
+// Find in loaded articles, or navigate the exact full-text result marks.
 (function () {
 "use strict";
 const $ = id => document.getElementById(id), t = window.wudictI18n.t;
@@ -13,7 +13,7 @@ const skip = "script,style,noscript,template,button,input,select,textarea,audio,
 const block = "p,div,li,dt,dd,td,th,h1,h2,h3,h4,h5,h6,blockquote,pre,.wu-m";
 let options = {query:"", mode:"contains", matchCase:false, all:true, examples:false};
 try { Object.assign(options, JSON.parse(localStorage.getItem("wudict_article_find") || "{}")); } catch (_) {}
-let matches = [], index = -1, active = false, restored = [], docs = new Set(), timer;
+let matches = [], index = -1, active = false, restored = [], docs = new Set(), timer, fullTextNavigation = null, fullTextGeneration = null, searchAnchor = null;
 let settle = null;
 let laidOutList = null;
 const fallbackSelections = new Map();
@@ -51,18 +51,45 @@ function readOptions() {
 }
 function fillOptions() {
   $("articleFindQuery").value = options.query;
-  $("articleFindMode").value = ["prefix","exact","contains"].includes(options.mode) ? options.mode : "contains";
+  options.mode = ["prefix","exact","contains"].includes(options.mode) || options.mode === "fts" && fullTextNavigation ? options.mode : "contains";
+  $("articleFindMode").value = options.mode;
   $("articleFindCase").checked = options.matchCase;
   $("articleFindAll").checked = options.all;
   $("articleFindExamples").checked = options.examples;
+  syncControls();
 }
-function open() {
+function open(preserveAnchor=false) {
+  if (!preserveAnchor) searchAnchor = null;
+  if (fullTextNavigation && options.mode === "fts") options = {...options, query:fullTextNavigation.query};
   fillOptions();
-  active = !!options.query;
-  rebuild();
+  active = options.mode !== "fts" && !!options.query;
+  if (active) rebuild();
   dialog.showModal();
-  $("articleFindQuery").focus();
-  $("articleFindQuery").select();
+  strip.hidden = true; measure();
+  if (options.mode === "fts") $("articleFindMode").focus();
+  else { $("articleFindQuery").focus(); $("articleFindQuery").select(); }
+}
+function syncControls() {
+  const select = $("articleFindMode"), hasFTS = !!fullTextNavigation;
+  const fts = select.value === "fts";
+  $("articleFindStop").disabled = fts && hasFTS;
+  select.querySelector('option[value="fts"]').disabled = !hasFTS;
+  $("articleFindQuery").disabled = fts;
+  for (const id of ["articleFindCase","articleFindAll","articleFindExamples"]) $(id).disabled = fts;
+  $("articleFindHiddenHint").hidden = fts || !options.query || !!matches.length || options.examples || !hiddenExamples;
+  if (fts) {
+    if (fullTextNavigation) {
+      options.query = fullTextNavigation.query || "";
+      $("articleFindQuery").value = options.query;
+    }
+    const position = fullTextNavigation?.position || t("articleFind.noMatches");
+    $("articleFindStatus").textContent = position;
+    $("articleFindCount").textContent = position;
+    $("articleFindCount").disabled = !(Number(fullTextNavigation?.total)>0);
+    $("articleFindDialogPrev").disabled = $("articleFindDialogNext").disabled = !fullTextNavigation?.canNavigate;
+  } else {
+    $("articleFindDialogPrev").disabled = $("articleFindDialogNext").disabled = !options.query;
+  }
 }
 function paint() {
   clearPaint();
@@ -77,6 +104,7 @@ function paint() {
   }
   const count = matches.length ? t("articleFind.position", {current:index < 0 ? 0 : index+1, total:matches.length}) : t("articleFind.noMatches");
   $("articleFindCount").textContent = count;
+  $("articleFindCount").disabled = !matches.length;
   $("articleFindStatus").textContent = options.query ? count : "";
   $("articleFindHiddenHint").hidden = !options.query || !!matches.length || options.examples || !hiddenExamples;
   $("articleFindLabel").textContent = options.query;
@@ -151,6 +179,7 @@ function scan(host, root, regex) {
   flush();
 }
 function rebuild() {
+  if (options.mode === "fts") { syncControls(); return; }
   const previous = matches[index];
   restoreExamples(); clearPaint(); matches = []; docs = new Set(); hiddenExamples = false;
   if (!options.query) { strip.hidden = true; measure(); }
@@ -165,6 +194,7 @@ function rebuild() {
       }
     }
   }
+  if (searchAnchor) matches = matches.filter(hit => compareToAnchor(hit) >= 0);
   index = previous ? matches.findIndex(hit => hit.range.startContainer === previous.range.startContainer && hit.range.startOffset === previous.range.startOffset) : -1;
   if (index < 0 && !window.wudictNativeShell) forceLayout(null);
   if (index >= 0) showExample(matches[index]);
@@ -174,6 +204,14 @@ function rebuild() {
     forceLayout(det);
     settleOn(matches[index],det);
   }
+}
+function compareToAnchor(hit) {
+  if (hit.host !== searchAnchor.host) {
+    const hosts = [...$("out").querySelectorAll(".article")];
+    return (hosts.indexOf(hit.host) - hosts.indexOf(searchAnchor.host)) * searchAnchor.direction;
+  }
+  try { return hit.range.compareBoundaryPoints(Range.START_TO_START, searchAnchor.range) * searchAnchor.direction; }
+  catch (_) { return 0; }
 }
 function forceLayout(det) {
   const dl = det?.querySelector(":scope>dl") || null;
@@ -238,21 +276,9 @@ function settleOn(hit, det) {
   settle = stopSettle;
   frame = requestAnimationFrame(align);
 }
-function go(step) {
-  if (dialog.open || !active) { clearTimeout(timer); readOptions(); active = !!options.query; rebuild(); }
-  if (!active) return;
+function revealCurrent(wrapped=false,step=1) {
+  if (!active || !matches.length || index < 0) { paint(); return; }
   dialog.close(); strip.hidden = false; measure();
-  if (!matches.length) { paint(); return; }
-  let wrapped = false;
-  if (index < 0) {
-    // The first jump starts at the reading position, ignoring collapsed sections.
-    const candidates = matches.map((hit,i) => ({hit,i})).filter(({hit}) => hit.host.closest("details.dict")?.open && (!hit.example || hit.example.ownerDocument.defaultView.getComputedStyle(hit.example).display !== "none"));
-    const found = step > 0 ? candidates.find(({hit}) => topOf(hit) >= barH()) : candidates.reverse().find(({hit}) => topOf(hit) < innerHeight/2);
-    index = found ? found.i : step > 0 ? 0 : matches.length-1;
-  } else {
-    const next = index+step; wrapped = next < 0 || next >= matches.length;
-    index = (next+matches.length)%matches.length;
-  }
   restoreExamples();
   const hit = matches[index], det = hit.host.closest("details.dict");
   if (det) det.open = true;
@@ -277,13 +303,97 @@ function go(step) {
   if (det) revealAt(det.getBoundingClientRect().top,det,true);
   settleOn(hit,det);
 }
+function go(step) {
+  if ($("articleFindMode").value === "fts") {
+    if (fullTextNavigation?.canNavigate) fullTextNavigation[step < 0 ? "previous" : "next"]?.();
+    return;
+  }
+  if (dialog.open || !active) { clearTimeout(timer); readOptions(); active = !!options.query; rebuild(); }
+  if (!active) return;
+  if (!matches.length) { paint(); return; }
+  let wrapped = false;
+  if (index < 0) {
+    if (searchAnchor) index = searchAnchor.direction > 0 ? 0 : matches.length-1;
+    else {
+      // The first jump starts at the reading position, ignoring collapsed sections.
+      const candidates = matches.map((hit,i) => ({hit,i})).filter(({hit}) => hit.host.closest("details.dict")?.open && (!hit.example || hit.example.ownerDocument.defaultView.getComputedStyle(hit.example).display !== "none"));
+      const found = step > 0 ? candidates.find(({hit}) => topOf(hit) >= barH()) : candidates.reverse().find(({hit}) => topOf(hit) < innerHeight/2);
+      index = found ? found.i : step > 0 ? 0 : matches.length-1;
+    }
+  } else {
+    const next = index+step; wrapped = next < 0 || next >= matches.length;
+    index = (next+matches.length)%matches.length;
+  }
+  revealCurrent(wrapped,step);
+}
+function goto(page) {
+  if ($("articleFindMode").value === "fts") { fullTextNavigation?.goto?.(page); return true; }
+  if (dialog.open || !active) { clearTimeout(timer); readOptions(); active = !!options.query; rebuild(); }
+  if (!Number.isInteger(page) || page < 1 || page > matches.length) return false;
+  index = page-1; revealCurrent(); return true;
+}
+function searchFrom(host,node,offset,direction) {
+  if (!host?.isConnected || !node) return;
+  const doc=node.ownerDocument, range=doc.createRange();
+  try { range.setStart(node,Math.max(0,Math.min(offset,node.nodeType===Node.TEXT_NODE?node.length:node.childNodes.length))); range.collapse(true); }
+  catch (_) { return; }
+  searchAnchor={host,range,direction:direction<0?-1:1};
+  index=-1;
+  if (options.mode === "fts" && fullTextNavigation) { fullTextNavigation.seekFrom?.(host,node,offset,direction); return; }
+  if (!dialog.open) open(true); else { readOptions(); active=!!options.query; rebuild(); }
+  $("articleFindQuery").focus();
+}
+function gotoOpen() {
+  const isFTS = $("articleFindMode").value === "fts" && !!fullTextNavigation;
+  const total=isFTS ? Number(fullTextNavigation.total)||0 : (active ? matches.length : 0);
+  const current=isFTS ? Number(fullTextNavigation.current)||1 : Math.max(1,index+1);
+  if (total) window.wudictOpenArticleFindGoto?.(total,current);
+}
 function stop() {
+  const navigation = fullTextNavigation;
+  fullTextNavigation = null;
   if (settle) settle();
   forceLayout(null);
   active = false; clearTimeout(timer); restoreExamples(); clearPaint(); matches = []; index = -1;
   docs.clear();
   if (dialog.open) dialog.close();
   strip.hidden = true; measure();
+  navigation?.close?.();
+}
+function setFullTextNavigation(state) {
+  const newSearch = !!state && state.generation !== fullTextGeneration;
+  if (state && state.generation !== undefined) fullTextGeneration = state.generation;
+  fullTextNavigation = state || null;
+  if (!fullTextNavigation) {
+    $("articleFindMode").querySelector('option[value="fts"]').disabled = true;
+    if (!active && !dialog.open) strip.hidden = true;
+    syncControls();
+    measure();
+    return;
+  }
+  if (newSearch && !dialog.open) options = {...options, query:fullTextNavigation.query || "", mode:"fts"};
+  if (active && dialog.open && $("articleFindMode").value === "fts") {
+    active = false; clearTimeout(timer); restoreExamples(); clearPaint(); matches = []; index = -1; docs.clear();
+  }
+  if (options.mode === "fts" || newSearch || dialog.open && $("articleFindMode").value === "fts") {
+    $("articleFindLabel").textContent = fullTextNavigation.query || "";
+    $("articleFindLabel").title = fullTextNavigation.query || "";
+  }
+  if (dialog.open) {
+    if ($("articleFindMode").value === "fts") {
+      options = {...options, query:fullTextNavigation.query || "", mode:"fts"};
+      $("articleFindQuery").value = options.query;
+      syncControls();
+    }
+    strip.hidden = true;
+  } else if (options.mode === "fts" || newSearch) {
+    strip.hidden = !fullTextNavigation.visible;
+    $("articleFindCount").textContent = fullTextNavigation.position || "";
+    $("articleFindCount").disabled = !(Number(fullTextNavigation.total)>0);
+    $("articleFindPrev").disabled = $("articleFindNext").disabled = !fullTextNavigation.canNavigate;
+  }
+  syncControls();
+  measure();
 }
 function schedule() { clearTimeout(timer); timer = setTimeout(() => { if (active) rebuild(); },100); }
 function measure() {
@@ -291,16 +401,32 @@ function measure() {
 }
 $("sbarFind").onclick = open;
 $("articleFindLabel").onclick = open;
+$("articleFindCount").onclick = gotoOpen;
 $("articleFindClose").onclick = () => dialog.close();
 $("articleFindStop").onclick = stop;
-$("articleFindPrev").onclick = () => go(-1);
-$("articleFindNext").onclick = () => go(1);
+$("articleFindPrev").onclick = () => fullTextNavigation && options.mode === "fts" ? fullTextNavigation.previous?.() : go(-1);
+$("articleFindNext").onclick = () => fullTextNavigation && options.mode === "fts" ? fullTextNavigation.next?.() : go(1);
 $("articleFindDialogPrev").onclick = () => go(-1);
 $("articleFindDialogNext").onclick = () => go(1);
-for (const id of ["articleFindMode","articleFindCase","articleFindAll","articleFindExamples"]) $(id).onchange = () => { readOptions(); index = -1; active = !!options.query; rebuild(); };
-$("articleFindQuery").oninput = () => { readOptions(); index = -1; active = !!options.query; schedule(); };
+$("articleFindMode").onchange = () => {
+  if ($("articleFindMode").value === "fts") {
+    if (!fullTextNavigation) { $("articleFindMode").value = options.mode = "contains"; syncControls(); return; }
+    options = {...options, query:fullTextNavigation.query || "", mode:"fts"};
+    $("articleFindQuery").value = options.query;
+    active = false; clearTimeout(timer); restoreExamples(); clearPaint(); matches = []; index = -1; docs.clear();
+    save(); syncControls();
+    return;
+  }
+  readOptions(); index = -1; active = !!options.query; rebuild(); syncControls();
+};
+for (const id of ["articleFindCase","articleFindAll","articleFindExamples"]) $(id).onchange = () => { readOptions(); index = -1; active = !!options.query; rebuild(); };
+$("articleFindQuery").oninput = () => { if ($("articleFindMode").value === "fts") return; readOptions(); index = -1; active = !!options.query; schedule(); };
 dialog.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.tagName !== "BUTTON") { e.preventDefault(); go(e.shiftKey ? -1 : 1); } });
-dialog.addEventListener("close", () => { if (active) { strip.hidden = false; measure(); } });
+dialog.addEventListener("close", () => {
+  if (active) strip.hidden = false;
+  else if (fullTextNavigation) strip.hidden = !fullTextNavigation.visible;
+  measure();
+});
 document.addEventListener("keydown", e => {
   if (document.querySelector("dialog[open]:not(#articleFindDialog)")) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") { e.preventDefault(); open(); }
@@ -312,5 +438,5 @@ new ResizeObserver(measure).observe(strip);
 new MutationObserver(() => { measure(); if (active) schedule(); }).observe($("sbar"),{attributes:true,attributeFilter:["hidden"]});
 $("sbarExamples").addEventListener("click",schedule);
 $("examplesRow")?.addEventListener("click",schedule);
-window.wudictArticleFind = {stop, refresh:schedule};
+window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation, fullTextModeActive:()=>options.mode === "fts", searchFrom, goto};
 })();
