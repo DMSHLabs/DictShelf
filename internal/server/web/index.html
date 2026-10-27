@@ -4079,6 +4079,17 @@ function panelRowColumns(){
         .reduce((sum,el)=>sum+el.getBoundingClientRect().width,0);
       if(col+gap+ctl>row.clientWidth)row.style.setProperty("--rlcol","auto")}
     hid.forEach(row=>{row.hidden=true})}
+  const exampleRows=[...$("panel").querySelectorAll("#exampleBackgroundRow.settings-switch-row,#exampleTextFadeRow.settings-switch-row")]
+    .filter(row=>!row.hidden);
+  let exampleLabelWidth=0;
+  for(const row of exampleRows){
+    const label=row.querySelector(":scope > .settings-toggle-label");
+    if(!label)continue;
+    const range=document.createRange();range.selectNodeContents(label);
+    exampleLabelWidth=Math.max(exampleLabelWidth,range.getBoundingClientRect().width);
+  }
+  if(exampleLabelWidth)for(const row of exampleRows)
+    row.style.setProperty("--example-switch-label-width",Math.ceil(exampleLabelWidth)+"px");
   fontScaleColumns();
 }
 function fontScaleColumns(){

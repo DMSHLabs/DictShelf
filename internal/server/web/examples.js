@@ -79,29 +79,20 @@ function mark(root) {
 function markExample(p) {
   if (p.classList.contains("wu-example-block") || p.querySelector("p,.wu-m")) return;
   const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
-  const bullets = [];
+  let hasExampleText = false;
   for (let n; (n = walker.nextNode()); ) {
     const text = n.textContent.trim();
-    if (!text || n.parentElement.closest("a")) continue;
-    const match = n.textContent.match(MARKER);
-    if (match) {
-      bullets.push({ node:n, length:match[0].length });
-      if (!n.textContent.slice(match[0].length).trim()) continue;
-    }
-    if (JUNK.test(text)) continue;
+    if (!text || n.parentElement.closest("a") || JUNK.test(text)) continue;
     if (!n.parentElement.closest(".wu-ex,.dsl_ex")) return;
-    p.classList.add("wu-example-block");
-    for (const bullet of bullets) {
-      const range = document.createRange();
-      range.setStart(bullet.node, 0);
-      range.setEnd(bullet.node, bullet.length);
-      const span = document.createElement("span");
-      span.className = "wu-example-bullet";
-      range.surroundContents(span);
-      p.classList.add("wu-author-bullet");
-    }
-    return;
+    hasExampleText = true;
+    break;
   }
+  if (!hasExampleText) return;
+  p.classList.add("wu-example-block");
+  // Keep a dictionary's own leading marker. The shared marker fills only the
+  // lines that have none; replacing an authored glyph can leave both visible
+  // when the dictionary renders it outside the example's text node.
+  if (MARKER.test(p.textContent)) p.classList.add("wu-author-bullet");
 }
 function markHost(el) {
   if (el.classList && el.classList.contains("article") && el.shadowRoot) mark(el.shadowRoot);

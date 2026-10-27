@@ -377,7 +377,7 @@
     setTimeout(poll, 1000);
   }
   new ResizeObserver(entries => {
-    if(!status?.running)return;
+    if(!tasks.size)return;
     const entry=entries[entries.length-1];
     const borderBox=entry?.borderBoxSize;
     const height=borderBox?(Array.isArray(borderBox)?borderBox[0]?.blockSize:borderBox.blockSize):box.getBoundingClientRect().height;
