@@ -353,6 +353,12 @@ async function looksCheckDrift() {
     looksRowRender();
     return;
   }
+  // A clean profile has no looks.json current id until a look is explicitly
+  // applied. The dry check can still identify the exact built-in appearance
+  // from the shell state reported by this page; use that answer for the row.
+  if (!LOOKS.current && answer.current && answer.current.id) {
+    LOOKS.current = answer.current.id;
+  }
   LOOKS.currentDrifted = !!answer.drifted;
   looksRowRender();
 }

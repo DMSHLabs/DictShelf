@@ -59,9 +59,9 @@ func listLooks(t *testing.T, s *Server) looksPayload {
 	return out
 }
 
-// A fresh install has the three that ship and nothing in force, which is what
-// the drop-down draws before anyone has saved anything.
-func TestLooksStartWithTheBuiltins(t *testing.T) {
+// A fresh profile's actual default state is Warm, so the picker should name
+// that built-in even before looks.json records an explicit selection.
+func TestLooksStartWithWarmInForce(t *testing.T) {
 	s, _ := newStyleServer(t)
 
 	got := listLooks(t, s)
@@ -69,7 +69,7 @@ func TestLooksStartWithTheBuiltins(t *testing.T) {
 		t.Fatal("a server with a style dir says it cannot write looks")
 	}
 	if got.Current != "" {
-		t.Fatalf("something is in force on a fresh install: %q", got.Current)
+		t.Fatalf("GET should not invent a current look without shell state: %q", got.Current)
 	}
 	if len(got.Looks) != 3 {
 		t.Fatalf("want the three built-ins, got %d", len(got.Looks))
@@ -78,6 +78,25 @@ func TestLooksStartWithTheBuiltins(t *testing.T) {
 		if !l.Builtin || l.Name == "" {
 			t.Fatalf("built-in looks must be named and marked: %+v", l)
 		}
+	}
+	// Once the page reports the shell colours as well, the dry check recognizes
+	// the default Warm appearance and does not ask before switching.
+	body := lookCall(t, s, "POST", "/api/looks/apply", map[string]any{
+		"id": lookClean, "dry": true, "fontSize": 15, "fontWeight": 400,
+		"shell": map[string]any{
+			"light": map[string]any{"colorEnabled": true, "color": "#F4ECD8", "image": ""},
+			"dark": map[string]any{"colorEnabled": true, "color": "#1C1A17", "image": ""},
+		},
+	}, 200)
+	var dry applyAnswer
+	if err := json.Unmarshal(body, &dry); err != nil {
+		t.Fatal(err)
+	}
+	if dry.NeedsConfirm {
+		t.Fatal("switching from the fresh default Warm appearance should not ask")
+	}
+	if dry.Current.ID != lookWarm || !dry.Current.Builtin {
+		t.Fatalf("dry check should identify the default Warm as current: %+v", dry.Current)
 	}
 }
 
@@ -422,15 +441,19 @@ func TestLooksTrustTheCallersText(t *testing.T) {
 // it is about to wear.
 func TestLookSwitchBetweenBuiltinsNeverAsks(t *testing.T) {
 	s, _ := newStyleServer(t)
-	// A fresh screen with no look in force: nothing in use, and the colour
-	// fields holding the shell's own defaults.
-	fresh := map[string]any{
-		"light": map[string]any{"colorEnabled": false, "color": "#EDD1A6", "image": ""},
-		"dark":  map[string]any{"colorEnabled": false, "color": "#332111", "image": ""},
+	if err := s.presetStateWrite([]string{lookWarm}); err != nil {
+		t.Fatal(err)
 	}
-	// After Clean: the same, because a look with no colour of its own leaves
-	// the field alone.
-	afterClean := fresh
+	// A fresh profile starts with Warm selected, including its shell colours.
+	fresh := map[string]any{
+		"light": map[string]any{"colorEnabled": true, "color": "#F4ECD8", "image": ""},
+		"dark":  map[string]any{"colorEnabled": true, "color": "#1C1A17", "image": ""},
+	}
+	// The shell state after Clean keeps the underlying colours but disables them.
+	afterClean := map[string]any{
+		"light": map[string]any{"colorEnabled": false, "color": "#F4ECD8", "image": ""},
+		"dark":  map[string]any{"colorEnabled": false, "color": "#1C1A17", "image": ""},
+	}
 	// Warm enables a window colour for each theme.
 	afterWarm := map[string]any{
 		"light": map[string]any{"colorEnabled": true, "color": "#F4ECD8", "image": ""},
