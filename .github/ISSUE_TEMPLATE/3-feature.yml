@@ -1,0 +1,37 @@
+name: Idea or improvement
+description: A new function, a better way to do something, or support for a new format.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Feature description
+      description: The task or the problem, in your own words. The goal helps us more than a finished design.
+      placeholder: Corners are not round enough. Liquid Glass style please.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What is expected?
+      description: Optional. Solution, or an example program that already does it well.
+      placeholder: <type your text>
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Optional.
+      multiple: true
+      options:
+        - Search
+        - Articles, images, sound
+        - Dictionary panel and library
+        - Adding dictionaries
+        - A new dictionary format
+        - Android app
+        - Browser extension
+        - Command line
+        - HTTP API
+        - Other

@@ -1,0 +1,24 @@
+name: Question
+description: You do not know how to do something, and the User Guide does not cover it.
+labels: [question]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The [Troubleshooting](https://wudict.legbehindneck.com/help/troubleshooting/) and [FAQ](https://wudict.legbehindneck.com/help/faq/) pages answer many questions at once.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: What you want to do, and what you tried.
+      placeholder: I want to use my dictionaries on my phone and my computer. Can both read the same folder?
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: System and wudict version
+      description: Optional.
+      placeholder: Android 15, wudict v3.7.9

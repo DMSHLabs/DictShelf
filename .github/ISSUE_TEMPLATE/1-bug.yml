@@ -1,0 +1,75 @@
+name: Something does not work
+description: wudict crashes, shows an error, or misbehaves.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting. Four fields are required; fill the others if you can.
+        A problem with **one dictionary** (cannot open, or articles not rendered correctly)? Use **A dictionary does not work** instead.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: Description
+      description: What is the current behaviour, and what you expected
+      placeholder: |
+        I searched for "house" in full-text mode. The page showed "Could not search: database is locked".
+        I expected the list of articles that contain "house".
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The minimum steps to reproduce the issue. If only happens intermittently please indicate how often.
+      placeholder: |
+        1. Start wudict.
+        2. Select "All dictionaries" in the dictionary picker.
+        3. Search for "house" in full-text mode.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: wudict version
+      description: "Please see at the bottom of the dictionary panel (☰ → folder summary), or printed by `wudict --version`."
+      placeholder: v3.7.9
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Where do you use wudict?
+      description: Select all that apply.
+      multiple: true
+      options:
+        - Android, Google Play
+        - Android, APK from GitHub, Obtainium, F-Droid
+        - Windows
+        - macOS
+        - Linux
+        - Browser extension, Chrome
+        - Browser extension, Firefox
+        - Command line only
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: System and browser
+      description: The versions, if the problem is on the page or with one system only.
+      placeholder: macOS 26.1, Firefox 144
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots, log, error output
+      description: |
+        Drag files into this box, or paste text. The log is the output in the terminal, or on Windows `%LOCALAPPDATA%\wudict\wudict.log`, on macOS `~/Library/Logs/wudict.log` (app started without a terminal).
+        Remove access keys and personal paths before you send.
