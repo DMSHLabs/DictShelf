@@ -1024,10 +1024,10 @@ html:not([data-shell-image]) #hotkeysSection .hotkey-row input{background-image:
 #panel .appearance-row:has(#appearanceColorOn)>.color-box{flex:1 1 12em}
 #sysSettings .sys-row.sys-num{cursor:default}
 #sysSettings .sys-result-cache-limit,#desktopSysBody .sys-result-cache-limit{justify-content:flex-start;gap:.45em;padding-left:0;font-size:calc(var(--ui-main-control-font) * 1rem)}
-#sysSettings .sys-result-cache-limit input[type="text"],#desktopSysBody .sys-result-cache-limit input[type="text"]{width:7em;height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;padding:0 .6em;text-align:right}
+#sysSettings .sys-result-cache-limit input[type="text"],#desktopSysBody .sys-result-cache-limit input[type="text"]{width:7em;height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1;padding:0 .6em;text-align:right}
 #sysSettings .sys-result-cache-limit input[type="text"]:disabled,#desktopSysBody .sys-result-cache-limit input[type="text"]:disabled{box-sizing:border-box;width:12em;max-width:calc(100% - 1em);text-align:left}
 #sysSettings .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:inherit;overflow-wrap:anywhere}
-#sysSettings .sys-num input:not([type="checkbox"]),#desktopSysBody .sys-num input:not([type="checkbox"]){box-sizing:border-box;flex:none;width:6.5em;height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;text-align:right;
+#sysSettings .sys-num input:not([type="checkbox"]),#desktopSysBody .sys-num input:not([type="checkbox"]){box-sizing:border-box;flex:none;width:6.5em;height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1;text-align:right;
   color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:0 .6em}
 #sysSettings .sys-num:not(.sys-result-cache-limit) .sys-label,#desktopSysBody .sys-num:not(.sys-result-cache-limit) .sys-label{font-size:calc(var(--ui-main-control-font) * 1rem)}
 #sysSettings .sys-num .sys-workers-select{flex:none;width:6.5em}
@@ -1039,14 +1039,14 @@ html:not([data-shell-image]) #hotkeysSection .hotkey-row input{background-image:
 #sysSettings .sys-combined-limit>.sys-label,#desktopSysBody .sys-combined-limit>.sys-label{flex:0 1 auto}
 #sysSettings .sys-combined-limit>input,#desktopSysBody .sys-combined-limit>input{height:calc(var(--ui-control-height) * 1em);min-height:0;padding:0 .6em;line-height:1}
 #sysSettings .sys-num .sys-return-cache-select>select,#desktopSysBody .sys-num .sys-return-cache-select>select{display:block;width:100%;max-width:none;min-width:0;box-sizing:border-box;
-  height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;color:var(--fg);background:var(--bg);
+  height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1;color:var(--fg);background:var(--bg);
   border:1px solid var(--line);border-radius:5px;padding:0 1.8em 0 .55em;appearance:none;-webkit-appearance:none}
 #sysSettings .sys-indexing-mode,#desktopSysBody .sys-indexing-mode{justify-content:flex-start;gap:.45em}
 #sysSettings .sys-indexing-mode>.sys-label,#desktopSysBody .sys-indexing-mode>.sys-label{flex:0 1 auto}
 #sysSettings .sys-indexing-mode-select,#desktopSysBody .sys-indexing-mode-select{flex:0 1 14em;width:14em;max-width:calc(100% - 5.5em);min-width:0}
 #sysSettings .sys-indexing-mode-select,#desktopSysBody .sys-indexing-mode-select{height:calc(var(--ui-control-height) * 1em);min-height:0}
 #sysSettings .sys-indexing-mode-select>select,#desktopSysBody .sys-indexing-mode-select>select{display:block;width:100%;max-width:none;min-width:0;box-sizing:border-box;
-  height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;color:var(--fg);background:var(--bg);
+  height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1;color:var(--fg);background:var(--bg);
   border:1px solid var(--line);border-radius:5px;padding:0 1.8em 0 .55em;appearance:none;-webkit-appearance:none}
 #sysSettings .sys-action-spaced{margin-top:calc(var(--ui-row-gap) * 1em)}
 #sysSettings .sys-action-spaced+.sys-head,#desktopSysBody .sys-action-spaced+.sys-head{margin-top:calc(var(--ui-section-space-before) * 1em + var(--ui-row-gap) * 1em)}
@@ -1664,6 +1664,7 @@ html[data-dict-icons-off] .dict-icon{display:none}
 #panel .facts.update-channel-row{flex-wrap:nowrap}
 #panel .facts.update-channel-row>.rowlabel{flex:none;white-space:nowrap}
 #panel .facts.update-channel-row>.panel-dropdown{flex:1 1 0;min-width:0}
+#panel .facts.update-channel-row>.panel-dropdown>select{font-size:calc(var(--ui-font-base) * 1rem)}
 #panel .facts.update-channel-row:has(select:disabled){opacity:.58}
 #panel .facts.update-check-row{margin-top:calc(var(--ui-row-gap) * 1em)}
 #panel .facts.update-install-row{margin-top:calc(var(--ui-row-gap) * 1em)}
