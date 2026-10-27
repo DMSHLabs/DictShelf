@@ -287,10 +287,11 @@ function topOf(hit) {
 }
 function settleOn(hit, det) {
   if (settle) settle();
-  let moves = 0, stable = 0, pending = 0, frame = 0;
+  let moves = 0, stable = 0, pending = 0, frame = 0, observer = null;
   const quit = ["wheel","touchstart","pointerdown","keydown"];
   const stopSettle = () => {
     clearTimeout(pending); clearTimeout(timeout); cancelAnimationFrame(frame);
+    observer?.disconnect();
     for (const event of quit) removeEventListener(event,stopSettle);
     if (settle === stopSettle) settle = null;
   };
@@ -300,10 +301,10 @@ function settleOn(hit, det) {
     const top = topOf(hit), bottom = top + rect.height;
     const ceiling = barH() + (det?.querySelector(":scope>summary")?.offsetHeight || 0);
     const floor = innerHeight - strip.offsetHeight - 8;
-    // Expanded dictionaries above this one can change height without resizing
-    // the selected dictionary. Keep checking until the match stays on screen.
+    // Opening the target dictionary can move it again as earlier sections
+    // finish laying out. Keep checking until the whole result list settles.
     if (laidOut && top >= ceiling && top < floor && Math.min(bottom,top+24) <= floor) {
-      if (++stable >= 5) return stopSettle();
+      if (++stable >= 8) return stopSettle();
     } else {
       stable = 0;
       if (++moves > 30) return stopSettle();
@@ -316,8 +317,12 @@ function settleOn(hit, det) {
     }
     pending = setTimeout(align,80);
   };
+  observer = new ResizeObserver(() => { stable = 0; });
+  observer.observe($("out"));
+  if (det) observer.observe(det);
+  observer.observe(hit.host);
   for (const event of quit) addEventListener(event,stopSettle,{passive:true});
-  const timeout = setTimeout(stopSettle,4000);
+  const timeout = setTimeout(stopSettle,6500);
   settle = stopSettle;
   frame = requestAnimationFrame(align);
 }

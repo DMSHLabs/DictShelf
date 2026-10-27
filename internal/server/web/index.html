@@ -9657,7 +9657,7 @@ function navSettleCurrent(cur){
     const stripHeight=$("articleFindStrip").hidden?0:$("articleFindStrip").offsetHeight;
     const ceiling=barH()+header,floor=innerHeight-stripHeight-8;
     if(laidOut&&top>=ceiling&&top<floor&&Math.min(bottom,top+24)<=floor){
-      if(++stable>=3)return stop();
+      if(++stable>=8)return stop();
     }else{
       stable=0;
       if(++attempts>30)return stop();
@@ -9666,10 +9666,12 @@ function navSettleCurrent(cur){
     }
     timer=setTimeout(align,80);
   };
-  observer=new ResizeObserver(align);
-  observer.observe(cur.det);observer.observe(cur.host);
+  observer=new ResizeObserver(()=>{stable=0;align()});
+  // Opening a dictionary may shift the target again while other result
+  // sections finish laying out, so observe the full results column too.
+  observer.observe($("out"));observer.observe(cur.det);observer.observe(cur.host);
   for(const event of quit)addEventListener(event,stop,{passive:true});
-  navScrollSettle=stop;timeout=setTimeout(stop,4000);frame=requestAnimationFrame(align);
+  navScrollSettle=stop;timeout=setTimeout(stop,6500);frame=requestAnimationFrame(align);
 }
 new MutationObserver(()=>{
   if(!markedAnswer||navSuppressed||navMutationFrame)return;

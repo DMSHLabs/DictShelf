@@ -165,6 +165,9 @@ public class LookupActivity extends Activity {
 
         Uri data = i == null ? null : i.getData();
         mode = mode(param(data, "mode"));
+        // Reader integrations should find the selected inflected form as well
+        // as its lemma. An explicit mode in a wudict:// request still wins.
+        if (mode == null && fromReader(i)) mode = "wordLemma";
         dict = clean(param(data, "dict"));
 
         // Before any window work, and before GoRuntime.retain(): the
@@ -378,7 +381,7 @@ public class LookupActivity extends Activity {
         return s.isEmpty() ? null : s;
     }
 
-    /** The page's four modes (index.html #mode); anything else is the caller's typo. */
+    /** Supported page modes (index.html #mode); anything else is the caller's typo. */
     private static String mode(String m) {
         if (m == null) return null;
         switch (m) {
@@ -386,6 +389,7 @@ public class LookupActivity extends Activity {
             case "prefix":
             case "contains":
             case "fts":
+            case "wordLemma":
                 return m;
             default:
                 return null; // leave the page on its own default
