@@ -276,11 +276,11 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	})
 	_ = w.Bind("wudictGetHotkeys", func() any {
 		if desktopRequest == nil {
-			return map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+Shift+B, Ctrl+Shift+B"}
+			return map[string]string{"show": "Ctrl+Shift+F11, Ctrl+Shift+F11", "translate": "Ctrl+Shift+B, Ctrl+Shift+B"}
 		}
 		value, err := desktopRequest(context.Background(), "desktopHotkeys", "")
 		if err != nil {
-			return map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+Shift+B, Ctrl+Shift+B"}
+			return map[string]string{"show": "Ctrl+Shift+F11, Ctrl+Shift+F11", "translate": "Ctrl+Shift+B, Ctrl+Shift+B"}
 		}
 		return value
 	})
@@ -908,7 +908,7 @@ func desktopSetHotkeysValue(hwnd uintptr, kind, value string, persist bool) bool
 	desktopHotkeySeq += uint32(len(sequence))
 	desktopHotkeyActions[action] = desktopHotkeyAction{sequence: registered, action: action, id: id}
 	if persist && desktopWindowRequest != nil {
-		stored := map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+Shift+B, Ctrl+Shift+B"}
+		stored := map[string]string{"show": "Ctrl+Shift+F11, Ctrl+Shift+F11", "translate": "Ctrl+Shift+B, Ctrl+Shift+B"}
 		if raw, err := desktopWindowRequest(context.Background(), "desktopHotkeys", ""); err == nil {
 			b, _ := json.Marshal(raw)
 			_ = json.Unmarshal(b, &stored)
@@ -927,7 +927,7 @@ func desktopSetHotkeysValue(hwnd uintptr, kind, value string, persist bool) bool
 }
 
 func desktopApplySavedHotkeys(hwnd uintptr, request func(context.Context, string, string) (any, error)) {
-	values := map[string]string{"show": "Ctrl+Shift+F11", "translate": "Ctrl+Shift+B, Ctrl+Shift+B"}
+	values := map[string]string{"show": "Ctrl+Shift+F11, Ctrl+Shift+F11", "translate": "Ctrl+Shift+B, Ctrl+Shift+B"}
 	if request != nil {
 		if raw, err := request(context.Background(), "desktopHotkeys", ""); err == nil {
 			b, _ := json.Marshal(raw)

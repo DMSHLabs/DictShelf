@@ -222,7 +222,7 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 		}
 		value := s.reg.prefs.desktopHotkeys()
 		if value.Show == "" {
-			value.Show = "Ctrl+Shift+F11"
+			value.Show = "Ctrl+Shift+F11, Ctrl+Shift+F11"
 		}
 		if value.Translate == "" {
 			value.Translate = "Ctrl+Shift+B, Ctrl+Shift+B"
