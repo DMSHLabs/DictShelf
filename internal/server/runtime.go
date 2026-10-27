@@ -7,6 +7,7 @@ package server
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 
 	"github.com/wuweidict/wudict/internal/config"
 	dslformat "github.com/wuweidict/wudict/internal/format/dsl"
@@ -53,7 +54,7 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 	mode, modeSaved := prefs.indexingMode()
 	modeSource := "state"
 	if !modeSaved {
-		mode = "adaptive"
+		mode = defaultIndexingModeFor(runtime.GOOS)
 		modeSource = "default"
 		if userDir != "" {
 			legacySettings, readErr := readUserStorage(filepath.Join(userDir, SettingsFile))

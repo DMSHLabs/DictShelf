@@ -11,7 +11,7 @@ const dialog = $("articleFindDialog"), strip = $("articleFindStrip");
 const wordChar = /[\p{L}\p{M}\p{N}_]/u;
 const skip = "script,style,noscript,template,button,input,select,textarea,audio,video,svg";
 const block = "p,div,li,dt,dd,td,th,h1,h2,h3,h4,h5,h6,blockquote,pre,.wu-m";
-let options = {query:"", mode:"contains", matchCase:false, all:true, examples:false};
+let options = {query:"", mode:"contains", matchCase:false, all:true, examples:false, blocks:true};
 try { Object.assign(options, JSON.parse(localStorage.getItem("wudict_article_find") || "{}")); } catch (_) {}
 let matches = [], index = -1, active = false, restored = [], docs = new Set(), timer, fullTextNavigation = null, fullTextGeneration = null, searchAnchor = null;
 let settle = null;
@@ -46,7 +46,7 @@ function save() {
 function readOptions() {
   options = {query:$("articleFindQuery").value.trim(), mode:$("articleFindMode").value,
     matchCase:$("articleFindCase").checked, all:$("articleFindAll").checked,
-    examples:$("articleFindExamples").checked};
+    examples:$("articleFindExamples").checked, blocks:$("articleFindBlocks").checked};
   save();
 }
 function fillOptions() {
@@ -56,6 +56,7 @@ function fillOptions() {
   $("articleFindCase").checked = options.matchCase;
   $("articleFindAll").checked = options.all;
   $("articleFindExamples").checked = options.examples;
+  $("articleFindBlocks").checked = options.blocks !== false;
   syncControls();
 }
 function open(preserveAnchor=false) {
@@ -86,10 +87,18 @@ function syncControls() {
     $("articleFindStatus").textContent = position;
     $("articleFindCount").textContent = position;
     $("articleFindCount").disabled = !(Number(fullTextNavigation?.total)>0);
-    $("articleFindDialogPrev").disabled = $("articleFindDialogNext").disabled = !fullTextNavigation?.canNavigate;
+    $("articleFindDialogPrev").disabled = !fullTextNavigation?.canPrevious;
+    $("articleFindDialogNext").disabled = !fullTextNavigation?.canNext;
   } else {
-    $("articleFindDialogPrev").disabled = $("articleFindDialogNext").disabled = !options.query;
+    $("articleFindDialogPrev").disabled = !canStep(-1);
+    $("articleFindDialogNext").disabled = !canStep(1);
   }
+}
+function canStep(step){
+  if(options.mode==="fts")return !!(step<0?fullTextNavigation?.canPrevious:fullTextNavigation?.canNext);
+  if(matches.length>=2)return true;
+  const hit=matches[index>=0?index:0];
+  return !!(options.query&&hit&&options.blocks!==false&&window.wudictArticleBlockHasMore?.(hit.host.closest("details.dict"),step));
 }
 function paint() {
   clearPaint();
@@ -112,8 +121,10 @@ function paint() {
   $("articleFindHiddenHint").hidden = !options.query || !!matches.length || options.examples || !hiddenExamples;
   $("articleFindLabel").textContent = options.query;
   $("articleFindLabel").title = options.query;
-  $("articleFindPrev").disabled = $("articleFindNext").disabled = !matches.length;
-  $("articleFindDialogPrev").disabled = $("articleFindDialogNext").disabled = !options.query;
+  $("articleFindPrev").disabled = !canStep(-1);
+  $("articleFindNext").disabled = !canStep(1);
+  $("articleFindDialogPrev").disabled = !canStep(-1);
+  $("articleFindDialogNext").disabled = !canStep(1);
 }
 let hiddenExamples = false;
 // Build a text stream per paragraph, retaining offsets across inline formatting.
@@ -294,10 +305,7 @@ function revealCurrent(wrapped=false,step=1) {
   }
   freezeBar();
   if (window.wudictNativeShell) {
-    requestAnimationFrame(() => {
-      revealAt(topOf(hit),det,true);
-      setTimeout(() => { if (active && matches[index] === hit && hit.host.isConnected) revealAt(topOf(hit),det,true); },120);
-    });
+    settleOn(hit,det);
     return;
   }
   // Bring the opened dictionary into view first so WebView2 lays out its
@@ -305,9 +313,50 @@ function revealCurrent(wrapped=false,step=1) {
   if (det) revealAt(det.getBoundingClientRect().top,det,true);
   settleOn(hit,det);
 }
+let blockNavigationPending=false,blockNavigationToken=0;
+function advanceLoaded(step){
+  const next=index+step,wrapped=next<0||next>=matches.length;
+  index=(next+matches.length)%matches.length;
+  revealCurrent(wrapped,step);
+}
+function selectAfterBlock(det,step){
+  const list=[...$("out").querySelectorAll("details.dict")],at=list.indexOf(det);
+  const rows=matches.map((hit,i)=>({hit,i,at:list.indexOf(hit.host.closest("details.dict"))}));
+  let row=step>0?rows.find(item=>item.at>at):rows.slice().reverse().find(item=>item.at<at);
+  if(!row)row=step>0?rows[0]:rows.at(-1);
+  if(!row){index=-1;paint();return false}
+  index=row.i;revealCurrent();return true;
+}
+async function crossResultBlocks(current,step){
+  if(blockNavigationPending)return;
+  blockNavigationPending=true;
+  const token=++blockNavigationToken,query=options.query,mode=options.mode;
+  let det=current.host.closest("details.dict"),changed=false;
+  try{
+    for(let page=0;page<100&&det&&window.wudictArticleBlockHasMore?.(det,step);page++){
+      const replacement=await window.wudictRequestArticleBlock?.(det,step);
+      if(token!==blockNavigationToken||!active||options.query!==query||options.mode!==mode||options.blocks===false)return;
+      if(!replacement)break;
+      changed=true;det=replacement;index=-1;
+      for(let check=0;check<10;check++){
+        await new Promise(resolve=>setTimeout(resolve,100));
+        if(token!==blockNavigationToken||!active||options.query!==query||options.mode!==mode||options.blocks===false)return;
+        rebuild();
+        const found=matches.map((hit,i)=>({hit,i})).filter(row=>row.hit.host.closest("details.dict")===det);
+        if(found.length){index=step>0?found[0].i:found.at(-1).i;revealCurrent();return}
+      }
+    }
+    if(changed){rebuild();selectAfterBlock(det,step)}
+    else advanceLoaded(step);
+  }finally{
+    if(token===blockNavigationToken)blockNavigationPending=false;
+  }
+}
 function go(step) {
+  if(blockNavigationPending)return;
   if ($("articleFindMode").value === "fts") {
-    if (fullTextNavigation?.canNavigate) fullTextNavigation[step < 0 ? "previous" : "next"]?.();
+    if (step<0?fullTextNavigation?.canPrevious:fullTextNavigation?.canNext)
+      fullTextNavigation[step < 0 ? "previous" : "next"]?.();
     return;
   }
   if (dialog.open || !active) { clearTimeout(timer); readOptions(); active = !!options.query; rebuild(); }
@@ -331,8 +380,12 @@ function go(step) {
   } else {
     const current = matches[index];
     const following = matches[index+step];
-    if (step > 0 && current && (!following || following.host.closest("details.dict") !== current.host.closest("details.dict")))
-      window.wudictRequestNextArticleBlock?.(current.host);
+    const currentDet=current?.host.closest("details.dict");
+    const boundary=step>0?(!following||following.host.closest("details.dict")!==currentDet):
+      (!matches[index-1]||matches[index-1].host.closest("details.dict")!==currentDet);
+    if(options.blocks!==false&&current&&boundary&&window.wudictArticleBlockHasMore?.(currentDet,step)){
+      crossResultBlocks(current,step);return;
+    }
     const next = index+step; wrapped = next < 0 || next >= matches.length;
     index = (next+matches.length)%matches.length;
   }
@@ -362,6 +415,7 @@ function gotoOpen() {
   if (total) window.wudictOpenArticleFindGoto?.(total,current);
 }
 function stop() {
+  blockNavigationToken++;blockNavigationPending=false;
   const navigation = fullTextNavigation;
   fullTextNavigation = null;
   if (settle) settle();
@@ -402,7 +456,8 @@ function setFullTextNavigation(state) {
     strip.hidden = !fullTextNavigation.visible;
     $("articleFindCount").textContent = fullTextNavigation.position || "";
     $("articleFindCount").disabled = !(Number(fullTextNavigation.total)>0);
-    $("articleFindPrev").disabled = $("articleFindNext").disabled = !fullTextNavigation.canNavigate;
+    $("articleFindPrev").disabled = !fullTextNavigation.canPrevious;
+    $("articleFindNext").disabled = !fullTextNavigation.canNext;
   }
   syncControls();
   measure();
@@ -432,6 +487,7 @@ $("articleFindMode").onchange = () => {
   readOptions(); index = -1; active = !!options.query; rebuild(); syncControls();
 };
 for (const id of ["articleFindCase","articleFindAll","articleFindExamples"]) $(id).onchange = () => { readOptions(); index = -1; active = !!options.query; rebuild(); };
+$("articleFindBlocks").onchange=()=>{readOptions();if(options.mode!=="fts"){index=-1;active=!!options.query;rebuild()}else{fullTextNavigation?.refresh?.();syncControls()}};
 $("articleFindQuery").oninput = () => { if ($("articleFindMode").value === "fts") return; readOptions(); index = -1; active = !!options.query; schedule(); };
 dialog.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.tagName !== "BUTTON") { e.preventDefault(); go(e.shiftKey ? -1 : 1); } });
 dialog.addEventListener("close", () => {
@@ -450,5 +506,5 @@ new ResizeObserver(measure).observe(strip);
 new MutationObserver(() => { measure(); if (active) schedule(); }).observe($("sbar"),{attributes:true,attributeFilter:["hidden"]});
 $("sbarExamples").addEventListener("click",schedule);
 $("examplesRow")?.addEventListener("click",schedule);
-window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation, fullTextModeActive:()=>options.mode === "fts", searchFrom, goto};
+window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation, fullTextModeActive:()=>options.mode === "fts", searchAcrossBlocks:()=>options.blocks!==false, searchFrom, goto};
 })();

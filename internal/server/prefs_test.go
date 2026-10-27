@@ -251,6 +251,18 @@ func TestPrefsInMemoryWithoutAPath(t *testing.T) {
 	}
 }
 
+func TestDefaultUpdateChannelForPlatform(t *testing.T) {
+	for _, tc := range []struct{ goos, want string }{
+		{"windows", "beta"}, {"android", "beta"}, {"linux", "release"}, {"darwin", "release"},
+	} {
+		t.Run(tc.goos, func(t *testing.T) {
+			if got := defaultUpdateChannelFor(tc.goos); got != tc.want {
+				t.Fatalf("defaultUpdateChannelFor(%q) = %q, want %q", tc.goos, got, tc.want)
+			}
+		})
+	}
+}
+
 // The two settings share one file and one write, but not one request: the
 // client that reorders dictionaries and the client that resizes text are the
 // same page sending different bodies, and neither may erase the other.

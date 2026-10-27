@@ -22,7 +22,9 @@ const (
 	// ResultCacheMaxAgeDays is the startup cleanup age for unused SQL result caches.
 	ResultCacheMaxAgeDays = 30
 	// ResultCacheAndroidDefaultGB is the default disk-cache limit on Android.
-	ResultCacheAndroidDefaultGB = 2
+	ResultCacheAndroidDefaultGB = 16
+	// ResultCacheWindowsDefaultGB is the default disk-cache limit on Windows.
+	ResultCacheWindowsDefaultGB = 16
 	// ResultCacheDesktopDefaultGB is the default disk-cache limit on desktop platforms.
 	ResultCacheDesktopDefaultGB = 8
 	// CombinedDictionaryLimitDefault is the default number of dictionaries allowed in a combined list.

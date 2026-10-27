@@ -73,6 +73,7 @@ final class ShellPrefs {
     // shared picker owns group choice, result navigation and list filtering.
     private static final String SEPIA_COLOR = "sepia_color";
     private static final int DEFAULT_SEPIA_COLOR = 0xFFF4ECD8;
+    private static final int DEFAULT_SEPIA_COLOR_NIGHT = 0xFF1C1A17;
     static final String BACKGROUND_IMAGE = "background_image";
 
     // ── the paper an enabled preset paints (2026-09-28) ─────────────────────
@@ -127,7 +128,8 @@ final class ShellPrefs {
     static int sepiaColor(Context c) { return sepiaColorFor(c, night(c)); }
 
     static int sepiaColorFor(Context c, boolean night) {
-        return of(c).getInt(themed(SEPIA_COLOR, night), DEFAULT_SEPIA_COLOR) | 0xFF000000;
+        int fallback = night ? DEFAULT_SEPIA_COLOR_NIGHT : DEFAULT_SEPIA_COLOR;
+        return of(c).getInt(themed(SEPIA_COLOR, night), fallback) | 0xFF000000;
     }
 
     static String sepiaColorText(Context c) { return sepiaColorTextFor(c, night(c)); }
