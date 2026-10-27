@@ -465,12 +465,13 @@ Update checks: System Settings now has Release, Pre-release, and Beta channels. 
 
 New-profile defaults: Warm (Sepia) appearance, Windows show/hide hotkey `Ctrl+Shift+F11, Ctrl+Shift+F11`, and only the Dictionaries and Results drawer sections expanded. Android recognizes Warm with its native background colour off by default; its System Settings hides Advanced and the divider above it. `build-android.cmd debug intel` passes; emulator verification is pending. Existing explicit hotkeys, appearance layers and drawer section choices remain in effect.
 
-When `looks.json` has no recorded current look yet, the looks dry-check now
-recognizes the exact default Warm state (including shell-reported window
-colours) as the current built-in. This keeps the Appearance row from showing
-Custom on a clean profile and avoids a false unsaved-changes prompt when
-switching from Warm. The UI uses that dry-check result to render the selected
-built-in without writing a selection to disk. All focused look tests pass.
+When `looks.json` has no recorded current look yet, the looks dry-check
+recognizes the default Warm state as the current built-in. On Android the
+native background colour is off by default, while the Warm preset layer paints
+the paper. This keeps the Appearance row from showing Custom on a clean profile
+and avoids a false unsaved-changes prompt when switching from Warm. The UI uses
+that dry-check result to render the selected built-in without writing a
+selection to disk. All focused look tests pass.
 
 Android System Settings hides the Advanced section and its Reset default
 button. Windows uses a separate System Settings dialog and does not show this
