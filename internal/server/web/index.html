@@ -2764,6 +2764,22 @@ function bootFailed(msg){
     `<p>${esc(msg||tx("search.unknown"))}</p>`+
     `<p><button type="button" class="btn" id="retryBtn">${esc(tx("search.retry"))}</button></p></div>`;
 }
+function showNoDictionaries(){
+  const out=$("out");
+  if(dicts.length){out.querySelector(".no-dictionaries")?.remove();return}
+  const box=document.createElement("div");box.className="empty no-dictionaries";
+  const title=document.createElement("p");title.textContent=tx("search.noConnectedDictionaries");
+  const instructions=document.createElement("p");
+  const sentence=tx("search.chooseDictionaries"),marker="{editFolders}",at=sentence.indexOf(marker);
+  if(at<0)instructions.textContent=sentence;
+  else{
+    instructions.append(document.createTextNode(sentence.slice(0,at)));
+    const link=document.createElement("a");link.href="#editFolders";link.textContent=tx("search.addDictionaries");
+    link.addEventListener("click",event=>{event.preventDefault();window.openFoldersDialog?.(event.currentTarget,cfgInfo)});
+    instructions.append(link,document.createTextNode(sentence.slice(at+marker.length)));
+  }
+  box.append(title,instructions);out.replaceChildren(box);
+}
 $("out").addEventListener("click",e=>{if(e.target.id==="retryBtn")loadDicts().then(ok=>{if(ok)applyURL()})});
 
 /* Two asymmetric corrections, because opening and closing fail differently.
@@ -3551,6 +3567,7 @@ async function loadDicts(rescan){
   if(listDiagnostics)sendBrowseDiagnostic({event:"dictionary_list_client",words:dicts.length,fetchMs:Math.max(0,beginMs),
     wordsMs:Math.max(0,firstRowMs),totalMs:streamMs,stripBuildMs:renderMs});
   setPhase("ready");
+  showNoDictionaries();
   if(blocking)logBrowseArticleTransition("dictionary_list_ready");
   finishDesktopStartup();
   if(blocking)clearStatusForResults();
@@ -9492,12 +9509,15 @@ function anchorTarget(root,frag){
 let navDet=null,navList=null,navIdx=0,navTimer=0,markedAnswer=false,navSuppressed=false;
 function markList(){
   const out=[];
-  for(const det of document.querySelectorAll("details.dict[open]")){
+  // Full-text results are rendered into every dictionary's current result
+  // page, even while the accordion is collapsed. Include those marks in the
+  // shared counter/navigation so it does not report only the expanded answer.
+  for(const det of document.querySelectorAll("details.dict")){
     for(const host of det.querySelectorAll(".article")){
       const root=host.shadowRoot||host.contentDocument;
       if(!root)continue;
       for(const m of root.querySelectorAll(".wu-hl"))
-        if(!m.checkVisibility||m.checkVisibility())out.push({det,host,el:m});
+        if(!det.open||!m.checkVisibility||m.checkVisibility())out.push({det,host,el:m});
     }
   }
   return out; // DOM order across the open dictionaries is reading order
@@ -9526,11 +9546,17 @@ function navRefresh(){
     if(!visibleByDet.has(item.det))visibleByDet.set(item.det,[]);
     visibleByDet.get(item.det).push(item);
   }
-  // Keep marks already collected from a dictionary when it is collapsed.
-  // They remain valid navigation targets and can reopen that dictionary.
+  // Keep marks already collected from a dictionary when it is collapsed,
+  // and include marks in its currently rendered result page. They remain
+  // navigation targets and navGo opens their dictionary when reached.
   navList=[];
-  for(const det of document.querySelectorAll("details.dict"))
-    navList.push(...(det.open?visibleByDet.get(det)||[]:previousByDet.get(det)||[]));
+  for(const det of document.querySelectorAll("details.dict")){
+    if(det.open)navList.push(...visibleByDet.get(det)||[]);
+    else{
+      const kept=previousByDet.get(det)||[],seen=new Set(kept.map(item=>item.el));
+      navList.push(...kept,...(visibleByDet.get(det)||[]).filter(item=>!seen.has(item.el)));
+    }
+  }
   if(!navDet)navDet=navList[0]?.det||document.querySelector("details.dict[open]");
   if(!navDet){navPos();return}
   // A late frame adds marks ABOVE the one you are on; keeping the element

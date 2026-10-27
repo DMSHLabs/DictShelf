@@ -1050,6 +1050,8 @@
   "search.groupUnavailable": "В группе «{name}» есть словари, но ни один не доступен для поиска — проверьте настройки словарей",
   "search.noDicts": "Чтобы добавить словари, нажмите",
   "search.addDictionaries": "Папки словарей",
+  "search.noConnectedDictionaries": "Словари не подключены.",
+  "search.chooseDictionaries": "Чтобы выбрать словари, откройте ☰ → {editFolders}.",
   "search.morphAll": "По запросу «{query}» ничего не найдено — показаны результаты для {forms}",
   "search.morphSome": "В некоторых словарях нет «{query}» — также показаны результаты для {forms}",
   "search.noQuery": "По запросу «{query}» ничего не найдено",
