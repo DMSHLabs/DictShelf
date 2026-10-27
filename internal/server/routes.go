@@ -155,6 +155,7 @@ func (s *Server) routes() []route {
 		{"POST", "/api/headword-export", s.handleHeadwordExport, "/api/headword-export", false},
 		{"GET", "/api/browse", s.handleBrowse, "/api/browse", false},
 		{"GET", "/api/browse/find", s.handleBrowseFind, "/api/browse/find", false},
+		{"GET", "/api/article-find/lemma", s.handleArticleFindLemma, "", false},
 		// what the platform is doing to us (D64) - the Android shell's channel
 		// for onStop / onTrimMemory / thermal / battery-saver, which the
 		// exec'd server has no other way of learning.

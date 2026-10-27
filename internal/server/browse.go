@@ -852,6 +852,34 @@ func (s *Server) headwordLemmaFor(e *entry, d dict.Dictionary, query string) str
 	return query
 }
 
+// handleArticleFindLemma resolves one article-search term using the selected
+// dictionary's language. Article text is searched in the browser, but the
+// morphology data and language choice belong to the server.
+func (s *Server) handleArticleFindLemma(w http.ResponseWriter, r *http.Request) {
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if query == "" || strings.ContainsAny(query, " \t\r\n") {
+		httpErr(w, http.StatusBadRequest, "article-search lemma needs one word")
+		return
+	}
+	e, err := s.reg.get(r.URL.Query().Get("dict"))
+	if err != nil {
+		httpErr(w, http.StatusNotFound, "%v", err)
+		return
+	}
+	lemma := query
+	if s.Morph.Enabled() {
+		d, err := e.open()
+		if err != nil {
+			httpErr(w, http.StatusInternalServerError, "%v", err)
+			return
+		}
+		lemma = s.headwordLemmaFor(e, d, query)
+	}
+	writeJSON(w, struct {
+		Lemma string `json:"lemma"`
+	}{Lemma: lemma})
+}
+
 func (s *Server) wildcardHeadwordLemmaQuery(e *entry, query, mode string) (string, error) {
 	if !isLemmaHeadwordMode(mode) || strings.ContainsAny(query, " \t\r\n") || strings.TrimSpace(query) == "" || !s.Morph.Enabled() {
 		return query, nil

@@ -933,8 +933,8 @@ window.wudictFontScale=(function(){
   <h2 id="articleFindTitle">{{T:articleFind.title}}<button type="button" class="btn" id="articleFindClose" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
   <label for="articleFindQuery">{{T:articleFind.query}}</label>
   <input type="text" id="articleFindQuery" autocomplete="off" spellcheck="false">
-  <label class="article-find-mode" for="articleFindMode">{{T:articleFind.mode}}<select id="articleFindMode">
-    <option value="prefix">{{T:search.prefix}}</option><option value="exact">{{T:articleFind.exact}}</option><option value="contains" selected>{{T:dictUI.contains}}</option><option value="fts">{{T:articleFind.fullText}}</option>
+  <label class="article-find-mode" for="articleFindMode">{{T:articleFind.mode}}<select id="articleFindMode" aria-label="{{T:articleFind.mode}}">
+    <option value="prefix">{{T:search.prefix}}</option><option value="suffix">{{T:search.suffix}}</option><option value="contains" selected>{{T:dictUI.contains}}</option><option value="word">{{T:browse.findModeWord}}</option><option value="wordLemma">{{T:browse.findModeWordLemma}}</option><option value="fts" hidden>{{T:articleFind.fullText}}</option>
   </select></label>
   <label><input type="checkbox" id="articleFindCase">{{T:articleFind.case}}</label>
   <label><input type="checkbox" id="articleFindAll" checked>{{T:articleFind.all}}</label>
@@ -11359,17 +11359,26 @@ function themedSelect(select,button,menu){
   const ctl=sheetMenuNew(button,menu,()=>{
     const nodes=[];let group=null;
     for(const option of select.options){
+      if(option.hidden)continue;
       if(select.id==="mode"&&["prefix","exact","fts"].includes(option.value)){
         group=document.createElement("div");group.className="headword-control-find-group";
         const heading=document.createElement("div");heading.className="headword-control-find-group-title";
         heading.textContent=tx(option.value==="prefix"?"browse.findModesEachWord":option.value==="exact"?"browse.findModesWholeHeadword":"search.articles");
         group.append(heading);nodes.push(group);
+      }else if(select.id==="articleFindMode"&&(option.value==="prefix"||option.value==="fts")){
+        group=document.createElement("div");group.className="headword-control-find-group";
+        if(option.value==="prefix"){
+          const heading=document.createElement("div");heading.className="headword-control-find-group-title";
+          heading.textContent=tx("search.articles");group.append(heading);
+        }
+        nodes.push(group);
       }
       const item=document.createElement("button");
-      item.type="button";item.className=select.id==="mode"?"headword-control-find-option":"choice-item";item.role="option";
+      const isFindMode=select.id==="mode"||select.id==="articleFindMode";
+      item.type="button";item.className=isFindMode?"headword-control-find-option":"choice-item";item.role="option";
       item.setAttribute("aria-selected",String(option.selected));
       item.disabled=option.disabled;
-      if(select.id==="mode"){
+      if(isFindMode){
         if(option.selected)item.classList.add("is-selected");
         const icon=document.createElement("span");icon.className="headword-control-find-option-icon";
         modeMark(icon,option.value);
@@ -11377,7 +11386,9 @@ function themedSelect(select,button,menu){
         const title=document.createElement("span");title.className="headword-control-find-option-title";
         title.textContent=themedModeDescriptions[option.value]||option.textContent;
         copy.append(title);
-        if(themedModeHints[option.value]){const hint=document.createElement("small");hint.className="headword-control-find-option-hint";hint.textContent=themedModeHints[option.value];copy.append(hint)}
+        const hintText=select.id==="articleFindMode"&&option.value==="fts"?tx("articleFind.fullTextHint"):
+          select.id==="articleFindMode"&&option.value==="wordLemma"?tx("articleFind.modeHintWordLemma"):themedModeHints[option.value];
+        if(hintText){const hint=document.createElement("small");hint.className="headword-control-find-option-hint";hint.textContent=hintText;copy.append(hint)}
         item.append(icon,copy);
       }else item.textContent=option.textContent;
       item.onclick=()=>{
@@ -11385,7 +11396,7 @@ function themedSelect(select,button,menu){
         ctl.hide();select.dispatchEvent(new Event("change",{bubbles:true}));
         sync();button.focus();
       };
-      if(select.id==="mode")group.append(item);else nodes.push(item);
+      if(isFindMode)group?.append(item);else nodes.push(item);
     }
     menu.replaceChildren(...nodes);
     return !!menu.children.length;
@@ -11396,7 +11407,7 @@ function themedSelect(select,button,menu){
   /* The mode button wears the mode's mark, so the mode's own name moves to the
      tooltip and the accessible name - without it the control would announce a
      pattern. Every other menu button keeps its option's text. */
-  const markedButton=select.id==="mode",controlName=select.getAttribute("aria-label")||"";
+  const markedButton=select.id==="mode"||select.id==="articleFindMode",controlName=select.getAttribute("aria-label")||"";
   function sync(){
     const option=select.selectedOptions[0];
     if(markedButton&&option){
@@ -11450,6 +11461,7 @@ function themedSelectCreate(select){
 }
 window.wudictThemedSelects={
   mode:themedSelect($("mode"),$("modeMenuBtn"),$("modeMenu")),
+  articleFindMode:themedSelectCreate($("articleFindMode")),
   pickerGroup:themedSelect($("webPickerGroup"),$("webPickerGroupBtn"),$("webPickerGroupMenu"))
 };
 $("webDictionaryPicker").addEventListener("close",()=>window.wudictThemedSelects.pickerGroup.hide());
