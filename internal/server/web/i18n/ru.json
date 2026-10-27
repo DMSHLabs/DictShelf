@@ -1145,6 +1145,7 @@
   "work.task.indexing": "индексация",
   "work.task.wildcards": "маски",
   "work.task.browse": "Browse",
+  "work.task.search": "поиск",
   "work.task.rescan": "пересканирование",
   "work.task.setup": "настройка",
   "work.expand": "Показать задачи",

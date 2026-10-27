@@ -568,14 +568,6 @@ select{box-sizing:border-box;font-size:calc(var(--ui-font-base) * 1rem);min-heig
 #status>.msg{overflow:hidden;min-height:0}
 #status .txt{padding:var(--sp-2) 0}
 #status.show{grid-template-rows:1fr;opacity:1}
-.search-progress{display:flex;align-items:center;gap:.65em;margin:0 0 var(--sp-2);font-size:13px;color:var(--label)}
-.search-progress[hidden]{display:none}
-.search-progress-track{position:relative;display:block;flex:1 1 8em;min-width:3em;height:.45em;overflow:hidden;border-radius:999px;background:var(--line-soft,var(--line))}
-.search-progress-track>span{position:absolute;inset:0 auto 0 0;width:34%;border-radius:inherit;background:var(--accent);animation:search-progress-move 1.25s ease-in-out infinite}
-@keyframes search-progress-move{from{transform:translateX(-110%)}to{transform:translateX(310%)}}
-.search-progress button{flex:none}
-@media(max-width:420px){.search-progress{gap:.4em}.search-progress button{padding:.25em .4em}}
-@media(prefers-reduced-motion:reduce){.search-progress-track>span{animation:none;left:30%;width:40%}}
 /* The line under the editor that names the FILE being edited. Small and faint
    like the sheet's other reference text, and never hidden: it answers "which
    of the four boxes is this" at the moment the reader is typing, which is

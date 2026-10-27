@@ -1133,6 +1133,7 @@
   "work.task.indexing": "indexing",
   "work.task.wildcards": "wildcards",
   "work.task.browse": "Browse",
+  "work.task.search": "search",
   "work.task.rescan": "rescan",
   "work.task.setup": "setup",
   "work.expand": "Show tasks",

@@ -292,11 +292,6 @@ window.wudictFontScale=(function(){
      clipped row, and .txt carries the padding INSIDE the clip so the closed
      state is truly 0px rather than 0px plus padding. -->
 <div id="status" role="status" aria-live="polite"><div class="msg"><div class="txt" id="statusMsg"></div></div></div>
-<div id="searchProgress" class="search-progress" role="status" aria-live="polite" hidden>
-  <span id="searchProgressLabel"></span>
-  <span class="search-progress-track" aria-hidden="true"><span></span></span>
-  <button type="button" class="btn" id="searchProgressStop">{{T:search.stop}}</button>
-</div>
 <div id="outdatedNotice" class="bulkbox outdated-notice" role="status" hidden></div>
 <div id="out"></div>
 <section id="maskView" aria-label="{{T:search.wildcardsResults}}" hidden>
@@ -1529,7 +1524,7 @@ $("systemLogShowFolder").addEventListener("click",()=>{
     .catch(error=>alert(window.wudictI18n.errorText(error.message)));
 });
 $("saveSystemLog").addEventListener("click",systemLogClick);
-window.wuSearchHistory.setSearch(word=>{ if($("mode").value==="wildcards"){ $("q").value=word;window.wuSearchHistory.hide();maskSubmitRequested=true;commitOnce=true;doSearch(); } else searchFor(word); });
+window.wuSearchHistory.setSearch(word=>{ if($("mode").value==="wildcards"){ $("q").value=word;window.wuSearchHistory.hide();maskSubmitRequested=true;commitOnce=true;doSearch(); } else searchFor(word,{preserveMode:true}); });
 window.wuSearchHistory.setSuggest((q,onHit,signal)=>{
   const mode=$("mode").value,sel=$("dict").value||"all";
   if(mode==="fts"||mode==="wildcards")return;
@@ -6104,36 +6099,31 @@ function setBusy(on){
   busyTimer=setTimeout(()=>{if(busyWanted)box.classList.add("busy")},BUSY_DELAY);
 }
 
-let searchProgressTimer=null,searchProgressGeneration=0,searchProgressDone=0,searchProgressTotal=0;
+let searchProgressGeneration=0,searchProgressDone=0,searchProgressTotal=0;
 function hideSearchProgress(){
-  clearTimeout(searchProgressTimer);searchProgressTimer=null;searchProgressGeneration=0;
-  const box=$("searchProgress");if(box)box.hidden=true;
+  searchProgressGeneration=0;
+  maskTaskFinish("search");
 }
 function beginSearchProgress(seq,total){
   hideSearchProgress();
   if(total<1)return;
   searchProgressGeneration=seq;searchProgressDone=0;searchProgressTotal=total;
-  searchProgressTimer=setTimeout(()=>{
-    if(searchProgressGeneration!==seq||seq!==searchSeq||!searchAC||searchAC.signal.aborted)return;
-    $("searchProgressLabel").textContent=tx("search.progress",{
-      done:window.wudictI18n.number(searchProgressDone),total:window.wudictI18n.number(searchProgressTotal)});
-    $("searchProgress").hidden=false;
-  },2000);
+  maskTaskStart("search",tx("search.progress",{
+    done:window.wudictI18n.number(0),total:window.wudictI18n.number(total)}),()=>{
+      if(seq!==searchSeq)return;
+      searchAC?.abort();finishSearchProgress(seq);
+    },{done:0,total});
 }
 function advanceSearchProgress(seq){
   if(searchProgressGeneration!==seq)return;
   searchProgressDone=Math.min(searchProgressTotal,searchProgressDone+1);
-  if(!$("searchProgress").hidden)$("searchProgressLabel").textContent=tx("search.progress",{
-    done:window.wudictI18n.number(searchProgressDone),total:window.wudictI18n.number(searchProgressTotal)});
+  maskTaskUpdate("search",tx("search.progress",{
+    done:window.wudictI18n.number(searchProgressDone),total:window.wudictI18n.number(searchProgressTotal)}),searchProgressDone,searchProgressTotal);
 }
 function finishSearchProgress(seq){
   if(searchProgressGeneration!==seq)return;
   hideSearchProgress();
 }
-$("searchProgressStop").addEventListener("click",()=>{
-  if(searchAC)searchAC.abort();
-  hideSearchProgress();
-});
 
 /* read a newline-delimited JSON response, invoking onMsg per record as it
    arrives — this is what lets each dictionary render the instant it is
@@ -8825,7 +8815,7 @@ document.addEventListener("keydown",e=>{
 function searchFor(term,opts){
   const t=String(term||"").trim();
   if(!t)return;
-  if(["fts","wildcards","suffix","word","wordLemma","exactLemma"].includes($("mode").value))setSearchMode("prefix");
+  if(!opts?.preserveMode&&["fts","wildcards","suffix","word","wordLemma","exactLemma"].includes($("mode").value))setSearchMode("prefix");
   window.wuSearchHistory.record(t);
   window.wuSearchHistory.hide();
   $("q").value=t;                       // verbatim: no trimming, ever

@@ -75,7 +75,7 @@
     renderQueued=true;
     requestAnimationFrame(()=>{renderQueued=false;renderTasks()});
   }
-  const taskTypeKeys={indexing:'work.task.indexing',wildcards:'work.task.wildcards',browse:'work.task.browse',rescan:'work.task.rescan',setup:'work.task.setup'};
+  const taskTypeKeys={indexing:'work.task.indexing',wildcards:'work.task.wildcards',browse:'work.task.browse',search:'work.task.search',rescan:'work.task.rescan',setup:'work.task.setup'};
   function taskStart(type,label,options={}){
     type=String(type||'work').slice(0,64);
     let id;
@@ -142,9 +142,9 @@
     document.documentElement.classList.toggle('server-work-active',running);
     const single=active.length===1&&!multiple;box.classList.toggle('work-multiple',multiple&&running);
     spinner.hidden=!single;text.hidden=!single;button.hidden=!single||!active[0]?.stop;
-    const singleBrowse=single&&active[0].type==='browse'&&active[0].total>0;
-    singleProgress.hidden=!singleBrowse;
-    if(singleBrowse){
+    const singleWithProgress=single&&active[0].total>0;
+    singleProgress.hidden=!singleWithProgress;
+    if(singleWithProgress){
       const task=active[0],percent=Math.max(0,Math.min(100,task.done*100/task.total));
       singleProgressBar.style.width=`${percent}%`;
       singleProgress.setAttribute('aria-valuemax',String(task.total));
