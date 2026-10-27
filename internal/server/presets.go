@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -289,15 +290,19 @@ func (s *Server) presetStatePath() string {
 }
 
 // presetEnabled reads the enabled list. An unknown id (a preset this build
-// no longer ships) is dropped rather than shown; an unreadable or absent
-// file is "none enabled", which is where everyone starts.
+// no longer ships) is dropped rather than shown. A missing file is a new
+// profile, whose default appearance is Warm (Sepia); a malformed existing
+// file is not silently replaced with that default.
 func (s *Server) presetEnabled() []string {
 	p := s.presetStatePath()
 	if p == "" {
-		return nil
+		return []string{lookWarm}
 	}
 	b, err := os.ReadFile(p)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return []string{lookWarm}
+		}
 		return nil
 	}
 	var st struct {

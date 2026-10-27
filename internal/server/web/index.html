@@ -3936,8 +3936,12 @@ function reissueIfCorpusMoved(){
    script, and nothing paints in between, so the reader never sees it. */
 const panelSectionsKey="wudict_panel_sections";
 const panelSectionsSaved=loadJSON(panelSectionsKey,{});
+const panelSectionsOpenByDefault=new Set(["dictionaries","results"]);
 for(const sect of $("panel").querySelectorAll("details[data-panel-section]")){
-  sect.open=panelSectionsSaved?.[sect.dataset.panelSection]!==false;
+  const key=sect.dataset.panelSection;
+  sect.open=Object.prototype.hasOwnProperty.call(panelSectionsSaved||{},key)
+    ?panelSectionsSaved[key]===true
+    :panelSectionsOpenByDefault.has(key);
   sect.addEventListener("toggle",()=>{
     // Toggle events may be coalesced; save the current state of every section.
     const states={};
@@ -4631,9 +4635,9 @@ let desktopSystemNodes=null;
 async function desktopHotkeysLoad(){
   const show=$("hotkeyShowWindow"),translate=$("hotkeyTranslateClipboard");
   if(!show||!translate)return;
-  let stored={show:"Ctrl+Shift+F11",translate:"Ctrl+Shift+B, Ctrl+Shift+B"};
+  let stored={show:"Ctrl+Shift+F11, Ctrl+Shift+F11",translate:"Ctrl+Shift+B, Ctrl+Shift+B"};
   try{stored=await window.wudictGetHotkeys()}catch(_){}
-  show.value=stored.show||"Ctrl+Shift+F11";
+  show.value=stored.show||"Ctrl+Shift+F11, Ctrl+Shift+F11";
   translate.value=stored.translate||"Ctrl+Shift+B, Ctrl+Shift+B";
   show.dataset.previous=show.value;translate.dataset.previous=translate.value;
   show.onkeydown=desktopHotkeyCapture;translate.onkeydown=desktopHotkeyCapture;
@@ -4678,7 +4682,7 @@ function desktopHotkeySave(input,kind){
   const value=input.value.trim();
   if(typeof window.wudictSetHotkeys==="function"&&!window.wudictSetHotkeys(kind,value)){
     input.setCustomValidity(tx("hotkeys.invalid"));input.reportValidity();
-    input.value=input.dataset.previous||(kind==="show"?"Ctrl+Shift+F11":"Ctrl+Shift+B, Ctrl+Shift+B");return;
+    input.value=input.dataset.previous||(kind==="show"?"Ctrl+Shift+F11, Ctrl+Shift+F11":"Ctrl+Shift+B, Ctrl+Shift+B");return;
   }
   input.setCustomValidity("");input.value=value;input.dataset.previous=value;
 }

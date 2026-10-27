@@ -132,6 +132,7 @@ Name: "associate";    Description: "Offer {#AppName} in ""Open with"" for dictio
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "DictShelf.exe"; Flags: ignoreversion
 Source: "dictshelf.ico";   DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\third_party\dictzip2\dictzip2.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 ; The third-party notices, beside the exe as well as inside it (`DictShelf
 ; licenses`): several of them require their text to accompany a binary.
 Source: "..\..\THIRD-PARTY-NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion

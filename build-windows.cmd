@@ -250,7 +250,7 @@ if not errorlevel 1 (
 rem Only replace the current executable after all prerequisites are present.
 taskkill /IM "%OUTPUT_EXE%" /F >nul 2>&1
 del /F /Q "%OUTPUT_EXE%"
-del /F /Q "%OUTPUT_EXE%~"
+if exist "%OUTPUT_EXE%~" del /F /Q "%OUTPUT_EXE%~"
 
 rem A compiler found by path is passed as an absolute CC because it is not on
 rem PATH, and CXX is derived beside it only when that g++.exe is really there -
