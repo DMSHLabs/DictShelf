@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -98,6 +99,10 @@ const (
 )
 
 func builtinLooks() []look {
+	// Android paints Warm through the preset layer, while its native window
+	// background colour is disabled by default. Match that shell default so a
+	// fresh Android profile is recognized as Warm rather than Custom.
+	warmColorEnabled := runtime.GOOS != "android"
 	return []look{
 		{
 			ID: lookClean, Name: "Clean", Builtin: true,
@@ -114,8 +119,8 @@ func builtinLooks() []look {
 			ID: lookWarm, Name: "Warm", Builtin: true,
 			State: lookState{
 				Layers: []string{"sepia"},
-				Light:  lookHalf{ColorEnabled: true, Color: "#F4ECD8"},
-				Dark:   lookHalf{ColorEnabled: true, Color: "#1C1A17"},
+				Light:  lookHalf{ColorEnabled: warmColorEnabled, Color: "#F4ECD8"},
+				Dark:   lookHalf{ColorEnabled: warmColorEnabled, Color: "#1C1A17"},
 			},
 		},
 		{

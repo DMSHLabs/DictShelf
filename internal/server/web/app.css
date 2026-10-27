@@ -983,6 +983,7 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
   margin:calc(var(--ui-row-gap) * 1em) 0 .2em;padding:.8em 0 0;border:0;background:none;text-align:left;
   font:inherit;font-size:calc(var(--ui-font-section) * 1rem);font-weight:600;color:var(--fg);cursor:pointer;
   border-top:1px solid color-mix(in srgb,var(--fg) 22%,transparent)}
+#sysSettings .sys-fold[hidden]{display:none}
 #sysSettings .sys-fold::before{content:"▸";color:var(--label);font-size:1em;
   line-height:1;display:inline-block;width:.9em;flex:none;text-align:center}
 #sysSettings .sys-fold[aria-expanded="true"]::before{content:"▾";color:var(--accent)}
@@ -1699,7 +1700,15 @@ html[data-dict-icons-off] .dict-icon{display:none}
   min-height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
   height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
   font-size:calc(var(--ui-control-font) * 1rem);line-height:1;
-  appearance:none;-webkit-appearance:none;padding:0 1.8em 0 .55em}
+  appearance:none;-webkit-appearance:none;padding:0 1.8em 0 .55em;
+  color:var(--fg);background-color:var(--bg-card);background-image:none;
+  border:1px solid var(--line);border-radius:5px}
+html[data-shell-sepia] #panel :is(.choice-btn,.panel-select-wrap>select){
+  background-color:var(--paper-bg,var(--bg))}
+html[data-shell-image] #panel :is(.choice-btn,.panel-select-wrap>select){
+  background-color:var(--paper-bg,var(--bg));
+  background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);
+  background-size:100% 100%}
 #panel .headword-threshold-row>.panel-select-wrap>select,
 #panel .article-font-select-wrap>select{height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
   min-height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);font-size:calc(var(--ui-font-base) * 1rem)}
