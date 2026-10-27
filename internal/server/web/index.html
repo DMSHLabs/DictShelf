@@ -549,6 +549,9 @@ window.wudictFontScale=(function(){
     </div>
   </div>
   <div class="facts">
+    <label class="rowlabel"><input class="panel-checkbox" type="checkbox" id="countAllResultsInBackground" checked> {{T:panel.searchAllResultsInBackground}}</label>
+  </div>
+  <div class="facts">
     <div class="history-setting">
       <label for="searchPageSize">{{T:panel.resultPageSize}}</label>
       <span class="number-stepper" role="group" aria-label="{{T:panel.resultPageSize}}">
@@ -936,6 +939,7 @@ window.wudictFontScale=(function(){
   <label><input type="checkbox" id="articleFindCase">{{T:articleFind.case}}</label>
   <label><input type="checkbox" id="articleFindAll" checked>{{T:articleFind.all}}</label>
   <label><input type="checkbox" id="articleFindExamples">{{T:articleFind.examples}}</label>
+  <label><input type="checkbox" id="articleFindBlocks" checked>{{T:articleFind.blocks}}</label>
   <p id="articleFindHiddenHint" hidden>{{T:articleFind.hiddenHint}}</p>
   <p id="articleFindStatus" role="status"></p>
   <div class="article-find-actions"><button type="button" class="btn" id="articleFindDialogPrev">{{T:articleFind.previous}}</button><button type="button" class="btn" id="articleFindDialogNext">{{T:articleFind.next}}</button></div>
@@ -1311,6 +1315,7 @@ const articleFindPageLoads=new Set();
 let articleCacheQueue=[],articleCacheActive=0,articleCacheAbort=null,articleCacheSeq=0,articleCacheFinished=0,articleCacheTotal=0;
 let articleCacheGroupID="",articleCacheGroupCount=1;
 let articleCacheSearchSettled=false,articleCacheFirstOrder=Infinity;
+let countAllResultsInBackground=true,activeSearchCountsInBackground=true;
 function newArticleResultCacheID(){
   const bytes=new Uint8Array(16);
   try{crypto.getRandomValues(bytes)}catch(_){for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256)}
@@ -1370,9 +1375,10 @@ function queueArticleResultCache(msg,mode,displayQuery,seq){
   const state={id:articleCacheGroupID||newArticleResultCacheID(),count:articleCacheGroupCount,order:msg.i||0,
     dict:msg.dict,name:msg.name||msg.dict,query:msg.term||displayQuery,
     displayQuery,mode,rung:msg.rung||"",ignore:ignoreDiacritics,total:msg.results.length,initial:msg.results.length,
-    initialPageRequested:false,
+    initialPageRequested:false,background:activeSearchCountsInBackground,
     done:false,error:"",started:false,seq,lastPaint:0,indexTimer:0,indexing:false};
-  articleResultCaches.set(msg.dict,state);articleCacheQueue.push(state);articleCacheTotal++;
+  articleResultCaches.set(msg.dict,state);
+  if(state.background){articleCacheQueue.push(state);articleCacheTotal++}
 }
 function finishArticleCacheInitialPage(state){
   if(!articleCacheSearchSettled||state.seq!==searchSeq||!state.done||state.error||state.initialPageRequested)return;
@@ -1381,13 +1387,6 @@ function finishArticleCacheInitialPage(state){
     node.dataset.searchQuery===state.displayQuery);
   if(!det)return;
   const first=state.order===articleCacheFirstOrder,portion=searchPortionSize();
-  const pendingStart=Number(det.dataset.ftsPagePending);
-  if(Number.isInteger(pendingStart)&&pendingStart>0){
-    delete det.dataset.ftsPagePending;
-    state.initialPageRequested=true;
-    fetchSearchPortion(det,pendingStart,{openAfter:true,pageSize:portion,firstPageSize:first?state.initial:0});
-    return;
-  }
   if(state.total<=state.initial)return;
   state.initialPageRequested=true;
   fetchSearchPortion(det,0,{openAfter:state.mode!=="fts",size:first?state.initial:portion,
@@ -1472,6 +1471,14 @@ function searchPortionOffset(page,size,firstPageSize=0){
 }
 function searchPortionSize(){
   try{return normalizedSearchPortionSize(localStorage.getItem(SEARCH_PORTION_SIZE_KEY)||20)}catch(_){return 20}
+}
+const countAllResultsCheckbox=$("countAllResultsInBackground");
+if(countAllResultsCheckbox){
+  countAllResultsCheckbox.checked=countAllResultsInBackground;
+  countAllResultsCheckbox.addEventListener("change",()=>{
+    countAllResultsInBackground=countAllResultsCheckbox.checked;
+    savePrefs(true);
+  });
 }
 const searchPortionInput=$("searchPageSize");
 if(searchPortionInput){
@@ -1859,6 +1866,8 @@ async function loadPrefs(){
       updateNotifications=!st.ui.updateNotificationsOff;
       resultCacheLimitGB=Number(st.ui.resultCacheLimitGB)||defaultResultCacheLimitGB();resultCacheNoLimit=!!st.ui.resultCacheNoLimit;syncResultCacheLimitUI();
       searchReturnCacheStorage=st.ui.searchReturnCache==="memory"?"memory":"disk";syncSearchReturnCacheUI();
+      countAllResultsInBackground=st.ui.skipBackgroundResultCount!==true;
+      $("countAllResultsInBackground").checked=countAllResultsInBackground;
       combinedDictionaryLimit=Math.max(1,Math.min(Number(st.ui.combinedDictionaryLimit)||defaultCombinedDictionaryLimit,maxCombinedDictionaryLimit));syncCombinedDictionaryLimitUI()}
     syncUpdateControls();restoreCachedUpdate();
     scheduleUpdateCheck();
@@ -1874,10 +1883,10 @@ async function loadPrefs(){
 /* Debounced, and silent when nothing actually changed — dragging a card emits
    a move per hovered row, and startup normalisation re-sends a list that is
    usually identical to the one we just read. */
-const defaultUpdateChannel=window.wudictWindowsShell===true?"beta":"release";
+const defaultUpdateChannel=window.wudictWindowsShell===true||window.wudictAndroidShell===true?"beta":"release";
 let prefsTimer=null,prefsSent=null,updateChannel=defaultUpdateChannel,updateNotifications=true;
 let updateAvailable=null,updateStatusMessage="",updateManualResult=false,updateStarting=false;
-function defaultResultCacheLimitGB(){return window.wudictAndroidShell?2:8}
+function defaultResultCacheLimitGB(){return window.wudictAndroidShell||window.wudictAndroidGo||window.wudictWindowsShell?16:8}
 let resultCacheLimitGB=defaultResultCacheLimitGB(),resultCacheNoLimit=false;
 let searchReturnCacheStorage="disk";
 const defaultCombinedDictionaryLimit={{COMBINED_DICTIONARY_LIMIT_DEFAULT}},maxCombinedDictionaryLimit={{COMBINED_DICTIONARY_LIMIT_MAX}};
@@ -1914,11 +1923,11 @@ function savePrefs(now){
   // real one.
   if(!prefsReady){setStatus(esc(tx("panel.prefsUnavailable")));return}
   if(!now){prefsTimer=setTimeout(()=>savePrefs(true),400);return}
-  // No `off` in the body: the server's field falls back to false (its
-  // omitempty zero value), which is what retires a flag set by the switches
-  // that no longer exist.
+  // Default-on settings are serialized as opt-outs, so enabling them again
+  // writes false and clears the saved opt-out.
   const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:d.name||d.path.split("/").pop(),title:dictTitles.get(d.id)||"",pinned:prefPinned.includes(d.id)})),
     ui:{fontSize:articleFS,fontWeight:articleFW,fontFamily:articleFont,hlOff:!hlOn,speakOff:!speakOn,dictIconsOff:!dictIconsOn,fastFirst:!orderFirst,hideUnmarkedExamples,exampleBackgroundOff:!dimExampleBackground,fadeExampleText,customOrder:prefCustomOrder,
+      skipBackgroundResultCount:!countAllResultsInBackground,
       resultCacheLimitGB,resultCacheNoLimit,combinedDictionaryLimit,searchReturnCache:searchReturnCacheStorage,updateChannel,
       updateNotificationsOff:!updateNotifications}});
   if(body===prefsSent)return;
@@ -5130,7 +5139,7 @@ function dictionaryCacheDiagnosticsEnabled(){try{return localStorage.getItem("wu
 function setDictionaryCacheDiagnostics(on){try{if(on)localStorage.setItem("wudict_dictionary_cache_diagnostics","1");else localStorage.removeItem("wudict_dictionary_cache_diagnostics")}catch(_){}}
 function indexParallelismDiagnosticsEnabled(){try{return localStorage.getItem("wudict_index_parallelism_diagnostics")==="1"}catch(_){return false}}
 function setIndexParallelismDiagnostics(on){try{if(on)localStorage.setItem("wudict_index_parallelism_diagnostics","1");else localStorage.removeItem("wudict_index_parallelism_diagnostics")}catch(_){}sendBrowseDiagnostic({event:"index_parallelism_diagnostics",enabled:!!on})}
-function indexingModePreference(){try{const mode=localStorage.getItem("wudict_indexing_mode");return mode==="parallel-dictionaries-single-worker"?mode:"adaptive"}catch(_){return "adaptive"}}
+function indexingModePreference(){const fallback=window.wudictWindowsShell||window.wudictAndroidShell?"parallel-dictionaries-single-worker":"adaptive";try{const mode=localStorage.getItem("wudict_indexing_mode");return mode==="parallel-dictionaries-single-worker"||mode==="adaptive"?mode:fallback}catch(_){return fallback}}
 async function setIndexingMode(mode,select){
   const previous=indexingModePreference();
   if(!await sendBrowseDiagnostic({event:"indexing_mode",mode})){
@@ -8710,6 +8719,7 @@ async function doSearch(ev){
   const q=$("q").value.trim();
   if(!q){if(browseReturnRouteContext)logBrowseReturnRoute("search_skipped_empty_query");return}
   if(browseReturnRouteContext)logBrowseReturnRoute("search_started",{query:q,mode:$("mode").value,dict:$("dict").value||"all"});
+  activeSearchCountsInBackground=countAllResultsInBackground;
   stopArticleResultCaches();
   if($("mode").value==="wildcards"){
     restoreSearchReturnCacheID=null;
@@ -9073,9 +9083,13 @@ async function fetchSearchPortion(det,start,options={}){
   const configuredSize=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
   const size=normalizedSearchPortionSize(options.size??configuredSize);
   const pageSize=normalizedSearchPortionSize(options.pageSize??configuredSize);
-  const firstPageSize=Math.max(0,Number(options.firstPageSize??det.dataset.searchFirstPageSize)||0);
   const cached=articleResultCaches.get(id);
-  if(cached&&cached.displayQuery===query&&cached.mode===mode&&!cached.error){
+  const savedFirstPageSize=Math.max(0,Number(options.firstPageSize??det.dataset.searchFirstPageSize)||0);
+  const firstPageSize=savedFirstPageSize||
+    (cached&&cached.displayQuery===query&&cached.order===articleCacheFirstOrder?cached.initial:0);
+  if(cached&&cached.displayQuery===query&&cached.mode===mode&&!cached.error&&
+     (cached.background||cached.started||cached.done)){
+    let loaded=null;
     const buttons=[...det.querySelectorAll(":scope>summary .priority-index,:scope>summary .result-page-action")];
     const restoreButtons=()=>{
       for(const button of buttons){
@@ -9098,22 +9112,22 @@ async function fetchSearchPortion(det,start,options={}){
           exact:cached.done,hasNext:!!msg.hasNext};
         renderSlot(box,{...msg,name:cached.name,results:visible},
           mode,query,initial,det.dataset.searchGroup==="true",page);
-        const replacement=box.querySelector(":scope>details.dict");
-        if(replacement)replacement.open=openAfter;
+        loaded=box.querySelector(":scope>details.dict");
+        if(loaded)loaded.open=openAfter;
         window.wudictArticleFind?.refresh();
       },articleCacheAbort?.signal);
     }catch(error){
       if(error.name!=="AbortError")setStatus("⚠ "+esc(error.message));
       if(det.isConnected)restoreButtons();
     }
-    return;
+    return loaded;
   }
   const end=start+size,requested=Math.min(end+1,SEARCH_RESULT_LIMIT);
   const priority=det.querySelector(":scope>summary .priority-index"),actions=[...det.querySelectorAll(":scope>summary .result-page-action")];
   if(priority)priority.disabled=true;
   actions.forEach(button=>button.disabled=true);
   const url="/api/search?q="+encodeURIComponent(query)+"&mode="+encodeURIComponent(mode)+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(id)+"&n="+requested;
-  let received=false;
+  let received=false,loaded=null;
   try{
     await fetchStream(url,msg=>{
       if(msg.t!=="hit"||msg.dict!==id)return;
@@ -9129,19 +9143,20 @@ async function fetchSearchPortion(det,start,options={}){
         if(all.length<=start){
           const fallbackStart=Math.max(0,all.length-size),fallback=all.slice(fallbackStart);
           renderSlot(box,{...msg,results:fallback},mode,query,initial,det.dataset.searchGroup==="true",{...page,start:fallbackStart});
-          const replacement=box.querySelector(":scope>details.dict");if(replacement)replacement.open=openAfter;
+          loaded=box.querySelector(":scope>details.dict");if(loaded)loaded.open=openAfter;
           window.wudictArticleFind?.refresh();
         }
         return;
       }
       renderSlot(box,{...msg,results:visible},mode,query,initial,det.dataset.searchGroup==="true",page);
-      const replacement=box.querySelector(":scope>details.dict");if(replacement)replacement.open=openAfter;
+      loaded=box.querySelector(":scope>details.dict");if(loaded)loaded.open=openAfter;
       window.wudictArticleFind?.refresh();
     });
     if(!received&&det.isConnected){if(priority)priority.disabled=false;actions.forEach(button=>button.disabled=false)}
   }catch(_){
     if(det.isConnected){if(priority)priority.disabled=false;actions.forEach(button=>button.disabled=false)}
   }
+  return loaded;
 }
 document.addEventListener("click",e=>{
   const action=e.target.closest("summary .priority-index,summary .result-page-action");
@@ -9428,6 +9443,8 @@ function navAttach(det){
   requestAnimationFrame(()=>{if(navDet===det)navRefresh()});
 }
 function navDetach(){
+  navBlockToken++;navBlockPending=false;
+  navScrollSettle?.();
   clearTimeout(navTimer);
   navDet=null;navList=null;navIdx=0;
   window.wudictArticleFind?.setFullTextNavigation(null);
@@ -9468,44 +9485,67 @@ function navRefresh(){
 }
 function navPos(){
   const count=navList?.length||0;
+  const current=navList?.[navIdx];
+  const canPrevious=count>=2||!!(current&&window.wudictArticleFind?.searchAcrossBlocks?.()&&window.wudictArticleBlockHasMore?.(current.det,-1));
+  const canNext=count>=2||!!(current&&window.wudictArticleFind?.searchAcrossBlocks?.()&&window.wudictArticleBlockHasMore?.(current.det,1));
   if(navSuppressed||!navDet||!markedAnswer){
     window.wudictArticleFind?.setFullTextNavigation(null);
     return;
   }
   const block=count?window.wudictArticleFindBlockRange?.(navList[navIdx]?.det):"";
   window.wudictArticleFind?.setFullTextNavigation({
-    query:lastQuery,generation:searchSeq,position:count?tx("articleFind.position",{current:navIdx+1,total:count})+(block?" · "+block:""):tx("articleFind.noMatches"),visible:count>0,canNavigate:count>=2,total:count,current:navIdx+1,
+    query:lastQuery,generation:searchSeq,position:count?tx("articleFind.position",{current:navIdx+1,total:count})+(block?" · "+block:""):tx("articleFind.noMatches"),visible:count>0,canNavigate:canPrevious||canNext,canPrevious,canNext,total:count,current:navIdx+1,
     previous:()=>navGo(-1),next:()=>navGo(1),
+    refresh:()=>navPos(),
     goto:page=>navGoto(page),
     seekFrom:(host,node,offset,direction)=>navSeekFrom(host,node,offset,direction),
     close:()=>{navSuppressed=true;navDetach()}
   });
 }
-/* Keep the control and keyboard route on the same test: at least two marks in
-   the active dictionary's rendered articles. */
-function navWalkable(){return !!(window.wudictArticleFind?.fullTextModeActive?.()&&navDet&&navDet.isConnected&&markedAnswer&&!navSuppressed&&navList?.length>=2)}
-function navLoadNextBlock(det){
-  if(!det?.isConnected||det.dataset.ftsPageLoading==="true")return;
-  const start=Number(det.dataset.searchPageStart)||0;
-  const count=Number(det.dataset.searchPageCount)||Number(det.dataset.searchInitial)||0;
-  const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
-  const next=start+(count||size);
-  if(det.dataset.searchHasNext==="false")return;
-  const cache=articleResultCaches.get(det.dataset.searchDict||"");
-  if(cache&&cache.displayQuery===det.dataset.searchQuery&&cache.mode==="fts"){
-    if(cache.error)return;
-    if(!cache.done){det.dataset.ftsPagePending=String(next);return}
-    if(next>=cache.total)return;
-  }
-  const key=[det.dataset.searchDict,det.dataset.searchQuery,next].join("\u0000");
-  if(articleFindPageLoads.has(key))return;
-  articleFindPageLoads.add(key);det.dataset.ftsPageLoading="true";
-  fetchSearchPortion(det,next,{openAfter:true}).finally(()=>{
-    articleFindPageLoads.delete(key);
-    if(det.isConnected)delete det.dataset.ftsPageLoading;
-  });
+/* Keep the control and keyboard route enabled for either another loaded mark
+   or an adjacent result block in the active dictionary. */
+function navWalkable(){
+  const current=navList?.[navIdx];
+  return !!(window.wudictArticleFind?.fullTextModeActive?.()&&navDet&&navDet.isConnected&&markedAnswer&&!navSuppressed&&
+    (navList?.length>=2||current&&window.wudictArticleFind?.searchAcrossBlocks?.()&&
+      (window.wudictArticleBlockHasMore?.(current.det,-1)||window.wudictArticleBlockHasMore?.(current.det,1))));
 }
-window.wudictRequestNextArticleBlock=host=>navLoadNextBlock(host?.closest?.("details.dict"));
+async function requestArticleBlock(det,direction){
+  if(!det?.isConnected||![-1,1].includes(direction))return null;
+  const dict=det.dataset.searchDict||"",query=det.dataset.searchQuery||"",mode=det.dataset.searchMode||"";
+  let cache=articleResultCaches.get(dict);
+  if(cache&&cache.displayQuery===query&&cache.mode===mode&&cache.background&&!cache.done){
+    if(!cache.started)pumpArticleResultCaches();
+    while(!cache.done&&!cache.error&&cache.seq===searchSeq)
+      await new Promise(resolve=>setTimeout(resolve,100));
+    if(!cache.done||cache.error||cache.seq!==searchSeq)return null;
+    det=[...document.querySelectorAll("details.dict")].find(node=>
+      node.dataset.searchDict===dict&&node.dataset.searchQuery===query);
+    if(!det)return null;
+  }
+  const start=Number(det.dataset.searchPageStart)||0;
+  const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
+  const firstPageSize=Math.max(0,Number(det.dataset.searchFirstPageSize)||
+    (cache&&cache.displayQuery===query&&cache.order===articleCacheFirstOrder?cache.initial:0));
+  const page=searchPortionPageAt(start,size,firstPageSize),targetPage=page+direction;
+  if(targetPage<1||det.dataset.searchHasNext==="false"&&direction>0)return null;
+  const target=searchPortionOffset(targetPage,size,firstPageSize);
+  if(cache&&cache.displayQuery===query&&cache.mode===mode&&cache.done&&target>=cache.total)return null;
+  const key=[dict,query,target].join("\u0000");
+  if(articleFindPageLoads.has(key))return null;
+  articleFindPageLoads.add(key);
+  try{return await fetchSearchPortion(det,target,{openAfter:true,pageSize:size,firstPageSize})}
+  finally{articleFindPageLoads.delete(key)}
+}
+window.wudictRequestArticleBlock=(source,direction)=>requestArticleBlock(
+  source?.matches?.("details.dict")?source:source?.closest?.("details.dict"),direction);
+window.wudictArticleBlockHasMore=(det,direction)=>{
+  if(!det?.isConnected)return false;
+  if(direction>0)return det.dataset.searchHasNext!=="false";
+  const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
+  const first=Math.max(0,Number(det.dataset.searchFirstPageSize)||0);
+  return searchPortionPageAt(Number(det.dataset.searchPageStart)||0,size,first)>1;
+};
 window.wudictArticleFindHasMore=()=>[...document.querySelectorAll("details.dict")].some(det=>{
   if(det.dataset.searchHasNext!==undefined)return det.dataset.searchHasNext==="true";
   return !!det.querySelector(":scope>summary .priority-index");
@@ -9515,24 +9555,67 @@ window.wudictArticleFindBlockRange=det=>{
   if(!Number.isInteger(start)||start<=0||!Number.isInteger(count)||count<=0)return "";
   return tx("articleFind.resultBlock",{start:window.wudictI18n.number(start+1),end:window.wudictI18n.number(start+count)});
 };
-function navGo(step){
+let navBlockPending=false,navBlockToken=0;
+function navSelect(item){
+  if(!item)return;
+  for(const m of navList||[])m.el.classList.remove("wu-cur");
+  navIdx=navList.indexOf(item);navDet=item.det;item.el.classList.add("wu-cur");
+  navSettleCurrent(item);navPos();
+}
+async function navCrossResultBlocks(current,step){
+  if(navBlockPending)return;
+  navBlockPending=true;
+  const token=++navBlockToken,generation=searchSeq;
+  let det=current.det,changed=false;
+  try{
+    for(let page=0;page<100&&det&&window.wudictArticleBlockHasMore?.(det,step);page++){
+      const replacement=await window.wudictRequestArticleBlock?.(det,step);
+      if(token!==navBlockToken||generation!==searchSeq||navSuppressed)return;
+      if(!replacement)break;
+      changed=true;det=replacement;
+      for(let check=0;check<10;check++){
+        await new Promise(resolve=>setTimeout(resolve,100));
+        if(token!==navBlockToken||generation!==searchSeq||navSuppressed||!window.wudictArticleFind?.searchAcrossBlocks?.())return;
+        navDet=det;navRefresh();
+        const found=navList.filter(item=>item.det===det);
+        if(found.length){navSelect(step>0?found[0]:found.at(-1));return}
+      }
+    }
+    if(changed){
+      navDet=det;navRefresh();
+      const dicts=[...$("out").querySelectorAll("details.dict")],at=dicts.indexOf(det);
+      const rows=navList.map(item=>({item,at:dicts.indexOf(item.det)}));
+      const next=step>0?rows.find(row=>row.at>at):rows.slice().reverse().find(row=>row.at<at);
+      navSelect(next?.item||(step>0?rows[0]?.item:rows.at(-1)?.item));
+    }else navMove(step);
+  }finally{if(token===navBlockToken)navBlockPending=false}
+}
+function navMove(step){
   if(!navDet||!navDet.isConnected)return navDetach();
   if(!navList||!navList.length||!navList[navIdx].el.isConnected)navRefresh();
   const n=navList.length;if(n<1)return;
-  const current=navList[navIdx];
-  if(step>0&&current&&navList.slice(navIdx+1).every(item=>item.det!==current.det))navLoadNextBlock(current.det);
   navIdx=((navIdx+step)%n+n)%n; // wraps: the list is a ring, not a rail
   for(const m of navList)m.el.classList.remove("wu-cur");
   const cur=navList[navIdx];
   navDet=cur.det;
   if(!cur.det.open)cur.det.open=true;
   cur.el.classList.add("wu-cur");
-  const top=cur.el.getBoundingClientRect().top+
-    (cur.host.shadowRoot?0:cur.host.getBoundingClientRect().top);
-  // Smooth for a neighbouring match, instant across an article: a two-second
-  // glide over 18000px of text is not orientation, it is waiting.
-  revealAt(top,navDet,Math.abs(top)>innerHeight*2);
+  navSettleCurrent(cur);
   navPos();
+}
+function navGo(step){
+  if(navBlockPending)return;
+  if(!navDet||!navDet.isConnected)return navDetach();
+  if(!navList||!navList.length||!navList[navIdx].el.isConnected)navRefresh();
+  const current=navList?.[navIdx];
+  if(step&&current&&window.wudictArticleFind?.searchAcrossBlocks?.()){
+    const boundary=step>0?navList.slice(navIdx+1).every(item=>item.det!==current.det):
+      navList.slice(0,navIdx).every(item=>item.det!==current.det);
+    if(boundary&&window.wudictArticleBlockHasMore?.(current.det,step)){
+      navCrossResultBlocks(current,step);return;
+    }
+  }
+  navMove(step);
 }
 function navGoto(page){
   if(!navList||!navList.length)navRefresh();
@@ -9556,7 +9639,38 @@ function navSeekFrom(host,node,offset,direction){
   if(chosen<0)chosen=dir>0?0:navList.length-1;
   navGoto(chosen+1);
 }
-let navMutationFrame=0;
+let navMutationFrame=0,navScrollSettle=null;
+function navSettleCurrent(cur){
+  navScrollSettle?.();
+  let moved=false,attempts=0,stable=0,timer=0,frame=0,timeout=0,observer=null;
+  const quit=["wheel","touchstart","pointerdown","keydown"];
+  const stop=()=>{
+    observer?.disconnect();clearTimeout(timer);clearTimeout(timeout);cancelAnimationFrame(frame);
+    for(const event of quit)removeEventListener(event,stop);
+    if(navScrollSettle===stop)navScrollSettle=null;
+  };
+  const align=()=>{
+    if(!markedAnswer||navSuppressed||navList?.[navIdx]!==cur||!cur.el.isConnected)return stop();
+    const rect=cur.el.getBoundingClientRect(),hostRect=cur.host.getBoundingClientRect();
+    const offset=cur.host.shadowRoot?0:hostRect.top,top=rect.top+offset,bottom=rect.bottom+offset;
+    const laidOut=!!(rect.width||rect.height),header=cur.det.querySelector(":scope>summary")?.offsetHeight||0;
+    const stripHeight=$("articleFindStrip").hidden?0:$("articleFindStrip").offsetHeight;
+    const ceiling=barH()+header,floor=innerHeight-stripHeight-8;
+    if(laidOut&&top>=ceiling&&top<floor&&Math.min(bottom,top+24)<=floor){
+      if(++stable>=3)return stop();
+    }else{
+      stable=0;
+      if(++attempts>30)return stop();
+      revealAt(laidOut?top:hostRect.top,cur.det,moved||Math.abs(top)>innerHeight*2);
+      moved=true;
+    }
+    timer=setTimeout(align,80);
+  };
+  observer=new ResizeObserver(align);
+  observer.observe(cur.det);observer.observe(cur.host);
+  for(const event of quit)addEventListener(event,stop,{passive:true});
+  navScrollSettle=stop;timeout=setTimeout(stop,4000);frame=requestAnimationFrame(align);
+}
 new MutationObserver(()=>{
   if(!markedAnswer||navSuppressed||navMutationFrame)return;
   navMutationFrame=requestAnimationFrame(()=>{navMutationFrame=0;navRefresh()});

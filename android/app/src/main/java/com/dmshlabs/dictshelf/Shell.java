@@ -269,7 +269,7 @@ final class Shell {
         reply.put("serverAvailable", false);
         org.json.JSONObject prefs = new org.json.JSONObject(GoBridge.prefsSnapshot());
         org.json.JSONObject uiPrefs = prefs.optJSONObject("ui");
-        reply.put("updateChannel", uiPrefs == null ? "release" : uiPrefs.optString("updateChannel", "release"));
+        reply.put("updateChannel", uiPrefs == null ? "beta" : uiPrefs.optString("updateChannel", "beta"));
         reply.put("updateNotifications", uiPrefs == null || !uiPrefs.optBoolean("updateNotificationsOff", false));
         reply.put("logEnabled", SystemLog.enabled());
         reply.put("logBaseEvents", SystemLog.baseEvents());

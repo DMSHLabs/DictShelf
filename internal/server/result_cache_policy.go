@@ -11,10 +11,14 @@ import (
 )
 
 func defaultResultCacheLimitGB() int {
-	if runtime.GOOS == "android" {
+	switch runtime.GOOS {
+	case "android":
 		return indexconst.ResultCacheAndroidDefaultGB
+	case "windows":
+		return indexconst.ResultCacheWindowsDefaultGB
+	default:
+		return indexconst.ResultCacheDesktopDefaultGB
 	}
-	return indexconst.ResultCacheDesktopDefaultGB
 }
 
 func resultCacheLimitBytes(ui *UIPrefs) int64 {
@@ -32,6 +36,9 @@ func (s *Server) uiPrefsSnapshot() *UIPrefs {
 	ui := s.reg.prefs.UI()
 	if ui == nil {
 		ui = &UIPrefs{}
+	}
+	if ui.UpdateChannel == "" {
+		ui.UpdateChannel = defaultUpdateChannelFor(runtime.GOOS)
 	}
 	if ui.ResultCacheLimitGB < 1 {
 		ui.ResultCacheLimitGB = defaultResultCacheLimitGB()

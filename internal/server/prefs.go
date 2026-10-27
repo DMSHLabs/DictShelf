@@ -65,13 +65,15 @@ type DictPref struct {
 // phone that reaches this same server too, and localStorage — keyed by origin
 // — would hand them 15px there, and again the first time SERVER_PORT changes.
 type UIPrefs struct {
-	UpdateChannel           string `json:"updateChannel,omitempty"`          // release, prerelease or beta; Windows defaults to beta
-	UpdateNotificationsOff  bool   `json:"updateNotificationsOff,omitempty"` // notifications are on unless disabled
-	ResultCacheLimitGB      int    `json:"resultCacheLimitGB,omitempty"`
-	ResultCacheNoLimit      bool   `json:"resultCacheNoLimit,omitempty"`
-	SearchReturnCache       string `json:"searchReturnCache,omitempty"`
-	CombinedDictionaryLimit int    `json:"combinedDictionaryLimit,omitempty"`
-	DictIconsOff            bool   `json:"dictIconsOff,omitempty"`
+	UpdateChannel          string `json:"updateChannel,omitempty"`          // release, prerelease or beta; Windows and Android default to beta
+	UpdateNotificationsOff bool   `json:"updateNotificationsOff,omitempty"` // notifications are on unless disabled
+	ResultCacheLimitGB     int    `json:"resultCacheLimitGB,omitempty"`
+	ResultCacheNoLimit     bool   `json:"resultCacheNoLimit,omitempty"`
+	// SkipBackgroundResultCount leaves the initial results uncounted until the reader requests more.
+	SkipBackgroundResultCount bool   `json:"skipBackgroundResultCount,omitempty"`
+	SearchReturnCache         string `json:"searchReturnCache,omitempty"`
+	CombinedDictionaryLimit   int    `json:"combinedDictionaryLimit,omitempty"`
+	DictIconsOff              bool   `json:"dictIconsOff,omitempty"`
 
 	FontSize int `json:"fontSize,omitempty"` // article text, px; 0 = the default
 
@@ -226,11 +228,15 @@ func (u *UIPrefs) normalize() {
 	switch u.UpdateChannel {
 	case "release", "prerelease", "beta":
 	default:
-		u.UpdateChannel = "release"
-		if runtime.GOOS == "windows" {
-			u.UpdateChannel = "beta"
-		}
+		u.UpdateChannel = defaultUpdateChannelFor(runtime.GOOS)
 	}
+}
+
+func defaultUpdateChannelFor(goos string) string {
+	if goos == "windows" || goos == "android" {
+		return "beta"
+	}
+	return "release"
 }
 
 // facetIDs bounds a hand-edited or hostile groupsOff to what a facet id can
@@ -319,6 +325,13 @@ func (p *Prefs) indexingMode() (string, bool) {
 		return "adaptive", true
 	}
 	return "", false
+}
+
+func defaultIndexingModeFor(goos string) string {
+	if goos == "windows" || goos == "android" {
+		return "parallel-dictionaries-single-worker"
+	}
+	return "adaptive"
 }
 
 func (p *Prefs) setIndexingMode(mode string) error {

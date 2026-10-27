@@ -3571,6 +3571,12 @@ components:
             Opens every section that has a result, in the user's own order.
             `fastFirst`, which opens one section, wins over it and over
             `openN`. Remembered state for wudict's own UI.
+        skipBackgroundResultCount:
+          type: boolean
+          description: >
+            Disables the background pass that counts all matching articles
+            after the initial results. Absent means the pass is enabled.
+            Remembered state for wudict's own UI.
         speakOff:
           type: boolean
           description: >

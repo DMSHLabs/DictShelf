@@ -1,3 +1,5 @@
+2026-10-28 Settings → Results now labels the background match count in EN/RU and saves its opt-out in `state.json`. Layout and fresh-profile platform defaults remain to be checked in the app.
+
 # Localization: status and next tasks
 
 2026-10-28 Full-text search mode hints now have matching EN/RU example text,

@@ -29,10 +29,10 @@
   function threshold() {
     try {
       const saved = localStorage.getItem(thresholdKey);
-      if (saved === null) return 50000;
+      if (saved === null) return window.wudictAndroidGo || window.wudictAndroidShell ? 10000 : 50000;
       const value = Number(saved);
-      return thresholds.includes(value) ? value : 50000;
-    } catch (_) { return 50000; }
+      return thresholds.includes(value) ? value : (window.wudictAndroidGo || window.wudictAndroidShell ? 10000 : 50000);
+    } catch (_) { return window.wudictAndroidGo || window.wudictAndroidShell ? 10000 : 50000; }
   }
   function setThreshold(value) {
     value = Number(value);
