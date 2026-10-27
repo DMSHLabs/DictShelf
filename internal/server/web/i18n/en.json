@@ -1038,6 +1038,8 @@
   "search.groupUnavailable": "“{name}” contains dictionaries, but none are available for search — check Dictionary settings",
   "search.noDicts": "To add dictionaries, choose",
   "search.addDictionaries": "Edit Folders",
+  "search.noConnectedDictionaries": "No dictionaries are connected.",
+  "search.chooseDictionaries": "To choose dictionaries, go to ☰ → {editFolders}.",
   "search.morphAll": "Nothing found for “{query}” — showing results for {forms}",
   "search.morphSome": "Some dictionaries do not list “{query}” — also showing results for {forms}",
   "search.noQuery": "No results for “{query}”",
