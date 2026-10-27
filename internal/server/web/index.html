@@ -1310,6 +1310,7 @@ const articleResultCaches=new Map();
 const articleFindPageLoads=new Set();
 let articleCacheQueue=[],articleCacheActive=0,articleCacheAbort=null,articleCacheSeq=0,articleCacheFinished=0,articleCacheTotal=0;
 let articleCacheGroupID="",articleCacheGroupCount=1;
+let articleCacheSearchSettled=false,articleCacheFirstOrder=Infinity;
 function newArticleResultCacheID(){
   const bytes=new Uint8Array(16);
   try{crypto.getRandomValues(bytes)}catch(_){for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256)}
@@ -1320,6 +1321,7 @@ function stopArticleResultCaches(){
   for(const state of articleResultCaches.values())clearTimeout(state.indexTimer);
   articleCacheQueue=[];articleCacheActive=0;articleCacheFinished=0;articleCacheTotal=0;
   articleCacheGroupID="";articleCacheGroupCount=1;
+  articleCacheSearchSettled=false;articleCacheFirstOrder=Infinity;
   articleResultCaches.clear();maskTaskFinish("search-results");
 }
 function cancelArticleResultCaches(){
@@ -1368,8 +1370,35 @@ function queueArticleResultCache(msg,mode,displayQuery,seq){
   const state={id:articleCacheGroupID||newArticleResultCacheID(),count:articleCacheGroupCount,order:msg.i||0,
     dict:msg.dict,name:msg.name||msg.dict,query:msg.term||displayQuery,
     displayQuery,mode,rung:msg.rung||"",ignore:ignoreDiacritics,total:msg.results.length,initial:msg.results.length,
+    initialPageRequested:false,
     done:false,error:"",started:false,seq,lastPaint:0,indexTimer:0,indexing:false};
   articleResultCaches.set(msg.dict,state);articleCacheQueue.push(state);articleCacheTotal++;
+}
+function finishArticleCacheInitialPage(state){
+  if(!articleCacheSearchSettled||state.seq!==searchSeq||!state.done||state.error||state.initialPageRequested)return;
+  const det=[...document.querySelectorAll("details.dict")].find(node=>
+    node.dataset.searchDict===state.dict&&node.dataset.searchMode===state.mode&&
+    node.dataset.searchQuery===state.displayQuery);
+  if(!det)return;
+  const first=state.order===articleCacheFirstOrder,portion=searchPortionSize();
+  const pendingStart=Number(det.dataset.ftsPagePending);
+  if(Number.isInteger(pendingStart)&&pendingStart>0){
+    delete det.dataset.ftsPagePending;
+    state.initialPageRequested=true;
+    fetchSearchPortion(det,pendingStart,{openAfter:true,pageSize:portion,firstPageSize:first?state.initial:0});
+    return;
+  }
+  if(state.total<=state.initial)return;
+  state.initialPageRequested=true;
+  fetchSearchPortion(det,0,{openAfter:state.mode!=="fts",size:first?state.initial:portion,
+    pageSize:portion,firstPageSize:first?state.initial:0});
+}
+function settleArticleCacheSearch(seq){
+  if(seq!==searchSeq)return;
+  articleCacheSearchSettled=true;articleCacheFirstOrder=Infinity;
+  for(const state of articleResultCaches.values())if(state.seq===seq)
+    articleCacheFirstOrder=Math.min(articleCacheFirstOrder,state.order);
+  for(const state of articleResultCaches.values())finishArticleCacheInitialPage(state);
 }
 function pumpArticleResultCaches(){
   if(!articleCacheQueue.length&&articleCacheActive===0){maskTaskFinish("search-results");return}
@@ -1394,17 +1423,7 @@ function pumpArticleResultCaches(){
       articleCacheActive--;articleCacheFinished++;
       maskTaskUpdate("search-results",tx("search.countingArticles"),articleCacheFinished,articleCacheTotal);
       updateArticleCacheCard(state);pumpArticleResultCaches();
-      if(state.done&&!state.error){
-        const det=[...document.querySelectorAll("details.dict")].find(node=>node.dataset.searchDict===state.dict&&
-          node.dataset.searchMode===state.mode&&node.dataset.searchQuery===state.displayQuery);
-        const pendingStart=Number(det?.dataset.ftsPagePending);
-        if(det&&Number.isInteger(pendingStart)&&pendingStart>0){
-          delete det.dataset.ftsPagePending;
-          fetchSearchPortion(det,pendingStart,{openAfter:true});
-        }else if(det&&state.total>state.initial){
-          fetchSearchPortion(det,0,{openAfter:state.mode!=="fts"});
-        }else updateArticleCacheCard(state);
-      }
+      finishArticleCacheInitialPage(state);
     });
   }
 }
@@ -1423,7 +1442,7 @@ async function requestPriorityIndex(state,button){
       }
       state.indexing=false;state.indexTimer=0;
       state.id=newArticleResultCacheID();state.total=state.initial;state.done=false;state.error="";
-      state.started=false;state.pageRequested=false;
+      state.started=false;state.pageRequested=false;state.initialPageRequested=false;
       articleCacheTotal++;
       articleCacheQueue.push(state);pumpArticleResultCaches();
     }catch(error){
@@ -1438,6 +1457,18 @@ async function requestPriorityIndex(state,button){
 function normalizedSearchPortionSize(value){
   const n=Math.floor(Number(value));
   return Number.isFinite(n)?Math.max(5,Math.min(500,Math.round(n/5)*5)):20;
+}
+function searchPortionPages(total,size,firstPageSize=0){
+  if(firstPageSize>0&&total>firstPageSize)return 1+Math.ceil((total-firstPageSize)/size);
+  return Math.max(1,Math.ceil(total/size));
+}
+function searchPortionPageAt(start,size,firstPageSize=0){
+  if(firstPageSize>0&&start>=firstPageSize)return 2+Math.floor((start-firstPageSize)/size);
+  return Math.floor(start/size)+1;
+}
+function searchPortionOffset(page,size,firstPageSize=0){
+  if(page<=1)return 0;
+  return (firstPageSize>0?firstPageSize:size)+(page-2)*size;
 }
 function searchPortionSize(){
   try{return normalizedSearchPortionSize(localStorage.getItem(SEARCH_PORTION_SIZE_KEY)||20)}catch(_){return 20}
@@ -6833,7 +6864,8 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
       `<button type="button" class="result-page-action" data-dir="next" aria-label="${escAttr(tx("search.nextArticleBlock"))}" title="${escAttr(tx("search.nextArticleBlock"))}" ${paging.hasNext?"":"disabled"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 4 8 8-8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button></span>`;
   })():"";
   det.dataset.searchMode=mode;det.dataset.searchQuery=q;det.dataset.searchDict=h.dict;
-  det.dataset.searchInitial=String(perDict);det.dataset.searchPageSize=String(pageSize);det.dataset.searchGroup=String(!!group);
+  det.dataset.searchInitial=String(perDict);det.dataset.searchPageSize=String(pageSize);
+  det.dataset.searchFirstPageSize=String(paging?.firstPageSize||0);det.dataset.searchGroup=String(!!group);
   if(paging){det.dataset.searchPageStart=String(paging.start||0);det.dataset.searchPageCount=String(h.results.length);det.dataset.searchHasNext=String(!!paging.hasNext);det.dataset.searchExact=String(!!paging.exact);det.dataset.searchTotal=String(paging.total||0);det.dataset.searchLowerBound=String(paging.lowerBound||0)}
   // Only for a multi-word full-text query: a single word has no phrase to fail
   // at, and every other mode has no ladder at all.
@@ -8212,8 +8244,9 @@ function searchPortionGotoOpen(det){
   if(!det?.isConnected)return;
   const total=Number(det.dataset.searchTotal)||0;
   const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
+  const firstPageSize=Math.max(0,Number(det.dataset.searchFirstPageSize)||0);
   if(total<1||size<1)return;
-  const pages=Math.max(1,Math.ceil(total/size)),current=Math.floor((Number(det.dataset.searchPageStart)||0)/size)+1;
+  const pages=searchPortionPages(total,size,firstPageSize),current=searchPortionPageAt(Number(det.dataset.searchPageStart)||0,size,firstPageSize);
   searchPortionGotoDetails=det;maskGotoTarget="searchPortion";
   const exact=det.dataset.searchExact==="true";
   const input=$("maskGotoInput");$("maskGotoHeading").textContent=tx("search.gotoArticleBlock");
@@ -8225,9 +8258,10 @@ function maskGotoApply(){
   const input=$("maskGotoInput"),page=Number(input.value);
   if(maskGotoTarget==="searchPortion"){
     const det=searchPortionGotoDetails;
-    const total=Number(det?.dataset.searchTotal)||0,size=normalizedSearchPortionSize(det?.dataset.searchPageSize||searchPortionSize()),pages=Math.max(1,Math.ceil(total/size));
+    const total=Number(det?.dataset.searchTotal)||0,size=normalizedSearchPortionSize(det?.dataset.searchPageSize||searchPortionSize());
+    const firstPageSize=Math.max(0,Number(det?.dataset.searchFirstPageSize)||0),pages=searchPortionPages(total,size,firstPageSize);
     if(!det?.isConnected||!Number.isInteger(page)||page<1||page>pages){input.reportValidity();return}
-    $("maskGotoDialog").close();searchPortionGotoDetails=null;fetchSearchPortion(det,(page-1)*size);return;
+    $("maskGotoDialog").close();searchPortionGotoDetails=null;fetchSearchPortion(det,searchPortionOffset(page,size,firstPageSize));return;
   }
   if(maskGotoTarget==="match"){
     const available=maskFindCommittedRows().reduce((sum,row)=>sum+(row.diskCache?row.total||0:row.streamPositions?.length||0),0);
@@ -8962,6 +8996,7 @@ async function doSearch(ev){
       }else if(msg.t==="end"){
         if(browseReturnRouteContext)logBrowseReturnRoute("search_stream_end",{
           slots:searchDiagSlots.length,resultCount:searchDiagSlots.reduce((sum,slot)=>sum+(slot.results||0),0),anyResults});
+        settleArticleCacheSearch(seq);
         pumpArticleResultCaches();
         searchDiagLog("search_end",{completed:searchProgressDone,total:searchProgressTotal});
         finishSearchProgress(seq);
@@ -9020,7 +9055,7 @@ async function doSearch(ev){
   }catch(err){
     if(err.name==="AbortError"){searchDiagLog("search_aborted",{completed:searchProgressDone,total:searchProgressTotal});return}
     searchDiagLog("search_error",{completed:searchProgressDone,total:searchProgressTotal,detail:err.message});
-    if(seq===searchSeq)setStatus("⚠ "+esc(err.message))
+    if(seq===searchSeq){settleArticleCacheSearch(seq);setStatus("⚠ "+esc(err.message))}
   }
   finally{
     // Only the newest search may stop the glyph. An aborted one has already
@@ -9034,7 +9069,11 @@ async function fetchSearchPortion(det,start,options={}){
   if(!det?.isConnected)return;
   const openAfter=options.openAfter??true;
   const box=det.parentElement,mode=det.dataset.searchMode||"prefix",query=det.dataset.searchQuery||"",id=det.dataset.searchDict||"";
-  const initial=Number(det.dataset.searchInitial)||5,size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
+  const initial=Number(det.dataset.searchInitial)||5;
+  const configuredSize=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
+  const size=normalizedSearchPortionSize(options.size??configuredSize);
+  const pageSize=normalizedSearchPortionSize(options.pageSize??configuredSize);
+  const firstPageSize=Math.max(0,Number(options.firstPageSize??det.dataset.searchFirstPageSize)||0);
   const cached=articleResultCaches.get(id);
   if(cached&&cached.displayQuery===query&&cached.mode===mode&&!cached.error){
     const buttons=[...det.querySelectorAll(":scope>summary .priority-index,:scope>summary .result-page-action")];
@@ -9055,7 +9094,7 @@ async function fetchSearchPortion(det,start,options={}){
         cached.total=msg.total||0;cached.done=!!msg.complete;
         const visible=msg.results||[];
         if(!visible.length){restoreButtons();updateArticleCacheCard(cached);return}
-        const page={start:msg.start||0,size,total:cached.total,lowerBound:cached.total,
+        const page={start:msg.start||0,size:pageSize,firstPageSize,total:cached.total,lowerBound:cached.total,
           exact:cached.done,hasNext:!!msg.hasNext};
         renderSlot(box,{...msg,name:cached.name,results:visible},
           mode,query,initial,det.dataset.searchGroup==="true",page);
@@ -9085,7 +9124,7 @@ async function fetchSearchPortion(det,start,options={}){
       const hasNext=Number.isFinite(knownTotal)?visibleEnd<knownTotal:all.length>visibleEnd;
       const lowerBound=Math.max(visibleEnd+(hasNext?1:0),requested===SEARCH_RESULT_LIMIT&&all.length>=SEARCH_RESULT_LIMIT?SEARCH_RESULT_LIMIT:0);
       const capped=requested===SEARCH_RESULT_LIMIT&&visibleEnd>=SEARCH_RESULT_LIMIT-1&&all.length>=SEARCH_RESULT_LIMIT;
-      const page={start,size,total:exact?total:lowerBound,lowerBound,exact,hasNext:hasNext&&!capped};
+      const page={start,size:pageSize,firstPageSize,total:exact?total:lowerBound,lowerBound,exact,hasNext:hasNext&&!capped};
       if(!visible.length){
         if(all.length<=start){
           const fallbackStart=Math.max(0,all.length-size),fallback=all.slice(fallbackStart);
@@ -9117,8 +9156,9 @@ document.addEventListener("click",e=>{
   e.preventDefault();e.stopPropagation();
   if(action.dataset.dir==="goto"){searchPortionGotoOpen(action.closest("details.dict"));return}
   const det=action.closest("details.dict"),size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
-  const current=Math.max(0,Number(det.dataset.searchPageStart)||0);
-  fetchSearchPortion(det,Math.max(0,current+(action.dataset.dir==="next"?size:-size)));
+  const current=Math.max(0,Number(det.dataset.searchPageStart)||0),firstPageSize=Math.max(0,Number(det.dataset.searchFirstPageSize)||0);
+  const page=searchPortionPageAt(current,size,firstPageSize)+(action.dataset.dir==="next"?1:-1);
+  fetchSearchPortion(det,searchPortionOffset(Math.max(1,page),size,firstPageSize));
 });
 
 /* Typing updates suggestions; committing the field updates articles. */
