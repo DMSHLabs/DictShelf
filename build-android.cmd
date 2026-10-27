@@ -184,13 +184,10 @@ if not defined VERSION (
 )
 
 rem Set WUDICT_VERSION to build the same named release as CI, for example:
-rem   set WUDICT_VERSION=wudict2-v3.8.0
+rem   set WUDICT_VERSION=dictshelf-v1.02.01
 rem Without an override, use the version derived from this checkout's Git history.
 if defined WUDICT_VERSION set "VERSION=%WUDICT_VERSION%"
-
-echo DictShelf version:
-echo   %VERSION%
-echo.
+call :print_version
 
 rem ------------------------------------------------------------
 rem Output path for native Android binary
@@ -327,6 +324,7 @@ echo ============================================================
 echo BUILD SUCCESSFUL
 echo ============================================================
 echo.
+call :print_version
 
 echo APK:
 echo   %CD%\%APK%
@@ -348,6 +346,15 @@ if defined EMU_X86 (
 echo.
 
 endlocal
+exit /b 0
+
+:print_version
+set "DISPLAY_VERSION=dictshelf-%VERSION%"
+if /i "%VERSION:~0,1%"=="v" set "DISPLAY_VERSION=dictshelf-%VERSION%"
+for /f "tokens=2 delims=v" %%V in ("%VERSION%") do set "DISPLAY_VERSION=dictshelf-v%%V"
+echo DictShelf version:
+echo   %DISPLAY_VERSION%
+echo.
 exit /b 0
 
 :build_bridge

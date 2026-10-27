@@ -103,12 +103,14 @@ if /i "%BUILD_TYPE%"=="installer" (
     )
     set "VERSION="
     for /f "tokens=2" %%V in ('DictShelf.exe --version') do if not defined VERSION set "VERSION=%%V"
+    call :print_version
     call :find_iscc
     if errorlevel 1 exit /b 1
     call :make_installer
     if errorlevel 1 exit /b 1
     echo.
     echo BUILD SUCCESSFUL
+    call :print_version
     echo Installer:
     echo   %SETUP%
     endlocal
@@ -149,10 +151,7 @@ if not defined VERSION (
 
 rem CI supplies the release tag so installer metadata matches the published artifact.
 if defined WUDICT_VERSION set "VERSION=%WUDICT_VERSION%"
-
-echo DictShelf version:
-echo   %VERSION%
-echo.
+call :print_version
 
 rem ------------------------------------------------------------
 rem Windows desktop builds require cgo; never silently build purego
@@ -309,6 +308,7 @@ echo ============================================================
 echo BUILD SUCCESSFUL
 echo ============================================================
 echo.
+call :print_version
 
 echo Binary:
 echo   %CD%\%OUTPUT_EXE%
@@ -332,6 +332,15 @@ echo   %OUTPUT_EXE% --help            every command and flag
 echo.
 
 endlocal
+exit /b 0
+
+:print_version
+set "DISPLAY_VERSION=dictshelf-%VERSION%"
+if /i "%VERSION:~0,1%"=="v" set "DISPLAY_VERSION=dictshelf-%VERSION%"
+for /f "tokens=2 delims=v" %%V in ("%VERSION%") do set "DISPLAY_VERSION=dictshelf-v%%V"
+echo DictShelf version:
+echo   %DISPLAY_VERSION%
+echo.
 exit /b 0
 
 rem ============================================================
@@ -476,9 +485,9 @@ if not defined SETUP (
     exit /b 1
 )
 
-rem Both v1.2.3 and this fork's wudict2-v1.2.3 tags provide the numeric
+rem Both v1.2.3 and dictshelf-v1.2.3 tags provide the numeric
 rem installer version. Unversioned development builds still read 0.0.0.
-echo %VERSION% | findstr /r /c:"^v[0-9]" /c:"^wudict2-v[0-9]" >nul
+echo %VERSION% | findstr /r /c:"^v[0-9]" /c:"^[A-Za-z0-9_-]*-v[0-9]" >nul
 if errorlevel 1 (
     echo.
     echo Note: the installer's file name and numeric version read 0.0.0 because
