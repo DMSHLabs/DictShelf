@@ -137,6 +137,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <title>DictShelf</title>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="stylesheet" href="/assets/app.css?v={{APPCSS}}">
+<link rel="stylesheet" href="/assets/checkbox.css?v={{CHECKBOXCSS}}">
 <link rel="stylesheet" href="/assets/workspace.css?v={{WORKSPACECSS}}">
 <link rel="stylesheet" href="/assets/headword-control.css?v={{HEADWORDCSS}}">
 <link rel="stylesheet" href="/assets/history.css?v={{HISTORYCSS}}">
@@ -268,11 +269,8 @@ window.wudictFontScale=(function(){
 <button type="button" class="choice-btn themed-select-btn" id="modeMenuBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="{{T:search.mode}}" disabled></button>
 <span class="choice-menu menu-card themed-select-menu" id="modeMenu" role="listbox" aria-label="{{T:search.mode}}" data-w="wide" hidden></span>
 </span>
-<!-- The dictionary scope's seg is NOT here in the markup: it lives in the
-     status bar while that bar is on screen and is moved back to this exact spot
-     (right after the mode seg) when the bar is hidden — before the first search,
-     or whenever the reader switches it off. See placeDictSeg: the node moves,
-     the mechanism does not. -->
+<!-- The dictionary scope's seg lives in the always-visible bottom bar and is
+     moved into its gap by placeDictSeg: the node moves, the mechanism does not. -->
 </span>
 <!-- No submit button, at any width. The form has exactly one field that
      blocks implicit submission (#q; <select> does not count), so Enter
@@ -293,6 +291,7 @@ window.wudictFontScale=(function(){
      state is truly 0px rather than 0px plus padding. -->
 <div id="status" role="status" aria-live="polite"><div class="msg"><div class="txt" id="statusMsg"></div></div></div>
 <div id="outdatedNotice" class="bulkbox outdated-notice" role="status" hidden></div>
+<div id="noDictionariesNotice" class="empty no-dictionaries" hidden></div>
 <div id="out"></div>
 <section id="maskView" aria-label="{{T:search.wildcardsResults}}" hidden>
   <div class="mask-chrome">
@@ -363,7 +362,7 @@ window.wudictFontScale=(function(){
      screen - a phone showed the chip pressed against the ▼ with no air at all.
      Under pressure the chip is what gives (its label ellipsises, and the fold's
      handle shortens itself - see app.css), never the spacing around it. -->
-<div class="sbar" id="sbar" hidden>
+<div class="sbar" id="sbar">
   <span class="rpad edge" aria-hidden="true"></span>
   <button type="button" class="btn" id="sbarPrev" aria-label="{{T:search.previousDict}}" title="{{T:search.jumpAbove}}">▲</button>
   <span class="rpad arrow-gap" aria-hidden="true"></span>
@@ -496,11 +495,7 @@ window.wudictFontScale=(function(){
        different kind of thing. Buttons and not a checkbox, as before; the
        highlighter's pen went with the button, because the label it now wears
        says the same thing in the register the other two labels use. -->
-  <span class="seg" role="group" aria-label="{{T:panel.highlightLabel}}">
-    <span>{{T:panel.highlight}}</span>
-    <button type="button" class="act" id="hlOn" aria-pressed="true" title="{{T:panel.highlightOn}}">{{T:panel.on}}</button>
-    <button type="button" class="act" id="hlOff" aria-pressed="false" title="{{T:panel.highlightOff}}">{{T:panel.off}}</button>
-  </span>
+  <label class="reading-checkbox"><input class="panel-checkbox" type="checkbox" id="hlToggle" checked> {{T:panel.highlight}}</label>
   <!-- Selecting text in an article offers a speaker that reads it aloud in a
        system voice (D148). Here because it costs nothing until a reader
        selects something, and a reader who never wants it should be able to
@@ -513,11 +508,7 @@ window.wudictFontScale=(function(){
        this row can say WHICH sense is offered; it moves into the label with
        the words, so the three rows keep one column of names and one column of
        pairs. -->
-  <span class="seg" role="group" aria-label="{{T:panel.speakLabel}}" id="speakSeg">
-    <span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.5 6h2.5l3.5-3v10l-3.5-3H2.5z"/><path class="wave" d="M11 5.8a3 3 0 0 1 0 4.4"/><path class="wave" d="M12.9 3.9a5.8 5.8 0 0 1 0 8.2"/></svg>{{T:panel.speak}}</span>
-    <button type="button" class="act" id="speakOn" aria-pressed="true" title="{{T:panel.speakOn}}">{{T:panel.on}}</button>
-    <button type="button" class="act" id="speakOff" aria-pressed="false" title="{{T:panel.speakOff}}">{{T:panel.off}}</button>
-  </span>
+  <label class="reading-checkbox" id="speakRow"><input class="panel-checkbox" type="checkbox" id="speakToggle" checked> <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.5 6h2.5l3.5-3v10l-3.5-3H2.5z"/><path class="wave" d="M11 5.8a3 3 0 0 1 0 4.4"/><path class="wave" d="M12.9 3.9a5.8 5.8 0 0 1 0 8.2"/></svg>{{T:panel.speak}}</label>
   <!-- Which section unfolds itself once the answers start arriving (D142) used
        to be chosen here, as a pair: "Open first: My order | Fastest". The pair
        is GONE (2026-09-27, the reader's call) and "My order" is the only
@@ -531,25 +522,6 @@ window.wudictFontScale=(function(){
        stored value (loadPrefs no longer applies st.ui.fastFirst), so nobody
        who once chose "Fastest" is stranded in a strategy with no row left to
        explain it - the same call the removed `sortMine` got above. -->
-  <!-- And what stands in its place is the GROUP the search is on, as the
-       reader's own drop-down: the bar names the group in force and the card
-       under it lists the groups, the answer ticked. It is the app's drawn menu
-       (.choice-btn/.choice-menu), not a <select>, for the reason the Presets
-       row gives: the platform's popup can wear neither the app's paper nor its
-       wallpaper. It is the same choice the native window's spinner makes at the
-       top of the dictionary list, and it goes through the same function
-       (wudictPickerGroupChanged) — store the group, drop the one-dictionary
-       scope, re-run the search — so the two cannot disagree.
-       It is here because this is where the reader's attention lands when a
-       search comes back from the wrong dictionaries, and because the status
-       bar's scope chip lives in a bar that only appears with results: this is
-       the door for scoping BEFORE any search exists. A group's name is
-       truncated by CSS (the bar is one line). -->
-  <div class="facts dictionary-group-row" id="pickerGroupRow">
-    <span class="rowlabel" id="pickerGroupLabel">{{T:panel.searchGroups}}</span>
-    <button type="button" class="choice-btn panel-dropdown" id="pickerGroupBtn" aria-haspopup="listbox" aria-labelledby="pickerGroupLabel" title="{{T:panel.chooseGroup}}"></button>
-    <div class="choice-menu menu-card" id="pickerGroupMenu" role="listbox" aria-label="{{T:panel.groups}}" data-w="anchor" hidden></div>
-  </div>
   <!-- There was a third pair here, "Sort dictionaries: Alphabetical | My
        order", and it is gone with the choice it offered: the picker now lists
        the library in the reader's own arrangement and in no other, which is
@@ -660,13 +632,7 @@ window.wudictFontScale=(function(){
        the server answers with (presetRowsPaint). The row is hidden while
        there is nothing to switch — the preview off, or no configuration
        folder to remember the choice in. -->
-  <div class="facts" id="compactRow" hidden>
-    <span class="rowlabel">{{T:panel.compact}}</span>
-    <span class="seg" role="group" aria-label="{{T:panel.compactLabel}}" id="compactSeg">
-      <button type="button" class="act" data-layer="on" id="compactOn" aria-pressed="false" title="{{T:panel.compactOn}}">{{T:panel.on}}</button>
-      <button type="button" class="act" data-layer="off" id="compactOff" aria-pressed="true" title="{{T:panel.compactOff}}">{{T:panel.off}}</button>
-    </span>
-  </div>
+  <label class="facts panel-setting-checkbox" id="compactRow" hidden><input class="panel-checkbox" type="checkbox" data-layer-checkbox="on" id="compactToggle"> {{T:panel.compact}}</label>
   <!-- Examples, the second layer with a handle on the panel. Same reasoning as
        Compact above, and the same machinery: the pair and the sheet's checkbox
        are one switch, painted from one payload (presetRowsPaint), and the row
@@ -679,23 +645,11 @@ window.wudictFontScale=(function(){
        this layer's article half (presets/examples/) is the rule that hides
        them - so the switch needs no call into the script, and folding examples
        back is taking a rule away, in the articles already on screen included. -->
-  <div class="facts" id="examplesRow" hidden>
-    <span class="rowlabel">{{T:panel.examples}}</span>
-    <span class="seg" role="group" aria-label="{{T:panel.examplesLabel}}" id="examplesSeg">
-      <button type="button" class="act" data-layer="off" id="examplesOn" aria-pressed="true" title="{{T:panel.examplesOn}}">{{T:panel.show}}</button>
-      <button type="button" class="act" data-layer="on" id="examplesOff" aria-pressed="false" title="{{T:panel.examplesOff}}">{{T:panel.hide}}</button>
-    </span>
-  </div>
+  <label class="facts panel-setting-checkbox" id="examplesRow" hidden><input class="panel-checkbox" type="checkbox" data-layer-checkbox="off" id="examplesToggle"> {{T:panel.showExamples}}</label>
   <label id="examplesExtraRow" class="examples-extra" hidden><input class="panel-checkbox" type="checkbox" id="hideUnmarkedExamples"> {{T:panel.hideUnmarkedExamples}}</label>
   <label id="exampleBackgroundRow" class="examples-extra" hidden><input class="panel-checkbox" type="checkbox" id="dimExampleBackground"> {{T:panel.dimExampleBackground}}</label>
   <label id="exampleTextFadeRow" class="examples-extra" hidden><input class="panel-checkbox" type="checkbox" id="fadeExampleText"> {{T:panel.fadeExampleText}}</label>
-  <div class="facts">
-    <span class="rowlabel">{{T:panel.dictionaryIcons}}</span>
-    <span class="seg" role="group" aria-label="{{T:panel.dictionaryIcons}}">
-      <button type="button" class="act" id="dictIconsOn" aria-pressed="true">{{T:panel.show}}</button>
-      <button type="button" class="act" id="dictIconsOff" aria-pressed="false">{{T:panel.hide}}</button>
-    </span>
-  </div>
+  <label class="facts panel-setting-checkbox"><input class="panel-checkbox" type="checkbox" id="dictIconsToggle" checked> {{T:panel.showDictionaryIcons}}</label>
   <!-- Whether the status bar is there at all. It is the bar's only door, so it
        has to be findable by someone who has just hidden it - hence a row here,
        in the drawer, beside the controls the bar duplicates, rather than in the
@@ -709,13 +663,6 @@ window.wudictFontScale=(function(){
        Stored in localStorage, not in state.json: it is a choice about this
        window, like wide mode, not a reading habit that should follow the reader
        to another device. -->
-  <div class="facts" id="sbarRow">
-    <span class="rowlabel">{{T:panel.statusBar}}</span>
-    <span class="seg" role="group" aria-label="{{T:panel.barLabel}}" id="sbarSeg">
-      <button type="button" class="act" id="sbarOn" aria-pressed="true" title="{{T:panel.barOn}}">{{T:panel.show}}</button>
-      <button type="button" class="act" id="sbarOff" aria-pressed="false" title="{{T:panel.barOff}}">{{T:panel.hide}}</button>
-    </span>
-  </div>
   <!-- One door per subject, and the sheet opens on the one that was asked for.
        It used to be a single row called "Screen, background, CSS…" opening one
        sheet with all three groups expanded - so a reader who wanted two rows
@@ -735,6 +682,35 @@ window.wudictFontScale=(function(){
     <button type="button" class="mrow door" data-styler="presets" title="{{T:panel.layersHint}}">{{T:panel.layersDoor}}</button>
     <button type="button" class="mrow door" data-styler="css" title="{{T:panel.cssHint}}">{{T:panel.cssDoor}}</button>
   </div>
+</details>
+
+
+
+<details class="sect" data-panel-section="history" open>
+  <summary class="sect-h">{{T:panel.history}}</summary>
+  <!-- The search box's memory, which is neither a look nor a result: its own
+       section because it is the one setting that belongs to the field you type
+       in. -->
+  <div class="facts">
+    <span class="history-controls">
+      <label class="history-setting">{{T:panel.historyLength}}
+        <input id="historyLength" type="number" min="0" max="100" step="1" inputmode="numeric" value="20" aria-label="{{T:panel.historyLengthLabel}}">
+      </label>
+      <button type="button" class="act" id="clearHistory" disabled>{{T:panel.clear}}</button>
+    </span>
+  </div>
+</details>
+
+<details class="sect" data-panel-section="tools" open>
+<summary class="sect-h">{{T:export.tools}}</summary>
+<div class="facts" id="portableTool" hidden><button type="button" class="mrow" id="openPortable">{{T:portable.open}}</button></div>
+<div class="facts"><button type="button" class="mrow" id="openHeadwordExport">{{T:export.open}}</button></div>
+</details>
+<details class="sect" id="hotkeysSection" hidden data-panel-section="hotkeys" open>
+  <summary class="sect-h">{{T:hotkeys.title}}</summary>
+  <div class="facts hotkey-row"><label class="sys-row"><span class="sys-label">{{T:hotkeys.showWindow}}</span><input type="text" id="hotkeyShowWindow" autocomplete="off" spellcheck="false"></label></div>
+  <div class="facts hotkey-row"><label class="sys-row"><span class="sys-label">{{T:hotkeys.translateClipboard}}</span><input type="text" id="hotkeyTranslateClipboard" autocomplete="off" spellcheck="false"></label></div>
+  <p class="sys-hint">{{T:hotkeys.hint}}</p>
 </details>
 
 <details class="sect" data-panel-section="fonts" open>
@@ -864,33 +840,6 @@ window.wudictFontScale=(function(){
   </div>
 </details>
 
-<details class="sect" data-panel-section="history" open>
-  <summary class="sect-h">{{T:panel.history}}</summary>
-  <!-- The search box's memory, which is neither a look nor a result: its own
-       section because it is the one setting that belongs to the field you type
-       in. -->
-  <div class="facts">
-    <span class="history-controls">
-      <label class="history-setting">{{T:panel.historyLength}}
-        <input id="historyLength" type="number" min="0" max="100" step="1" inputmode="numeric" value="20" aria-label="{{T:panel.historyLengthLabel}}">
-      </label>
-      <button type="button" class="act" id="clearHistory" disabled>{{T:panel.clear}}</button>
-    </span>
-  </div>
-</details>
-
-<details class="sect" data-panel-section="tools" open>
-<summary class="sect-h">{{T:export.tools}}</summary>
-<div class="facts" id="portableTool" hidden><button type="button" class="mrow" id="openPortable">{{T:portable.open}}</button></div>
-<div class="facts"><button type="button" class="mrow" id="openHeadwordExport">{{T:export.open}}</button></div>
-</details>
-<details class="sect" id="hotkeysSection" hidden data-panel-section="hotkeys" open>
-  <summary class="sect-h">{{T:hotkeys.title}}</summary>
-  <div class="facts hotkey-row"><label class="sys-row"><span class="sys-label">{{T:hotkeys.showWindow}}</span><input type="text" id="hotkeyShowWindow" autocomplete="off" spellcheck="false"></label></div>
-  <div class="facts hotkey-row"><label class="sys-row"><span class="sys-label">{{T:hotkeys.translateClipboard}}</span><input type="text" id="hotkeyTranslateClipboard" autocomplete="off" spellcheck="false"></label></div>
-  <p class="sys-hint">{{T:hotkeys.hint}}</p>
-</details>
-
 <details class="sect" id="updateSection" data-panel-section="update" open>
   <summary class="sect-h">{{T:panel.updateSection}}</summary>
   <div class="facts update-notifications-row">
@@ -941,7 +890,7 @@ window.wudictFontScale=(function(){
   <div id="folderBody"></div>
   <!-- The app's identity, last. -->
   <div class="about">
-    <a class="brand" href="https://github.com/DmShAl/wudict2" target="_blank" rel="noopener">Dict<small>Shelf</small></a>
+    <a class="brand" href="https://github.com/DMSHLabs/DictShelf" target="_blank" rel="noopener">Dict<small>Shelf</small></a>
     <span class="ver">{{VERSION}}</span>
   </div>
 </details>
@@ -1015,7 +964,7 @@ window.wudictFontScale=(function(){
 {{FOLDERSDIALOG}}
 {{LEMMADIALOG}}
 <dialog id="portableDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="portableTitle">
-<h2 id="portableTitle">{{T:portable.title}}</h2>
+<h2 id="portableTitle">{{T:portable.title}} <button type="button" class="btn" id="portableCloseTitle" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
 <p>{{T:portable.hint}}</p>
 <div class="portable-options">
   <label class="portable-option"><input type="radio" name="portableDestination" id="portableInPlace" value="in-place"><span>{{T:portable.inPlace}}</span></label>
@@ -1125,7 +1074,7 @@ window.wudictFontScale=(function(){
     <div class="group-toolbar sys-action-spaced"><button type="button" class="btn" id="sysClearCache">{{T:system.clearCache}}</button></div>
     <h3 class="sys-head" id="sysResultCacheHeading">{{T:system.resultCache}}</h3>
     <p class="sys-hint" id="sysResultCacheHint">{{T:system.resultCacheHint}}</p>
-    <div class="sys-row sys-num sys-result-cache-limit"><label class="sys-label" for="sysResultCacheValue"><input type="checkbox" id="sysResultCacheLimited">{{T:system.resultCacheLimit}}</label><input type="text" id="sysResultCacheValue" inputmode="numeric" aria-label="{{T:system.resultCacheLimit}}" disabled><span id="sysResultCacheUnit">{{T:system.gb}}</span></div>
+    <div class="sys-row sys-num sys-result-cache-limit"><span class="sys-label" id="sysResultCacheLimitLabel">{{T:system.resultCacheLimit}}</span><input type="checkbox" id="sysResultCacheLimited" aria-labelledby="sysResultCacheLimitLabel"><input type="text" id="sysResultCacheValue" inputmode="numeric" aria-label="{{T:system.resultCacheLimit}}" disabled><span id="sysResultCacheUnit">{{T:system.gb}}</span></div>
     <div class="sys-row sys-num"><label class="sys-label" for="sysReturnCacheStorage">{{T:system.returnCache}}</label><div class="panel-select-wrap panel-dropdown sys-return-cache-select"><select id="sysReturnCacheStorage"><option value="memory">{{T:system.memory}}</option><option value="disk">{{T:system.disk}}</option></select></div></div>
     <p class="sys-hint" id="sysReturnCacheHint">{{T:system.returnCacheHint}}</p>
     <div class="sys-row sys-num sys-combined-limit"><span class="sys-label" id="sysCombinedLimitLabel">{{T:system.combinedDictionaryLimit}}</span><input type="number" id="sysCombinedLimit" min="1" max="{{COMBINED_DICTIONARY_LIMIT_MAX}}" step="1" inputmode="numeric" aria-labelledby="sysCombinedLimitLabel"></div>
@@ -2255,8 +2204,7 @@ const diacriticsSearchParam=()=>"&ignoreDiacritics="+(ignoreDiacritics?1:0);
 function applyHL(on,save){
   const v=!!on,moved=v!==hlOn;
   hlOn=v;
-  for(const [id,want] of [["hlOff",false],["hlOn",true]])
-    $(id).setAttribute("aria-pressed",v===want?"true":"false");
+  $("hlToggle").checked=v;
   if(save&&moved)savePrefs();
   return moved;
 }
@@ -2264,10 +2212,9 @@ function applyHL(on,save){
    on screen must repaint it — the marks live in the HTML the server sent, so
    the answer cannot be re-marked without asking again. Pressing the half that
    is already in force is not a change, the rule both pairs below follow. */
-for(const [id,want] of [["hlOff",false],["hlOn",true]])
-  $(id).addEventListener("click",()=>{
-    if(applyHL(want,true)&&$("mode").value==="fts"&&$("q").value.trim())doSearch();
-  });
+$("hlToggle").addEventListener("change",e=>{
+  if(applyHL(e.target.checked,true)&&$("mode").value==="fts"&&$("q").value.trim())doSearch();
+});
 applyHL(true,false);
 /* Read aloud (D148). Off costs nothing: no listener, no fetch, no voice list.
    On, and until a reader first selects text in an article, it costs two
@@ -2325,21 +2272,19 @@ function speakWake(){
 function applySpeak(on,save){
   const v=!!on,moved=v!==speakOn;
   speakOn=v;
-  for(const [id,want] of [["speakOff",false],["speakOn",true]])
-    $(id).setAttribute("aria-pressed",v===want?"true":"false");
+  $("speakToggle").checked=v;
   // The label keeps its own colour whatever this says: the pair beside it is
   // what states on or off, and a second signal in the same row is noise (the
   // user's call, 2026-09-26). The class only decides whether the mark shows
   // its waves - a speaker talking rather than one muted.
-  $("speakSeg").classList.toggle("on",v);
+  $("speakRow").classList.toggle("on",v);
   if(window.wuSpeak)window.wuSpeak.on(v);
   else speakGate(v);
   if(moved)for(const f of document.querySelectorAll("iframe.article"))
     f.contentWindow&&f.contentWindow.postMessage({t:"speak",on:v},"*");
   if(save&&moved)savePrefs();
 }
-for(const [id,want] of [["speakOff",false],["speakOn",true]])
-  $(id).addEventListener("click",()=>applySpeak(want,true));
+$("speakToggle").addEventListener("change",e=>applySpeak(e.target.checked,true));
 applySpeak(true,false);
 /* Which section auto-expands: the first dictionary in the user's own order
    that has a result (D142, and the default since D144). There WAS a second
@@ -2434,14 +2379,12 @@ function applyExampleBackground(on,persist=true){
   dimExampleBackground=!!on;
   $("dimExampleBackground").checked=dimExampleBackground;
   document.documentElement.style.setProperty("--wu-example-background-strength",dimExampleBackground?"8%":"0%");
-  settingsToggleSync($("dimExampleBackground"));
   if(persist)savePrefs();
 }
 function applyExampleTextFade(on,persist=true){
   fadeExampleText=!!on;
   $("fadeExampleText").checked=fadeExampleText;
   document.documentElement.style.setProperty("--wu-example-text-strength",fadeExampleText?"65%":"100%");
-  settingsToggleSync($("fadeExampleText"));
   if(persist)savePrefs();
 }
 $("dimExampleBackground").addEventListener("change",e=>applyExampleBackground(e.target.checked));
@@ -2453,7 +2396,6 @@ function extraExampleCSS(){
 function applyHideUnmarkedExamples(on,persist=true){
   hideUnmarkedExamples=!!on;
   $("hideUnmarkedExamples").checked=hideUnmarkedExamples;
-  settingsToggleSync($("hideUnmarkedExamples"));
   articleRefresh();
   if(persist)savePrefs();
 }
@@ -2631,13 +2573,11 @@ function setDictIcon(img,id){
 function applyDictIcons(on,save){
   const changed=dictIconsOn!==!!on;
   dictIconsOn=!!on;
-  for(const [id,want] of [["dictIconsOff",false],["dictIconsOn",true]])
-    $(id).setAttribute("aria-pressed",String(dictIconsOn===want));
+  $("dictIconsToggle").checked=dictIconsOn;
   document.documentElement.toggleAttribute("data-dict-icons-off",!dictIconsOn);
   if(save&&changed)savePrefs(true);
 }
-for(const [id,want] of [["dictIconsOff",false],["dictIconsOn",true]])
-  $(id).addEventListener("click",()=>applyDictIcons(want,true));
+$("dictIconsToggle").addEventListener("change",e=>applyDictIcons(e.target.checked,true));
 /* A DSL [ref dict="..."] names another dictionary by its #NAME, which is what
    dictBaseLabel shows, so the name is matched against the label as well as the
    stored name - a dictionary whose file carries no #NAME is known here by its
@@ -2765,9 +2705,9 @@ function bootFailed(msg){
     `<p><button type="button" class="btn" id="retryBtn">${esc(tx("search.retry"))}</button></p></div>`;
 }
 function showNoDictionaries(){
-  const out=$("out");
-  if(dicts.length){out.querySelector(".no-dictionaries")?.remove();return}
-  const box=document.createElement("div");box.className="empty no-dictionaries";
+  const box=$("noDictionariesNotice");
+  if(dicts.length){box.hidden=true;box.replaceChildren();return}
+  box.hidden=false;
   const title=document.createElement("p");title.textContent=tx("search.noConnectedDictionaries");
   const instructions=document.createElement("p");
   const sentence=tx("search.chooseDictionaries"),marker="{editFolders}",at=sentence.indexOf(marker);
@@ -2778,7 +2718,7 @@ function showNoDictionaries(){
     link.addEventListener("click",event=>{event.preventDefault();window.openFoldersDialog?.(event.currentTarget,cfgInfo)});
     instructions.append(link,document.createTextNode(sentence.slice(at+marker.length)));
   }
-  box.append(title,instructions);out.replaceChildren(box);
+  box.replaceChildren(title,instructions);
 }
 $("out").addEventListener("click",e=>{if(e.target.id==="retryBtn")loadDicts().then(ok=>{if(ok)applyURL()})});
 
@@ -2866,77 +2806,14 @@ function scopedDictionary(){
   const d=dicts.find(x=>x.id===v);
   return d?{id:"d:"+v,name:dictLabel(d)}:null;
 }
-/* The group the picker is on, by name — the panel's drop-down writes it, the
-   status bar's chip says it, and the native window's spinner shows the same
-   string inside itself. The name comes from the server's own group list, so
-   the reserved group reads "All Dictionaries" here exactly as it does in the
-   window; an id that no longer exists (a group deleted in the editor) falls
-   back to it, for the reason the scope does. */
+/* The standing group name appears in the status-bar scope chip and the
+   dictionary picker. A removed group falls back to All Dictionaries. */
 function pickerGroupName(id){
   const g=userGroups.find(x=>x.id===(id||pickerGroup));
   return g&&g.id!=="all"?(g.filter?"🔗 ":"")+g.name:tx("panel.allDictionaries");
 }
-/* The panel's group drop-down: the bar names the group in force, the card lists
-   the reader's groups with the chosen one ticked. Its own helper rather than
-   screenChoice because the answer is an ID and not an index — the list is
-   rebuilt whenever it opens and whenever /api/groups answers, and an index
-   would then point at whatever slid into that place. Built on open for the same
-   reason: a group added in the editor is in the menu the next time it is read,
-   with nothing to keep in step. */
-function pickerGroupMenu(bar,menu,onPick){
-  let value="all";
-  const ctl=sheetMenuNew(bar,menu,()=>{
-    menu.replaceChildren();
-    if(!userGroups.length)return false; // nothing to list: do not open an empty card
-    for(const g of userGroups){
-      const b=document.createElement("button");
-      b.type="button";b.className="choice-item";b.setAttribute("role","option");
-      b.setAttribute("aria-selected",String(g.id===value));
-      b.textContent=pickerGroupName(g.id);
-      b.onclick=()=>{ctl.hide();onPick(g.id)};
-      menu.appendChild(b);
-    }
-    return true;
-  });
-  const show=ctl.show,hide=ctl.hide;
-  ctl.show=()=>{show();bar.setAttribute("aria-expanded","true")};
-  ctl.hide=()=>{hide();bar.setAttribute("aria-expanded","false")};
-  bar.onclick=()=>ctl.toggle();
-  // Escape shuts the menu before the drawer, as the Presets row's does.
-  bar.addEventListener("keydown",e=>{
-    if(e.key==="Escape"&&ctl.isOpen()){e.stopPropagation();ctl.hide()}
-  });
-  return {set(id){
-    value=id;
-    const lbl=document.createElement("span");
-    lbl.textContent=pickerGroupName(id);
-    bar.replaceChildren(lbl);
-  }};
-}
-/* Created on first use, not here, and for two ordering reasons rather than for
-   laziness: sheetMenuNew pushes onto `sheetMenus`, and pickerGroupName reads
-   userGroups, which group-editor.js
-   declares AFTER this script has run. paintPickerGroup is only ever called once
-   a page has loaded (the panel opening, the picker's own spinner, /api/groups
-   answering), when both exist. */
-let pickerGroupChoice=null;
-/* Says which group is in force wherever it is said: the panel's drop-down and,
-   through syncChips, the status bar's chip. Called when the panel opens
-   (loadFolders, which showPanel already calls), when /api/groups answers, and
-   from the one place the group can change from OUTSIDE the panel — the native
-   window's spinner. */
+/* Repaint the chip after the standing group changes in the dictionary picker. */
 function paintPickerGroup(){
-  if($("pickerGroupBtn")){
-    if(!pickerGroupChoice)
-      pickerGroupChoice=pickerGroupMenu($("pickerGroupBtn"),$("pickerGroupMenu"),id=>{
-        // The same function the native window's spinner calls, so the two
-        // controls cannot disagree: store the group, drop the one-dictionary
-        // scope, re-run the search.
-        wudictPickerGroupChanged(id);
-        paintPickerGroup();
-      });
-    pickerGroupChoice.set(pickerGroup);
-  }
   syncChips();
 }
 /* What the scope chip says. The all-scope is not nameless: it resolves to the
@@ -2982,8 +2859,7 @@ function scopeLabel(){
   // field on a phone it says NOTHING, because the field has no room for it and
   // the book mark alone is the control's face there. The name is not lost: the
   // traced-out scope is on screen in the bar, in the picker's own spinner and in
-  // the results' own message, and the field's chip only appears at all when the
-  // reader has switched the bar off.
+  // the results' own message.
   const inBar=$("dictSeg")&&$("dictSeg").parentElement===$("sbar");
   if(d.value==="all"){
     if(!inBar)return "";
@@ -3180,6 +3056,7 @@ $('portablePath').oninput=portablePathChanged;
 $('portableInPlace').onchange=portablePathChanged;$('portableOutput').onchange=portablePathChanged;
 $('portableFolder').onclick=()=>window.wudictPickFolder(path=>{if(path){$('portablePath').value=path;portablePathChanged()}});
 $('portableClose').onclick=()=>$('portableDialog').close();
+$('portableCloseTitle').onclick=()=>$('portableDialog').close();
 $('portableCreate').onclick=async()=>{
  portableShowStatus({Running:true,Stage:'counting'});
  try{await portableCall('start',{path:$('portablePath').value.trim(),inPlace:$('portableInPlace').checked,dictionaries:$('portableDictionaries').checked});portableFollow()}
@@ -4092,23 +3969,11 @@ function panelRowColumns(){
     for(const row of rows){
       const label=row.querySelector(":scope > .rowlabel");
       if(!label||col<=0)continue;
-      if(row.id==="pickerGroupRow")continue;
       const gap=parseFloat(getComputedStyle(row).columnGap)||0;
       const ctl=[...row.children].filter(el=>el!==label&&!el.classList.contains("choice-menu")&&!el.hidden)
         .reduce((sum,el)=>sum+el.getBoundingClientRect().width,0);
       if(col+gap+ctl>row.clientWidth)row.style.setProperty("--rlcol","auto")}
     hid.forEach(row=>{row.hidden=true})}
-  const exampleRows=[...$("panel").querySelectorAll("#exampleBackgroundRow.settings-switch-row,#exampleTextFadeRow.settings-switch-row")]
-    .filter(row=>!row.hidden);
-  let exampleLabelWidth=0;
-  for(const row of exampleRows){
-    const label=row.querySelector(":scope > .settings-toggle-label");
-    if(!label)continue;
-    const range=document.createRange();range.selectNodeContents(label);
-    exampleLabelWidth=Math.max(exampleLabelWidth,range.getBoundingClientRect().width);
-  }
-  if(exampleLabelWidth)for(const row of exampleRows)
-    row.style.setProperty("--example-switch-label-width",Math.ceil(exampleLabelWidth)+"px");
   fontScaleColumns();
 }
 function fontScaleColumns(){
@@ -4173,7 +4038,7 @@ function showPanel(){panelSnap=panelState();  /* before the lock: once the root 
   document.documentElement.style.setProperty("--wd-sbw",
     Math.max(0,innerWidth-document.documentElement.clientWidth)+"px");
 document.querySelector('[data-styler="screen"]').hidden=!window.wudictAndroidShell;
-$("speakSeg").hidden=!speakCan();$("panel").classList.add("show");
+  $("speakRow").hidden=!speakCan();$("panel").classList.add("show");
   // The rows are read down one column per section, so its width has to be
   // known before the reader sees them: measured here, in the same frame the
   // drawer is opened in, so nothing paints between the two.
@@ -4454,33 +4319,26 @@ function sysPaint(state){
 function syncSystemSettingSwitches(root){
   if(!root)return;
   for(const input of root.querySelectorAll('input[type="checkbox"]')){
-    const row=input.closest(".sys-row");
+    let row=input.closest(".sys-row");
     if(!row)continue;
-    if(row.classList.contains("sys-switch-ready")){
-      const buttons=row.querySelectorAll(".settings-toggle-option"),group=row.querySelector(".settings-toggle");
-      if(buttons.length===2){buttons[0].setAttribute("aria-pressed",String(input.checked));buttons[1].setAttribute("aria-pressed",String(!input.checked));buttons[0].disabled=buttons[1].disabled=input.disabled}
-      if(group)group.setAttribute("aria-disabled",String(input.disabled));
-      continue;
-    }
+    if(row.classList.contains("sys-switch-ready"))continue;
     const label=row.querySelector(":scope > .sys-label");
     if(label?.contains(input)){
-      const caption=document.createElement("span");caption.textContent=label.textContent.trim();
-      label.replaceChildren(caption);label.after(input);
-    }else if(label&&input.parentElement===row){label.after(input)}
-    const group=document.createElement("span");group.className="settings-toggle";group.setAttribute("role","group");
-    const caption=label?.textContent.trim()||input.getAttribute("aria-label")||"";group.setAttribute("aria-label",caption);
-    const setButton=document.createElement("button"),clearButton=document.createElement("button");
-    for(const [button,on,key] of [[setButton,true,"panel.on"],[clearButton,false,"panel.off"]]){
-      button.type="button";button.className="settings-toggle-option";button.textContent=tx(key);button.setAttribute("aria-pressed",String(input.checked===on));
-      button.addEventListener("click",event=>{event.preventDefault();event.stopPropagation();if(input.disabled)return;input.checked=on;input.dispatchEvent(new Event("change",{bubbles:true}));sync()});
-      group.append(button);
-    }
-    function sync(){setButton.setAttribute("aria-pressed",String(input.checked));clearButton.setAttribute("aria-pressed",String(!input.checked));group.setAttribute("aria-disabled",String(input.disabled));setButton.disabled=clearButton.disabled=input.disabled}
-    input.classList.add("settings-switch-source");input.tabIndex=-1;input.setAttribute("aria-hidden","true");input.addEventListener("change",sync);
+      label.textContent=label.textContent.trim();
+      label.htmlFor=input.id;
+      label.before(input);
+    }else if(row.tagName==="LABEL"&&input.parentElement===row){
+      const text=row.querySelector(":scope > .sys-label");
+      if(text){
+        const replacement=document.createElement("div");
+        for(const name of row.getAttributeNames())replacement.setAttribute(name,row.getAttribute(name));
+        replacement.classList.add("sys-switch-ready");
+        const caption=document.createElement("label");caption.className="sys-label";
+        caption.htmlFor=input.id;caption.textContent=text.textContent;
+        replacement.append(input,caption);row.replaceWith(replacement);row=replacement;
+      }
+    }else if(label&&input.parentElement===row){row.insertBefore(input,label)}
     row.classList.add("sys-switch-ready");
-    const cacheValue=row.classList.contains("sys-result-cache-limit")?row.querySelector("#sysResultCacheValue"):null;
-    if(cacheValue)row.insertBefore(group,cacheValue);else row.append(group);
-    sync();
   }
   const headings=[...root.querySelectorAll("h3.sys-head")],blocks=new Map();
   for(const row of root.querySelectorAll(".sys-row.sys-switch-ready")){
@@ -4507,34 +4365,6 @@ function syncSystemSettingSwitches(root){
     if(width>0)for(const row of rows)row.style.setProperty("--sys-switch-label-width",String(Math.ceil(width))+"px");
   }
 }
-function settingsToggleBuild(input,caption){
-  const group=document.createElement("span");group.className="settings-toggle";group.setAttribute("role","group");group.setAttribute("aria-label",caption||input.getAttribute("aria-label")||"");
-  const yes=document.createElement("button"),no=document.createElement("button");
-  for(const [button,on,key] of [[yes,true,"panel.on"],[no,false,"panel.off"]]){
-    button.type="button";button.className="settings-toggle-option";button.textContent=tx(key);
-    button.addEventListener("click",event=>{event.preventDefault();event.stopPropagation();if(input.disabled)return;input.checked=on;input.dispatchEvent(new Event("change",{bubbles:true}));sync()});
-    group.append(button);
-  }
-  function sync(){yes.setAttribute("aria-pressed",String(input.checked));no.setAttribute("aria-pressed",String(!input.checked));yes.disabled=no.disabled=input.disabled;group.setAttribute("aria-disabled",String(input.disabled))}
-  input.classList.add("settings-switch-source");input.tabIndex=-1;input.setAttribute("aria-hidden","true");input.addEventListener("change",sync);
-  group._sync=sync;sync();return group;
-}
-function settingsToggleSync(input){input?.parentElement?.querySelector(".settings-toggle")?._sync?.()}
-function syncPreferenceSwitches(){
-  for(const id of ["ignoreDiacritics","hideUnmarkedExamples","dimExampleBackground","fadeExampleText","updateNotifications","appearanceColorOn"]){
-    const input=$(id);if(!input||input.dataset.settingsToggleReady)continue;
-    const label=input.closest("label")||document.querySelector('label[for="'+id+'"]'),caption=label?.textContent.trim()||label?.getAttribute("aria-label")||input.getAttribute("aria-label")||"";
-    const group=settingsToggleBuild(input,caption);input.dataset.settingsToggleReady="1";
-    if(id==="appearanceColorOn"){input.after(group);continue}
-    if(label?.classList.contains("examples-extra")){
-      const text=label.textContent.trim(),name=document.createElement("span");name.className="settings-toggle-label";name.textContent=text;
-      label.replaceChildren(name,input,group);label.classList.add("settings-switch-row");
-    }else if(label){
-      const host=label.closest(".facts"),name=document.createElement("span");name.className="rowlabel";name.textContent=caption;
-      label.replaceWith(name,input,group);host?.classList.add("settings-switch-row");
-    }
-  }
-}
 function sysRowBuild(row){
   const wrap=document.createElement("div");
   wrap.className="sys-item";
@@ -4545,6 +4375,7 @@ function sysRowBuild(row){
     label.className="sys-row";
     const box=document.createElement("input");
     box.type="checkbox";
+    box.id="sysAdvancedToggle"+(sysRows.length+1);
     box.checked=row.stored!=null;
     // Written as it is used - there is no Save anywhere in this app - so a
     // switch the shell refused has to put itself back, which is what the
@@ -4848,6 +4679,11 @@ window.wudictHotkeyLookup=function(text){
 };
 async function showDesktopSysSettings(){
   const dialog=$("desktopSysSettings"),body=$("desktopSysBody");
+  // Normalize the checkbox rows before caching their containers below. The
+  // first normalization replaces label rows with div rows; caching their old
+  // parents first leaves empty labels to be reused the next time this dialog
+  // opens.
+  syncSystemSettingSwitches($("sysSettings"));
   if(!desktopSystemNodes)desktopSystemNodes={
     info:$("sysInfo").parentElement,
     resultCacheHeading:$("sysResultCacheHeading"),
@@ -4974,7 +4810,6 @@ function updateAvailableKey(channel=updateChannel){return "dictshelf_update_avai
 function syncUpdateControls(){
   const notifications=$("updateNotifications"),channel=$("updateChannel");
   if(notifications)notifications.checked=updateNotifications;
-  settingsToggleSync(notifications);
   if(channel){channel.value=updateChannel;channel.disabled=!updateNotifications}
   renderUpdateNotice();
 }
@@ -5434,10 +5269,10 @@ async function loadFolders(){
   }
   const row=(path,note,bad)=>{
     const d=document.createElement("div");d.className="frow";
-    const p=document.createElement("span");p.className="p path";
-    p.dataset.full=path;              // what gets copied, whatever is displayed
+    const p=document.createElement("span");p.className="p path"+(c.canReveal?" revealable":"");
+    p.dataset.full=path;              // the reveal endpoint receives the absolute path
     p.innerHTML=pathHTML(path);
-    p.title=tx("panel.copyPath");
+    if(c.canReveal){p.title=c.revealLabel;p.setAttribute("role","button");p.tabIndex=0}
     d.appendChild(p);
     // The facts travel as one unit so they wrap as one — and so a row with no
     // fact (the config file) simply has a shorter unit, instead of holding an
@@ -5447,20 +5282,13 @@ async function loadFolders(){
       const s=document.createElement("span");s.className="n"+(bad?" bad":"");s.textContent=note;
       m.appendChild(s);
     }
-    if(c.canReveal){
-      const rv=document.createElement("span");rv.className="rv";rv.textContent=c.revealLabel;
-      rv.onclick=e=>{e.stopPropagation();apiFetch("/api/reveal?path="+encodeURIComponent(path))
-        .then(async r=>{const j=await r.json();if(!r.ok||j.error)throw new Error(j.error||"HTTP "+r.status)})
-        .catch(error=>alert(window.wudictI18n.errorText(error.message)))};
-      m.appendChild(rv);
-    }
     if(m.childNodes.length)d.appendChild(m);
     b.appendChild(d);
   };
   const grp=t=>{const g=document.createElement("div");g.className="grp";g.textContent=t;b.appendChild(g)};
   grp(tx("panel.dictionaryFolders"));
   for(const r of c.roots||[]){
-    let note=tx("panel.dictionaryCount",{count:r.count,number:r.count}),bad=false;
+    let note=String(r.count),bad=false;
     if(!r.exists){note=tx("panel.folderMissing");bad=true}
     else if(!r.total){note=tx("panel.noDictionaries")}
     else if(!r.count){note=tx("panel.listedAbove",{number:r.total})}
@@ -5477,7 +5305,7 @@ async function loadFolders(){
   // is restated one line down by the row's own note — the same rule that keeps
   // the format prefix off a file name ending in ".mdx" (see provenance above).
   grp(tx("panel.library"));
-  row(c.libDir,tx("panel.prepared",{number:c.prepared}),false);
+  row(c.libDir,String(c.prepared),false);
   // Likewise "file": the row shows a path ending in ".toml".
   if(c.configPath){grp(tx("panel.configFile"));row(c.configPath,"",false)}
 }
@@ -5486,9 +5314,15 @@ async function loadFolders(){
 // no open state to remember and no "have we drawn it yet" to ask.
 $("folderBody").addEventListener("click",e=>{
   const p=e.target.closest(".path");if(!p)return;
-  // The absolute path, not the ~-shortened text on screen.
-  navigator.clipboard?.writeText(p.dataset.full||p.textContent);
-  p.style.color="var(--accent)";setTimeout(()=>{p.style.color=""},900);
+  if(!p.classList.contains("revealable"))return;
+  apiFetch("/api/reveal?path="+encodeURIComponent(p.dataset.full||p.textContent))
+    .then(async r=>{const j=await r.json();if(!r.ok||j.error)throw new Error(j.error||"HTTP "+r.status)})
+    .catch(error=>alert(window.wudictI18n.errorText(error.message)));
+});
+$("folderBody").addEventListener("keydown",e=>{
+  if(e.key!=="Enter"&&e.key!==" ")return;
+  const p=e.target.closest(".path.revealable");if(!p)return;
+  e.preventDefault();p.click();
 });
 /* Bulk full-text (D31). It names what the user gets, not our mechanism -
    new dictionaries are queued for their headword index - and it
@@ -9896,8 +9730,6 @@ new ResizeObserver(measureBar).observe($("bar"),{box:"border-box"});
    Stored in localStorage, like wide mode: a choice about this window, not a
    reading habit that should follow the reader to another device. Absent means
    the app's default, which is on. */
-const RBAR_KEY="wudict_sbar";
-let sbarWant=localStorage.getItem(RBAR_KEY)!=="0";
 function browseReturnFromURL(){
   const raw=new URLSearchParams(location.search).get("browse");
   if(!raw)return "";
@@ -9982,7 +9814,6 @@ function sbarPaint(){
   // switched on has to be where they left it, and the arrows stand down on their
   // own while there is nothing to walk (D102). Hidden in the MARKUP as well, so
   // a page whose script broke shows no dead chrome.
-  $("sbar").hidden=!sbarWant;
   // A control that cannot act is not shown (D102): with one dictionary there is
   // nowhere to walk, and the arrows are what would lie about it. Where an arrow
   // can act but has run out of list, it is dimmed instead - see sbarEndsPaint.
@@ -9992,8 +9823,6 @@ function sbarPaint(){
   $("sbarBackWords").hidden=!returnURL||(!androidGo&&n>=2)||document.documentElement.hasAttribute("data-webview2");
   $("barBackWords").hidden=!returnURL||androidGo;
   if(returnURL)$("sbarBackWords").href=$("barBackWords").href=returnURL;
-  $("sbarOn").setAttribute("aria-pressed",sbarWant?"true":"false");
-  $("sbarOff").setAttribute("aria-pressed",sbarWant?"false":"true");
   placeDictSeg();
   sbarMeasure();
   sbarEndsPaint();
@@ -10017,23 +9846,15 @@ function placeDictSeg(){
   if(!seg)return;
   // In the bar the seg goes BETWEEN the two floors, which is what keeps a
   // square of air on each side of it (see the markup and .rpad.floor).
-  const toBar=$("sbar").hidden?$("mode").parentElement:$("dictSegGap");
+  const toBar=$("dictSegGap");
   if(seg.parentElement!==toBar){
-    if($("sbar").hidden)toBar.after(seg);
-    else toBar.before(seg);
+    toBar.before(seg);
   }
   // The chip's label depends on where it lives (see scopeLabel), so the move
   // repaints it - and moving the node does not fire the observer the bar is
   // painted from, so nothing else would.
   syncChips();
 }
-function sbarSet(on){
-  sbarWant=!!on;
-  localStorage.setItem(RBAR_KEY,sbarWant?"":"0");
-  sbarPaint();
-}
-$("sbarOn").onclick=()=>sbarSet(true);
-$("sbarOff").onclick=()=>sbarSet(false);
 /* Where the reader is: an index into the sections, always - the first one
    included, because at the top of the page the first dictionary is the one in
    front of them. Two answers, in this order, and the order is the whole trick:
@@ -10941,6 +10762,7 @@ async function presetToggle(id,on,notify){
     // known payload puts it back, because a switch that lies is worse than
     // a note alone.
     presetsPaneRender();
+    presetRowsPaint();
     say(tx("panel.presetFailed",{error:window.wudictI18n.errorText(e.message)}));
     return false;
   }
@@ -10958,12 +10780,11 @@ async function presetToggle(id,on,notify){
    where both states are the same control - flips whatever it is now
    ("toggle"). Painting is the same for both: it follows the payload, never the
    press. */
-/* The buttons one entry drives. A row in the drawer holds a PAIR; the reading
-   bar's handle is a single button wearing the same data-layer, which is why
-   this returns the element itself when it is one - same painter, same payload,
-   three handles on the example fold and two on Compact. */
-function layerButtons(row){
-  return row.matches("button[data-layer]")?[row]:[...row.querySelectorAll("button[data-layer]")];
+/* A drawer row uses a checkbox while the reading bar keeps its compact
+   button. Both paint from the same layer registry. */
+function layerControls(row){
+  if(row.matches("button[data-layer]"))return [row];
+  return [...row.querySelectorAll("input[data-layer-checkbox]")];
 }
 function presetRowsPaint(){
   for(const [rowId,id] of PRESET_ROWS){
@@ -10979,8 +10800,11 @@ function presetRowsPaint(){
     if(!p||STYLE_OFF||(PRESETS&&!PRESETS.writable)){row.hidden=true;continue}
     row.hidden=false;
     const on=!!p.enabled;
-    for(const b of layerButtons(row))
-      b.setAttribute("aria-pressed",(b.dataset.layer==="on")===on?"true":"false");
+    for(const control of layerControls(row)){
+      if(control.type==="checkbox")
+        control.checked=(control.dataset.layerCheckbox==="on")===on;
+      else control.setAttribute("aria-pressed",(control.dataset.layer==="on")===on?"true":"false");
+    }
   }
   $("examplesExtraRow").hidden=$("examplesRow").hidden;
   $("exampleBackgroundRow").hidden=$("examplesRow").hidden;
@@ -10990,13 +10814,17 @@ function presetRowsPaint(){
 for(const [rowId,id,kind] of PRESET_ROWS){
   const row=$(rowId);
   if(!row)continue;
-  for(const b of layerButtons(row))
-    b.addEventListener("click",()=>{
+  for(const control of layerControls(row)){
+    const apply=()=>{
       const want=kind==="toggle"
         ? !((PRESETS&&PRESETS.enabled)||[]).includes(id)
-        : b.dataset.layer==="on";
+        : control.type==="checkbox"
+          ? (control.dataset.layerCheckbox==="on" ? control.checked : !control.checked)
+          : control.dataset.layer==="on";
       presetToggle(id,want,msg=>setStatus("⚠ "+esc(msg)));
-    });
+    };
+    control.addEventListener(control.type==="checkbox"?"change":"click",apply);
+  }
 }
 /* The pane. Groups in manifest order; a group of more than one is a
    conflict group and says so, because two switches that silently undo each
@@ -11044,7 +10872,7 @@ function presetsPaneRender(){
                    :"";
       const row=document.createElement("div");row.className="pr"+(blocked?" off":"");
       const sw=document.createElement("input");
-      sw.type="checkbox";sw.className="en";sw.checked=!!p.enabled;
+      sw.type="checkbox";sw.checked=!!p.enabled;
       if(blocked)sw.disabled=true;
       sw.setAttribute("aria-label",layerTitle(p));
       sw.onchange=()=>presetToggle(p.id,sw.checked);
@@ -11673,7 +11501,6 @@ function appearanceRender(state){
   document.documentElement.setAttribute("data-native-appearance","");
   $("appearanceColorOn").checked=!!state.colorEnabled;
   $("appearanceColorOn").disabled=!!state.image;
-  settingsToggleSync($("appearanceColorOn"));
   $("appearanceColor").value=String(state.color||"").replace(/^#/,"").toUpperCase();
   colorPickSync($("appearanceColor"),$("appearanceColorPick"));
   // Tiles, left to right: None, every image in the store, then "+". A
@@ -12181,7 +12008,6 @@ $("styler").addEventListener("keydown",e=>{
 // boot screen over. The config comes alongside rather than after, because the
 // cards need its home prefix to render paths as ~/… on the FIRST draw; run
 // concurrently it costs no extra latency, and it cannot reject.
-syncPreferenceSwitches();
 </script>
 <link rel="stylesheet" href="/assets/group-editor.css?v={{GROUPCSS}}">
 <dialog id="groupEditor" lang="{{T:locale}}" class="group-dialog panel-card workspace-dialog" aria-labelledby="groupTitle">

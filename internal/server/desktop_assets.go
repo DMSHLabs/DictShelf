@@ -29,6 +29,8 @@ func desktopAsset(name string) (desktopAssetResponse, bool) {
 		return desktopAssetResponse{frameJS, "application/javascript; charset=utf-8", immutable}, true
 	case "/assets/app.css":
 		return desktopAssetResponse{appCSS, "text/css; charset=utf-8", immutable}, true
+	case "/assets/checkbox.css":
+		return desktopAssetResponse{checkboxCSS, "text/css; charset=utf-8", immutable}, true
 	case "/assets/fonts/Quivira.otf":
 		body, err := articleFontFiles.ReadFile("web/fonts/Quivira.otf")
 		if err == nil {

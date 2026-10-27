@@ -124,6 +124,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <title>{{T:pages.folders}}</title>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="stylesheet" href="/assets/setup.css?v={{CSS}}">
+<link rel="stylesheet" href="/assets/checkbox.css?v={{CHECKBOXCSS}}">
 <link rel="stylesheet" href="/assets/workspace.css?v={{WORKSPACECSS}}">
 {{UI_SCALE_DEFAULTS}}
 <!-- The app halves of any preset that asked to be on this page too (manifest
@@ -172,7 +173,7 @@ html[data-shell-tone="dark"] {
 .dsl-default-row>span{flex:0 0 auto;min-width:9em;white-space:nowrap}
 .dsl-default-row>div{display:flex;flex-wrap:wrap;gap:.5em 1em}
 .dsl-default-row label{display:inline-flex;align-items:center;gap:.3em}
-.dsl-default-row input[type=checkbox]{width:20px;height:20px;margin:0}
+.dsl-default-row input[type=checkbox]{--ds-checkbox-size:20px;--ds-checkbox-margin:0}
 .frow input{margin:.3em 0;min-width:0}
 .frow .rm{flex:none;background:none;border:0;color:var(--label-quiet);font-size:16px;
   cursor:pointer;padding:0 .2em;margin:0;line-height:1}
@@ -214,12 +215,7 @@ html:not([data-folder-picker]) .frow .pick{display:none}
   .frow .rm{margin-left:auto;font-size:18px;padding:.15em .35em}
 }
 label.keep{display:flex;gap:.5em;align-items:flex-start;font-size:13.5px;color:var(--label);margin-top:.618em}
-/* The box's own width and shape come from setup.css (appearance:none, 20px);
-   all this adds is the nudge down onto the label's first line. It used to say
-   `width:auto`, which was how a platform checkbox kept its natural size
-   against setup.css's input{width:100%} - with the box drawn, a width here
-   would be the thing that breaks it. */
-label.keep input[type=checkbox]{margin:.25em 0 0}
+label.keep input[type=checkbox]{--ds-checkbox-margin:.25em 0 0}
 label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
 #lib{max-height:38vh;overflow:auto;margin:.618em 0 0;border:1px solid var(--line);border-radius:8px}
 .row{display:flex;gap:.5em;align-items:baseline;padding:.38em .618em;border-bottom:1px solid var(--line);font-size:13px}
@@ -249,7 +245,7 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
    the one row on this page that is not a choice, so it keeps the grey every
    other label here gave up. Its ⚠ line (`.why`) stays in the error colour. */
 #cands label.row.no{cursor:default;color:var(--faint)}
-#cands .row input[type=checkbox]{flex:none;margin:0}
+#cands .row input[type=checkbox]{--ds-checkbox-margin:0}
 /* The files a candidate is made of. They take the flexible width and the name
    keeps its own: the name is short and is the identity, the list is the part
    that can grow, and a row that truncated the name to fit its files would hide
@@ -262,7 +258,7 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
 #extras{margin:.618em 0 0}
 #extras .head{font-size:12px;color:var(--label);margin:0 0 .3em}
 #extras label.row{cursor:pointer}
-#extras .row input[type=checkbox]{flex:none;margin:0}
+#extras .row input[type=checkbox]{--ds-checkbox-margin:0}
 #extras .row .need{color:var(--label);font-size:11.5px}
 #extras .row .need.req{color:var(--err)}
 /* One line, as the whole of the progress report: a bar per file, a byte
@@ -284,11 +280,8 @@ body{font-size:calc(var(--ui-font-base) * 1rem)}
   margin-bottom:calc(var(--ui-section-space-after) * 1em)}
 #indexDefaults .dsl-default-row label{min-height:calc(var(--ui-edit_control-height) * 1em);
   font-size:calc(var(--ui-edit_control-font) * 1rem)}
-#indexDefaults .dsl-default-row input[type=checkbox]{flex:none;
-  width:calc(var(--ui-edit_control-height) * 1em);
-  height:calc(var(--ui-edit_control-height) * 1em)}
-#indexDefaults .dsl-default-row input[type=checkbox]:checked::after{
-  left:35%;top:20%;width:25%;height:50%}
+#indexDefaults .dsl-default-row input[type=checkbox]{
+  --ds-checkbox-size:calc(var(--ui-edit_control-height) * 1em)}
 #rows .frow input{box-sizing:border-box;flex:1 1 0;
   height:calc(var(--ui-edit_control-height) * 1.5rem);min-height:0;
   font-size:calc(var(--ui-edit_control-font) * 1rem)}

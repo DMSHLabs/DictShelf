@@ -233,6 +233,7 @@ func (s *Server) routes() []route {
 		{"GET", "/assets/history.css", serveAsset("text/css; charset=utf-8", historyCSS), "", false},
 		{"GET", "/assets/history.js", serveAsset("application/javascript; charset=utf-8", historyJS), "", false},
 		{"GET", "/assets/group-editor.css", serveAsset("text/css; charset=utf-8", groupEditorCSS), "", false},
+		{"GET", "/assets/checkbox.css", serveAsset("text/css; charset=utf-8", checkboxCSS), "", false},
 		{"GET", "/assets/group-editor.js", serveAsset("application/javascript; charset=utf-8", groupEditorJS), "", false},
 		{"GET", "/assets/filters-dialog.css", serveAsset("text/css; charset=utf-8", filtersDialogCSS), "", false},
 		{"GET", "/assets/filters-dialog.js", serveAsset("application/javascript; charset=utf-8", filtersDialogJS), "", false},

@@ -1,5 +1,7 @@
 # Localization: status and next tasks
 
+2026-10-27 Empty-library notice now says “No dictionaries found” / «Словари не найдены». It renders outside the replaceable results area and is independent of Show info messages. Go build and diff check pass; desktop runtime verification remains pending.
+
 2026-10-27 Update section: added EN/RU labels for the channel, notification checkbox and Update button; the channel control is disabled when notifications are off. In-app update badge and persisted default-on preference added. Update checks read a static per-channel catalogue; the version links to its release page. Windows desktop offers installer and portable update paths. FOSS Android downloads a matching APK to Downloads and launches package installation when allowed; Play retains the release link. Phone and desktop wording/layout verification remain pending.
 
 2026-10-26 Main search now labels the initial five-result action `5+` with localized indexing-priority tooltip text; the count is replaced by paged totals after indexing/counting. EN/RU catalog entries were added; catalog/runtime wording checks remain pending.

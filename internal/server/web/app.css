@@ -940,11 +940,9 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
 /* ── the System window ─────────────────────────────────────────────────
    The shell's own settings, drawn by the page. Its frame, its paper and the
    wallpaper beside it come from dialog.group-dialog.panel-card, and so do its
-   CHECKBOXES - from that file's `input[type=checkbox]`, the app's own square
-   (20px, a 1.5px --fg border, a tick drawn from two borders) and the very
-   recipe the Lemmatization page copies. Nothing about a checkbox is stated
-   here on purpose: a second recipe for one control is a second thing to keep
-   in step, and the platform's own box is what these windows must not wear.
+   CHECKBOXES - from the shared `checkbox.css` control. Nothing about their
+   shape is stated here: the same control serves every web surface, and each
+   setting here only supplies its local size, spacing or disabled colours.
    What is stated here is the window's own furniture - a group's name, the
    sentence under it, one row per setting, and the two notes the window speaks
    with. The rows are the phone's: 44px of touch floor like the group editor's,
@@ -1000,11 +998,12 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
 #desktopSysBody .sys-hint{margin:0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.618;color:var(--label)}
 #sysSettings .sys-item{margin:.5em 0 .2em}
 #sysSettings .sys-row,#desktopSysBody .sys-row{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);margin:calc(var(--ui-row-gap) * .5em) 0;font-size:calc(var(--ui-main-control-font) * 1rem);cursor:pointer}
-#sysSettings .sys-row input[type="checkbox"],#desktopSysBody .sys-row input[type="checkbox"]{appearance:none;-webkit-appearance:none;box-sizing:border-box;position:relative;flex:none;width:20px;height:20px;margin:0 .5em 0 0;border:1.5px solid var(--fg);border-radius:4px;background-color:var(--paper-bg,var(--bg));vertical-align:middle;cursor:pointer}
-#sysSettings .sys-row input[type="checkbox"]:checked::after,#desktopSysBody .sys-row input[type="checkbox"]:checked::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid var(--fg);border-width:0 2px 2px 0;transform:rotate(45deg)}
-#sysSettings .sys-row input[type="checkbox"]:focus-visible,#desktopSysBody .sys-row input[type="checkbox"]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-#sysSettings .sys-row input[type="checkbox"]:disabled,#desktopSysBody .sys-row input[type="checkbox"]:disabled{background-color:var(--fg-soft);border-color:var(--fg-soft);opacity:.8;cursor:default}
-#sysSettings .sys-row input[type="checkbox"]:disabled:checked::after,#desktopSysBody .sys-row input[type="checkbox"]:disabled:checked::after{border-color:var(--bg)}
+#sysSettings .sys-row input[type="checkbox"],#desktopSysBody .sys-row input[type="checkbox"]{
+  --ds-checkbox-margin:0;
+  --ds-checkbox-disabled-background:var(--fg-soft);
+  --ds-checkbox-disabled-border-color:var(--fg-soft);
+  --ds-checkbox-disabled-mark-color:var(--bg);
+  --ds-checkbox-disabled-opacity:.8}
 #sysSettings .sys-hint+.sys-row,#desktopSysBody .sys-hint+.sys-row{margin-top:calc(var(--ui-addition-gap) * 1em)}
 #sysSettings .sys-row+.sys-row,#desktopSysBody .sys-row+.sys-row{margin-top:calc(var(--ui-row-gap) * 1em)}
 #sysSettings .sys-row+.sys-hint,#desktopSysBody .sys-row+.sys-hint{margin-top:calc(var(--ui-addition-gap) * 1em)}
@@ -1019,40 +1018,16 @@ html:not([data-shell-image]) #hotkeysSection .hotkey-row input{background-image:
 #sysSettings .sys-row.sys-switch-ready,#desktopSysBody .sys-row.sys-switch-ready{justify-content:flex-start;gap:.8em}
 #sysSettings .sys-row.sys-switch-ready>.sys-label,#desktopSysBody .sys-row.sys-switch-ready>.sys-label{
   box-sizing:border-box;flex:0 1 var(--sys-switch-label-width,auto);width:var(--sys-switch-label-width,auto);
-  max-width:calc(100% - 7.8em);min-width:0;white-space:nowrap}
-#sysSettings .sys-row input.settings-switch-source,#desktopSysBody .sys-row input.settings-switch-source{display:none!important}
-.settings-switch-source{display:none!important}
-.settings-toggle{display:inline-flex;flex:none;align-items:stretch;min-width:7em}
-.settings-toggle-option{flex:1 1 50%;box-sizing:border-box;min-width:3.5em;height:calc(var(--ui-control-height) * 1em);margin:0;padding:0 .7em;
-  color:var(--label);background:var(--bg-card,var(--bg));border:1px solid var(--line);font:inherit;line-height:1;cursor:pointer}
-.settings-toggle-option:first-child{border-radius:8px 0 0 8px}
-.settings-toggle-option:last-child{margin-left:-1px;border-radius:0 8px 8px 0}
-.settings-toggle-option:hover{color:var(--fg);border-color:var(--fg-faint)}
-.settings-toggle-option[aria-pressed="true"],.settings-toggle-option[aria-pressed="true"]:hover{position:relative;z-index:1;color:var(--accent);border-color:var(--accent)}
-.settings-toggle-option:focus-visible{position:relative;z-index:2;outline:2px solid var(--focus);outline-offset:1px}
-.settings-toggle-option:disabled{opacity:.55;cursor:default}
-#panel .facts.settings-switch-row{display:flex;flex-wrap:nowrap;align-items:center;width:100%}
-#panel .facts.settings-switch-row>.rowlabel{flex:0 1 var(--rlcol,96px);min-width:0;white-space:normal}
-#panel .examples-extra.settings-switch-row{align-items:center;margin-block:calc(var(--ui-row-gap) * 1em)}
-#panel .examples-extra.settings-switch-row>.settings-toggle-label{flex:0 0 var(--example-switch-label-width,auto);min-width:0}
+  max-width:calc(100% - 3.5em);min-width:0;white-space:nowrap}
 #panel #examplesExtraRow+.facts{margin-top:calc(var(--ui-row-gap) * 1em)}
-#panel .facts.update-notifications-row.settings-switch-row{flex-wrap:nowrap}
-#panel .facts.update-notifications-row.settings-switch-row>.rowlabel{flex:0 1 auto;white-space:nowrap}
 #panel .appearance-row:has(#appearanceColorOn){flex-wrap:wrap}
-#panel .appearance-row:has(#appearanceColorOn)>.settings-toggle{margin-right:auto}
 #panel .appearance-row:has(#appearanceColorOn)>.color-box{flex:1 1 12em}
 #sysSettings .sys-row.sys-num{cursor:default}
 #sysSettings .sys-result-cache-limit,#desktopSysBody .sys-result-cache-limit{justify-content:flex-start;gap:.45em;padding-left:0;font-size:calc(var(--ui-main-control-font) * 1rem)}
-#sysSettings .sys-result-cache-limit .sys-label,#desktopSysBody .sys-result-cache-limit .sys-label{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);flex:0 1 auto}
-#sysSettings .sys-result-cache-limit .sys-label input[type="checkbox"],#desktopSysBody .sys-result-cache-limit .sys-label input[type="checkbox"]{margin:0}
-#sysSettings .sys-result-cache-limit .sys-label input[type="checkbox"],#desktopSysBody .sys-result-cache-limit .sys-label input[type="checkbox"]{width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);border-radius:5px}
-#sysSettings .sys-result-cache-limit .sys-label input[type="checkbox"]:checked::after,#desktopSysBody .sys-result-cache-limit .sys-label input[type="checkbox"]:checked::after{left:25%;top:8%;width:28%;height:52%;border-width:0 2px 2px 0}
-#sysSettings .sys-result-cache-limit .sys-label{flex:0 1 auto}
-#sysSettings .sys-result-cache-limit .sys-label input[type="checkbox"]{margin-right:0}
-#sysSettings .sys-result-cache-limit input,#desktopSysBody .sys-result-cache-limit input{width:7em;height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;padding:0 .6em;text-align:right}
-#sysSettings .sys-result-cache-limit input:disabled,#desktopSysBody .sys-result-cache-limit input:disabled{box-sizing:border-box;width:12em;max-width:calc(100% - 1em);text-align:left}
+#sysSettings .sys-result-cache-limit input[type="text"],#desktopSysBody .sys-result-cache-limit input[type="text"]{width:7em;height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;padding:0 .6em;text-align:right}
+#sysSettings .sys-result-cache-limit input[type="text"]:disabled,#desktopSysBody .sys-result-cache-limit input[type="text"]:disabled{box-sizing:border-box;width:12em;max-width:calc(100% - 1em);text-align:left}
 #sysSettings .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:inherit;overflow-wrap:anywhere}
-#sysSettings .sys-num input,#desktopSysBody .sys-num input{box-sizing:border-box;flex:none;width:6.5em;height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;text-align:right;
+#sysSettings .sys-num input:not([type="checkbox"]),#desktopSysBody .sys-num input:not([type="checkbox"]){box-sizing:border-box;flex:none;width:6.5em;height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;text-align:right;
   color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:0 .6em}
 #sysSettings .sys-num:not(.sys-result-cache-limit) .sys-label,#desktopSysBody .sys-num:not(.sys-result-cache-limit) .sys-label{font-size:calc(var(--ui-main-control-font) * 1rem)}
 #sysSettings .sys-num .sys-workers-select{flex:none;width:6.5em}
@@ -1091,27 +1066,17 @@ html:not([data-shell-image]) #hotkeysSection .hotkey-row input{background-image:
 #sysSettings .sys-note{margin:calc(var(--ui-addition-gap) * 1em) 0 0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.618;color:var(--label)}
 #sysSettings .sys-note:empty{margin:0}
 #sysSettings #sysStale{border:1px solid var(--line);border-radius:8px;padding:.5em .7em}
-/* The Background-color checkbox wears the groups editor's square - one
-   checkbox shape across the panels: 20px, a --fg border, and the check drawn
-   rather than left to the platform, whose default box reads as foreign next
-   to it. --paper-bg first because behind the shell wallpaper a native white
-   box would glow. */
-.appearance-row input[type=checkbox]{appearance:none;-webkit-appearance:none;flex:none;
-  width:20px;height:20px;margin:0;border:1.5px solid var(--fg);border-radius:4px;
-  background-color:var(--paper-bg,var(--bg));position:relative;cursor:pointer}
-.appearance-row input[type=checkbox]:checked::after{content:"";position:absolute;
-  left:5px;top:1px;width:5px;height:10px;border:solid var(--fg);
-  border-width:0 2px 2px 0;transform:rotate(45deg)}
-.appearance-row input[type=checkbox]:focus-visible{outline:2px solid var(--accent);
-  outline-offset:2px}
-#panel .panel-checkbox{appearance:none;-webkit-appearance:none;flex:none;
-  width:20px;height:20px;margin:0 .5em 0 0;border:1.5px solid var(--fg);border-radius:4px;
-  background-color:var(--paper-bg,var(--bg));position:relative;vertical-align:middle;cursor:pointer}
-#panel .examples-extra .panel-checkbox{margin:.2em 0 0}
-#panel .panel-checkbox:checked::after{content:"";position:absolute;
-  left:5px;top:1px;width:5px;height:10px;border:solid var(--fg);
-  border-width:0 2px 2px 0;transform:rotate(45deg)}
-#panel .panel-checkbox:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* Checkbox shape and paper are shared by checkbox.css; these declarations
+   only tune the appearance drawer's local spacing. */
+.appearance-row input[type=checkbox]{--ds-checkbox-margin:0}
+#panel .panel-checkbox{--ds-checkbox-margin:0 .5em 0 0}
+#panel .examples-extra .panel-checkbox{--ds-checkbox-margin:.2em 0 0}
+#panel .facts.panel-setting-checkbox{align-items:center;gap:calc(var(--ui-control-gap) * 1em);width:100%;cursor:pointer}
+#panel .facts.panel-setting-checkbox>.panel-checkbox{--ds-checkbox-margin:0}
+.reading-checkbox{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);cursor:pointer}
+.reading-checkbox[hidden]{display:none}
+.reading-checkbox>.panel-checkbox{--ds-checkbox-margin:0}
+.reading-checkbox svg{width:1em;height:1em;flex:none;color:var(--label-quiet)}
 #panel .headword-threshold-row{width:100%;align-items:center;column-gap:calc(var(--ui-control-gap) * 2em)}
 #panel .headword-threshold-row>.threshold-select-wrap{flex:1 1 0;min-width:0;max-width:100%}
 #panel .headword-threshold-row>.rowlabel{flex:none;white-space:nowrap;line-height:1.35}
@@ -1360,7 +1325,7 @@ html[data-native-appearance]{--styler-h:min(65vh,560px)}
 /* The presets pane wears the Files pane's box, because they are the same
    kind of thing - a list of rows in the textarea's place - and the reader
    should not have to learn a second surface. The rows differ in what leads
-   them: a switch, not a thumbnail, since a preset's whole body is the
+   them: a checkbox, not a thumbnail, since a preset's whole body is the
    description under its name. */
 #stylerPresetsPane{width:100%;margin-top:.5em;
   background:var(--bg-card);border:1px solid var(--line);
@@ -1373,9 +1338,9 @@ html[data-native-appearance]{--styler-h:min(65vh,560px)}
    inert, with the reason on its own line - see presetsPaneRender. Hiding it
    instead answered "why is this not here?" with silence. */
 .pr.off{opacity:.55}
-.pr.off .en{cursor:default}
 #stylerPresetsPane .pr{display:flex;align-items:center;gap:.6em;padding:.4em .6em;
   border-bottom:1px solid var(--line-soft)}
+#stylerPresetsPane .pr input[type=checkbox]{--ds-checkbox-margin:0}
 #stylerPresetsPane .pr:last-child{border-bottom:0}
 #stylerPresetsPane .n{flex:1 1 auto;min-width:0;font-size:12.5px}
 #stylerPresetsPane .n b{display:block;font-weight:500;color:var(--fg)}
@@ -1450,8 +1415,8 @@ dialog.panel-card:not([open]){display:none}
   font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1}
 #panel .panel-head .themeFlip{width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);min-width:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);box-sizing:border-box;display:grid;place-items:center;padding:0;
   font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1}
-#panel .panel-head .themeAuto{width:auto;height:auto;min-width:0;min-height:0;padding:.3em .55em;display:inline-block;
-  font-size:calc(var(--ui-font-title) * 1rem);line-height:1.2}
+#panel .panel-head .themeAuto{width:auto;height:calc(var(--ui-main-control-height) * 1em);min-width:0;min-height:calc(var(--ui-main-control-height) * 1em);box-sizing:border-box;display:inline-grid;place-items:center;padding:0 .55em;
+  font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1}
 #panel .panel-head #closePanel .icon-close{width:1.4em;height:1.4em}
 .panel-card h2 .headacts{margin-left:auto;display:flex;gap:calc(var(--ui-control-gap) * 1em)}
 /* The theme control is TWO buttons - Auto, and the state it resolves to.
@@ -1507,22 +1472,10 @@ html[data-dict-icons-off] .dict-icon{display:none}
 #dictSettings .pd .grip{grid-column:1;grid-row:2;padding:.4em;align-self:center}
 #dictSettings .pd .ord{grid-column:2;grid-row:2;gap:calc(var(--ui-control-gap) * 2.5em);margin-left:0;justify-content:flex-end}
 #dictSettings .pd .ord button{box-sizing:border-box;min-width:calc(var(--ui-control-height) * 1em);width:calc(var(--ui-control-height) * 1em);height:calc(var(--ui-control-height) * 1em);min-height:calc(var(--ui-control-height) * 1em);padding:0}
-.en{appearance:none;width:32px;height:18px;border-radius:9px;background:var(--line);
-  position:relative;cursor:pointer;flex:none;transition:background .15s}
-.en:checked{background:var(--accent)}
-.en::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;
-  border-radius:50%;background:#fff;transition:transform .15s}
-.en:checked::after{transform:translateX(14px)}
-/* partial: knob centred on a half-tinted track — readable as "some", never
-   mistaken for the full-accent "all" */
-.en:indeterminate{background:color-mix(in srgb,var(--accent) 45%,var(--line))}
-.en:indeterminate::after{transform:translateX(7px)}
-.en:disabled{opacity:.4;cursor:default}
 /* A button with nothing to do is dimmed rather than removed: the Presets row
    keeps its shape, and the reader learns where the control lives instead of
    watching it appear. */
 .btn:disabled{opacity:.45;cursor:default}
-.en:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .pd .meta{color:var(--label-quiet);font-size:calc(var(--ui-font-addition) * 1rem);margin:.15em 0 .3em}
 .pd .feat{box-sizing:border-box;display:inline-flex;align-items:center;height:calc(var(--ui-control-height) * 1em);border:1px solid var(--line);border-radius:99px;
   padding:0 .55em;margin:.15em calc(var(--ui-control-gap) * 1em) .15em 0;font-size:calc(var(--ui-font-base) * 1rem);line-height:1;color:var(--label-quiet);
@@ -1706,19 +1659,6 @@ html[data-dict-icons-off] .dict-icon{display:none}
 .facts .mrow.door::after{content:"›";margin-left:auto;color:var(--label-quiet);
   font-size:1em;line-height:1;flex:none}
 .facts .mrow.door:hover::after{color:var(--label)}
-/* The panel's group drop-down follows its natural-width label and fills
-   the rest of the row. Its own label is
-   ellipsised: min-width:0 is what lets a flex item shrink below its content at
-   all, and the caret keeps its place on its own auto margin. The button's
-   `width:100%` is replaced by `flex:1 1 0` because `.facts` wraps: an item
-   100% wide beside a label would take a line of its own. The row itself needs
-   `width:100%` too: it is a child of `.facts.reading`, which is a column with
-   `align-items:flex-start`, so without it the row and the bar inside it would
-   be only as wide as their content - a short group name left a short bar. */
-.facts.dictionary-group-row{width:100%;align-self:stretch}
-#panel .facts.dictionary-group-row>.rowlabel{flex:none;min-width:0;white-space:nowrap}
-.facts.dictionary-group-row>#pickerGroupBtn{box-sizing:border-box;width:auto;flex:1 1 0;min-width:0}
-#pickerGroupBtn>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #panel .facts.update-notifications-row,#panel .facts.update-channel-row,#panel .facts.update-install-row,#panel .facts.update-check-row{width:100%;align-self:stretch}
 #panel .facts.update-notifications-row>.rowlabel{display:flex;align-items:center;white-space:normal;color:var(--label);cursor:pointer}
 #panel .facts.update-channel-row{flex-wrap:nowrap}
@@ -1744,6 +1684,11 @@ html[data-dict-icons-off] .dict-icon{display:none}
 .panel-dropdown{position:relative;box-sizing:border-box;height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
   min-height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem)}
 #panel .facts .panel-dropdown{font-size:calc(var(--ui-control-font) * 1rem);line-height:1}
+#panel .facts.language-row>#languageBtn,
+#panel #looksChoice,
+#panel .headword-threshold-row>.threshold-select-wrap,
+#panel .article-font-select-wrap{height:calc(var(--ui-edit_control-height) * 1.5rem);min-height:calc(var(--ui-edit_control-height) * 1.5rem);
+  font-size:calc(var(--ui-edit_control-font) * 1rem)}
 .panel-dropdown::after{content:"";position:absolute;right:.55em;top:50%;transform:translateY(-50%);pointer-events:none;
   width:0;height:0;margin:0;border:4px solid transparent;border-top-color:var(--fg)}
 .panel-select-wrap{min-width:0}
@@ -1753,6 +1698,9 @@ html[data-dict-icons-off] .dict-icon{display:none}
   height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
   font-size:calc(var(--ui-control-font) * 1rem);line-height:1;
   appearance:none;-webkit-appearance:none;padding:0 1.8em 0 .55em}
+#panel .headword-threshold-row>.panel-select-wrap>select,
+#panel .article-font-select-wrap>select{height:calc(var(--ui-edit_control-height) * 1.5rem);
+  min-height:calc(var(--ui-edit_control-height) * 1.5rem);font-size:calc(var(--ui-edit_control-font) * 1rem)}
 /* A label for the control on its row, in the register the segs' labels use. */
 .facts .rowlabel{font-size:calc(var(--ui-font-base) * 1rem);line-height:1.2;color:var(--label-quiet)}
 /* The collection's count, on its own line under the heading: the answer to "is
@@ -1803,8 +1751,7 @@ html[data-dict-icons-off] .dict-icon{display:none}
    `.facts` row in the panel has a `.rowlabel`; the reading strip's labels
    measure into their own section's column (see "One label column" there). */
 .facts:has(>#fsCtl)>.rowlabel,.facts:has(>#fwCtl)>.rowlabel,
-.facts:has(>#looksControls)>.rowlabel,.facts:has(>#compactSeg)>.rowlabel,
-.facts:has(>#examplesSeg)>.rowlabel,.facts:has(>#sbarSeg)>.rowlabel,
+.facts:has(>#looksControls)>.rowlabel,
 .facts:has(>.article-font-select-wrap)>.rowlabel{
   flex:0 1 var(--rlcol,auto);min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis}
@@ -1871,14 +1818,13 @@ html[data-dict-icons-off] .dict-icon{display:none}
 #folderBody .frow{display:flex;flex-wrap:wrap;align-items:baseline;
   column-gap:.6em;padding:.15em 0}
 #folderBody .frow .p{flex:1 1 auto;min-width:min(24ch,100%);overflow-wrap:break-word;
-  color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem);cursor:pointer}
+  color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem)}
+#folderBody .frow .p.revealable{cursor:pointer}
+#folderBody .frow .p.revealable:hover{color:var(--link);text-decoration:underline}
 #folderBody .frow .meta{margin-left:auto;display:flex;align-items:baseline;gap:.9em;
   white-space:nowrap}
 #folderBody .frow .n{color:var(--label-quiet);font-size:calc(var(--ui-hint-font-size) * 1rem)}
 #folderBody .frow .n.bad{color:var(--danger)}
-#folderBody .rv{color:var(--label-quiet);font-size:calc(var(--ui-hint-font-size) * 1rem);cursor:pointer}
-#folderBody .rv:hover{color:var(--link);text-decoration:underline}
-#folderBody .frow:hover .rv{color:var(--label)}
 /* The rows. An affordance on the web is a BOUNDARY, not a pictograph beside a
    word — a border is what says "aim here", which is the one thing the emoji
    that used to sit in these rows never said. Quietest possible bounding in this
@@ -1903,7 +1849,7 @@ html[data-dict-icons-off] .dict-icon{display:none}
    content-sized: stretching it across the drawer made the pair look pinned to
    the right edge. The explicit label width below still gives both rows the
    same control start. */
-.facts.reading>.seg{align-self:flex-start;width:auto;max-width:100%}
+.facts.reading>.reading-checkbox{align-self:flex-start;width:auto;max-width:100%}
 .facts .history-controls{display:flex;align-items:center;flex-wrap:wrap;gap:calc(var(--ui-control-gap) * 1em);
   font-size:calc(var(--ui-font-base) * 1rem)}
 .facts .history-setting{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);font-size:calc(var(--ui-font-base) * 1rem)}
@@ -1954,7 +1900,6 @@ html[data-dict-icons-off] .dict-icon{display:none}
    own text. */
 .facts .seg>span{flex:0 0 var(--rlcol,96px);min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;font-size:calc(var(--ui-font-base) * 1rem);line-height:1.2;color:var(--label-quiet)}
-.facts.reading>.seg>span{box-sizing:border-box;flex:0 1 auto;width:var(--rlcol,96px)}
 /* A mark may ride in the label, as the speaker does. It is drawn at the same
    size and in the same faint colour as the marks that ride ON a control, but
    it sits in the label column with the words it belongs to: the row it came
@@ -1962,7 +1907,6 @@ html[data-dict-icons-off] .dict-icon{display:none}
    column the other two rows are read down. */
 .facts .seg>span svg{width:14px;height:14px;flex:none;color:var(--label-quiet);
   vertical-align:-2px;margin-right:calc(var(--ui-control-gap) * 1em)}
-#speakSeg>span svg{width:1em;height:1em;vertical-align:-.15em}
 /* Both halves of every pair are as wide as the widest word in the section, so
    the six buttons make ONE column and the edge the halves share falls at the
    same x in all three rows. At their natural widths the rows came out ragged:
@@ -1971,7 +1915,6 @@ html[data-dict-icons-off] .dict-icon{display:none}
    read as the same control in two states. */
 .facts .seg .act{position:relative;border-radius:0;min-width:80px;
   justify-content:center}
-#hlOn,#hlOff,#speakOn,#speakOff{min-width:60px}
 .facts .seg .act:first-of-type{border-radius:8px 0 0 8px}
 .facts .seg .act:last-of-type{border-radius:0 8px 8px 0;margin-left:-1px}
 /* Raised over its neighbour so the edge they share is the accent one; the
@@ -1997,7 +1940,7 @@ html[data-dict-icons-off] .dict-icon{display:none}
    the label column is where the reader looks for the NAME of a thing, not for
    what it is set to. The waves are not a colour: they are part of the mark, a
    speaker that is speaking rather than one that is muted, and they stay. */
-#speakSeg:not(.on) .wave{display:none}
+#speakRow:not(.on) .wave{display:none}
 /* It belongs with the other things you came to this drawer to DO, so it wears
    the row's chrome — but it still reveals a choice rather than performing one,
    and it keeps the ▸/▾ every other disclosure in this app uses (.prov,
@@ -2064,7 +2007,7 @@ html[data-dict-icons-off] .dict-icon{display:none}
    Scoped to .sect on purpose: `.about` is ALSO the class of a card's "About this
    dictionary" disclosure further down, which carries its own rules — a bare
    `.about a` here would restyle that card's links. */
-#panel .sect .about{margin-top:0}
+#panel .sect .about{margin-top:calc(var(--ui-section-space-before) * 1em)}
 .sect .about .brand{font-size:calc(var(--ui-font-base) * 1rem);margin-right:.4em}
 .sect .about .ver{font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label-quiet);font-variant-numeric:tabular-nums}
 #panel .sect .about p{margin:calc(var(--ui-addition-gap) * 1em) 0 0;font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label-quiet);line-height:1.45}
@@ -2314,7 +2257,7 @@ html:is([data-shell-sepia],[data-shell-image]) .list-search-input{background-col
 
 #headwordExport .export-group{display:flex;align-items:center;gap:.8em;padding:.2em .5em .6em;border-bottom:1px solid var(--line)}
 #exportGroup{flex:1;min-width:0;width:100%;max-width:none}
-#headwordExport input[type="checkbox"]{flex:none;margin:0}
+#headwordExport input[type="checkbox"]{--ds-checkbox-margin:0}
 #exportRows .web-picker-row{padding:.75em .5em;gap:.8em}
 #exportSearch{border-top:1px solid var(--line);padding-top:.5em}
 #exportSelected{margin-inline-start:auto;white-space:nowrap}
@@ -2342,11 +2285,12 @@ html:is([data-shell-sepia],[data-shell-image]) .list-search-input{background-col
 @font-face{font-family:"wudict-Gentium";font-weight:700;font-style:italic;src:url("/assets/fonts/Gentium-BoldItalic.woff2?v=7.000") format("woff2")}
 @font-face{font-family:"wudict-Quivira";src:url("/assets/fonts/Quivira.otf?v=1") format("opentype")}
 
-#portableDialog{width:min(560px,calc(100vw - 32px));box-sizing:border-box;max-height:calc(100dvh - 32px);overflow:auto}
+#portableDialog{width:min(560px,calc(100vw - 32px));box-sizing:border-box;max-height:calc(100dvh - 32px);overflow:auto;gap:.45em}
 #portableDialog h2{margin-top:0}
+#portableDialog>p{margin:.15em 0}
 .portable-path,.portable-actions,.portable-check,.portable-option{display:flex;gap:.6em;align-items:center}
 .portable-path input{min-width:0;flex:1}
-.portable-options{display:flex;flex-direction:column;gap:.45em}
+.portable-options{display:flex;flex-direction:column;gap:.25em}
 .portable-option input[type="radio"]{appearance:none;-webkit-appearance:none;box-sizing:border-box;position:relative;flex:none;
   width:24px;height:24px;margin:0;border:2px solid var(--fg);border-radius:50%;
   background-color:var(--paper-bg,var(--bg));cursor:pointer}
@@ -2357,8 +2301,9 @@ html:is([data-shell-sepia],[data-shell-image]) .list-search-input{background-col
 .portable-source-path,.portable-permission-hint{margin:0 0 0 1.8em;font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label);overflow-wrap:anywhere}
 .portable-permission-hint{color:var(--label)}
 .portable-path{margin-left:1.8em}
-.portable-check{margin-top:1em}
-.portable-actions{flex-wrap:wrap}
-#portableStatus{overflow-wrap:anywhere}
+.portable-check{margin-top:0}
+.portable-actions{justify-content:space-between;flex-wrap:wrap}
+#portableStatus{margin:0;overflow-wrap:anywhere}
+#portableStatus:empty,#portableSourcePath:empty{display:none}
 #portableProgress{width:100%;margin-top:1em}
 #portableTool[hidden]{display:none}
