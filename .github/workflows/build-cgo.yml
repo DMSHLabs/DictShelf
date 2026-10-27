@@ -15,12 +15,16 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Version stamp for the binaries (e.g. wudict2-v0.12.0); blank = next version: +0.0.1 for a pre-release, +0.1.0 for a release"
+        description: "Release tag (e.g. dictshelf-v1.02.01); blank = generate from the selected channel"
         required: false
-      prerelease:
-        description: "Mark the release as a pre-release"
-        type: boolean
-        default: false
+      channel:
+        description: "Release channel"
+        type: choice
+        options:
+          - release
+          - pre-release
+          - beta
+        default: release
       draft:
         description: "Create the release as a draft (nothing is downloadable until it is published)"
         type: boolean
@@ -59,6 +63,15 @@ jobs:
           ref: releases
           fetch-depth: 0
 
+      - name: Checkout the version resolver from this workflow revision
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-source
+          sparse-checkout: tools/next-tag.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
@@ -79,16 +92,12 @@ jobs:
             # a pre-release takes the next patch, a release the next minor,
             # and a release another workflow already started keeps its tag -
             # so the binary is stamped with the version its release carries.
-            if [ "${{ inputs.prerelease }}" = "true" ]; then
-              VERSION="$(sh tools/next-tag.sh --prerelease)"
-            else
-              VERSION="$(sh tools/next-tag.sh --release)"
-            fi
+            VERSION="$(sh .workflow-source/tools/next-tag.sh --${{ inputs.channel }})"
           fi
           # Fail loudly instead of silently shipping 0.0.0 artifacts. The
-          # fork's tags carry the wudict2- prefix, so they count as versions.
+          # Both current DictShelf tags and legacy tags count as versions.
           case "$VERSION" in
-            v[0-9]*|wudict2-v[0-9]*|[0-9]*) : ;;
+            v[0-9]*|dictshelf-v[0-9]*|wudict2-v[0-9]*|[0-9]*) : ;;
             *) echo "::warning title=Unversioned build::no usable tag found - stamping '$VERSION'; installers will be named 0.0.0" ;;
           esac
           echo "version: $VERSION"
@@ -177,6 +186,15 @@ jobs:
           ref: releases
           fetch-depth: 0
 
+      - name: Checkout the version resolver from this workflow revision
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-source
+          sparse-checkout: tools/next-tag.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Configure GCC for the build script
         shell: pwsh
         run: |
@@ -194,11 +212,7 @@ jobs:
           if [ -z "$VERSION" ]; then
             # The version this release carries (D168), the same one the build
             # job stamps the binaries with and the release job tags it as.
-            if [ "${{ inputs.prerelease }}" = "true" ]; then
-              VERSION="$(sh tools/next-tag.sh --prerelease)"
-            else
-              VERSION="$(sh tools/next-tag.sh --release)"
-            fi
+            VERSION="$(sh .workflow-source/tools/next-tag.sh --${{ inputs.channel }})"
           fi
           # build-windows.cmd would otherwise name the setup file and its
           # VersionInfo after the clone's last tag, which is the PREVIOUS
@@ -263,6 +277,15 @@ jobs:
           fetch-depth: 0 # full history + tags so tools/next-tag.sh can pick the version
           persist-credentials: true
 
+      - name: Checkout the version resolver from this workflow revision
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-source
+          sparse-checkout: tools/next-tag.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Resolve tag
         id: tag
         run: |
@@ -271,11 +294,7 @@ jobs:
             # Blank field: tools/next-tag.sh decides, the same rule the build
             # job stamped the binaries with (D168). Both read the same clone
             # and neither creates anything, so the two cannot disagree.
-            if [ "${{ inputs.prerelease }}" = "true" ]; then
-              TAG="$(sh tools/next-tag.sh --prerelease)"
-            else
-              TAG="$(sh tools/next-tag.sh --release)"
-            fi
+            TAG="$(sh .workflow-source/tools/next-tag.sh --${{ inputs.channel }})"
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
@@ -297,7 +316,7 @@ jobs:
             git config user.email "github-actions[bot]@users.noreply.github.com"
             # The message keeps the shape of every hand-made tag in this
             # repository (wuDict2 v0.11.1), so the two are one line in a log.
-            git tag -a "${TAG}" -m "wuDict2 ${TAG#wudict2-}"
+            git tag -a "${TAG}" -m "DictShelf ${TAG}"
             git push origin "${TAG}"
             echo "Tag ${TAG} pushed."
           fi
@@ -344,7 +363,7 @@ jobs:
         # onto an older release must not strip its pre-release marker.
         run: |
           FLAGS=()
-          [ "${{ inputs.prerelease }}" = "true" ] && FLAGS+=(--prerelease)
+          [ "${{ inputs.channel }}" != "release" ] && FLAGS+=(--prerelease)
           [ "${{ inputs.draft }}" = "true" ] && FLAGS+=(--draft)
           # This workflow OWNS the notes: it sets them on a release it finds
           # as well as on one it creates. Three workflows publish into the
@@ -373,3 +392,19 @@ jobs:
               --title "${{ github.event.repository.name }} ${TAG}" \
               "${NOTES[@]}" "${FLAGS[@]}"
           fi
+
+      - name: Checkout dev for the public update catalogue
+        if: ${{ inputs.draft == false }}
+        uses: actions/checkout@v6
+        with:
+          ref: dev
+          path: .update-catalog
+          fetch-depth: 0
+
+      - name: Refresh static update catalogue
+        if: ${{ inputs.draft == false }}
+        run: |
+          set -euo pipefail
+          export UPDATE_CATALOG_PATH=.update-catalog/update-catalog.json
+          gh api --paginate repos/DMSHLabs/DictShelf/releases --jq '.[]' | jq -s '.' | python3 .update-catalog/tools/update-catalog.py
+          sh .update-catalog/tools/publish-update-catalog.sh .update-catalog/update-catalog.json

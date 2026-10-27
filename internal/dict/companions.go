@@ -29,7 +29,7 @@ import (
 // deleted rather than trusted silently.
 
 // Stem returns the main file's path with its format suffix removed, which is
-// what every companion is named after. ".dz" is stripped first, so "x.dsl.dz"
+// what every companion is named after. ".dz" or ".dz2" is stripped first, so "x.dsl.dz"
 // and "x.dsl" both yield "x" - a compressed DSL's companions are named for the
 // dictionary, not for the compression.
 //
@@ -39,7 +39,7 @@ import (
 func Stem(src string) string {
 	s := src
 	switch ext := strings.ToLower(filepath.Ext(s)); {
-	case ext == ".dz", ext == ".gz" && strings.HasSuffix(strings.ToLower(s), ".wudict.md.gz"):
+	case ext == ".dz", ext == ".dz2", ext == ".gz" && strings.HasSuffix(strings.ToLower(s), ".wudict.md.gz"):
 		s = s[:len(s)-len(ext)]
 	}
 	return strings.TrimSuffix(s, filepath.Ext(s))
@@ -58,7 +58,7 @@ func Name(path string) string {
 		return n
 	}
 	// a compressed spelling the list does not name ("notes.md.gz")
-	for _, z := range []string{".gz", ".dz"} {
+	for _, z := range []string{".gz", ".dz", ".dz2"} {
 		if len(base) > len(z) && strings.EqualFold(base[len(base)-len(z):], z) {
 			if n, ok := trimMainExt(base[:len(base)-len(z)]); ok {
 				return n
@@ -82,7 +82,7 @@ func trimMainExt(base string) (string, bool) {
 // the ".dsl" inside it. One list, read twice: MainExt matches a name against
 // it, and classify.go walks it to build the companion vocabulary, so a format
 // that grows a companion table cannot be forgotten by the other reader.
-var mainExts = []string{".wudict.md.gz", ".wudict.md.dz", ".wudict.md", ".dsl.dz", ".dsl", ".mdx", ".ifo", ".slob", ".bgl", ".zimaa", ".zim", ".md"}
+var mainExts = []string{".wudict.md.gz", ".wudict.md.dz", ".wudict.md", ".dsl.dz2", ".dsl.dz", ".dsl", ".mdx", ".ifo", ".slob", ".bgl", ".zimaa", ".zim", ".md"}
 
 // MaxZIMParts bounds the number of files opened for a split archive, including
 // its first .zimaa part. Kiwix splits at file boundaries only by chance; the
@@ -199,11 +199,11 @@ func CompanionMedia(src string) []string {
 			}
 			out = append(out, f)
 		}
-	case ".dsl", ".dsl.dz":
+	case ".dsl", ".dsl.dz", ".dsl.dz2":
 		// "x.dsl.files.zip" beside "x.dsl" - and beside "x.dsl.dz" too, where
 		// the zip is named for the dictionary and not for the compression -
 		// or the shorter "x.files.zip".
-		uncompressed := strings.TrimSuffix(src, filepath.Ext(src)) // "x.dsl.dz" → "x.dsl"
+		uncompressed := strings.TrimSuffix(src, filepath.Ext(src)) // "x.dsl.dz[2]" → "x.dsl"
 		for _, f := range []string{src + ".files.zip", uncompressed + ".files.zip", base + ".files.zip"} {
 			if fsx.FileExists(f) {
 				out = append(out, f)
@@ -257,8 +257,8 @@ func CompanionSuffixes(mainExt string) []string {
 			".syn", ".syn.gz", ".syn.dz",
 			".ann",
 		}
-	case ".dsl", ".dsl.dz":
-		return []string{"_abrv.dsl.dz", "_abrev.dsl.dz", "_abrv.dsl", "_abrev.dsl", ".ann", ".dsl.ann"}
+	case ".dsl", ".dsl.dz", ".dsl.dz2":
+		return []string{"_abrv.dsl.dz2", "_abrev.dsl.dz2", "_abrv.dsl.dz", "_abrev.dsl.dz", "_abrv.dsl", "_abrev.dsl", ".ann", ".dsl.ann"}
 	case ".lsd":
 		return []string{"_abrv.lsd", "_abrev.lsd"}
 	case ".mdx":
@@ -287,7 +287,7 @@ func MediaSuffixes(mainExt string) []string {
 	case ".mdx":
 		// covers ".mdd" and every ".<n>.mdd" part, which end in it
 		return []string{".mdd"}
-	case ".dsl", ".dsl.dz", ".wudict.md", ".wudict.md.gz", ".wudict.md.dz", ".md":
+	case ".dsl", ".dsl.dz", ".dsl.dz2", ".wudict.md", ".wudict.md.gz", ".wudict.md.dz", ".md":
 		return []string{".files.zip"}
 	}
 	return nil
@@ -315,7 +315,7 @@ func RequiredCompanions(mainExt string) [][]string {
 // abbrevSuffixes are the spellings of Lingvo's abbreviation glossary, longest
 // first so a ".dsl.dz" companion is recognised before the ".dsl" inside its
 // name. Appended to the STEM, exactly like every other companion here.
-var abbrevSuffixes = []string{"_abrv.dsl.dz", "_abrev.dsl.dz", "_abrv.lsd", "_abrev.lsd", "_abrv.dsl", "_abrev.dsl"}
+var abbrevSuffixes = []string{"_abrv.dsl.dz2", "_abrev.dsl.dz2", "_abrv.dsl.dz", "_abrev.dsl.dz", "_abrv.lsd", "_abrev.lsd", "_abrv.dsl", "_abrev.dsl"}
 
 // AbbrevCompanion returns the abbreviation glossary belonging to a DSL or LSD
 // main file src, if one exists beside it. Lingvo writes it as the expansion map
@@ -324,8 +324,8 @@ var abbrevSuffixes = []string{"_abrv.dsl.dz", "_abrev.dsl.dz", "_abrv.lsd", "_ab
 func AbbrevCompanion(src string) (string, bool) {
 	var suffixes []string
 	switch MainExt(src) {
-	case ".dsl", ".dsl.dz":
-		suffixes = []string{"_abrv.dsl.dz", "_abrev.dsl.dz", "_abrv.dsl", "_abrev.dsl"}
+	case ".dsl", ".dsl.dz", ".dsl.dz2":
+		suffixes = []string{"_abrv.dsl.dz2", "_abrev.dsl.dz2", "_abrv.dsl.dz", "_abrev.dsl.dz", "_abrv.dsl", "_abrev.dsl"}
 	case ".lsd":
 		suffixes = []string{"_abrv.lsd", "_abrev.lsd"}
 	default:
@@ -352,7 +352,7 @@ func IsAbbrevCompanion(path string) bool {
 	if base == "" {
 		return false
 	}
-	return fsx.FileExists(base+".dsl") || fsx.FileExists(base+".dsl.dz") || fsx.FileExists(base+".lsd")
+	return fsx.FileExists(base+".dsl") || fsx.FileExists(base+".dsl.dz") || fsx.FileExists(base+".dsl.dz2") || fsx.FileExists(base+".lsd")
 }
 
 // IsAbbrevCompanionSource reports whether path names an abbreviation glossary
@@ -364,7 +364,7 @@ func IsAbbrevCompanionSource(path string, discovered []string) bool {
 	if base == "" {
 		return false
 	}
-	for _, ext := range []string{".dsl", ".dsl.dz", ".lsd"} {
+	for _, ext := range []string{".dsl", ".dsl.dz", ".dsl.dz2", ".lsd"} {
 		want := CanonPath(base + ext)
 		for _, candidate := range discovered {
 			if CanonPath(candidate) == want {

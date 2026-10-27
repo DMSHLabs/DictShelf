@@ -207,6 +207,7 @@ final class Shell {
         // page's own boot push because the flag arrives at onPageFinished,
         // which either side of that push can win.
         web.evaluateJavascript("window.wudictAndroidShell=1;window.wudictNativeShell=1;"
+                + "window.wudictAndroidUpdaterAvailable=" + AndroidUpdate.available() + ";"
                 + "if(typeof wudictPresetPaper==='function')wudictPresetPaper();"
                 + "if(typeof appearanceRead==='function' && document.getElementById('styler')"
                 + " && document.getElementById('styler').classList.contains('show')) appearanceRead();"
@@ -266,6 +267,10 @@ final class Shell {
         reply.put("reader", ShellPrefs.opensApp(c, ShellPrefs.READER));
         reply.put("info", ShellPrefs.infoMessages(c));
         reply.put("serverAvailable", false);
+        org.json.JSONObject prefs = new org.json.JSONObject(GoBridge.prefsSnapshot());
+        org.json.JSONObject uiPrefs = prefs.optJSONObject("ui");
+        reply.put("updateChannel", uiPrefs == null ? "release" : uiPrefs.optString("updateChannel", "release"));
+        reply.put("updateNotifications", uiPrefs == null || !uiPrefs.optBoolean("updateNotificationsOff", false));
         reply.put("logEnabled", SystemLog.enabled());
         reply.put("logBaseEvents", SystemLog.baseEvents());
         reply.put("logWebEvents", SystemLog.detailedEvents());
@@ -448,8 +453,8 @@ final class Shell {
             return GoBridge.browseFindPage(query);
         }
 
-        @JavascriptInterface public void browseDiagnostic(String payload) {
-            GoBridge.browseDiagnostic(payload);
+        @JavascriptInterface public String browseDiagnostic(String payload) {
+            return GoBridge.browseDiagnostic(payload);
         }
 
         @JavascriptInterface public String about(String origin, String dictionary) {
@@ -706,6 +711,17 @@ final class Shell {
                     a.runOnUiThread(() -> AppExit.request(a));
                     return true;
                 }
+                if ("wudict:android-update".equals(message)) {
+                    try {
+                        result.confirm(AndroidUpdate.start(a, defaultValue).toString());
+                    } catch (Exception error) {
+                        SystemLog.warn(TAG, "could not start Android update", error);
+                        String detail = error.getMessage() == null
+                                ? "Update could not be started" : error.getMessage();
+                        result.confirm("{\"error\":" + org.json.JSONObject.quote(detail) + "}");
+                    }
+                    return true;
+                }
                 if ("wudict:appearance".equals(message)) {
                     try {
                         org.json.JSONObject request = new org.json.JSONObject(defaultValue);
@@ -849,6 +865,19 @@ final class Shell {
                                 ShellPrefs.set(a, ShellPrefs.READER, request.getBoolean("value"));
                             } else if ("info".equals(field)) {
                                 ShellPrefs.set(a, ShellPrefs.INFO_MESSAGES, request.getBoolean("value"));
+                            } else if ("updateChannel".equals(field)) {
+                                String channel = request.getString("value");
+                                if (!java.util.Arrays.asList("release", "prerelease", "beta").contains(channel))
+                                    throw new IllegalArgumentException("Unknown update channel");
+                                org.json.JSONObject patch = new org.json.JSONObject().put("ui", new org.json.JSONObject().put("updateChannel", channel));
+                                if (!new org.json.JSONObject(GoBridge.savePrefs(patch.toString())).optBoolean("ok"))
+                                    throw new IllegalStateException("Could not save update channel");
+                            } else if ("updateNotifications".equals(field)) {
+                                boolean enabled = request.getBoolean("value");
+                                org.json.JSONObject patch = new org.json.JSONObject().put("ui",
+                                        new org.json.JSONObject().put("updateNotificationsOff", !enabled));
+                                if (!new org.json.JSONObject(GoBridge.savePrefs(patch.toString())).optBoolean("ok"))
+                                    throw new IllegalStateException("Could not save update notification setting");
                             } else if ("override".equals(field)) {
                                 ShellPrefs.Override o = ShellPrefs.byKey(request.getString("key"));
                                 // An absent or null value is "follow the

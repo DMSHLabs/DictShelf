@@ -39,6 +39,8 @@ func init() { dict.RegisterAbout("dsl", loadAnn) }
 func annPath(srcPath string) (string, bool) {
 	low := strings.ToLower(srcPath)
 	switch {
+	case strings.HasSuffix(low, ".dsl.dz2"):
+		return srcPath[:len(srcPath)-len(".dsl.dz2")] + ".ann", true
 	case strings.HasSuffix(low, ".dsl.dz"):
 		return srcPath[:len(srcPath)-len(".dsl.dz")] + ".ann", true
 	case strings.HasSuffix(low, ".dsl"):

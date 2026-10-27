@@ -1,5 +1,7 @@
 # Localization: status and next tasks
 
+2026-10-27 Update section: added EN/RU labels for the channel, notification checkbox and Update button; the channel control is disabled when notifications are off. In-app update badge and persisted default-on preference added. Update checks read a static per-channel catalogue; the version links to its release page. Windows desktop offers installer and portable update paths. FOSS Android downloads a matching APK to Downloads and launches package installation when allowed; Play retains the release link. Phone and desktop wording/layout verification remain pending.
+
 2026-10-26 Main search now labels the initial five-result action `5+` with localized indexing-priority tooltip text; the count is replaced by paged totals after indexing/counting. EN/RU catalog entries were added; catalog/runtime wording checks remain pending.
 
 2026-10-25 Startup dictionary-list progress names file checks and metadata reads, and continues the metadata count in a non-blocking status line after the first row; indexing progress adds completed dictionaries and elapsed time overall and per dictionary. EN/RU entries added; catalog and runtime checks remain pending.

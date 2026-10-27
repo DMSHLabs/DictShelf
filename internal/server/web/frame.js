@@ -670,6 +670,12 @@
 	// that lands on a link, a button or a media element belongs to that
 	// element, not to a lookup.
 	var wordAt = window.wuWordAt;
+	document.addEventListener("contextmenu", function (e) {
+		var el = e.composedPath ? e.composedPath()[0] : e.target;
+		if (el && el.closest && el.closest("a,button,input,textarea,select,audio,video,[contenteditable]")) return;
+		e.preventDefault();
+		HOST.postMessage({ t: "findhere", fid: fid, x: e.clientX, y: e.clientY }, "*");
+	}, true);
 	document.addEventListener("dblclick", function (e) {
 		var el = e.composedPath ? e.composedPath()[0] : e.target;
 		if (el && el.closest && el.closest("a,button,input,textarea,select,audio,video,[contenteditable]")) return;

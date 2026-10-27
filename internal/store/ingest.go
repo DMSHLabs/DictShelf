@@ -74,8 +74,11 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 		ctx = context.Background()
 	}
 	srcMeta := r.Meta()
-	trace := newIndexTrace(srcMeta.Path, dbPath, plan)
+	trace := newIndexTraceContext(ctx, srcMeta.Path, dbPath, plan)
+	trace.dictionary = srcMeta.Name
+	trace.format = srcMeta.Format
 	defer func() {
+		trace.entries = rep.Entries
 		if p := recover(); p != nil {
 			trace.finish(fmt.Errorf("panic: %v", p))
 			panic(p)
@@ -201,7 +204,7 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	total := srcMeta.EntryCount
 
 	trace.phase("scan articles: headwords, fulltext and contains per plan")
-	id, subEntries, linkCount, err := scanIngestEntries(ctx, r, plan, total, progress, rows)
+	id, subEntries, linkCount, err := scanIngestEntries(ctx, r, plan, total, progress, rows, trace)
 	if err != nil {
 		return rep, err
 	}

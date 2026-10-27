@@ -275,6 +275,7 @@ html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image
 #articleFindStrip[hidden]{display:none}
 #articleFindLabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
 #articleFindCount{flex:none;white-space:nowrap;font-size:.85em}
+#articleFindCount:disabled{opacity:.65;cursor:default}
 #articleFindStrip>button:not(#articleFindLabel){flex:none}
 #articleFindPrev,#articleFindNext{min-width:44px;min-height:44px}
 #articleFindNext{margin-left:var(--sp-2)}
@@ -671,24 +672,6 @@ summary .count{margin-left:auto;font-weight:400;color:var(--label-quiet);font-si
    the difference between "this phrase is not in the dictionary" and "here it
    is" (D102). Accent-coloured because it qualifies the result it precedes. */
 summary .rung{color:var(--accent)}
-/* Walking the matches of the section you are reading (markNav). It lives in
-   the sticky header because that is the only surface still on screen halfway
-   down a 27000px article, and because it moves through exactly what the count
-   beside it is counting. The chevrons carry a ~36px touch target on a 25px row
-   via padding plus a matching negative margin, so the finger gets its target
-   and the header keeps its height; ‹ › rather than words because the row also
-   holds a dictionary name that is allowed to wrap and this must never be what
-   pushes it to a second line. */
-summary .mnav{display:flex;align-items:center;gap:1px;margin-left:auto;font-weight:400}
-summary .mnav[hidden]{display:none}
-summary .mnav~.count{margin-left:var(--sp-1)} /* two auto margins would split the row */
-summary .mbtn{cursor:pointer;color:var(--label);font-size:16px;line-height:1;
-  padding:9px 7px;margin:-9px 0;border-radius:5px;user-select:none;
-  -webkit-tap-highlight-color:transparent}
-summary .mbtn:hover{color:var(--fg);background:var(--bg)}
-summary .mbtn:active{color:var(--accent)}
-summary .mpos{font-size:11px;color:var(--label-quiet);min-width:2.8em;text-align:center;
-  font-variant-numeric:tabular-nums}
 summary .search-pages{display:flex;align-items:center;gap:2px;font-weight:400;
   font-size:calc(var(--ui-font-addition) * 1rem);white-space:nowrap}
 summary .result-page-action{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;flex:none;
@@ -736,12 +719,15 @@ summary .upgrade{font-weight:400;font-size:calc(var(--ui-font-addition) * 1rem);
    .group-control-disabled, and the ⌕ in the field). Everything else reads at
    --fg — the reader's report of 2026-09-28 was that the whole panel looked
    switched off. */
-details.noindex>summary{font-weight:700;color:var(--fg-faint)}
+details.noindex>summary{display:flex;align-items:baseline;gap:var(--sp-2);font-weight:700;color:var(--fg-faint)}
+details.noindex>summary .noindex-title{min-width:0}
+details.noindex>summary .noindex-add-all{flex:none;margin-left:auto;padding:0;border:0;background:transparent;font-family:inherit;font-weight:400;font-size:calc(var(--ui-font-addition) * 1rem);color:var(--link);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+details.noindex>summary .noindex-add-all:disabled{opacity:.55;cursor:progress}
 .noidx{padding:var(--sp-1) .62rem var(--sp-2)}
-.noidx>div{display:flex;align-items:baseline;gap:var(--sp-1);font-size:12px;
+.noidx>div{display:grid;grid-template-columns:max-content minmax(0,1fr);align-items:baseline;column-gap:var(--sp-2);font-size:calc(var(--ui-font-addition) * 1rem);
   color:var(--label);padding:.15rem 0}
-.noidx .upgrade{font-size:12px;color:var(--link);cursor:pointer;
-  text-decoration:underline;text-underline-offset:2px;margin-left:auto;white-space:nowrap}
+.noidx .upgrade{font-size:calc(var(--ui-font-addition) * 1rem);color:var(--link);cursor:pointer;
+  text-decoration:underline;text-underline-offset:2px;margin-left:0;white-space:nowrap}
 dl{margin:0;padding:var(--sp-1) var(--sp-2) var(--sp-2)}
 dt{font-size:1.272em;font-weight:700;color:var(--accent);word-break:break-word;
   margin-top:var(--sp-2)}
@@ -975,7 +961,7 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    four of them, which made it grey in BOTH looks, the one thing the register
    exists to prevent). The greys are LEFT to things the reader cannot act on,
    which in this window is nothing: no row here can be disabled. */
-#sysSettings h3.sys-head,#desktopSysBody h3.sys-head{margin:calc(var(--ui-section-space-before) * 1em) 0 calc(var(--ui-section-space-after) * 1em);font-size:calc(var(--ui-font-section) * 1rem);font-weight:600;color:var(--label)}
+#sysSettings h3.sys-head,#desktopSysBody h3.sys-head{margin:calc(var(--ui-row-gap) * 1em) 0 calc(var(--ui-section-space-after) * 1em);font-size:calc(var(--ui-font-section) * 1rem);font-weight:600;color:var(--label)}
 #sysSettings h3.sys-head:first-child,#desktopSysBody h3.sys-head:first-of-type{margin-top:0}
 /* The one group that folds, wearing the heading it replaces: same type, same
    spacing, plus the ▸/▾ this app uses everywhere it means "there is more
@@ -1025,6 +1011,36 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
 #sysSettings .sys-head+.sys-hint,#desktopSysBody .sys-head+.sys-hint{margin-top:0}
 #sysSettings .sys-hint+.sys-head,#desktopSysBody .sys-hint+.sys-head{margin-top:calc(var(--ui-section-space-before) * 1em)}
 #desktopSysBody .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:inherit;overflow-wrap:anywhere}
+#hotkeysSection .hotkey-row .sys-row{align-items:flex-start;cursor:default;flex-wrap:wrap}
+#hotkeysSection .hotkey-row .sys-label{flex:1 1 100%;color:var(--label)}
+#hotkeysSection .hotkey-row input{box-sizing:border-box;width:100%;height:calc(var(--ui-control-height) * 1em);font:inherit;padding:0 .6em;
+  color:var(--fg);background-color:var(--paper-bg,var(--bg));background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%;border:1px solid var(--line);border-radius:5px}
+html:not([data-shell-image]) #hotkeysSection .hotkey-row input{background-image:linear-gradient(#ffffff24,#ffffff24)}
+#sysSettings .sys-row.sys-switch-ready,#desktopSysBody .sys-row.sys-switch-ready{justify-content:flex-start;gap:.8em}
+#sysSettings .sys-row.sys-switch-ready>.sys-label,#desktopSysBody .sys-row.sys-switch-ready>.sys-label{
+  box-sizing:border-box;flex:0 1 var(--sys-switch-label-width,auto);width:var(--sys-switch-label-width,auto);
+  max-width:calc(100% - 7.8em);min-width:0;white-space:nowrap}
+#sysSettings .sys-row input.settings-switch-source,#desktopSysBody .sys-row input.settings-switch-source{display:none!important}
+.settings-switch-source{display:none!important}
+.settings-toggle{display:inline-flex;flex:none;align-items:stretch;min-width:7em}
+.settings-toggle-option{flex:1 1 50%;box-sizing:border-box;min-width:3.5em;height:calc(var(--ui-control-height) * 1em);margin:0;padding:0 .7em;
+  color:var(--label);background:var(--bg-card,var(--bg));border:1px solid var(--line);font:inherit;line-height:1;cursor:pointer}
+.settings-toggle-option:first-child{border-radius:8px 0 0 8px}
+.settings-toggle-option:last-child{margin-left:-1px;border-radius:0 8px 8px 0}
+.settings-toggle-option:hover{color:var(--fg);border-color:var(--fg-faint)}
+.settings-toggle-option[aria-pressed="true"],.settings-toggle-option[aria-pressed="true"]:hover{position:relative;z-index:1;color:var(--accent);border-color:var(--accent)}
+.settings-toggle-option:focus-visible{position:relative;z-index:2;outline:2px solid var(--focus);outline-offset:1px}
+.settings-toggle-option:disabled{opacity:.55;cursor:default}
+#panel .facts.settings-switch-row{display:flex;flex-wrap:nowrap;align-items:center;width:100%}
+#panel .facts.settings-switch-row>.rowlabel{flex:0 1 var(--rlcol,96px);min-width:0;white-space:normal}
+#panel .examples-extra.settings-switch-row{align-items:center;margin-block:calc(var(--ui-row-gap) * 1em)}
+#panel .examples-extra.settings-switch-row>.settings-toggle-label{flex:0 0 var(--example-switch-label-width,auto);min-width:0}
+#panel #examplesExtraRow+.facts{margin-top:calc(var(--ui-row-gap) * 1em)}
+#panel .facts.update-notifications-row.settings-switch-row{flex-wrap:nowrap}
+#panel .facts.update-notifications-row.settings-switch-row>.rowlabel{flex:0 1 auto;white-space:nowrap}
+#panel .appearance-row:has(#appearanceColorOn){flex-wrap:wrap}
+#panel .appearance-row:has(#appearanceColorOn)>.settings-toggle{margin-right:auto}
+#panel .appearance-row:has(#appearanceColorOn)>.color-box{flex:1 1 12em}
 #sysSettings .sys-row.sys-num{cursor:default}
 #sysSettings .sys-result-cache-limit,#desktopSysBody .sys-result-cache-limit{justify-content:flex-start;gap:.45em;padding-left:0;font-size:calc(var(--ui-main-control-font) * 1rem)}
 #sysSettings .sys-result-cache-limit .sys-label,#desktopSysBody .sys-result-cache-limit .sys-label{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);flex:0 1 auto}
@@ -1048,6 +1064,13 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
 #sysSettings .sys-combined-limit>.sys-label,#desktopSysBody .sys-combined-limit>.sys-label{flex:0 1 auto}
 #sysSettings .sys-combined-limit>input,#desktopSysBody .sys-combined-limit>input{height:calc(var(--ui-control-height) * 1em);min-height:0;padding:0 .6em;line-height:1}
 #sysSettings .sys-num .sys-return-cache-select>select,#desktopSysBody .sys-num .sys-return-cache-select>select{display:block;width:100%;max-width:none;min-width:0;box-sizing:border-box;
+  height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;color:var(--fg);background:var(--bg);
+  border:1px solid var(--line);border-radius:5px;padding:0 1.8em 0 .55em;appearance:none;-webkit-appearance:none}
+#sysSettings .sys-indexing-mode,#desktopSysBody .sys-indexing-mode{justify-content:flex-start;gap:.45em}
+#sysSettings .sys-indexing-mode>.sys-label,#desktopSysBody .sys-indexing-mode>.sys-label{flex:0 1 auto}
+#sysSettings .sys-indexing-mode-select,#desktopSysBody .sys-indexing-mode-select{flex:0 1 14em;width:14em;max-width:calc(100% - 5.5em);min-width:0}
+#sysSettings .sys-indexing-mode-select,#desktopSysBody .sys-indexing-mode-select{height:calc(var(--ui-control-height) * 1em);min-height:0}
+#sysSettings .sys-indexing-mode-select>select,#desktopSysBody .sys-indexing-mode-select>select{display:block;width:100%;max-width:none;min-width:0;box-sizing:border-box;
   height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;color:var(--fg);background:var(--bg);
   border:1px solid var(--line);border-radius:5px;padding:0 1.8em 0 .55em;appearance:none;-webkit-appearance:none}
 #sysSettings .sys-action-spaced{margin-top:calc(var(--ui-row-gap) * 1em)}
@@ -1162,16 +1185,16 @@ html[data-styled-selects] .themed-select-native{display:none}
 html[data-styled-selects] .themed-select-btn[data-themed-select]{display:flex}
 html[data-styled-selects] #webPickerGroup{display:none}
 html[data-styled-selects] #webPickerGroupBtn{display:flex}
-@media (min-width:601px){
-  html[data-styled-selects] #mode{display:none}
-  html[data-styled-selects] #modeMenuBtn{display:flex;width:auto;min-width:5em}
+html[data-styled-selects] #mode{display:none}
+html[data-styled-selects] #modeChip{display:none}
+html[data-styled-selects] #modeMenuBtn{display:flex;flex:none;width:auto;min-width:5em}
+@media(max-width:600px){
+  html[data-styled-selects] #modeMenuBtn{min-width:40px;max-width:none;padding:.45em .3em;font-size:11.5px}
 }
 .themed-select-menu{min-width:0}
-/* The mode button and the narrow-width mode chip wear the same mark the menu's
-   left column shows, and the article-text mode's mark is drawn, not typed: it is
-   sized here because their own font-size does not reach it. The chip types its
-   label smaller than the button does, so its drawn mark is stepped up to stay
-   readable inside the chip. */
+/* The custom mode button wears the same mark as the menu's left column. The
+   article-text mode mark is drawn rather than typed, so size it to match the
+   glyphs beside the menu descriptions. */
 .themed-select-btn svg{display:block;flex:none;width:1.15em;height:1.15em}
 #modeChip svg{display:block;flex:none;width:1.5em;height:1.5em}
 #modeMenu{max-height:calc(100vh - 12px);overflow:auto;padding:.2em;font-size:calc(var(--ui-edit_control-font) * 1rem)}
@@ -1696,6 +1719,22 @@ html[data-dict-icons-off] .dict-icon{display:none}
 #panel .facts.dictionary-group-row>.rowlabel{flex:none;min-width:0;white-space:nowrap}
 .facts.dictionary-group-row>#pickerGroupBtn{box-sizing:border-box;width:auto;flex:1 1 0;min-width:0}
 #pickerGroupBtn>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#panel .facts.update-notifications-row,#panel .facts.update-channel-row,#panel .facts.update-install-row,#panel .facts.update-check-row{width:100%;align-self:stretch}
+#panel .facts.update-notifications-row>.rowlabel{display:flex;align-items:center;white-space:normal;color:var(--label);cursor:pointer}
+#panel .facts.update-channel-row{flex-wrap:nowrap}
+#panel .facts.update-channel-row>.rowlabel{flex:none;white-space:nowrap}
+#panel .facts.update-channel-row>.panel-dropdown{flex:1 1 0;min-width:0}
+#panel .facts.update-channel-row:has(select:disabled){opacity:.58}
+#panel .facts.update-check-row{margin-top:calc(var(--ui-row-gap) * 1em)}
+#panel .facts.update-install-row{margin-top:calc(var(--ui-row-gap) * 1em)}
+#panel .panel-update-status{margin:calc(var(--ui-row-gap) * 1em) 0 0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.5;color:var(--label)}
+#panel .panel-update-status[hidden]{display:none}
+#panel .panel-update-status a{color:var(--link)}
+#panelBtn{position:relative}
+.panel-update-badge{position:absolute;right:-.25em;top:-.3em;z-index:1;display:grid;place-items:center;
+  width:1.1em;height:1.1em;border:1.5px solid var(--accent);border-radius:50%;
+  background:var(--bg);color:var(--accent);font-size:.68em;font-weight:800;line-height:1}
+.panel-update-badge[hidden]{display:none}
 #languageError{margin:calc(var(--ui-addition-gap) * 1em) 0 0;color:var(--danger);font-size:calc(var(--ui-hint-font-size) * 1rem)}
 #languageError[hidden]{display:none}
 #panel .language-setting{margin:0 var(--sp-2) var(--sp-1);padding:calc(var(--ui-section-space-before) * 1em) 0 var(--sp-1);border-bottom:1px solid color-mix(in srgb,var(--fg) 22%,transparent)}
@@ -2305,8 +2344,19 @@ html:is([data-shell-sepia],[data-shell-image]) .list-search-input{background-col
 
 #portableDialog{width:min(560px,calc(100vw - 32px));box-sizing:border-box;max-height:calc(100dvh - 32px);overflow:auto}
 #portableDialog h2{margin-top:0}
-.portable-path,.portable-actions,.portable-check{display:flex;gap:.6em;align-items:center}
+.portable-path,.portable-actions,.portable-check,.portable-option{display:flex;gap:.6em;align-items:center}
 .portable-path input{min-width:0;flex:1}
+.portable-options{display:flex;flex-direction:column;gap:.45em}
+.portable-option input[type="radio"]{appearance:none;-webkit-appearance:none;box-sizing:border-box;position:relative;flex:none;
+  width:24px;height:24px;margin:0;border:2px solid var(--fg);border-radius:50%;
+  background-color:var(--paper-bg,var(--bg));cursor:pointer}
+.portable-option input[type="radio"]:checked::after{content:"";position:absolute;inset:5px;
+  border-radius:50%;background:var(--fg)}
+.portable-option input[type="radio"]:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.portable-option:hover input[type="radio"]{border-color:var(--accent)}
+.portable-source-path,.portable-permission-hint{margin:0 0 0 1.8em;font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label);overflow-wrap:anywhere}
+.portable-permission-hint{color:var(--label)}
+.portable-path{margin-left:1.8em}
 .portable-check{margin-top:1em}
 .portable-actions{flex-wrap:wrap}
 #portableStatus{overflow-wrap:anywhere}

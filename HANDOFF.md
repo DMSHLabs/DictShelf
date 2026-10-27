@@ -1,5 +1,17 @@
 # Agent handoff — current state
 
+Indexing modes in `dev` are now Parallel dictionaries and Adaptive (the former
+`auto2` schedule). Saved `auto`, `auto2`, and `pipeline` selections load as
+Adaptive; existing Parallel selections remain Parallel. A job involving one
+dictionary selects sequential preparation for small sources or the shared
+reader/writer/worker pipeline for large sources, regardless of the saved mode.
+The shared pool now permits this per-job pipeline override while Parallel is
+selected. Focused indexing tests and `go build ./...` pass. The full server
+package test has an unrelated reproducible Windows failure in
+`TestRemoveTakesTheEmptiedFolderWithIt`; device timing remains unverified.
+
+Canonical checkout: `D:\Projects\Android\DictShelf\`, branch `dev` at `24aa843`. Release workflow dispatch offers `release`, `pre-release`, and `beta` for Android, Windows, and Linux/macOS native builds. New tags use `dictshelf-vMAJOR.MINOR.PATCH`; previews add `-pre-release.N` or `-beta.N` and are GitHub pre-releases. The Update panel stores the selected channel and an enabled-by-default notification preference in `state.json`; it checks the static `update-catalog.json` on the dedicated `update-catalog` branch daily while the page runs and marks ☰ when it finds an update. The version links to the release page. Windows desktop offers an Update button: installed copies launch the matching Inno Setup update; portable copies replace only the running EXE through a waiting helper, then restart. Publishing workflows regenerate the catalog from non-draft GitHub Releases; client checks do not call the GitHub API or change version history. Windows and native workflows load the tag resolver from the workflow revision while using the selected source checkout for tag history. The FOSS Android updater downloads an ABI-matched APK into Downloads, checks its catalogue SHA-256, and opens Android's installer when allowed; the DownloadManager notification provides the manual route. Play omits install permission and the update button. Windows and Android updater behavior remains unverified at runtime or in Actions. Older notes below are historical snapshots.
+
 Current checkout: branch `DictShelf2` at `af1927d8` (working tree has indexing/startup progress UI changes); pipeline from `8b3ee97e` merged. Per active dictionary, it runs a source-reader goroutine and a coordinator/writer; CPU preparation uses a shared pool sized from logical processors and concurrent indexing sessions, with 16 outstanding batches per dictionary. `INDEX_WORKERS` is now obsolete and ignored; per-dictionary and global worker limits derive from logical processors. `Contains` creates and inserts both `entry_fts` (headword token FTS) and `entry_trigram`; `article_fts` is independent FullText and remains absent when disabled. Verified in generated DB schemas. Full `go test -tags sqlite_fts5 ./... -count=1` passes. Old `dev` (`c79732e4`) does one sequential read/prepare/write pass per dictionary, with only cross-dictionary parallelism. With `-headwords -contains`, single-run dev/DictShelf2 times: Oxford DSL 9.4/7.3 s (71,293 rows); Urban DSL 107.3/78.3 s (1,418,551); Longman MDX 10.2/8.0 s (69,172); Russian Wiktionary ZIM first run 39.4/47.7 s. Three ZIM runs gave medians 38.8/47.4 s (dev/DictShelf2); new pipeline is slower on this title-only ZIM case. Entry row counts match; DB byte sizes differ slightly due to layout. LSD Longman DOCE 5 on DictShelf2: 54,819 entries in 3.9 s; dev has no LSD ingest Reader. Output DBs are under `D:\Dictionaries\wuDict\Test\index-contains-{dev,dictshelf2}-2026-10-25`.
 
 The boot screen reports dictionary-file checks and metadata reads. The native
@@ -23,6 +35,24 @@ was looked up in user32.dll; it belongs to kernel32.dll. The lookup is fixed,
 and `build-windows.cmd` now builds and verifies DictShelf.exe. Native UI behavior
 remains to be checked on the desktop.
 
+Windows System Settings now has a Hot keys section before System. It configures
+global show/hide and selected-text lookup; the settings and main-window size live in
+`state.json`. The default lookup shortcut is Ctrl+C, Ctrl+C: the first press sends ordinary Ctrl+C
+to the previously active app so it copies the selection, and the second brings DictShelf to the foreground
+and searches the first copied word in Exact + lemmatization (`=+`) mode. A clipboard-sequence check prevents searching stale text when copying fails. The default shortcuts are
+`Ctrl+Shift+F11` and `Ctrl+C, Ctrl+C`. The window restores its last saved size.
+Both hot-key actions accept one chord or a two-chord sequence; the second chord may differ.
+Windows captures and replays physical scan codes so letter shortcuts ignore the active layout.
+Windows UI behavior still needs desktop verification.
+
+Boolean preferences in System Settings, including dynamically generated Advanced rows and
+Close to system tray, now use accessible On/Off segmented controls. The main panel's
+preference checkboxes for diacritics, examples, update notifications and background color
+use the same control. System controls align within each headed block; the label column is
+measured without wrapping from that block's longest switch label. The result-cache On/Off
+control precedes its value field so it does not move when the field switches between a size
+and No Limit. Runtime visual verification remains pending.
+
 ## Product identity
 
 - Product: DictShelf; publisher: DMSH Labs. Android ID, Java package and Gradle namespace: `com.dmshlabs.dictshelf`; Windows artifacts: `DictShelf.exe`, `DictShelf-cli.exe`, `DictShelf-server.exe`; macOS bundle ID and launchd label: `com.dmshlabs.dictshelf`; Linux user unit: `dictshelf.service`.
@@ -30,10 +60,21 @@ remains to be checked on the desktop.
 
 ## Search and menu state
 
+- Choosing a saved word from search history preserves full-text mode; dictionary cross-reference lookups still switch to prefix mode.
+- Search pickers retain symbolic marks (`ab→`, `→ab`, etc.) with compact inline examples in hint-size text. The main search uses the custom picker on Android as well as desktop; native option labels no longer expose internal names such as `prefix`. The article-text row retains its page icon. Runtime verification remains pending.
+- Find in articles has a `full text` mode while FTS matches are active. It disables the query and literal-match options, and navigates server-marked FTS matches across all expanded dictionary sections; other modes search the entered text in loaded articles. Switching modes does not resubmit main search. Navigation is available when article highlighting is enabled. Runtime visual verification remains pending.
+- Main full-text searches keep result sections collapsed while background all-match counting runs. The saved Open all preference and a restored Browse target still open their requested sections.
+- Every result header offers Browse: transferable headword modes carry their query; full-text and other modes open the dictionary's unfiltered A–Z list.
+- Long-pressing or right-clicking article text offers search above or below that point. The position remains relative to all currently loaded matches, with the article range shown on later result pages; Go to match supports literal and FTS results. Runtime interaction remains unverified.
+- The shared progress notice now publishes its height while any task is active, including article counting, so the main status bar can sit above it. Runtime visual verification remains pending.
 - Contains builds headword token FTS and trigram indexes together; FullText builds separate article FTS. `IngestVersion=6` offers existing indexes for rebuild, while old databases remain readable. Main headword search and Browse fall back to the base index when optional indexes are absent. Search modes include suffix, whole-word and explicit lemma variants; article full-text stays separate.
+- The grouped no-index list under multi-dictionary full-text search has an Add All action in its header, which queues all listed dictionaries for full-text indexing. Per-dictionary Add links sit in a shared left column beside names; both use `--ui-font-addition`. Visual verification remains pending.
 - Main search now uses lemmas only in `wordLemma` and `exactLemma`: the typed form and a distinct lemma go into one per-dictionary query in both HTTP and native bridges. The old empty-result second wave was removed. Focused morphology checks and the full `internal/server` test package pass with Windows cgo/FTS5; Windows/Android UI checks remain.
 - Main search starts with five results per dictionary; its `5+` action reprioritizes that dictionary within the active new-index queue without adding a worker. Once the full count is ready, the initial results switch to paged article controls. The queue and demand endpoint support native and HTTP transports; runtime UI checks remain.
 - Main search mode menu follows Browse/Wildcards grouping and styling. Choosing Recent list preserves the current search mode. Main search progress and Stop use the shared bottom task panel. Search diagnostics record query, mode, dictionary scope, chosen backend/database/index and per-dictionary results in HTTP and desktop bridge paths; runtime UI verification remains pending.
+- Example folding now recognizes the requested diamond, square, triangle, circle and star bullets (including `⊙`, `⊚`, `⦿`, and `⁕`). It keeps an authored leading marker and suppresses the shared marker on that line. Visual verification remains pending.
+- The Examples settings now include Dim background (on by default) and Fade text (off by default) after Also hide examples without [*]. Both preferences are stored in `state.json` and update existing article styles live; visual verification remains pending.
+- The Dim background and Fade text switches share a measured label column so their On/Off controls align; the measurement follows the visible text size and updates when the panel is laid out.
 - Search-return snapshots and Browse find/filter results are bounded SQLite caches shared by the native and HTTP paths. Browse links retain the originating query and dictionary through article navigation.
 
 ## Verification and remaining checks
@@ -410,3 +451,6 @@ prepared dictionaries and confirm indexes are reused after copying `Data`. Check
 picker on Android.
 
 ## Server-removal estimate The workspace-dialog refactor in [`docs/DIALOG-REFACTOR.md`](docs/DIALOG-REFACTOR.md) is confirmed on Windows; Android/browser checks and unused iframe-route removal remain. The earlier estimate was 89–91% complete, with regression checks the largest remaining stage. Windows startup without a listener, direct page navigation and `/res/` media delivery are confirmed; remaining Windows screens, assets/styles, browser and Android HTTP paths still need verification.
+
+
+Update checks: System Settings now has Release, Pre-release, and Beta channels. Beta means the word beta anywhere in the version string, case-insensitive. The selected channel is saved with UI preferences; the app checks GitHub Releases at startup at most once per day and has a manual check. Windows Go server build and Android debug APK build passed; APK was not installed. Runtime UI behavior is pending. Build scripts accept --channel release, pre-release or beta; beta adds a -beta.1 suffix and pre-release adds -pre. GitHub publication metadata remains a separate step.

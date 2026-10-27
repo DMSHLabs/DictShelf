@@ -64,6 +64,8 @@ type DictPref struct {
 // phone that reaches this same server too, and localStorage — keyed by origin
 // — would hand them 15px there, and again the first time SERVER_PORT changes.
 type UIPrefs struct {
+	UpdateChannel           string `json:"updateChannel,omitempty"`          // release, prerelease or beta; empty defaults to release
+	UpdateNotificationsOff  bool   `json:"updateNotificationsOff,omitempty"` // notifications are on unless disabled
 	ResultCacheLimitGB      int    `json:"resultCacheLimitGB,omitempty"`
 	ResultCacheNoLimit      bool   `json:"resultCacheNoLimit,omitempty"`
 	SearchReturnCache       string `json:"searchReturnCache,omitempty"`
@@ -95,6 +97,10 @@ type UIPrefs struct {
 
 	// Also fold [ex] zones when the Examples Hide layer is enabled.
 	HideUnmarkedExamples bool `json:"hideUnmarkedExamples,omitempty"`
+
+	// ExampleBackgroundOff opts out of the default background tint on examples.
+	ExampleBackgroundOff bool `json:"exampleBackgroundOff,omitempty"`
+	FadeExampleText      bool `json:"fadeExampleText,omitempty"`
 
 	// FastFirst expands whichever dictionary answers first, instead of the
 	// first dictionary in the user's own order that has a result (D73, D142;
@@ -212,6 +218,11 @@ func (u *UIPrefs) normalize() {
 	default: // prefix, and what a hand edit may carry (the retired "fuzzy", D16)
 		u.Mode = ""
 	}
+	switch u.UpdateChannel {
+	case "release", "prerelease", "beta":
+	default:
+		u.UpdateChannel = "release"
+	}
 }
 
 // facetIDs bounds a hand-edited or hostile groupsOff to what a facet id can
@@ -238,6 +249,7 @@ func facetIDs(in []string) []string {
 // are ignored by JSON decoding and disappear on the next save.
 type prefsFile struct {
 	DSLTitleRepairs *bool                   `json:"dslTitleRepairs,omitempty"`
+	IndexingMode    string                  `json:"indexingMode,omitempty"`
 	IndexDefaults   *indexOptions           `json:"indexDefaults,omitempty"`
 	IndexMigrated   map[string]bool         `json:"indexMigrated,omitempty"` // completed legacy receipt migrations, per source
 	DSLKnown        map[string]bool         `json:"dslKnown,omitempty"`
@@ -245,11 +257,23 @@ type prefsFile struct {
 	DSLRemoved      map[string]bool         `json:"dslRemoved,omitempty"`
 	Damaged         map[string]string       `json:"damagedSources,omitempty"` // source path → size:mtime signature
 	Language        string                  `json:"language,omitempty"`       // interface language choice: system, en or ru; never the dictionary language
+	DesktopHotkeys  desktopHotkeys          `json:"desktopHotkeys,omitempty"`
+	DesktopWindow   desktopWindowSize       `json:"desktopWindow,omitempty"`
 
 	Groups  []DictionaryGroup `json:"groups,omitempty"`
 	Version int               `json:"version"`
 	UI      *UIPrefs          `json:"ui,omitempty"`
 	Dicts   []DictPref        `json:"dicts"` // array ORDER is the user's order
+}
+
+type desktopHotkeys struct {
+	Show      string `json:"show,omitempty"`
+	Translate string `json:"translate,omitempty"`
+}
+
+type desktopWindowSize struct {
+	Width  int `json:"width,omitempty"`
+	Height int `json:"height,omitempty"`
 }
 
 // Prefs is the state file (state.json), an ownedFile (ownedfile.go): read
@@ -276,6 +300,36 @@ func (p *Prefs) dslTitleRepairs() (bool, bool) {
 		return true, false
 	}
 	return *f.DSLTitleRepairs, true
+}
+
+func (p *Prefs) indexingMode() (string, bool) {
+	f, _ := p.data()
+	switch f.IndexingMode {
+	case "parallel-dictionaries-single-worker":
+		return f.IndexingMode, true
+	case "pipeline", "auto", "auto2", "adaptive":
+		return "adaptive", true
+	}
+	return "", false
+}
+
+func (p *Prefs) setIndexingMode(mode string) error {
+	if mode != "parallel-dictionaries-single-worker" && mode != "adaptive" {
+		return errors.New("invalid indexing mode")
+	}
+	return p.mutate(func(f *prefsFile) { f.IndexingMode = mode })
+}
+
+func (p *Prefs) desktopHotkeys() desktopHotkeys { f, _ := p.data(); return f.DesktopHotkeys }
+func (p *Prefs) setDesktopHotkeys(value desktopHotkeys) error {
+	return p.mutate(func(f *prefsFile) { f.DesktopHotkeys = value })
+}
+func (p *Prefs) desktopWindowSize() desktopWindowSize { f, _ := p.data(); return f.DesktopWindow }
+func (p *Prefs) setDesktopWindowSize(value desktopWindowSize) error {
+	if value.Width < 480 || value.Height < 320 || value.Width > 10000 || value.Height > 10000 {
+		return errors.New("invalid desktop window size")
+	}
+	return p.mutate(func(f *prefsFile) { f.DesktopWindow = value })
 }
 
 // maxPrefsBytes bounds state.json: thousands of dictionaries' worth, and a

@@ -378,9 +378,20 @@ func (u *upgraded) Close() error {
 // limiter sized from the machine's logical processors. Per-entry ingestMu
 // keeps operations for the same dictionary in sequence.
 var indexLimit = make(chan struct{}, indexconst.IndexDictionaryLimit(runtime.NumCPU()))
+var parallelDictionaryIndexLimit = make(chan struct{}, max(1, runtime.NumCPU()-1))
 
 func currentIndexLimit() chan struct{} {
+	if indexconst.CurrentMode() == indexconst.ModeParallelDictionariesSingleWorker {
+		return parallelDictionaryIndexLimit
+	}
 	return indexLimit
+}
+
+func indexLaneForContext(ctx context.Context) chan struct{} {
+	if indexconst.IsAutomaticMode(indexconst.CurrentMode()) && indexconst.IngestMode(ctx) == indexconst.ModeParallelDictionariesSingleWorker {
+		return parallelDictionaryIndexLimit
+	}
+	return currentIndexLimit()
 }
 
 // acquire blocks until a slot of sem is free and returns what frees it. The
@@ -1993,7 +2004,7 @@ func (e *entry) setFeatures(want features, progress store.Progress, force ...boo
 }
 
 func (e *entry) setFeaturesContext(ctx context.Context, want features, progress store.Progress, force ...bool) error {
-	defer acquire(currentIndexLimit())()
+	defer acquire(indexLaneForContext(ctx))()
 	// The user ticked a box and is watching a progress bar: the longest
 	// user-visible operation the app has keeps every core it started with,
 	// and the Android shell keeps its foreground service up (power.go).

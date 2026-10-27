@@ -141,7 +141,7 @@ func TestI18nPagesAndCache(t *testing.T) {
 	if back.Header().Get("ETag") == systemRu.Header().Get("ETag") {
 		t.Fatal("explicit English selection reused the System page")
 	}
-	// No loaded dictionaries is the separate first-run path through setupPage.
+	// An empty collection still uses the regular app page and both catalogs.
 	empty, err := NewRegistry(nil, false, WithPrefs(LoadPrefs("")))
 	if err != nil {
 		t.Fatal(err)
@@ -150,8 +150,8 @@ func TestI18nPagesAndCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	first := serve(New(empty), newRequest("GET", "/", nil)).Body.String()
-	if strings.Contains(first, "{{") || !strings.Contains(first, "Папка словарей ещё не задана.") {
-		t.Fatal("first run is not translated")
+	if strings.Contains(first, "{{") || !strings.Contains(first, `id="panel"`) || !strings.Contains(first, "Чтобы добавить словари, нажмите") {
+		t.Fatal("empty main page is not translated or usable")
 	}
 }
 

@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Android APK (D52, D53): cross-compile the cgo android/arm64 Go/JNI bridge
-# (mattn FTS5 + built-in speex) into the APK's jniLibs, then let Gradle package it.
+# Android APK: cross-compile the cgo Android Go/JNI bridges for both ARM ABIs,
+# then package arm64-v8a, armeabi-v7a and universal FOSS release APKs.
 # The NDK version is pinned here; the Makefile auto-detects it locally.
 #
 # Secrets required for a signed release build.
@@ -17,21 +17,17 @@ name: Build Android APK
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        description: "Source branch to build"
+      tag:
+        description: "Release tag (e.g. dictshelf-v1.02.01); blank = generate from the selected channel"
+        required: false
+      channel:
+        description: "Release channel"
         type: choice
         options:
-          - releases
-          - dev
-        default: releases
-        required: true
-      tag:
-        description: "Release tag (e.g. wudict2-v0.12.0); blank = next version: +0.0.1 for a pre-release, +0.1.0 for a release"
-        required: false
-      prerelease:
-        description: "Mark the release as a pre-release"
-        type: boolean
-        default: false
+          - release
+          - pre-release
+          - beta
+        default: release
       draft:
         description: "Create the release as a draft (nothing is downloadable until it is published)"
         type: boolean
@@ -61,7 +57,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.branch }}
+          ref: dev
           fetch-depth: 0 # versionName and versionCode both come from git history
 
       - name: Setup Go
@@ -96,17 +92,7 @@ jobs:
         run: |
           VERSION="${{ inputs.tag }}"
           if [ -z "$VERSION" ]; then
-            # A blank field takes the next version, not the last one:
-            # tools/next-tag.sh owns the rule (D168) - a pre-release takes the
-            # next patch (0.11.1 → 0.11.2), a release the next minor with the
-            # patch reset (0.11.2 → 0.12.0) - and it reuses the tag an earlier
-            # workflow of the SAME release created, so Android, Windows and
-            # the native builds land in one release instead of one each.
-            if [ "${{ inputs.prerelease }}" = "true" ]; then
-              VERSION="$(sh tools/next-tag.sh --prerelease)"
-            else
-              VERSION="$(sh tools/next-tag.sh --release)"
-            fi
+            VERSION="$(sh tools/next-tag.sh --${{ inputs.channel }})"
           fi
 
           # versionCode is NOT passed: app/build.gradle derives it from commits
@@ -117,17 +103,28 @@ jobs:
           echo "TAG=$VERSION" >> "$GITHUB_ENV"
           echo "building $VERSION (versionCode derived from Android baseline)"
 
-      - name: Build the Go/JNI bridge (cgo - FTS5 + speex)
-        # Assemble below stamps the selected release tag into BuildConfig and
-        # the APK manifest; the Android shell passes it to Go/JNI at runtime.
-        run: make android-go
+      - name: Build Go/JNI bridges for ARM ABIs
+        run: |
+          set -euo pipefail
+          build_bridge() {
+            local goarch="$1" goarm="$2" target="$3" abi="$4"
+            mkdir -p "android/app/src/main/jniLibs/$abi"
+            CGO_ENABLED=1 GOOS=android GOARCH="$goarch" GOARM="$goarm" \
+              CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/clang --target=${target}" \
+              CXX="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=${target}" \
+              go build -buildmode=c-shared -tags sqlite_fts5 -trimpath \
+                -ldflags "-s -w -extldflags=-Wl,-z,max-page-size=16384" \
+                -o "android/app/src/main/jniLibs/$abi/libwudictbridge.so" ./android/nativebridge
+          }
+          build_bridge arm64 '' aarch64-linux-android26 arm64-v8a
+          build_bridge arm 7 armv7a-linux-androideabi26 armeabi-v7a
 
       - name: Configure signing
         id: signing
         run: |
           if [ -z "$KS_B64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::signing secrets incomplete - building a debug APK"
+            echo "::notice::signing secrets incomplete - building unsigned release APKs"
             exit 0
           fi
           KS="$RUNNER_TEMP/wudict.keystore"
@@ -148,17 +145,22 @@ jobs:
           # Only the FOSS flavour is published here (D62). The Play bundle is
           # built locally with `make aab-play` and signed with Play's UPLOAD
           # key, which is not this workflow's keystore.
-          # The Play APK is still assembled, unsigned, so the
-          # permission assertion below has something to inspect.
-          if [ "${{ steps.signing.outputs.enabled }}" = "true" ]; then
-            TASK=assembleFossRelease
-          else
-            TASK=assembleFossDebug
-          fi
-          # Stamp the selected release TAG into BuildConfig and the APK
-          # manifest. Go/JNI receives this same value when the runtime starts.
-          ./gradlew --no-daemon "$TASK" assemblePlayDebug \
-            -PversionName="${{ steps.ver.outputs.version }}"
+          # Stamp the selected version and restrict each APK to its advertised
+          # ABI. Stage each file immediately because Gradle replaces the prior
+          # APK in foss/release on the next assemble invocation.
+          OUT=app/build/outputs/apk/foss/release
+          STAGE=app/build/outputs/apk/all
+          mkdir -p "$STAGE"
+          if [ "${{ steps.signing.outputs.enabled }}" = "true" ]; then SUFFIX=""; else SUFFIX="-unsigned"; fi
+          ./gradlew --no-daemon assembleFossRelease \
+            -PversionName="${{ steps.ver.outputs.version }}" -PandroidAbis=arm64-v8a -PapkAbiName=arm64-v8a
+          cp "$OUT/dictshelf-android-arm64-v8a-foss$SUFFIX.apk" "$STAGE/"
+          ./gradlew --no-daemon assembleFossRelease \
+            -PversionName="${{ steps.ver.outputs.version }}" -PandroidAbis=armeabi-v7a -PapkAbiName=armeabi-v7a
+          cp "$OUT/dictshelf-android-armeabi-v7a-foss$SUFFIX.apk" "$STAGE/"
+          ./gradlew --no-daemon assembleFossRelease \
+            -PversionName="${{ steps.ver.outputs.version }}" -PandroidAbis=arm64-v8a,armeabi-v7a -PapkAbiName=universal
+          cp "$OUT/dictshelf-android-universal-foss$SUFFIX.apk" "$STAGE/"
 
       - name: Assert Android APK permissions and no-server boundary
         # Play must omit storage access, FOSS must retain All-files access,
@@ -174,29 +176,34 @@ jobs:
           # invented a second name (wudict-android-arm64.apk) that said nothing
           # about the flavour and existed nowhere else in the project.
           if [ "${{ steps.signing.outputs.enabled }}" = "true" ]; then
-            APK="$(make -s print-APK_FOSS VERSION="$TAG")"
+            SUFFIX=""
           else
-            APK="$(make -s print-APK_FOSS_DEBUG VERSION="$TAG")"
+            SUFFIX="-unsigned"
           fi
-          if [ ! -f "$APK" ]; then
-            echo "expected $APK - Gradle produced:"
-            find android/app/build/outputs/apk -name '*.apk' -print
-            exit 1
-          fi
-          echo "APK=$APK" >> "$GITHUB_ENV"
-          echo "publishing $(basename "$APK")"
+          OUT=android/app/build/outputs/apk/all
+          APK_ARM64="$OUT/dictshelf-android-arm64-v8a-foss$SUFFIX.apk"
+          APK_ARMV7="$OUT/dictshelf-android-armeabi-v7a-foss$SUFFIX.apk"
+          APK_UNIVERSAL="$OUT/dictshelf-android-universal-foss$SUFFIX.apk"
+          for APK in "$APK_ARM64" "$APK_ARMV7" "$APK_UNIVERSAL"; do
+            if [ ! -f "$APK" ]; then
+              echo "expected $APK - Gradle produced:"
+              find android/app/build/outputs/apk -name '*.apk' -print
+              exit 1
+            fi
+          done
+          echo "APK_ARM64=$APK_ARM64" >> "$GITHUB_ENV"
+          echo "APK_ARMV7=$APK_ARMV7" >> "$GITHUB_ENV"
+          echo "APK_UNIVERSAL=$APK_UNIVERSAL" >> "$GITHUB_ENV"
+          echo "publishing all three ABI APKs"
 
-      # - name: Upload artifact
-      #   uses: actions/upload-artifact@v7
-      #   with:
-      #     name: ${{ env.APK }}
-      #     path: ${{ env.APK }}
-
-      - name: Upload APK for testing
+      - name: Upload release APKs
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ steps.signing.outputs.enabled == 'true' && 'dictshelf-android-signed-test' || 'dictshelf-android-debug-test' }}
-          path: ${{ env.APK }}
+          name: dictshelf-android-release-apks
+          path: |
+            ${{ env.APK_ARM64 }}
+            ${{ env.APK_ARMV7 }}
+            ${{ env.APK_UNIVERSAL }}
 
       - name: Create git tag if missing
         if: ${{ inputs.publish_release && steps.signing.outputs.enabled == 'true' }}
@@ -211,25 +218,25 @@ jobs:
             git config user.email "github-actions[bot]@users.noreply.github.com"
             # The message keeps the shape of every hand-made tag in this
             # repository (wuDict2 v0.11.1), so the two are one line in a log.
-            git tag -a "${TAG}" -m "wuDict2 ${TAG#wudict2-}"
+            git tag -a "${TAG}" -m "DictShelf ${TAG}"
             git push origin "${TAG}"
             echo "Tag ${TAG} pushed."
           fi
 
       - name: Create or update GitHub release
         if: ${{ inputs.publish_release && steps.signing.outputs.enabled == 'true' }}
-        # The two dispatch checkboxes. They apply when the release is CREATED;
+        # The channel and draft selection apply when the release is CREATED;
         # on one that already exists they are only ever ADDED, never cleared.
         # Three workflows publish into the same tag, so the second to arrive
         # must not un-draft what the first staged, and a re-upload of assets
         # onto an older release must not strip its pre-release marker.
         run: |
           FLAGS=()
-          [ "${{ inputs.prerelease }}" = "true" ] && FLAGS+=(--prerelease)
+          [ "${{ inputs.channel }}" != "release" ] && FLAGS+=(--prerelease)
           [ "${{ inputs.draft }}" = "true" ] && FLAGS+=(--draft)
           if gh release view "${TAG}" > /dev/null 2>&1; then
             echo "Release ${TAG} exists - replacing assets."
-            gh release upload "${TAG}" "$APK" --clobber
+            gh release upload "${TAG}" "$APK_ARM64" "$APK_ARMV7" "$APK_UNIVERSAL" --clobber
             # An `if`, not a trailing `&&`: this is the last command in the
             # branch, so a false test would become the step's exit status.
             if [ ${#FLAGS[@]} -gt 0 ]; then
@@ -237,7 +244,14 @@ jobs:
             fi
           else
             echo "Creating release ${TAG}."
-            gh release create "${TAG}" "$APK" \
+            gh release create "${TAG}" "$APK_ARM64" "$APK_ARMV7" "$APK_UNIVERSAL" \
               --title "${{ github.event.repository.name }} ${TAG}" \
               --generate-notes "${FLAGS[@]}"
           fi
+
+      - name: Refresh static update catalogue
+        if: ${{ inputs.publish_release && steps.signing.outputs.enabled == 'true' && inputs.draft == false }}
+        run: |
+          set -euo pipefail
+          gh api --paginate repos/DMSHLabs/DictShelf/releases --jq '.[]' | jq -s '.' | python3 tools/update-catalog.py
+          sh tools/publish-update-catalog.sh update-catalog.json

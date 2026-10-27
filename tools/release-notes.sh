@@ -37,8 +37,8 @@ fi
 # a pre-release still has to be able to start and end a range here. A tag
 # outside this vocabulary (v3.8.0-rc1, v3.8-beta, a stray `git describe`
 # output) is not a release and must never become a range endpoint.
-RE_ANY='^v[0-9]+\.[0-9]+(\.[0-9]+)?(-(alpha|beta|rc)\.[0-9]+)?$'
-RE_STABLE='^v[0-9]+\.[0-9]+(\.[0-9]+)?$'
+RE_ANY='^(dictshelf-|wudict2-)?v[0-9]+\.[0-9]+(\.[0-9]+)?(-(alpha|beta|rc|pre-release)\.[0-9]+)?$'
+RE_STABLE='^(dictshelf-|wudict2-)?v[0-9]+\.[0-9]+(\.[0-9]+)?$'
 
 # Where does the range START?
 #
@@ -48,7 +48,7 @@ RE_STABLE='^v[0-9]+\.[0-9]+(\.[0-9]+)?$'
 #                     shipped. Without this, notes for v3.8.0 begin at
 #                     v3.8.0-rc.2 and silently describe a fraction of it.
 case "$TAG" in
-  *-alpha.*|*-beta.*|*-rc.*) FROM_RE="$RE_ANY" ;;
+  *-alpha.*|*-beta.*|*-rc.*|*-pre-release.*) FROM_RE="$RE_ANY" ;;
   *)                         FROM_RE="$RE_STABLE" ;;
 esac
 

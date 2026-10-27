@@ -102,6 +102,11 @@ func (s *Server) userStorageSnapshot() (map[string]string, error) {
 	for key, value := range history {
 		settings[key] = value
 	}
+	if s.reg != nil && s.reg.prefs != nil {
+		if mode, ok := s.reg.prefs.indexingMode(); ok {
+			settings["wudict_indexing_mode"] = mode
+		}
+	}
 	return settings, nil
 }
 

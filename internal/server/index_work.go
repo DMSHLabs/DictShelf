@@ -10,17 +10,22 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/wuweidict/wudict/internal/indexconst"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/store"
 )
 
 const bulkIndexKey = "bulk-indexes"
+
+var indexTaskQueuesActive atomic.Int32
+var indexModeMu sync.Mutex
 
 // runIndexDictionaryGroups runs each dictionary's operations in order while
 // allowing independent dictionaries to use the configured indexing workers.
@@ -28,6 +33,10 @@ func runIndexDictionaryGroups(groups [][]indexOperation, stopped func() bool, ru
 	if len(groups) == 0 {
 		return
 	}
+	indexModeMu.Lock()
+	indexTaskQueuesActive.Add(1)
+	indexModeMu.Unlock()
+	defer indexTaskQueuesActive.Add(-1)
 	workers := cap(currentIndexLimit())
 	if workers < 1 {
 		workers = 1
@@ -35,7 +44,7 @@ func runIndexDictionaryGroups(groups [][]indexOperation, stopped func() bool, ru
 	if workers > len(groups) {
 		workers = len(groups)
 	}
-	logx.System("index dictionary queue started dictionaries=%d workers=%d", len(groups), workers)
+	logx.System("index dictionary queue started dictionaries=%d workers=%d mode=%s", len(groups), workers, indexconst.ModeName())
 	for i, group := range groups {
 		if len(group) > 0 {
 			logx.System("index dictionary queued dictionary=%q position=%d/%d", group[0].Dict, i+1, len(groups))
@@ -48,10 +57,12 @@ func runIndexDictionaryGroups(groups [][]indexOperation, stopped func() bool, ru
 			name = group[0].Dict
 		}
 		count := active.Add(1)
+		started := time.Now()
 		logx.System("index dictionary started dictionary=%q active=%d workers=%d", name, count, workers)
 		defer func() {
 			count := active.Add(-1)
-			logx.System("index dictionary worker released dictionary=%q active=%d", name, count)
+			elapsed := time.Since(started)
+			logx.System("index dictionary worker released dictionary=%q active=%d elapsed=%s elapsed_ms=%d", name, count, elapsed.Round(time.Millisecond), elapsed.Milliseconds())
 		}()
 		run(group)
 	})
@@ -62,6 +73,11 @@ func runIndexTasks[T any](items []T, stopped func() bool, run func(T)) {
 	if len(items) == 0 {
 		return
 	}
+	indexModeMu.Lock()
+	indexTaskQueuesActive.Add(1)
+	indexModeMu.Unlock()
+	defer indexTaskQueuesActive.Add(-1)
+	startedAt := time.Now()
 	workers := cap(currentIndexLimit())
 	if workers < 1 {
 		workers = 1
@@ -69,7 +85,8 @@ func runIndexTasks[T any](items []T, stopped func() bool, run func(T)) {
 	if workers > len(items) {
 		workers = len(items)
 	}
-	logx.System("index task queue started tasks=%d workers=%d", len(items), workers)
+	logx.System("index task queue started tasks=%d workers=%d dictionary_worker_limit=%d logical_cpus=%d gomaxprocs=%d mode=%s",
+		len(items), workers, cap(currentIndexLimit()), runtime.NumCPU(), runtime.GOMAXPROCS(0), indexconst.ModeName())
 	queue := make(chan T, len(items))
 	var wg sync.WaitGroup
 	var started atomic.Int32
@@ -91,7 +108,8 @@ func runIndexTasks[T any](items []T, stopped func() bool, run func(T)) {
 	}
 	close(queue)
 	wg.Wait()
-	logx.System("index task queue finished tasks_started=%d tasks_queued=%d", started.Load(), len(items))
+	elapsed := time.Since(startedAt)
+	logx.System("index task queue finished tasks_started=%d tasks_queued=%d elapsed=%s elapsed_ms=%d", started.Load(), len(items), elapsed.Round(time.Millisecond), elapsed.Milliseconds())
 }
 
 func groupIndexOperations(operations []indexOperation) [][]indexOperation {
@@ -342,6 +360,11 @@ func (s *Server) startIndexWork(raw []byte, single, allowBaseDelete bool) (index
 			ctx, cancel, ok := j.beginDictionary(dictID)
 			if !ok {
 				return
+			}
+			if len(groups) == 1 {
+				if e, err := s.reg.get(dictID); err == nil {
+					ctx = adaptiveSingleIndexContext(ctx, e)
+				}
 			}
 			trackJobDictionary(j, dictID, true)
 			defer func() {

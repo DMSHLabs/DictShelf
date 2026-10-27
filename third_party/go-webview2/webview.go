@@ -26,11 +26,19 @@ var (
 	windowContext     = map[uintptr]interface{}{}
 	windowContextSync sync.RWMutex
 	closeToTrayHook   func(uintptr) bool
+	hotkeyHandler     func(uintptr, uintptr, uintptr) bool
+	windowSizeHandler func(uintptr, int, int)
 )
 
 // SetCloseToTrayHook lets a Windows host consume WM_CLOSE without destroying
 // the WebView window. Returning true means the hook handled the close.
 func SetCloseToTrayHook(hook func(uintptr) bool) { closeToTrayHook = hook }
+
+// SetHotkeyHandler handles WM_HOTKEY messages for the native host.
+func SetHotkeyHandler(handler func(uintptr, uintptr, uintptr) bool) { hotkeyHandler = handler }
+
+// SetWindowSizeHandler observes the native client size as it changes.
+func SetWindowSizeHandler(handler func(uintptr, int, int)) { windowSizeHandler = handler }
 
 func getWindowContext(wnd uintptr) interface{} {
 	windowContextSync.RLock()
@@ -438,6 +446,9 @@ func wndproc(hwnd, msg, wp, lp uintptr) uintptr {
 			r, _, _ := w32.User32DefWindowProcW.Call(hwnd, msg, wp, lp)
 			return r
 		case w32.WMSize:
+			if windowSizeHandler != nil {
+				windowSizeHandler(hwnd, int(uint16(lp)), int(uint16(lp>>16)))
+			}
 			if w.browser != nil {
 				w.browser.Resize()
 			}
@@ -453,6 +464,10 @@ func wndproc(hwnd, msg, wp, lp uintptr) uintptr {
 			}
 			if w.autofocus {
 				w.browser.Focus()
+			}
+		case w32.WMHotkey:
+			if hotkeyHandler != nil && hotkeyHandler(hwnd, wp, lp) {
+				return 0
 			}
 		case w32.WMClose:
 			if closeToTrayHook != nil && closeToTrayHook(hwnd) {
@@ -826,6 +841,8 @@ func (w *webview) Init(js string) {
 func (w *webview) Eval(js string) {
 	w.browser.Eval(js)
 }
+
+func (w *webview) DispatchJavaScript(js string) { w.Dispatch(func() { w.Eval(js) }) }
 
 func (w *webview) ClearBrowserCache(done func(error)) error {
 	cache, ok := w.browser.(interface{ ClearBrowserCache(func(error)) error })
