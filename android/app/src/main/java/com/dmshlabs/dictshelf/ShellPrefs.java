@@ -119,7 +119,9 @@ final class ShellPrefs {
     static boolean sepia(Context c) { return sepiaFor(c, night(c)); }
 
     static boolean sepiaFor(Context c, boolean night) {
-        return of(c).getBoolean(themed(SEPIA, night), false);
+        // Warm is the new-profile default look, and its background colour is
+        // part of the look on every platform.
+        return of(c).getBoolean(themed(SEPIA, night), true);
     }
 
     static int sepiaColor(Context c) { return sepiaColorFor(c, night(c)); }
