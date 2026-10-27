@@ -18,6 +18,7 @@ let settle = null;
 let laidOutList = null;
 const fallbackSelections = new Map();
 const watched = new WeakSet();
+const lemmaLookups = new Map();
 const highlightCSS = "::highlight(wudict-find-all){background:#ffe082;color:#171717}::highlight(wudict-find-current){background:#ff9800;color:#171717;text-decoration:underline}";
 
 function restoreExamples() {
@@ -51,7 +52,8 @@ function readOptions() {
 }
 function fillOptions() {
   $("articleFindQuery").value = options.query;
-  options.mode = ["prefix","exact","contains"].includes(options.mode) || options.mode === "fts" && fullTextNavigation ? options.mode : "contains";
+  if(options.mode==="exact")options.mode="word"; // saved by the earlier article-search picker
+  options.mode = ["prefix","suffix","contains","word","wordLemma"].includes(options.mode) || options.mode === "fts" && fullTextNavigation ? options.mode : "contains";
   $("articleFindMode").value = options.mode;
   $("articleFindCase").checked = options.matchCase;
   $("articleFindAll").checked = options.all;
@@ -72,9 +74,14 @@ function open(preserveAnchor=false) {
 }
 function syncControls() {
   const select = $("articleFindMode"), hasFTS = !!fullTextNavigation;
-  const fts = select.value === "fts";
+  const ftsOption=select.querySelector('option[value="fts"]');
+  ftsOption.disabled=!hasFTS;ftsOption.hidden=!hasFTS;
+  let fts = select.value === "fts";
+  if(fts&&!hasFTS){
+    options={...options,mode:"contains"};select.value="contains";fts=false;save();
+    if(dialog.open){active=!!options.query;if(active)rebuild()}
+  }
   $("articleFindStop").disabled = fts && hasFTS;
-  select.querySelector('option[value="fts"]').disabled = !hasFTS;
   $("articleFindQuery").disabled = fts;
   for (const id of ["articleFindCase","articleFindAll","articleFindExamples"]) $(id).disabled = fts;
   $("articleFindHiddenHint").hidden = fts || !options.query || !!matches.length || options.examples || !hiddenExamples;
@@ -93,12 +100,38 @@ function syncControls() {
     $("articleFindDialogPrev").disabled = !canStep(-1);
     $("articleFindDialogNext").disabled = !canStep(1);
   }
+  window.wudictThemedSelects?.articleFindMode?.sync();
 }
 function canStep(step){
   if(options.mode==="fts")return !!(step<0?fullTextNavigation?.canPrevious:fullTextNavigation?.canNext);
   if(matches.length>=2)return true;
   const hit=matches[index>=0?index:0];
   return !!(options.query&&hit&&options.blocks!==false&&window.wudictArticleBlockHasMore?.(hit.host.closest("details.dict"),step));
+}
+function lemmaFor(host,query){
+  if(options.mode!=="wordLemma"||/\s/u.test(query))return query;
+  const id=host.dataset.dict;
+  if(!id)return query;
+  const key=id+"\u0000"+query;
+  let record=lemmaLookups.get(key);
+  if(!record){
+    record={value:null};lemmaLookups.set(key,record);
+    if(lemmaLookups.size>500)lemmaLookups.delete(lemmaLookups.keys().next().value);
+    record.pending=fetch("/api/article-find/lemma?"+new URLSearchParams({dict:id,q:query}))
+      .then(response=>response.ok?response.json():null)
+      .then(data=>{
+        record.value=typeof data?.lemma==="string"&&data.lemma?data.lemma:query;
+        if(active&&options.mode==="wordLemma"&&options.query===query)schedule();
+      }).catch(()=>{record.value=query});
+  }
+  return record.value||query;
+}
+function escapeRE(value){return value.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}
+function matcherFor(host,query){
+  const alternatives=[query];
+  if(options.mode==="wordLemma"&&/^\S+$/u.test(query))alternatives.push(lemmaFor(host,query));
+  const unique=[...new Set(alternatives)].sort((a,b)=>b.length-a.length);
+  return new RegExp(unique.map(escapeRE).join("|"),options.matchCase?"gu":"giu");
 }
 function paint() {
   clearPaint();
@@ -149,8 +182,8 @@ function scan(host, root, regex) {
     for (let found; (found = regex.exec(text)); ) {
       const start = found.index, end = start+found[0].length;
       const before = Array.from(text.slice(0,start)).pop() || "", after = Array.from(text.slice(end))[0] || "";
-      if (options.mode !== "contains" && wordChar.test(before)) continue;
-      if (options.mode === "exact" && wordChar.test(after)) continue;
+      if (["prefix","word","wordLemma"].includes(options.mode) && wordChar.test(before)) continue;
+      if (["suffix","word","wordLemma"].includes(options.mode) && wordChar.test(after)) continue;
       const a = points[start], b = points[end-1];
       if (!a || !b) continue;
       const range = doc.createRange(); range.setStart(a.node,a.start); range.setEnd(b.endNode,b.end);
@@ -202,9 +235,8 @@ function rebuild() {
     if (query.length > 1 && query.startsWith('"') && query.endsWith('"')) query = query.slice(1,-1);
     query = query.replace(/\s+/gu," ");
     if (query) {
-      const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"), options.matchCase ? "gu" : "giu");
       for (const host of $("out").querySelectorAll(".article")) {
-        const root = rootFor(host); if (root) scan(host,root,regex);
+        const root = rootFor(host); if (root) scan(host,root,matcherFor(host,query));
       }
     }
   }
