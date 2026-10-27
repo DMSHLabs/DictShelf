@@ -234,4 +234,6 @@
     <string name="system_log_saving">Saving System Log…</string>
     <string name="system_log_saved">System Log saved</string>
     <string name="system_log_failed">Could not save System Log: %1$s</string>
+    <string name="update_download_title">DictShelf update</string>
+    <string name="update_download_description">Tap to install from Downloads</string>
 </resources>

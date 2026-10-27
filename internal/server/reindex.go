@@ -10,9 +10,11 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
+	"github.com/wuweidict/wudict/internal/indexconst"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/store"
 )
@@ -169,12 +171,19 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 	defer j.update(func(st *jobStatus) {
 		st.Current, st.CurrentDone, st.CurrentTotal = "", 0, 0
 	})
-	runIndexTasks(todo, j.canceled, func(e *entry) {
-		release := acquire(currentIndexLimit())
+	process := func(e *entry, mode indexconst.Mode) {
+		lane := currentIndexLimit()
+		if indexconst.IsAutomaticMode(indexconst.CurrentMode()) {
+			lane = parallelDictionaryIndexLimit
+		}
+		release := acquire(lane)
 		defer release()
 		ctx, cancel, ok := j.beginDictionary(e.ID)
 		if !ok {
 			return
+		}
+		if indexconst.IsAutomaticMode(indexconst.CurrentMode()) || len(todo) == 1 {
+			ctx = indexconst.WithIngestMode(ctx, mode)
 		}
 		defer func() {
 			j.finishDictionary(e.ID, cancel)
@@ -212,7 +221,33 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 		if err != nil {
 			logx.Warn("could not rebuild %s: %v", filepath.Base(e.Path), err)
 		}
-	})
+	}
+	if indexconst.IsAutomaticMode(indexconst.CurrentMode()) {
+		indexModeMu.Lock()
+		indexTaskQueuesActive.Add(1)
+		indexModeMu.Unlock()
+		defer indexTaskQueuesActive.Add(-1)
+		budget := max(1, runtime.NumCPU()-1)
+		items := make([]pendingDictionaryIndex, len(todo))
+		for i, e := range todo {
+			items[i] = pendingDictionaryIndex{entry: e}
+		}
+		mode := indexconst.CurrentMode()
+		small, heavy := orderAutomaticIndexes(items, budget, mode)
+		logx.System("automatic rebuild queue started strategy=%s dictionaries=%d small=%d pipeline=%d processor_budget=%d", indexconst.ModeString(mode), len(items), small, heavy, budget)
+		queue := newPriorityDictionaryQueue(items, nil)
+		started := time.Now()
+		runHybridPriorityDictionaryQueue(queue, budget, j.canceled, func(item pendingDictionaryIndex) { process(item.entry, item.mode) })
+		logx.System("automatic rebuild queue finished strategy=%s dictionaries=%d elapsed_ms=%d", indexconst.ModeString(mode), len(items), time.Since(started).Milliseconds())
+	} else {
+		singleMode := indexconst.CurrentMode()
+		if len(todo) == 1 {
+			item := pendingDictionaryIndex{entry: todo[0]}
+			classifyAutomaticIndex(&item, max(1, runtime.NumCPU()-1), indexconst.ModeAdaptive)
+			singleMode = item.mode
+		}
+		runIndexTasks(todo, j.canceled, func(e *entry) { process(e, singleMode) })
+	}
 	if j.canceled() {
 		j.update(func(st *jobStatus) { st.Canceled = true })
 	}

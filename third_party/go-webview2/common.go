@@ -75,6 +75,9 @@ type WebView interface {
 	// to receive notifications about the results of the evaluation.
 	Eval(js string)
 
+	// DispatchJavaScript evaluates a script on the WebView's UI thread.
+	DispatchJavaScript(js string)
+
 	// Bind binds a callback function so that it will appear under the given name
 	// as a global JavaScript function. Internally it uses webview_init().
 	// Callback receives a request string and a user-provided argument pointer.

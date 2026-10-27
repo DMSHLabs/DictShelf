@@ -67,15 +67,16 @@ type ingestSession struct {
 // The pool owns only CPU preparation. Each session keeps its own source reader
 // and SQLite writer. Workers select dictionary queues in round-robin order.
 type ingestPool struct {
-	registryMu  sync.Mutex                       // begins and ends publish immutable session snapshots
-	sessions    atomic.Pointer[[]*ingestSession] // readers never hold the registry lock
-	cursor      atomic.Uint64
-	running     atomic.Int32
-	workers     atomic.Int32
-	wakeMu      sync.Mutex
-	wake        chan struct{}
-	usedBytes   atomic.Int64
-	memCapacity atomic.Int64
+	registryMu    sync.Mutex                       // begins and ends publish immutable session snapshots
+	sessions      atomic.Pointer[[]*ingestSession] // readers never hold the registry lock
+	cursor        atomic.Uint64
+	running       atomic.Int32
+	inlineRunning atomic.Int32
+	workers       atomic.Int32
+	wakeMu        sync.Mutex
+	wake          chan struct{}
+	usedBytes     atomic.Int64
+	memCapacity   atomic.Int64
 }
 
 var sharedIngestPool = ingestPool{wake: make(chan struct{})}
@@ -92,7 +93,12 @@ func (p *ingestPool) begin(parent context.Context) *ingestSession {
 	p.registryMu.Lock()
 	// Spawn for the machine, even if Android is backgrounded at start. The
 	// active limit below follows GOMAXPROCS when the app returns to foreground.
-	wanted := indexconst.IngestWorkerLimit(runtime.NumCPU(), 1)
+	wanted := indexconst.IngestWorkerLimitForMode(runtime.NumCPU(), 1)
+	if indexconst.IsAutomaticMode(indexconst.CurrentMode()) {
+		// Small dictionary scans leave this pool later; create the lanes once
+		// and let workerLimit account for their changing CPU use.
+		wanted = indexconst.IngestWorkerLimit(runtime.NumCPU(), 1)
+	}
 	for int(p.workers.Load()) < wanted {
 		p.workers.Add(1)
 		go p.worker()
@@ -227,7 +233,7 @@ func (p *ingestPool) reserveWorker(sessions int) bool {
 // writer lane for each active ingest. The remaining processors are shared.
 func (p *ingestPool) workerLimit(sessions int) int {
 	logical := min(runtime.NumCPU(), runtime.GOMAXPROCS(0))
-	return min(int(p.workers.Load()), indexconst.IngestWorkerLimit(logical, sessions))
+	return min(int(p.workers.Load()), indexconst.IngestWorkerLimitForMode(logical, sessions))
 }
 
 func (p *ingestPool) takeInline(s *ingestSession) *ingestWork {
@@ -253,6 +259,8 @@ func (p *ingestPool) takeReadyOrInline(s *ingestSession) (preparedIngestBatch, b
 	default:
 	}
 	if item := p.takeInline(s); item != nil {
+		p.inlineRunning.Add(1)
+		defer p.inlineRunning.Add(-1)
 		return prepareIngestBatch(item), true
 	}
 	return preparedIngestBatch{}, false
@@ -492,8 +500,14 @@ func readIngestEntries(s *ingestSession, r dict.Reader, plan Plan, redirects cha
 
 // scanIngestEntries is the only SQLite writer. Results may finish out of
 // order, but article IDs, aliases and progress are written in source order.
-func scanIngestEntries(ctx context.Context, r dict.Reader, plan Plan, total int, progress Progress, rows *ingestRowWriter) (id, subEntries, linkCount int64, err error) {
+func scanIngestEntries(ctx context.Context, r dict.Reader, plan Plan, total int, progress Progress, rows *ingestRowWriter, trace *indexTrace) (id, subEntries, linkCount int64, err error) {
+	mode, autoSingle := indexconst.BeginIngestContext(ctx)
+	defer indexconst.EndIngestContext(mode, autoSingle)
+	if mode == indexconst.ModeParallelDictionariesSingleWorker {
+		return scanIngestEntriesSequential(ctx, r, plan, total, progress, rows, trace)
+	}
 	s := sharedIngestPool.begin(ctx)
+	logIngestParallelism("start", trace.dictionary, trace.id)
 	redirects := make(chan ingestRedirect, ingestQueueEntries)
 	done := make(chan ingestReaderResult, 1)
 	go readIngestEntries(s, r, plan, redirects, done)
@@ -589,6 +603,69 @@ func scanIngestEntries(ctx context.Context, r dict.Reader, plan Plan, total int,
 			}
 			delete(pending, ready.sequence)
 			sharedIngestPool.release(s, ready)
+		}
+	}
+}
+
+// scanIngestEntriesSequential is the benchmark path: one dictionary task owns
+// reading, preparing and writing its records. Parallelism is only between
+// dictionary tasks; there is no per-dictionary reader goroutine or shared
+// preparation worker.
+func scanIngestEntriesSequential(ctx context.Context, r dict.Reader, plan Plan, total int, progress Progress, rows *ingestRowWriter, trace *indexTrace) (id, subEntries, linkCount int64, err error) {
+	s := sharedIngestPool.begin(ctx)
+	logIngestParallelism("start", trace.dictionary, trace.id)
+	defer func() {
+		s.cancel()
+		sharedIngestPool.end(s)
+	}()
+	for {
+		if err := ctx.Err(); err != nil {
+			return id, subEntries, linkCount, err
+		}
+		e, err := r.Next()
+		if errors.Is(err, io.EOF) {
+			return id, subEntries, linkCount, nil
+		}
+		if err != nil {
+			return id, subEntries, linkCount, err
+		}
+		if err := ctx.Err(); err != nil {
+			return id, subEntries, linkCount, err
+		}
+		if len(e.Headwords) == 0 {
+			continue
+		}
+		headword := strings.TrimSpace(e.Headwords[0])
+		if headword == "" {
+			continue
+		}
+		if e.LinkTo != "" {
+			if err := rows.redirect(headword, e.LinkTo); err != nil {
+				return id, subEntries, linkCount, err
+			}
+			linkCount++
+			continue
+		}
+		nextID := id + 1
+		prepared := prepareIngestEntry(e, plan, ctx)
+		if prepared.panicValue != nil {
+			panic(prepared.panicValue)
+		}
+		if prepared.err != nil {
+			return id, subEntries, linkCount, prepared.err
+		}
+		if err := rows.write(nextID, prepared); err != nil {
+			return id, subEntries, linkCount, err
+		}
+		id = nextID
+		if prepared.subEntry {
+			subEntries++
+		}
+		if progress != nil && id%batchSize == 0 {
+			if err := rows.flush(); err != nil {
+				return id, subEntries, linkCount, err
+			}
+			progress(clampDone(int(id), total), total)
 		}
 	}
 }

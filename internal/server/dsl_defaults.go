@@ -4,14 +4,22 @@
 package server
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"maps"
 	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/indexconst"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/store"
 )
@@ -27,6 +35,9 @@ type pendingDictionaryIndex struct {
 	key      string
 	plan     indexOptions
 	prepared bool
+	mode     indexconst.Mode
+	cost     int
+	score    int64
 }
 
 type priorityDictionaryQueue struct {
@@ -81,6 +92,24 @@ func (q *priorityDictionaryQueue) next() (pendingDictionaryIndex, bool) {
 	return item, true
 }
 
+func (q *priorityDictionaryQueue) nextWithin(free int) (pendingDictionaryIndex, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if len(q.items) == 0 || q.items[0].cost > free {
+		return pendingDictionaryIndex{}, false
+	}
+	item := q.items[0]
+	q.items = q.items[1:]
+	q.active[item.entry.ID] = true
+	return item, true
+}
+
+func (q *priorityDictionaryQueue) remaining() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return len(q.items)
+}
+
 func (q *priorityDictionaryQueue) finish(id string) {
 	q.mu.Lock()
 	delete(q.active, id)
@@ -109,6 +138,104 @@ func runPriorityDictionaryQueue(q *priorityDictionaryQueue, workers int, stopped
 		}()
 	}
 	wg.Wait()
+}
+
+func runHybridPriorityDictionaryQueue(q *priorityDictionaryQueue, budget int, stopped func() bool, run func(pendingDictionaryIndex)) {
+	budget = max(1, budget)
+	free, active := budget, 0
+	done := make(chan int, budget)
+	for {
+		if stopped != nil && stopped() {
+			if active == 0 {
+				return
+			}
+		} else if item, ok := q.nextWithin(free); ok {
+			free -= item.cost
+			active++
+			go func() {
+				run(item)
+				q.finish(item.entry.ID)
+				done <- item.cost
+			}()
+			continue
+		}
+		if active == 0 {
+			return
+		}
+		free += <-done
+		active--
+	}
+}
+
+func classifyAutomaticIndex(item *pendingDictionaryIndex, budget int, strategy indexconst.Mode) {
+	path := item.entry.Path
+	var size int64
+	if info, err := os.Stat(path); err == nil {
+		size = info.Size()
+	}
+	meta, err := dict.Probe(path)
+	entries, format := 0, ""
+	if err == nil {
+		entries, format = meta.EntryCount, meta.Format
+	}
+	if format == "" {
+		format = strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), ".")
+		if strings.HasSuffix(strings.ToLower(path), ".dsl.dz") {
+			format = "dsl"
+		}
+	}
+	heavy := false
+	switch format {
+	case "dsl":
+		heavy = size >= 32<<20
+	case "zim":
+		heavy = entries >= 1_000_000
+	default:
+		heavy = entries >= 250_000 || size >= 64<<20
+	}
+	item.mode = indexconst.ModeParallelDictionariesSingleWorker
+	item.cost = 1
+	item.score = max(int64(entries), size/512)
+	if heavy {
+		item.mode = indexconst.ModePipeline
+		item.cost = automaticPipelineCost(strategy, budget)
+	}
+	logx.System("automatic indexing classified strategy=%s source=%q format=%q entries=%d source_bytes=%d mode=%s processor_cost=%d", indexconst.ModeString(strategy), path, format, entries, size, indexconst.ModeString(item.mode), item.cost)
+}
+
+func adaptiveSingleIndexContext(ctx context.Context, e *entry) context.Context {
+	item := pendingDictionaryIndex{entry: e}
+	classifyAutomaticIndex(&item, max(1, runtime.NumCPU()-1), indexconst.ModeAdaptive)
+	return indexconst.WithIngestMode(ctx, item.mode)
+}
+
+func automaticPipelineCost(strategy indexconst.Mode, budget int) int {
+	reserved := 4
+	if strategy == indexconst.ModeAdaptive {
+		reserved = 3
+	}
+	return min(reserved, max(1, budget))
+}
+
+func orderAutomaticIndexes(items []pendingDictionaryIndex, budget int, strategy indexconst.Mode) (small, heavy int) {
+	for i := range items {
+		classifyAutomaticIndex(&items[i], budget, strategy)
+		if items[i].mode == indexconst.ModePipeline {
+			heavy++
+		} else {
+			small++
+		}
+	}
+	slices.SortStableFunc(items, func(a, b pendingDictionaryIndex) int {
+		if a.cost != b.cost {
+			return a.cost - b.cost
+		}
+		if a.cost == 1 {
+			return cmp.Compare(a.score, b.score)
+		}
+		return cmp.Compare(b.score, a.score)
+	})
+	return small, heavy
 }
 
 func (p *Prefs) newIndexDefaults() indexOptions {
@@ -337,6 +464,10 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 	if len(pending) == 0 {
 		return
 	}
+	indexModeMu.Lock()
+	indexTaskQueuesActive.Add(1)
+	indexModeMu.Unlock()
+	defer indexTaskQueuesActive.Add(-1)
 	process := func(item pendingDictionaryIndex) {
 		e := item.entry
 		ctx := context.Background()
@@ -399,6 +530,13 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 			updateJobDictionaryProgress(queueJob, e.ID, e.probeName(), feature, action, int64(done), int64(total))
 		}
 		var err error
+		lane := currentIndexLimit()
+		if indexconst.IsAutomaticMode(indexconst.CurrentMode()) || len(pending) == 1 {
+			ctx = indexconst.WithIngestMode(ctx, item.mode)
+			if indexconst.IsAutomaticMode(indexconst.CurrentMode()) {
+				lane = parallelDictionaryIndexLimit
+			}
+		}
 		if item.prepared && !e.indexBlocked() {
 			media := false
 			if prepared, ok := preparedInfo(e.Path); ok {
@@ -406,7 +544,7 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 			}
 			err = e.setFeaturesContext(ctx, features{Contains: item.plan.Contains, FullText: item.plan.FullText, Media: media}, progress)
 		} else {
-			err = e.restoreIndexContext(ctx, store.Plan{Contains: item.plan.Contains, FullText: item.plan.FullText}, progress, currentIndexLimit())
+			err = e.restoreIndexContext(ctx, store.Plan{Contains: item.plan.Contains, FullText: item.plan.FullText}, progress, lane)
 		}
 		if err == nil && e.indexBlocked() {
 			// A successfully restored or rebuilt index makes a deliberately
@@ -454,6 +592,23 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 			})
 		}
 	}
+	mode := indexconst.CurrentMode()
+	budget := max(1, runtime.NumCPU()-1)
+	if len(pending) == 1 && !indexconst.IsAutomaticMode(mode) {
+		classifyAutomaticIndex(&pending[0], budget, indexconst.ModeAdaptive)
+	}
+	if indexconst.IsAutomaticMode(mode) {
+		small, heavy := orderAutomaticIndexes(pending, budget, mode)
+		logx.System("automatic index queue started strategy=%s dictionaries=%d small=%d pipeline=%d processor_budget=%d", indexconst.ModeString(mode), len(pending), small, heavy, budget)
+		if queueJob != nil {
+			queueJob.update(func(st *jobStatus) {
+				st.QueuedDicts = st.QueuedDicts[:0]
+				for _, item := range pending {
+					st.QueuedDicts = append(st.QueuedDicts, item.entry.ID)
+				}
+			})
+		}
+	}
 	queue := newPriorityDictionaryQueue(pending, func(ids []string) {
 		if queueJob != nil {
 			queueJob.update(func(st *jobStatus) { st.QueuedDicts = ids })
@@ -469,11 +624,15 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 		}
 		r.priorityMu.Unlock()
 	}()
-	workers := cap(currentIndexLimit())
-	if workers > len(pending) {
-		workers = len(pending)
+	stopped := func() bool { return queueJob != nil && queueJob.canceled() }
+	if indexconst.IsAutomaticMode(mode) {
+		started := time.Now()
+		runHybridPriorityDictionaryQueue(queue, budget, stopped, process)
+		logx.System("automatic index queue finished strategy=%s dictionaries=%d elapsed_ms=%d", indexconst.ModeString(mode), len(pending), time.Since(started).Milliseconds())
+	} else {
+		workers := min(cap(currentIndexLimit()), len(pending))
+		runPriorityDictionaryQueue(queue, workers, stopped, process)
 	}
-	runPriorityDictionaryQueue(queue, workers, func() bool { return queueJob != nil && queueJob.canceled() }, process)
 	if queueJob != nil && queueJob.canceled() {
 		queueJob.update(func(st *jobStatus) { st.Canceled = true })
 	}

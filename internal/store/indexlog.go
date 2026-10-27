@@ -4,13 +4,16 @@
 package store
 
 import (
+	"context"
 	"fmt"
-	"github.com/wuweidict/wudict/internal/logx"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sync/atomic"
 	"time"
+
+	"github.com/wuweidict/wudict/internal/indexconst"
+	"github.com/wuweidict/wudict/internal/logx"
 )
 
 const indexLogLimit = logx.SystemLogLimit
@@ -24,13 +27,22 @@ func IndexLog() ([]byte, error)                  { return logx.SystemSnapshot() 
 
 type indexTrace struct {
 	id          string
+	dictionary  string
+	format      string
+	plan        Plan
+	mode        indexconst.Mode
+	entries     int
 	stage       string
 	start, last time.Time
 	done, total int
 }
 
 func newIndexTrace(src, target string, plan Plan) *indexTrace {
-	x := &indexTrace{id: fmt.Sprintf("%d-%d", os.Getpid(), indexLogID.Add(1)), start: time.Now()}
+	return newIndexTraceContext(context.Background(), src, target, plan)
+}
+
+func newIndexTraceContext(ctx context.Context, src, target string, plan Plan) *indexTrace {
+	x := &indexTrace{id: fmt.Sprintf("%d-%d", os.Getpid(), indexLogID.Add(1)), start: time.Now(), plan: plan, mode: indexconst.IngestMode(ctx)}
 	IndexDiagnostic("job=%s start source=%q target=%q headwords=true contains=%v fulltext=%v runtime=%s platform=%s/%s ingest_version=%d", x.id, src, target, plan.Contains, plan.FullText, runtime.Version(), runtime.GOOS, runtime.GOARCH, IngestVersion)
 	x.phase("open database")
 	return x
@@ -48,8 +60,17 @@ func (x *indexTrace) progress(done, total int) {
 	}
 	x.last = time.Now()
 	IndexDiagnostic("job=%s stage=%q progress=%d/%d elapsed=%s", x.id, x.stage, done, total, time.Since(x.start).Round(time.Millisecond))
+	logIngestParallelism("progress", x.dictionary, x.id)
 }
 
 func (x *indexTrace) finish(err error) {
-	IndexDiagnostic("job=%s finish stage=%q progress=%d/%d elapsed=%s error=%q", x.id, x.stage, x.done, x.total, time.Since(x.start).Round(time.Millisecond), fmt.Sprint(err))
+	elapsed := time.Since(x.start)
+	status := "success"
+	if err != nil {
+		status = "error"
+	}
+	IndexDiagnostic("job=%s finish stage=%q progress=%d/%d elapsed=%s elapsed_ms=%d dictionary=%q format=%q mode=%s status=%s entries=%d contains=%v fulltext=%v error=%q",
+		x.id, x.stage, x.done, x.total, elapsed.Round(time.Millisecond), elapsed.Milliseconds(),
+		x.dictionary, x.format, indexconst.ModeString(x.mode), status, x.entries, x.plan.Contains, x.plan.FullText, fmt.Sprint(err))
+	logIngestParallelism("finish", x.dictionary, x.id)
 }

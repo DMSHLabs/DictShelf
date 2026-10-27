@@ -30,7 +30,7 @@ OUT=android/app/build/outputs/apk
 # somebody could install, so every one is checked; a failure naming an old path
 # means "rebuild or delete that", not "the assertion is wrong". Unquoted below
 # on purpose: these are build-output paths, which contain no spaces.
-FOSS=$(ls -1 "$OUT"/foss/debug/*.apk "$OUT"/foss/release/*.apk 2>/dev/null || true)
+FOSS=$(find "$OUT/foss/debug" "$OUT/foss/release" "$OUT/all" -maxdepth 1 -name '*.apk' -print 2>/dev/null || true)
 PLAY=$(ls -1 "$OUT"/play/debug/*.apk "$OUT"/play/release/*.apk 2>/dev/null || true)
 
 fail() { echo "FAIL: $1"; exit 1; }
@@ -48,6 +48,9 @@ if [ -n "$PLAY" ]; then
         fi
         if ! echo "$perms" | grep -q 'android.permission.INTERNET'; then
             fail "$apk lost INTERNET"
+        fi
+        if echo "$perms" | grep -q 'android.permission.REQUEST_INSTALL_PACKAGES'; then
+            fail "$apk must not request package installation permission"
         fi
         # An explicit allow-set, not a list of things to be absent: the next
         # permission to creep in is by definition one nobody thought to forbid
@@ -84,7 +87,10 @@ if [ -n "$FOSS" ]; then
         if ! "$AAPT2" dump permissions "$apk" | grep -q 'MANAGE_EXTERNAL_STORAGE'; then
             fail "$apk LOST MANAGE_EXTERNAL_STORAGE"
         fi
-        echo "ok: $apk keeps All-files access"
+        if ! "$AAPT2" dump permissions "$apk" | grep -q 'android.permission.REQUEST_INSTALL_PACKAGES'; then
+            fail "$apk LOST REQUEST_INSTALL_PACKAGES"
+        fi
+        echo "ok: $apk keeps All-files access and FOSS APK update permission"
     done
 else
     echo "skip: no foss APK built (make apk)"
@@ -99,8 +105,21 @@ for apk in $FOSS $PLAY; do
     fi
     echo "ok: $apk has no TCP-server control"
 
-    "$AAPT2" dump badging "$apk" | grep -q "native-code: 'arm64-v8a'" \
-        || fail "$apk ships no arm64-v8a native code"
+    native=$("$AAPT2" dump badging "$apk" | sed -n 's/^native-code: //p')
+    case "$(basename "$apk")" in
+        *-universal-*)
+            echo "$native" | grep -q "'arm64-v8a'" && echo "$native" | grep -q "'armeabi-v7a'" \
+                || fail "$apk must ship both ARM ABIs; found: ${native:-none}"
+            ;;
+        *-armeabi-v7a-*)
+            echo "$native" | grep -q "'armeabi-v7a'" && ! echo "$native" | grep -q "'arm64-v8a'" \
+                || fail "$apk must ship only armeabi-v7a; found: ${native:-none}"
+            ;;
+        *)
+            echo "$native" | grep -q "'arm64-v8a'" \
+                || fail "$apk ships no arm64-v8a native code"
+            ;;
+    esac
     # AGP 9's aapt2 prints the resolved boolean; older ones print the raw
     # typed value. Accept both rather than pin to the current toolchain.
     "$AAPT2" dump xmltree --file AndroidManifest.xml "$apk" \

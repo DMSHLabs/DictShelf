@@ -263,7 +263,8 @@ func (r *Reader) init(path string) error {
 	}
 	if name == "" {
 		base := filepath.Base(path)
-		name = strings.TrimSuffix(strings.TrimSuffix(base, ".dz"), ".dsl")
+		base = strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(base, ".dz2"), ".dz"), ".dsl")
+		name = base
 	}
 	fromKey := "INDEX_LANGUAGE"
 	from, to := r.header["INDEX_LANGUAGE"], r.header["CONTENTS_LANGUAGE"]
