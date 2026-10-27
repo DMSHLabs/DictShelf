@@ -81,7 +81,7 @@
     {key:"eachWord", modes:["prefix", "suffix", "contains", "word", "wordLemma"]},
     {key:"wholeHeadword", modes:["exact", "exactLemma", "wildcards"]}
   ]);
-  const findModeIcons = Object.freeze({prefix:"ab→", suffix:"→ab", contains:"*ab*", word:"·ab·", wordLemma:"·ab·+", exact:"=", exactLemma:"=+", wildcards:"*?"});
+  const findModeIcons = Object.freeze({prefix:"ab→", suffix:"→ab", contains:"ab", word:"·ab·", wordLemma:"·ab·+", exact:"=", exactLemma:"=+", wildcards:"*?"});
   function create({dock, ids, labels, maxRows = 2, countAction = false, onQuery, onMode, onFindMode, onThreshold, onApply, onStep, onCount}) {
     if (!dock || !ids) throw new TypeError("headword control needs a dock and element ids");
     const id = name => ids[name];
@@ -139,10 +139,19 @@
         const icon = document.createElement("span");
         icon.className = "headword-control-find-option-icon";
         icon.textContent = findModeIcons[mode];
-        const description = document.createElement("span");
-        description.className = "headword-control-find-option-description";
-        description.textContent = findModes[mode]?.description || mode;
-        item.append(icon, description);
+        const copy = document.createElement("span");
+        copy.className = "headword-control-find-option-copy";
+        const title = document.createElement("span");
+        title.className = "headword-control-find-option-title";
+        title.textContent = findModes[mode]?.title || findModes[mode]?.description || mode;
+        copy.append(title);
+        if (findModes[mode]?.hint) {
+          const hint = document.createElement("small");
+          hint.className = "headword-control-find-option-hint";
+          hint.textContent = findModes[mode].hint;
+          copy.append(hint);
+        }
+        item.append(icon, copy);
         item.addEventListener("click", () => {
           if (el.mask.disabled) return;
           hideHistory();
