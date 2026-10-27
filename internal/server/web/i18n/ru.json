@@ -1188,6 +1188,7 @@
   "articleFind.previous": "Найти предыдущее",
   "articleFind.next": "Найти следующее",
   "articleFind.position": "{current} из {total}",
+  "articleFind.resultBlock": "статьи {start}–{end}",
   "articleFind.noMatches": "Совпадений нет",
   "articleFind.fromStart": "С начала",
   "articleFind.fromEnd": "С конца",

@@ -27,7 +27,7 @@
 .headword-control-find-menu[hidden]{display:none}
 .headword-control-find-group+.headword-control-find-group{margin-top:.25em;padding-top:.25em;border-top:1px solid var(--line)}
 .headword-control-find-group-title{padding:.2em .5em;color:var(--muted-fg,var(--fg));font-size:calc(var(--ui-font-section) * 1rem);font-weight:600}
-.headword-control-find-option{box-sizing:border-box;display:grid;grid-template-columns:4.4em minmax(0,1fr);align-items:start;gap:.35em;width:100%;padding:.35em .5em;border:0;border-radius:4px;background:transparent;color:var(--fg);font:inherit;font-size:calc(var(--ui-font-addition) * 1rem);text-align:left;white-space:normal;cursor:pointer}
+.headword-control-find-option{box-sizing:border-box;display:grid;grid-template-columns:3.1em minmax(0,1fr);align-items:start;gap:.2em;width:100%;padding:.35em .5em;border:0;border-radius:4px;background:transparent;color:var(--fg);font:inherit;font-size:calc(var(--ui-font-addition) * 1rem);text-align:left;white-space:normal;cursor:pointer}
 .headword-control-find-option-icon{white-space:nowrap;font-variant-numeric:tabular-nums}
 /* The article-text mode's page icon is drawn, not typed: it is set a little
    larger than the glyph rows so its mark stays readable, and it hangs from the

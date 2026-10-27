@@ -1354,6 +1354,7 @@ const $=id=>document.getElementById(id);
 const SEARCH_PORTION_SIZE_KEY="wudict_search_portion_size";
 const SEARCH_RESULT_LIMIT=501;
 const articleResultCaches=new Map();
+const articleFindPageLoads=new Set();
 let articleCacheQueue=[],articleCacheActive=0,articleCacheAbort=null,articleCacheSeq=0,articleCacheFinished=0,articleCacheTotal=0;
 let articleCacheGroupID="",articleCacheGroupCount=1;
 function newArticleResultCacheID(){
@@ -1441,13 +1442,15 @@ function pumpArticleResultCaches(){
       maskTaskUpdate("search-results",tx("search.countingArticles"),articleCacheFinished,articleCacheTotal);
       updateArticleCacheCard(state);pumpArticleResultCaches();
       if(state.done&&!state.error){
-        if(state.total>state.initial){
-          const det=[...document.querySelectorAll("details.dict")].find(node=>node.dataset.searchDict===state.dict&&
-            node.dataset.searchMode===state.mode&&node.dataset.searchQuery===state.displayQuery);
-          if(det)fetchSearchPortion(det,0);
-        }else{
-          updateArticleCacheCard(state);
-        }
+        const det=[...document.querySelectorAll("details.dict")].find(node=>node.dataset.searchDict===state.dict&&
+          node.dataset.searchMode===state.mode&&node.dataset.searchQuery===state.displayQuery);
+        const pendingStart=Number(det?.dataset.ftsPagePending);
+        if(det&&Number.isInteger(pendingStart)&&pendingStart>0){
+          delete det.dataset.ftsPagePending;
+          fetchSearchPortion(det,pendingStart,{openAfter:true});
+        }else if(det&&state.total>state.initial){
+          fetchSearchPortion(det,0,{openAfter:state.mode!=="fts"});
+        }else updateArticleCacheCard(state);
       }
     });
   }
@@ -9161,8 +9164,9 @@ async function doSearch(ev){
   }
 }
 $("frm").addEventListener("submit",doSearch);
-async function fetchSearchPortion(det,start){
+async function fetchSearchPortion(det,start,options={}){
   if(!det?.isConnected)return;
+  const openAfter=options.openAfter??true;
   const box=det.parentElement,mode=det.dataset.searchMode||"prefix",query=det.dataset.searchQuery||"",id=det.dataset.searchDict||"";
   const initial=Number(det.dataset.searchInitial)||5,size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
   const cached=articleResultCaches.get(id);
@@ -9190,7 +9194,8 @@ async function fetchSearchPortion(det,start){
         renderSlot(box,{...msg,name:cached.name,results:visible},
           mode,query,initial,det.dataset.searchGroup==="true",page);
         const replacement=box.querySelector(":scope>details.dict");
-        if(replacement)replacement.open=true;
+        if(replacement)replacement.open=openAfter;
+        window.wudictArticleFind?.refresh();
       },articleCacheAbort?.signal);
     }catch(error){
       if(error.name!=="AbortError")setStatus("⚠ "+esc(error.message));
@@ -9219,12 +9224,14 @@ async function fetchSearchPortion(det,start){
         if(all.length<=start){
           const fallbackStart=Math.max(0,all.length-size),fallback=all.slice(fallbackStart);
           renderSlot(box,{...msg,results:fallback},mode,query,initial,det.dataset.searchGroup==="true",{...page,start:fallbackStart});
-          const replacement=box.querySelector(":scope>details.dict");if(replacement)replacement.open=true;
+          const replacement=box.querySelector(":scope>details.dict");if(replacement)replacement.open=openAfter;
+          window.wudictArticleFind?.refresh();
         }
         return;
       }
       renderSlot(box,{...msg,results:visible},mode,query,initial,det.dataset.searchGroup==="true",page);
-      const replacement=box.querySelector(":scope>details.dict");if(replacement)replacement.open=true;
+      const replacement=box.querySelector(":scope>details.dict");if(replacement)replacement.open=openAfter;
+      window.wudictArticleFind?.refresh();
     });
     if(!received&&det.isConnected){if(priority)priority.disabled=false;actions.forEach(button=>button.disabled=false)}
   }catch(_){
@@ -9508,7 +9515,7 @@ function markList(){
 function navAttach(det){
   if(!det.querySelector(":scope>summary"))return navDetach();
   navSuppressed=false;
-  navDet=det;navList=null;navIdx=0;
+  navDet=det;navIdx=-1;
   requestAnimationFrame(()=>{if(navDet===det)navRefresh()});
 }
 function navDetach(){
@@ -9518,17 +9525,30 @@ function navDetach(){
 }
 function navRefresh(){
   if(navDet&&!navDet.isConnected)navDet=null;
-  if(!navDet)navDet=document.querySelector("details.dict[open]");
-  if(!navDet)return navDetach();
   const cur=navList&&navList[navIdx]&&navList[navIdx].el;
-  navList=markList();
-  if(!navDet?.open)navDet=navList[0]?.det||null;
-  if(!navDet)return navDetach();
+  const previousByDet=new Map(),visibleByDet=new Map();
+  for(const item of navList||[]){
+    if(!item.det.isConnected||!item.el.isConnected)continue;
+    if(!previousByDet.has(item.det))previousByDet.set(item.det,[]);
+    previousByDet.get(item.det).push(item);
+  }
+  for(const item of markList()){
+    if(!visibleByDet.has(item.det))visibleByDet.set(item.det,[]);
+    visibleByDet.get(item.det).push(item);
+  }
+  // Keep marks already collected from a dictionary when it is collapsed.
+  // They remain valid navigation targets and can reopen that dictionary.
+  navList=[];
+  for(const det of document.querySelectorAll("details.dict"))
+    navList.push(...(det.open?visibleByDet.get(det)||[]:previousByDet.get(det)||[]));
+  if(!navDet)navDet=navList[0]?.det||document.querySelector("details.dict[open]");
+  if(!navDet){navPos();return}
   // A late frame adds marks ABOVE the one you are on; keeping the element
   // rather than the number is what stops the position from drifting.
   let at=cur?navList.findIndex(m=>m.el===cur):-1;
   if(at<0)at=navList.findIndex(m=>m.det===navDet);
   navIdx=at<0?0:at;
+  if(navList[navIdx])navDet=navList[navIdx].det;
   navPos();
 }
 function navPos(){
@@ -9537,8 +9557,9 @@ function navPos(){
     window.wudictArticleFind?.setFullTextNavigation(null);
     return;
   }
+  const block=count?window.wudictArticleFindBlockRange?.(navList[navIdx]?.det):"";
   window.wudictArticleFind?.setFullTextNavigation({
-    query:lastQuery,generation:searchSeq,position:count?tx("articleFind.position",{current:navIdx+1,total:count}):tx("articleFind.noMatches"),visible:count>0,canNavigate:count>=2,total:count,current:navIdx+1,
+    query:lastQuery,generation:searchSeq,position:count?tx("articleFind.position",{current:navIdx+1,total:count})+(block?" · "+block:""):tx("articleFind.noMatches"),visible:count>0,canNavigate:count>=2,total:count,current:navIdx+1,
     previous:()=>navGo(-1),next:()=>navGo(1),
     goto:page=>navGoto(page),
     seekFrom:(host,node,offset,direction)=>navSeekFrom(host,node,offset,direction),
@@ -9548,14 +9569,48 @@ function navPos(){
 /* Keep the control and keyboard route on the same test: at least two marks in
    the active dictionary's rendered articles. */
 function navWalkable(){return !!(window.wudictArticleFind?.fullTextModeActive?.()&&navDet&&navDet.isConnected&&markedAnswer&&!navSuppressed&&navList?.length>=2)}
+function navLoadNextBlock(det){
+  if(!det?.isConnected||det.dataset.ftsPageLoading==="true")return;
+  const start=Number(det.dataset.searchPageStart)||0;
+  const count=Number(det.dataset.searchPageCount)||Number(det.dataset.searchInitial)||0;
+  const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
+  const next=start+(count||size);
+  if(det.dataset.searchHasNext==="false")return;
+  const cache=articleResultCaches.get(det.dataset.searchDict||"");
+  if(cache&&cache.displayQuery===det.dataset.searchQuery&&cache.mode==="fts"){
+    if(cache.error)return;
+    if(!cache.done){det.dataset.ftsPagePending=String(next);return}
+    if(next>=cache.total)return;
+  }
+  const key=[det.dataset.searchDict,det.dataset.searchQuery,next].join("\u0000");
+  if(articleFindPageLoads.has(key))return;
+  articleFindPageLoads.add(key);det.dataset.ftsPageLoading="true";
+  fetchSearchPortion(det,next,{openAfter:true}).finally(()=>{
+    articleFindPageLoads.delete(key);
+    if(det.isConnected)delete det.dataset.ftsPageLoading;
+  });
+}
+window.wudictRequestNextArticleBlock=host=>navLoadNextBlock(host?.closest?.("details.dict"));
+window.wudictArticleFindHasMore=()=>[...document.querySelectorAll("details.dict")].some(det=>{
+  if(det.dataset.searchHasNext!==undefined)return det.dataset.searchHasNext==="true";
+  return !!det.querySelector(":scope>summary .priority-index");
+});
+window.wudictArticleFindBlockRange=det=>{
+  const start=Number(det?.dataset.searchPageStart),count=Number(det?.dataset.searchPageCount);
+  if(!Number.isInteger(start)||start<=0||!Number.isInteger(count)||count<=0)return "";
+  return tx("articleFind.resultBlock",{start:window.wudictI18n.number(start+1),end:window.wudictI18n.number(start+count)});
+};
 function navGo(step){
   if(!navDet||!navDet.isConnected)return navDetach();
   if(!navList||!navList.length||!navList[navIdx].el.isConnected)navRefresh();
   const n=navList.length;if(n<1)return;
+  const current=navList[navIdx];
+  if(step>0&&current&&navList.slice(navIdx+1).every(item=>item.det!==current.det))navLoadNextBlock(current.det);
   navIdx=((navIdx+step)%n+n)%n; // wraps: the list is a ring, not a rail
   for(const m of navList)m.el.classList.remove("wu-cur");
   const cur=navList[navIdx];
   navDet=cur.det;
+  if(!cur.det.open)cur.det.open=true;
   cur.el.classList.add("wu-cur");
   const top=cur.el.getBoundingClientRect().top+
     (cur.host.shadowRoot?0:cur.host.getBoundingClientRect().top);
