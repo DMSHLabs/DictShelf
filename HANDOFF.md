@@ -457,3 +457,16 @@ picker on Android.
 Update checks: System Settings now has Release, Pre-release, and Beta channels. Beta means the word beta anywhere in the version string, case-insensitive. The selected channel is saved with UI preferences; the app checks GitHub Releases at startup at most once per day and has a manual check. Windows Go server build and Android debug APK build passed; APK was not installed. Runtime UI behavior is pending. Build scripts accept --channel release, pre-release or beta; beta adds a -beta.1 suffix and pre-release adds -pre. GitHub publication metadata remains a separate step.
 
 New-profile defaults: Warm (Sepia) appearance, Windows show/hide hotkey `Ctrl+Shift+F11, Ctrl+Shift+F11`, and only the Dictionaries and Results drawer sections expanded. Existing explicit hotkeys, appearance layers and drawer section choices remain in effect.
+
+When `looks.json` has no recorded current look yet, the looks dry-check now
+recognizes the exact default Warm state (including shell-reported window
+colours) as the current built-in. This keeps the Appearance row from showing
+Custom on a clean profile and avoids a false unsaved-changes prompt when
+switching from Warm. The UI uses that dry-check result to render the selected
+built-in without writing a selection to disk. All focused look tests pass;
+the full server package still has unrelated Windows failures in
+`TestDictsRunningJobIsNotKept` and `TestI18nCatalogs`.
+
+Android System Settings hides the Advanced section and its Reset default
+button. Windows uses a separate System Settings dialog and does not show this
+section or button. Runtime Android UI verification is pending.

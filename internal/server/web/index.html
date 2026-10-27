@@ -4331,8 +4331,10 @@ function sysPaint(state){
   box.replaceChildren();
   sysRows.length=0;
   for(const row of state.rows||[])box.appendChild(sysRowBuild(row));
-  $("sysAdvBar").hidden=sysRows.length===0;
-  if(sysRows.length===0)$("sysAdvBody").hidden=true;
+  const hideAdvanced=!!window.wudictAndroidShell;
+  $("sysAdvBar").hidden=hideAdvanced||sysRows.length===0;
+  $("sysRestore").hidden=hideAdvanced;
+  if(hideAdvanced||sysRows.length===0)$("sysAdvBody").hidden=true;
   syncSystemSettingSwitches($("sysSettings"));
   sysEffectPaint();
 }
@@ -4616,7 +4618,10 @@ function showSysSettings(){
   // by default" has to mean for a surface that is not rebuilt between visits:
   // the element keeps whatever state it was left in, so a window reopened onto
   // an open group would be a window that looks different every time.
+  const hideAdvanced=!!window.wudictAndroidShell;
   $("sysAdvBody").hidden=true;
+  $("sysAdvBar").hidden=hideAdvanced;
+  $("sysRestore").hidden=hideAdvanced;
   $("sysAdvBar").setAttribute("aria-expanded","false");
   $("sysSettings").showModal();
   sysRead();

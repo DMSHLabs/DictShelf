@@ -635,10 +635,26 @@ func (s *Server) lookOperation(method, path string, body []byte) (any, error) {
 		}
 		f := s.looksRead()
 		current := s.lookStateNow(&req.lookNow)
+		if f.Current == "" && s.looksFileMissing() && req.lookNow.Shell == nil {
+			// A non-shell client cannot report the window colours, but Warm is
+			// still the server-side first-run layer default.
+			current.Layers = append([]string(nil), s.presetEnabled()...)
+		}
 		var inForce look
 		haveBase := false
 		if f.Current != "" {
 			inForce, haveBase = s.lookByID(f.Current)
+		} else if s.looksFileMissing() && req.lookNow.Shell != nil {
+			// On a fresh profile the enabled preset layer is Warm, but no
+			// looks.json exists to record that selection yet. Recognize the
+			// matching built-in state so it is neither shown as Custom nor
+			// treated as unsaved work when switching presets.
+			for _, candidate := range builtinLooks() {
+				if !lookDiffers(current, candidate.State) {
+					inForce, haveBase = candidate, true
+					break
+				}
+			}
 		}
 		drifted := lookIsCustomised(current)
 		if haveBase {
@@ -667,6 +683,15 @@ func (s *Server) lookOperation(method, path string, body []byte) (any, error) {
 			"fontWeight": target.State.FontWeight, "shell": shellHalf(target.State), "payload": s.lookPayload()}, nil
 	}
 	return nil, lookError(http.StatusNotFound, "unsupported look request")
+}
+
+func (s *Server) looksFileMissing() bool {
+	p := s.looksPath()
+	if p == "" {
+		return false
+	}
+	_, err := os.Stat(p)
+	return errors.Is(err, os.ErrNotExist)
 }
 
 func (s *Server) serveLookOperation(w http.ResponseWriter, r *http.Request) {
