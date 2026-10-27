@@ -1176,6 +1176,7 @@
   "articleFind.previous": "Find previous",
   "articleFind.next": "Find next",
   "articleFind.position": "{current} of {total}",
+  "articleFind.resultBlock": "articles {start}–{end}",
   "articleFind.noMatches": "No matches",
   "articleFind.fromStart": "From the beginning",
   "articleFind.fromEnd": "From the end",

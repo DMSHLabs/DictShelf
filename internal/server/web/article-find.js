@@ -102,7 +102,10 @@ function paint() {
     win.CSS.highlights.set("wudict-find-all", all);
     win.CSS.highlights.set("wudict-find-current", current);
   }
-  const count = matches.length ? t("articleFind.position", {current:index < 0 ? 0 : index+1, total:matches.length}) : t("articleFind.noMatches");
+  const partial = matches.length > 0 && !!window.wudictArticleFindHasMore?.();
+  const total = String(matches.length)+(partial?"+":"");
+  const block = index >= 0 ? window.wudictArticleFindBlockRange?.(matches[index]?.host.closest("details.dict")) : "";
+  const count = matches.length ? t("articleFind.position", {current:index < 0 ? 0 : index+1, total})+(block?" · "+block:"") : t("articleFind.noMatches");
   $("articleFindCount").textContent = count;
   $("articleFindCount").disabled = !matches.length;
   $("articleFindStatus").textContent = options.query ? count : "";
@@ -194,7 +197,6 @@ function rebuild() {
       }
     }
   }
-  if (searchAnchor) matches = matches.filter(hit => compareToAnchor(hit) >= 0);
   index = previous ? matches.findIndex(hit => hit.range.startContainer === previous.range.startContainer && hit.range.startOffset === previous.range.startOffset) : -1;
   if (index < 0 && !window.wudictNativeShell) forceLayout(null);
   if (index >= 0) showExample(matches[index]);
@@ -313,7 +315,13 @@ function go(step) {
   if (!matches.length) { paint(); return; }
   let wrapped = false;
   if (index < 0) {
-    if (searchAnchor) index = searchAnchor.direction > 0 ? 0 : matches.length-1;
+    if (searchAnchor) {
+      const candidates = matches.map((hit,i) => ({hit,i})).filter(({hit}) => compareToAnchor(hit) >= 0);
+      const chosen = searchAnchor.direction > 0 ? candidates[0] : candidates.at(-1);
+      wrapped = !chosen;
+      index = chosen ? chosen.i : searchAnchor.direction > 0 ? 0 : matches.length-1;
+      searchAnchor = null;
+    }
     else {
       // The first jump starts at the reading position, ignoring collapsed sections.
       const candidates = matches.map((hit,i) => ({hit,i})).filter(({hit}) => hit.host.closest("details.dict")?.open && (!hit.example || hit.example.ownerDocument.defaultView.getComputedStyle(hit.example).display !== "none"));
@@ -321,6 +329,10 @@ function go(step) {
       index = found ? found.i : step > 0 ? 0 : matches.length-1;
     }
   } else {
+    const current = matches[index];
+    const following = matches[index+step];
+    if (step > 0 && current && (!following || following.host.closest("details.dict") !== current.host.closest("details.dict")))
+      window.wudictRequestNextArticleBlock?.(current.host);
     const next = index+step; wrapped = next < 0 || next >= matches.length;
     index = (next+matches.length)%matches.length;
   }
