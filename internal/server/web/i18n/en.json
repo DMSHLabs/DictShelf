@@ -313,7 +313,7 @@
   "search.modeHintExact": "(work in → work in)",
   "search.modeHintExactLemma": "(worked → work, worked; one word)",
   "search.modeHintWildcards": "(*wo?k* → worked in)",
-  "search.modeHintFullText": "",
+  "search.modeHintFullText": "(word → matching article)",
   "browse.previousMatch": "Previous matching headword",
   "browse.nextMatch": "Next matching headword",
   "browse.noMatches": "No matching headwords",

@@ -155,11 +155,20 @@ func settled(t *testing.T) (*Server, dictInfo, string) {
 	t.Helper()
 	s := newTestServer(t)
 	dictsWith(t, s, "")
-	_, rows, tag := dictsWith(t, s, "")
-	if len(rows) != 1 || tag == "" {
-		t.Fatalf("setup: %d rows, tag %q", len(rows), tag)
+	// First-run preparation and the row's file signature can settle just after
+	// the initial queue disappears. A list without a validator is deliberately
+	// not keepable during that transition; wait for the first stable answer.
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		_, rows, tag := dictsWith(t, s, "")
+		if len(rows) == 1 && tag != "" {
+			return s, rows[0], tag
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
-	return s, rows[0], tag
+	_, rows, tag := dictsWith(t, s, "")
+	t.Fatalf("setup did not settle: %d rows, tag %q, rows %+v", len(rows), tag, rows)
+	return nil, dictInfo{}, ""
 }
 
 func wantFull(t *testing.T, s *Server, tag, why string) string {

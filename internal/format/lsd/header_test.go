@@ -118,6 +118,23 @@ func TestReadIconWithoutDecodingDictionary(t *testing.T) {
 	}
 }
 
+func TestEmbeddedBMPIconMIME(t *testing.T) {
+	icon := make([]byte, 14)
+	copy(icon, "BM")
+	if got := iconMIME(icon); got != "image/bmp" {
+		t.Fatalf("iconMIME(BMP) = %q, want image/bmp", got)
+	}
+	path := filepath.Join(t.TempDir(), "icon.lsd")
+	writeIconOnlyLSD(t, path, icon)
+	body, mime, err := ReadIcon(path)
+	if err != nil || string(body) != string(icon) || mime != "image/bmp" {
+		t.Fatalf("ReadIcon(BMP) = %x, %q, %v; want original bytes, image/bmp", body, mime, err)
+	}
+	if got := iconMIME([]byte("not an image")); got != "" {
+		t.Fatalf("iconMIME(text) = %q, want empty", got)
+	}
+}
+
 func writeIconOnlyLSD(t *testing.T, path string, icon []byte) {
 	t.Helper()
 	variable := []byte{0, 0, 0, 0, 0, 0, 0}

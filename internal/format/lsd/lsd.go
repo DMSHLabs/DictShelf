@@ -277,9 +277,22 @@ func ReadIcon(path string) ([]byte, string, error) {
 	if len(icon) == 0 {
 		return nil, "", dict.ErrNotFound
 	}
-	mime := http.DetectContentType(icon)
-	if !strings.HasPrefix(mime, "image/") {
-		return nil, "", fmt.Errorf("lsd: embedded icon is not an image (%s)", mime)
+	mime := iconMIME(icon)
+	if mime == "" {
+		return nil, "", fmt.Errorf("lsd: embedded icon is not an image")
 	}
 	return icon, mime, nil
+}
+
+// iconMIME supplements net/http's content sniffing with BMP, which it does
+// not recognize even though BMP is a common embedded Lingvo dictionary icon.
+func iconMIME(data []byte) string {
+	mime := http.DetectContentType(data)
+	if strings.HasPrefix(mime, "image/") {
+		return mime
+	}
+	if len(data) >= 14 && string(data[:2]) == "BM" {
+		return "image/bmp"
+	}
+	return ""
 }

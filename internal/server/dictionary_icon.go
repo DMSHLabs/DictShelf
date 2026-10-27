@@ -33,7 +33,7 @@ const maxDictionaryIconCacheBytes = 3 << 20
 const dictionaryIconMaxDimension = 128
 const maxDictionaryIconSourcePixels = 16 << 20
 const dictionaryIconCacheName = "icon.cache"
-const dictionaryIconCacheVersion = 1
+const dictionaryIconCacheVersion = 2
 
 const defaultDictionaryIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect x="4" y="5" width="22" height="23" rx="3" fill="#eee7d8" stroke="#806f52" stroke-width="1.5"/><path d="M9 5v23m17-18h3v18H9" fill="none" stroke="#806f52" stroke-width="1.5"/><path d="M13 12h8m-8 4h8m-8 4h6" stroke="#806f52" stroke-linecap="round" stroke-width="1.5"/></svg>`
 
