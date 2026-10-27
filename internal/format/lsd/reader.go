@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"html"
 	"io"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -332,8 +331,8 @@ func (d *Dict) Icon() (io.ReadCloser, string, error) {
 	if len(d.source.icon) == 0 {
 		return nil, "", dict.ErrNotFound
 	}
-	mime := http.DetectContentType(d.source.icon)
-	if !strings.HasPrefix(mime, "image/") {
+	mime := iconMIME(d.source.icon)
+	if mime == "" {
 		return nil, "", dict.ErrNotFound
 	}
 	return io.NopCloser(bytes.NewReader(d.source.icon)), mime, nil

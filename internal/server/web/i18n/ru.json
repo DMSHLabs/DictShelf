@@ -313,7 +313,7 @@
   "search.modeHintExact": "(work in → work in)",
   "search.modeHintExactLemma": "(worked → work, worked; одно слово)",
   "search.modeHintWildcards": "(*wo?k* → worked in)",
-  "search.modeHintFullText": "",
+  "search.modeHintFullText": "(word → matching article)",
   "browse.previousMatch": "Предыдущий найденный заголовок",
   "browse.nextMatch": "Следующий найденный заголовок",
   "browse.noMatches": "Заголовки не найдены",

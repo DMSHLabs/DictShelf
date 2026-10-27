@@ -46,6 +46,18 @@ func TestDictionaryIconUsesFallbackWhenDictionaryHasNoIcon(t *testing.T) {
 	}
 }
 
+func TestShrinkDictionaryBMPIconKeepsBrowserMIME(t *testing.T) {
+	icon := make([]byte, 14)
+	copy(icon, "BM")
+	body, mime, err := shrinkDictionaryIcon(icon, "image/bmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != string(icon) || mime != "image/bmp" {
+		t.Fatalf("BMP icon = %x, %q; want unchanged bytes and image/bmp", body, mime)
+	}
+}
+
 func TestDictionaryIconPrefersSiblingThenUsesEmbeddedLSDIcon(t *testing.T) {
 	isolatedDBDir(t)
 	dir := t.TempDir()
