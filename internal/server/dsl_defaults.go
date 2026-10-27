@@ -203,9 +203,15 @@ func classifyAutomaticIndex(item *pendingDictionaryIndex, budget int, strategy i
 	logx.System("automatic indexing classified strategy=%s source=%q format=%q entries=%d source_bytes=%d mode=%s processor_cost=%d", indexconst.ModeString(strategy), path, format, entries, size, indexconst.ModeString(item.mode), item.cost)
 }
 
+func adaptiveSingleIndexContext(ctx context.Context, e *entry) context.Context {
+	item := pendingDictionaryIndex{entry: e}
+	classifyAutomaticIndex(&item, max(1, runtime.NumCPU()-1), indexconst.ModeAdaptive)
+	return indexconst.WithIngestMode(ctx, item.mode)
+}
+
 func automaticPipelineCost(strategy indexconst.Mode, budget int) int {
 	reserved := 4
-	if strategy == indexconst.ModeAuto2 {
+	if strategy == indexconst.ModeAdaptive {
 		reserved = 3
 	}
 	return min(reserved, max(1, budget))
@@ -525,9 +531,11 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 		}
 		var err error
 		lane := currentIndexLimit()
-		if indexconst.IsAutomaticMode(indexconst.CurrentMode()) {
+		if indexconst.IsAutomaticMode(indexconst.CurrentMode()) || len(pending) == 1 {
 			ctx = indexconst.WithIngestMode(ctx, item.mode)
-			lane = parallelDictionaryIndexLimit
+			if indexconst.IsAutomaticMode(indexconst.CurrentMode()) {
+				lane = parallelDictionaryIndexLimit
+			}
 		}
 		if item.prepared && !e.indexBlocked() {
 			media := false
@@ -586,6 +594,9 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 	}
 	mode := indexconst.CurrentMode()
 	budget := max(1, runtime.NumCPU()-1)
+	if len(pending) == 1 && !indexconst.IsAutomaticMode(mode) {
+		classifyAutomaticIndex(&pending[0], budget, indexconst.ModeAdaptive)
+	}
 	if indexconst.IsAutomaticMode(mode) {
 		small, heavy := orderAutomaticIndexes(pending, budget, mode)
 		logx.System("automatic index queue started strategy=%s dictionaries=%d small=%d pipeline=%d processor_budget=%d", indexconst.ModeString(mode), len(pending), small, heavy, budget)

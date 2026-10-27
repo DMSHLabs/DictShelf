@@ -744,12 +744,15 @@ summary .upgrade{font-weight:400;font-size:calc(var(--ui-font-addition) * 1rem);
    .group-control-disabled, and the ⌕ in the field). Everything else reads at
    --fg — the reader's report of 2026-09-28 was that the whole panel looked
    switched off. */
-details.noindex>summary{font-weight:700;color:var(--fg-faint)}
+details.noindex>summary{display:flex;align-items:baseline;gap:var(--sp-2);font-weight:700;color:var(--fg-faint)}
+details.noindex>summary .noindex-title{min-width:0}
+details.noindex>summary .noindex-add-all{flex:none;margin-left:auto;padding:0;border:0;background:transparent;font-family:inherit;font-weight:400;font-size:calc(var(--ui-font-addition) * 1rem);color:var(--link);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+details.noindex>summary .noindex-add-all:disabled{opacity:.55;cursor:progress}
 .noidx{padding:var(--sp-1) .62rem var(--sp-2)}
-.noidx>div{display:flex;align-items:baseline;gap:var(--sp-1);font-size:12px;
+.noidx>div{display:grid;grid-template-columns:max-content minmax(0,1fr);align-items:baseline;column-gap:var(--sp-2);font-size:calc(var(--ui-font-addition) * 1rem);
   color:var(--label);padding:.15rem 0}
-.noidx .upgrade{font-size:12px;color:var(--link);cursor:pointer;
-  text-decoration:underline;text-underline-offset:2px;margin-left:auto;white-space:nowrap}
+.noidx .upgrade{font-size:calc(var(--ui-font-addition) * 1rem);color:var(--link);cursor:pointer;
+  text-decoration:underline;text-underline-offset:2px;margin-left:0;white-space:nowrap}
 dl{margin:0;padding:var(--sp-1) var(--sp-2) var(--sp-2)}
 dt{font-size:1.272em;font-weight:700;color:var(--accent);word-break:break-word;
   margin-top:var(--sp-2)}
@@ -1038,10 +1041,12 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
 #hotkeysSection .hotkey-row input{box-sizing:border-box;width:100%;height:calc(var(--ui-control-height) * 1em);font:inherit;padding:0 .6em;
   color:var(--fg);background-color:var(--paper-bg,var(--bg));background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%;border:1px solid var(--line);border-radius:5px}
 html:not([data-shell-image]) #hotkeysSection .hotkey-row input{background-image:linear-gradient(#ffffff24,#ffffff24)}
-#sysSettings .sys-row.sys-switch-ready,#desktopSysBody .sys-row.sys-switch-ready{justify-content:space-between;gap:.8em}
-#sysSettings .sys-row.sys-switch-ready>.sys-label,#desktopSysBody .sys-row.sys-switch-ready>.sys-label{flex:1 1 auto}
+#sysSettings .sys-row.sys-switch-ready,#desktopSysBody .sys-row.sys-switch-ready{justify-content:flex-start;gap:.8em}
+#sysSettings .sys-row.sys-switch-ready>.sys-label,#desktopSysBody .sys-row.sys-switch-ready>.sys-label{
+  box-sizing:border-box;flex:0 1 var(--sys-switch-label-width,auto);width:var(--sys-switch-label-width,auto);
+  max-width:calc(100% - 7.8em);min-width:0;white-space:nowrap}
 #sysSettings .sys-row input.settings-switch-source,#desktopSysBody .sys-row input.settings-switch-source{display:none!important}
-.settings-toggle-source{display:none!important}
+.settings-switch-source{display:none!important}
 .settings-toggle{display:inline-flex;flex:none;align-items:stretch;min-width:7em}
 .settings-toggle-option{flex:1 1 50%;box-sizing:border-box;min-width:3.5em;height:calc(var(--ui-control-height) * 1em);margin:0;padding:0 .7em;
   color:var(--label);background:var(--bg-card,var(--bg));border:1px solid var(--line);font:inherit;line-height:1;cursor:pointer}
@@ -1053,8 +1058,11 @@ html:not([data-shell-image]) #hotkeysSection .hotkey-row input{background-image:
 .settings-toggle-option:disabled{opacity:.55;cursor:default}
 #panel .facts.settings-switch-row{display:flex;flex-wrap:nowrap;align-items:center;width:100%}
 #panel .facts.settings-switch-row>.rowlabel{flex:0 1 var(--rlcol,96px);min-width:0;white-space:normal}
-#panel .examples-extra.settings-switch-row{align-items:center}
-#panel .examples-extra.settings-switch-row>.settings-toggle-label{flex:1 1 auto;min-width:0}
+#panel .examples-extra.settings-switch-row{align-items:center;margin-block:calc(var(--ui-row-gap) * 1em)}
+#panel .examples-extra.settings-switch-row>.settings-toggle-label{flex:0 1 auto;min-width:0}
+#panel #examplesExtraRow+.facts{margin-top:calc(var(--ui-row-gap) * 1em)}
+#panel .facts.update-notifications-row.settings-switch-row{flex-wrap:nowrap}
+#panel .facts.update-notifications-row.settings-switch-row>.rowlabel{flex:0 1 auto;white-space:nowrap}
 #panel .appearance-row:has(#appearanceColorOn){flex-wrap:wrap}
 #panel .appearance-row:has(#appearanceColorOn)>.settings-toggle{margin-right:auto}
 #panel .appearance-row:has(#appearanceColorOn)>.color-box{flex:1 1 12em}

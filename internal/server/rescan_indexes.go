@@ -409,6 +409,9 @@ func (r *Registry) updateDictionaryIndexesContext(ctx context.Context, req resca
 		}
 		i := positions[t.e.ID]
 		e := t.e
+		if len(workTargets) == 1 {
+			dictCtx = adaptiveSingleIndexContext(dictCtx, e)
+		}
 		store.IndexDiagnostic("rescan index start source=%q dictionary=%q fresh=%v self_indexed=%v native_only=%v", e.Path, e.probeName(), t.fresh, entryHasSelfIndex(e), t.nativeOnly)
 		if t.nativeOnly {
 			if t.fresh {

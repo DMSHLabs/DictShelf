@@ -64,7 +64,7 @@ type DictPref struct {
 // phone that reaches this same server too, and localStorage — keyed by origin
 // — would hand them 15px there, and again the first time SERVER_PORT changes.
 type UIPrefs struct {
-	UpdateChannel           string `json:"updateChannel,omitempty"` // release, prerelease or beta; empty defaults to release
+	UpdateChannel           string `json:"updateChannel,omitempty"`          // release, prerelease or beta; empty defaults to release
 	UpdateNotificationsOff  bool   `json:"updateNotificationsOff,omitempty"` // notifications are on unless disabled
 	ResultCacheLimitGB      int    `json:"resultCacheLimitGB,omitempty"`
 	ResultCacheNoLimit      bool   `json:"resultCacheNoLimit,omitempty"`
@@ -97,6 +97,10 @@ type UIPrefs struct {
 
 	// Also fold [ex] zones when the Examples Hide layer is enabled.
 	HideUnmarkedExamples bool `json:"hideUnmarkedExamples,omitempty"`
+
+	// ExampleBackgroundOff opts out of the default background tint on examples.
+	ExampleBackgroundOff bool `json:"exampleBackgroundOff,omitempty"`
+	FadeExampleText      bool `json:"fadeExampleText,omitempty"`
 
 	// FastFirst expands whichever dictionary answers first, instead of the
 	// first dictionary in the user's own order that has a result (D73, D142;
@@ -300,14 +304,17 @@ func (p *Prefs) dslTitleRepairs() (bool, bool) {
 
 func (p *Prefs) indexingMode() (string, bool) {
 	f, _ := p.data()
-	if f.IndexingMode != "pipeline" && f.IndexingMode != "parallel-dictionaries-single-worker" && f.IndexingMode != "auto" && f.IndexingMode != "auto2" {
-		return "", false
+	switch f.IndexingMode {
+	case "parallel-dictionaries-single-worker":
+		return f.IndexingMode, true
+	case "pipeline", "auto", "auto2", "adaptive":
+		return "adaptive", true
 	}
-	return f.IndexingMode, true
+	return "", false
 }
 
 func (p *Prefs) setIndexingMode(mode string) error {
-	if mode != "pipeline" && mode != "parallel-dictionaries-single-worker" && mode != "auto" && mode != "auto2" {
+	if mode != "parallel-dictionaries-single-worker" && mode != "adaptive" {
 		return errors.New("invalid indexing mode")
 	}
 	return p.mutate(func(f *prefsFile) { f.IndexingMode = mode })

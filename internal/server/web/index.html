@@ -692,6 +692,8 @@ window.wudictFontScale=(function(){
     </span>
   </div>
   <label id="examplesExtraRow" class="examples-extra" hidden><input class="panel-checkbox" type="checkbox" id="hideUnmarkedExamples"> {{T:panel.hideUnmarkedExamples}}</label>
+  <label id="exampleBackgroundRow" class="examples-extra" hidden><input class="panel-checkbox" type="checkbox" id="dimExampleBackground"> {{T:panel.dimExampleBackground}}</label>
+  <label id="exampleTextFadeRow" class="examples-extra" hidden><input class="panel-checkbox" type="checkbox" id="fadeExampleText"> {{T:panel.fadeExampleText}}</label>
   <div class="facts">
     <span class="rowlabel">{{T:panel.dictionaryIcons}}</span>
     <span class="seg" role="group" aria-label="{{T:panel.dictionaryIcons}}">
@@ -1136,7 +1138,7 @@ window.wudictFontScale=(function(){
     <label class="sys-row"><input type="checkbox" id="sysMergedTrigram"><span class="sys-label">{{T:system.mergedTrigram}}</span></label>
 
     <h3 class="sys-head" id="sysIndexingHeading">{{T:system.indexing}}</h3>
-    <label class="sys-row sys-num sys-indexing-mode"><span class="sys-label">{{T:system.indexingMode}}</span><span class="panel-select-wrap panel-dropdown sys-indexing-mode-select"><select id="sysIndexingMode"><option value="pipeline">{{T:system.indexingModePipeline}}</option><option value="parallel-dictionaries-single-worker">{{T:system.indexingModeParallel}}</option><option value="auto">{{T:system.indexingModeAuto}}</option><option value="auto2">{{T:system.indexingModeAuto2}}</option></select></span></label>
+    <label class="sys-row sys-num sys-indexing-mode"><span class="sys-label">{{T:system.indexingMode}}</span><span class="panel-select-wrap panel-dropdown sys-indexing-mode-select"><select id="sysIndexingMode"><option value="parallel-dictionaries-single-worker">{{T:system.indexingModeParallel}}</option><option value="adaptive">{{T:system.indexingModeAdaptive}}</option></select></span></label>
     <p class="sys-hint">{{T:system.indexingModeHint}}</p>
 
     <h3 class="sys-head">{{T:system.logFile}}</h3>
@@ -1853,6 +1855,8 @@ async function loadPrefs(){
        reader in a strategy with nothing on screen to explain or change it -
        the same call the removed `sortMine` got. The field is still WRITTEN
        (below, always false), because it is upstream's. */
+    applyExampleBackground(st.ui?.exampleBackgroundOff!==true,false);
+    applyExampleTextFade(!!st.ui?.fadeExampleText,false);
     if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyArticleFont(st.ui.fontFamily||"charis",false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false);applyDictIcons(!st.ui.dictIconsOff,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll;prefOrderModeKnown=typeof st.ui.customOrder==="boolean";prefCustomOrder=!!st.ui.customOrder;
       updateChannel=st.ui.updateChannel||"release";
       updateNotifications=!st.ui.updateNotificationsOff;
@@ -1916,7 +1920,7 @@ function savePrefs(now){
   // omitempty zero value), which is what retires a flag set by the switches
   // that no longer exist.
   const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:d.name||d.path.split("/").pop(),title:dictTitles.get(d.id)||"",pinned:prefPinned.includes(d.id)})),
-    ui:{fontSize:articleFS,fontWeight:articleFW,fontFamily:articleFont,hlOff:!hlOn,speakOff:!speakOn,dictIconsOff:!dictIconsOn,fastFirst:!orderFirst,hideUnmarkedExamples,customOrder:prefCustomOrder,
+    ui:{fontSize:articleFS,fontWeight:articleFW,fontFamily:articleFont,hlOff:!hlOn,speakOff:!speakOn,dictIconsOff:!dictIconsOn,fastFirst:!orderFirst,hideUnmarkedExamples,exampleBackgroundOff:!dimExampleBackground,fadeExampleText,customOrder:prefCustomOrder,
       resultCacheLimitGB,resultCacheNoLimit,combinedDictionaryLimit,searchReturnCache:searchReturnCacheStorage,updateChannel,
       updateNotificationsOff:!updateNotifications}});
   if(body===prefsSent)return;
@@ -2423,7 +2427,23 @@ let userArticleCSS="";
 // frameCSS() reads this - a declaration further down would be a TDZ
 // ReferenceError that kills the whole script before anything binds.
 let presetArticleCSS="";
-let hideUnmarkedExamples=false;
+let hideUnmarkedExamples=false,dimExampleBackground=true,fadeExampleText=false;
+function applyExampleBackground(on,persist=true){
+  dimExampleBackground=!!on;
+  $("dimExampleBackground").checked=dimExampleBackground;
+  document.documentElement.style.setProperty("--wu-example-background-strength",dimExampleBackground?"8%":"0%");
+  settingsToggleSync($("dimExampleBackground"));
+  if(persist)savePrefs();
+}
+function applyExampleTextFade(on,persist=true){
+  fadeExampleText=!!on;
+  $("fadeExampleText").checked=fadeExampleText;
+  document.documentElement.style.setProperty("--wu-example-text-strength",fadeExampleText?"65%":"100%");
+  settingsToggleSync($("fadeExampleText"));
+  if(persist)savePrefs();
+}
+$("dimExampleBackground").addEventListener("change",e=>applyExampleBackground(e.target.checked));
+$("fadeExampleText").addEventListener("change",e=>applyExampleTextFade(e.target.checked));
 function extraExampleCSS(){
   return !STYLE_OFF&&hideUnmarkedExamples&&typeof PRESETS!=="undefined"&&PRESETS?.enabled?.includes("hide_examples")
     ? ".wu-exonly,.wu-ex,.dsl_ex{display:none}" : "";
@@ -4427,7 +4447,34 @@ function syncSystemSettingSwitches(root){
     }
     function sync(){setButton.setAttribute("aria-pressed",String(input.checked));clearButton.setAttribute("aria-pressed",String(!input.checked));group.setAttribute("aria-disabled",String(input.disabled));setButton.disabled=clearButton.disabled=input.disabled}
     input.classList.add("settings-switch-source");input.tabIndex=-1;input.setAttribute("aria-hidden","true");input.addEventListener("change",sync);
-    row.classList.add("sys-switch-ready");row.append(group);sync();
+    row.classList.add("sys-switch-ready");
+    const cacheValue=row.classList.contains("sys-result-cache-limit")?row.querySelector("#sysResultCacheValue"):null;
+    if(cacheValue)row.insertBefore(group,cacheValue);else row.append(group);
+    sync();
+  }
+  const headings=[...root.querySelectorAll("h3.sys-head")],blocks=new Map();
+  for(const row of root.querySelectorAll(".sys-row.sys-switch-ready")){
+    let heading=null;
+    for(const candidate of headings){
+      if(candidate.compareDocumentPosition(row)&Node.DOCUMENT_POSITION_FOLLOWING)heading=candidate;
+    }
+    const block=row.closest("#sysAdvanced")||heading||root;
+    if(!blocks.has(block))blocks.set(block,[]);
+    blocks.get(block).push(row);
+  }
+  for(const rows of blocks.values()){
+    let width=0;
+    for(const row of rows){
+      const label=row.querySelector(":scope > .sys-label"),text=label?.querySelector("span")||label;
+      if(!text)continue;
+      const labelStyle=label.getAttribute("style"),textStyle=text.getAttribute("style");
+      label.style.cssText+=";flex:0 0 auto;width:max-content;max-width:none;white-space:nowrap";
+      text.style.cssText+=";display:inline-block;width:max-content;white-space:nowrap";
+      width=Math.max(width,label.scrollWidth,text.scrollWidth,text.getBoundingClientRect().width);
+      if(labelStyle===null)label.removeAttribute("style");else label.setAttribute("style",labelStyle);
+      if(textStyle===null)text.removeAttribute("style");else text.setAttribute("style",textStyle);
+    }
+    if(width>0)for(const row of rows)row.style.setProperty("--sys-switch-label-width",String(Math.ceil(width))+"px");
   }
 }
 function settingsToggleBuild(input,caption){
@@ -4444,7 +4491,7 @@ function settingsToggleBuild(input,caption){
 }
 function settingsToggleSync(input){input?.parentElement?.querySelector(".settings-toggle")?._sync?.()}
 function syncPreferenceSwitches(){
-  for(const id of ["ignoreDiacritics","hideUnmarkedExamples","updateNotifications","appearanceColorOn"]){
+  for(const id of ["ignoreDiacritics","hideUnmarkedExamples","dimExampleBackground","fadeExampleText","updateNotifications","appearanceColorOn"]){
     const input=$(id);if(!input||input.dataset.settingsToggleReady)continue;
     const label=input.closest("label")||document.querySelector('label[for="'+id+'"]'),caption=label?.textContent.trim()||label?.getAttribute("aria-label")||input.getAttribute("aria-label")||"";
     const group=settingsToggleBuild(input,caption);input.dataset.settingsToggleReady="1";
@@ -4701,6 +4748,7 @@ $("sysAdvBar").onclick=()=>{
   const open=$("sysAdvBody").hidden;
   $("sysAdvBody").hidden=!open;
   $("sysAdvBar").setAttribute("aria-expanded",open?"true":"false");
+  if(open)syncSystemSettingSwitches($("sysSettings"));
 };
 let desktopSystemNodes=null;
 async function desktopHotkeysLoad(){
@@ -4831,7 +4879,7 @@ async function showDesktopSysSettings(){
   const indexingModeText=document.createElement("span");indexingModeText.className="sys-label";indexingModeText.textContent=tx("system.indexingMode");
   const indexingModeSelectWrap=document.createElement("span");indexingModeSelectWrap.className="panel-select-wrap panel-dropdown sys-indexing-mode-select";
   const indexingModeSelect=document.createElement("select");indexingModeSelect.id="desktopSysIndexingMode";
-  for(const [value,key] of [["pipeline","system.indexingModePipeline"],["parallel-dictionaries-single-worker","system.indexingModeParallel"],["auto","system.indexingModeAuto"],["auto2","system.indexingModeAuto2"]]){
+  for(const [value,key] of [["parallel-dictionaries-single-worker","system.indexingModeParallel"],["adaptive","system.indexingModeAdaptive"]]){
     const option=document.createElement("option");option.value=value;option.textContent=tx(key);indexingModeSelect.append(option);
   }
   indexingModeSelect.value=indexingModePreference();indexingModeSelect.addEventListener("change",()=>setIndexingMode(indexingModeSelect.value,indexingModeSelect));
@@ -4918,7 +4966,10 @@ function renderUpdateNotice(){
     versionLink.addEventListener("click",()=>setTimeout(clearUpdateAvailable,0));note.append(versionLink);
     if(/^https:\/\/github\.com\/DMSHLabs\/DictShelf\/releases\//.test(updateAvailable.url)){
       const validAsset=asset=>asset&&typeof asset.url==="string"&&typeof asset.sha256==="string"&&/^[0-9a-f]{64}$/i.test(asset.sha256);
-      install.hidden=!window.wudictWindowsShell||(!validAsset(updateAvailable.windowsInstaller)&&!validAsset(updateAvailable.windowsPortable));
+      const hasWindows=window.wudictWindowsShell&&(validAsset(updateAvailable.windowsInstaller)||validAsset(updateAvailable.windowsPortable));
+      const androidApks=updateAvailable.androidApks&&Object.values(updateAvailable.androidApks).some(validAsset);
+      const hasAndroid=window.wudictAndroidUpdaterAvailable&&androidApks;
+      install.hidden=!hasWindows&&!hasAndroid;
       install.disabled=updateStarting;
       install.textContent=tx(updateStarting?"system.updatePreparing":"system.updateAction");
     }
@@ -5010,7 +5061,9 @@ async function checkForUpdates(silent=false){
       if(!entry||typeof entry.version!=="string"||typeof entry.url!=="string"||
          !/^https:\/\/github\.com\/DMSHLabs\/DictShelf\/releases\/tag\//.test(entry.url))continue;
       if(!versionIsNewer(entry.version,current))continue;
-      found={version:entry.version,url:entry.url};break;
+      found={version:entry.version,url:entry.url,
+        windowsInstaller:entry.windowsInstaller||null,windowsPortable:entry.windowsPortable||null,
+        androidApks:entry.androidApks||null};break;
     }
     updateAvailable=found;updateStatusMessage=found?"":(!silent?tx("system.noUpdates"):"");
     if(found&&updateNotifications){try{localStorage.setItem(updateAvailableKey(),JSON.stringify(found))}catch(_){}}
@@ -5025,14 +5078,21 @@ async function checkForUpdates(silent=false){
 }
 $("checkUpdates").addEventListener("click",()=>checkForUpdates(false));
 $("installUpdate").addEventListener("click",async()=>{
-  if(!updateAvailable||!window.wudictUpdateWindows)return;
+  if(!updateAvailable)return;
   updateStarting=true;updateStatusMessage="";renderUpdateNotice();
   try{
-    await window.wudictUpdateWindows(JSON.stringify({
-      installer:updateAvailable.windowsInstaller||null,
-      portable:updateAvailable.windowsPortable||null,
-      portableFailure:tx("system.updatePortableFailed")
-    }));
+    if(window.wudictAndroidUpdaterAvailable){
+      const answer=window.prompt("wudict:android-update",JSON.stringify({version:updateAvailable.version,androidApks:updateAvailable.androidApks||{}}));
+      if(!answer)throw new Error("Android update was not started");
+      const result=JSON.parse(answer);if(result.error)throw new Error(result.error);
+      updateStarting=false;updateStatusMessage=tx("system.updateAndroidDownloadStarted");updateManualResult=true;renderUpdateNotice();
+    }else if(window.wudictUpdateWindows){
+      await window.wudictUpdateWindows(JSON.stringify({
+        installer:updateAvailable.windowsInstaller||null,
+        portable:updateAvailable.windowsPortable||null,
+        portableFailure:tx("system.updatePortableFailed")
+      }));
+    }else throw new Error("Update is unavailable in this app");
   }catch(error){
     updateStarting=false;updateStatusMessage=tx("system.updateStartFailed",{error:window.wudictI18n.errorText(error.message)});
     updateManualResult=true;renderUpdateNotice();
@@ -5149,7 +5209,7 @@ function dictionaryCacheDiagnosticsEnabled(){try{return localStorage.getItem("wu
 function setDictionaryCacheDiagnostics(on){try{if(on)localStorage.setItem("wudict_dictionary_cache_diagnostics","1");else localStorage.removeItem("wudict_dictionary_cache_diagnostics")}catch(_){}}
 function indexParallelismDiagnosticsEnabled(){try{return localStorage.getItem("wudict_index_parallelism_diagnostics")==="1"}catch(_){return false}}
 function setIndexParallelismDiagnostics(on){try{if(on)localStorage.setItem("wudict_index_parallelism_diagnostics","1");else localStorage.removeItem("wudict_index_parallelism_diagnostics")}catch(_){}sendBrowseDiagnostic({event:"index_parallelism_diagnostics",enabled:!!on})}
-function indexingModePreference(){try{const mode=localStorage.getItem("wudict_indexing_mode");return ["pipeline","parallel-dictionaries-single-worker","auto","auto2"].includes(mode)?mode:"auto"}catch(_){return "auto"}}
+function indexingModePreference(){try{const mode=localStorage.getItem("wudict_indexing_mode");return mode==="parallel-dictionaries-single-worker"?mode:"adaptive"}catch(_){return "adaptive"}}
 async function setIndexingMode(mode,select){
   const previous=indexingModePreference();
   if(!await sendBrowseDiagnostic({event:"indexing_mode",mode})){
@@ -5862,6 +5922,21 @@ async function runRemove(id,kind,node){
 document.addEventListener("click",e=>{
   const up=e.target.closest(".upgrade");
   if(!up)return;
+  if(up.classList.contains("noindex-add-all")){
+    e.preventDefault();
+    if(up.disabled)return;
+    const section=up.closest("details.noindex"),items=[...section.querySelectorAll(".noidx .upgrade[data-id]")];
+    const feat=items[0]?.dataset.feat||"fts";
+    const operations=[...new Set(items.map(item=>item.dataset.id).filter(Boolean))]
+      .map(dict=>({dict,feature:feat,action:"create"}));
+    if(!operations.length)return;
+    up.disabled=true;
+    window.wudictWork.start(operations).then(result=>{
+      if(result.error)throw new Error(result.error);
+    }).catch(error=>setIndexStatus("⚠ "+esc(error.message||String(error))))
+      .finally(()=>{if(up.isConnected)up.disabled=false;});
+    return;
+  }
   e.preventDefault(); // don't toggle the <details>
   runIngest(up.dataset.id,{[up.dataset.feat||"fts"]:1},up);
 });
@@ -6853,7 +6928,7 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
   const countLabel=paging?(rung?`<span class="count">${rung}</span>`:``):more
     ?`<span class="count">${rung}${more} ${esc(tx("search.results",{count:perDict,number:""}).trim())}</span>`
     :`<span class="count">${rung}${esc(tx("search.results",{count:h.results.length,number:window.wudictI18n.number(h.results.length)}))}</span>`;
-  det.innerHTML=`<summary class="search-result-summary"><span class="search-dict-identity">${dictIconHTML(h.dict)}<span class="search-dict-name">${esc(h.name)}</span></span><span class="search-dict-controls">${pageControls}${countLabel}${more}${browse}</span></summary>`;
+  det.innerHTML=`<summary class="search-result-summary"><span class="search-dict-identity">${dictIconHTML(h.dict)}<span class="search-dict-name">${esc(h.name)}</span></span><span class="search-dict-controls">${pageControls}${countLabel}${browse}</span></summary>`;
   const dl=document.createElement("dl"),roots=[];
   for(const r of h.results){
     const dt=document.createElement("dt");
@@ -6966,15 +7041,16 @@ function noIndexRow(el,out,info){
   if(!el){
     el=document.createElement("details");
     el.className="dict noindex";
-    el.innerHTML='<summary></summary><div class="noidx"></div>';
+    const addAll=info.feat==="fts"?'<button type="button" class="upgrade noindex-add-all">'+esc(tx("dictUI.addAll"))+'</button>':'';
+    el.innerHTML='<summary><span class="noindex-title"></span>'+addAll+'</summary><div class="noidx"></div>';
     out.appendChild(el);
   }
   const list=el.lastElementChild,row=document.createElement("div");
-  row.innerHTML=`<span>${esc(info.name)}</span>`+
-    `<span class="upgrade" data-id="${info.dict}" data-feat="${info.feat}">${esc(tx("search.enable"))}</span>`;
+  row.innerHTML=`<span class="upgrade" data-id="${info.dict}" data-feat="${info.feat}">${esc(tx("search.enable"))}</span>`+
+    `<span class="noidx-name">${esc(info.name)}</span>`;
   list.appendChild(row);
   const n=list.childElementCount;
-  el.firstElementChild.textContent=
+  el.querySelector(".noindex-title").textContent=
     tx("search.noIndex",{count:n,number:window.wudictI18n.number(n),what:FEAT_NAME[info.feat]});
   return el;
 }
@@ -10760,6 +10836,8 @@ function presetRowsPaint(){
       b.setAttribute("aria-pressed",(b.dataset.layer==="on")===on?"true":"false");
   }
   $("examplesExtraRow").hidden=$("examplesRow").hidden;
+  $("exampleBackgroundRow").hidden=$("examplesRow").hidden;
+  $("exampleTextFadeRow").hidden=$("examplesRow").hidden;
   $("hideUnmarkedExamples").disabled=!(PRESETS&&PRESETS.enabled&&PRESETS.enabled.includes("hide_examples"));
 }
 for(const [rowId,id,kind] of PRESET_ROWS){

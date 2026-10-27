@@ -404,7 +404,7 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 }
 
 func validIndexingMode(mode string) bool {
-	return mode == "pipeline" || mode == "parallel-dictionaries-single-worker" || mode == "auto" || mode == "auto2"
+	return mode == "parallel-dictionaries-single-worker" || mode == "adaptive"
 }
 
 func (s *Server) recordBrowseDiagnostic(d browseDiagnostic) error {

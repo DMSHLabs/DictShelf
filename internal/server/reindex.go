@@ -182,7 +182,7 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 		if !ok {
 			return
 		}
-		if indexconst.IsAutomaticMode(indexconst.CurrentMode()) {
+		if indexconst.IsAutomaticMode(indexconst.CurrentMode()) || len(todo) == 1 {
 			ctx = indexconst.WithIngestMode(ctx, mode)
 		}
 		defer func() {
@@ -240,7 +240,13 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 		runHybridPriorityDictionaryQueue(queue, budget, j.canceled, func(item pendingDictionaryIndex) { process(item.entry, item.mode) })
 		logx.System("automatic rebuild queue finished strategy=%s dictionaries=%d elapsed_ms=%d", indexconst.ModeString(mode), len(items), time.Since(started).Milliseconds())
 	} else {
-		runIndexTasks(todo, j.canceled, func(e *entry) { process(e, indexconst.CurrentMode()) })
+		singleMode := indexconst.CurrentMode()
+		if len(todo) == 1 {
+			item := pendingDictionaryIndex{entry: todo[0]}
+			classifyAutomaticIndex(&item, max(1, runtime.NumCPU()-1), indexconst.ModeAdaptive)
+			singleMode = item.mode
+		}
+		runIndexTasks(todo, j.canceled, func(e *entry) { process(e, singleMode) })
 	}
 	if j.canceled() {
 		j.update(func(st *jobStatus) { st.Canceled = true })

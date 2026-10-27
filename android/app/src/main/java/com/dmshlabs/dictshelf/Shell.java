@@ -207,6 +207,7 @@ final class Shell {
         // page's own boot push because the flag arrives at onPageFinished,
         // which either side of that push can win.
         web.evaluateJavascript("window.wudictAndroidShell=1;window.wudictNativeShell=1;"
+                + "window.wudictAndroidUpdaterAvailable=" + AndroidUpdate.available() + ";"
                 + "if(typeof wudictPresetPaper==='function')wudictPresetPaper();"
                 + "if(typeof appearanceRead==='function' && document.getElementById('styler')"
                 + " && document.getElementById('styler').classList.contains('show')) appearanceRead();"
@@ -708,6 +709,17 @@ final class Shell {
                 if ("wudict:exit".equals(message)) {
                     result.confirm("ok");
                     a.runOnUiThread(() -> AppExit.request(a));
+                    return true;
+                }
+                if ("wudict:android-update".equals(message)) {
+                    try {
+                        result.confirm(AndroidUpdate.start(a, defaultValue).toString());
+                    } catch (Exception error) {
+                        SystemLog.warn(TAG, "could not start Android update", error);
+                        String detail = error.getMessage() == null
+                                ? "Update could not be started" : error.getMessage();
+                        result.confirm("{\"error\":" + org.json.JSONObject.quote(detail) + "}");
+                    }
                     return true;
                 }
                 if ("wudict:appearance".equals(message)) {

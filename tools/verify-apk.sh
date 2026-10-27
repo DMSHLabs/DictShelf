@@ -49,6 +49,9 @@ if [ -n "$PLAY" ]; then
         if ! echo "$perms" | grep -q 'android.permission.INTERNET'; then
             fail "$apk lost INTERNET"
         fi
+        if echo "$perms" | grep -q 'android.permission.REQUEST_INSTALL_PACKAGES'; then
+            fail "$apk must not request package installation permission"
+        fi
         # An explicit allow-set, not a list of things to be absent: the next
         # permission to creep in is by definition one nobody thought to forbid
         # — a feature added to the shell is exactly how it would arrive. Adding
@@ -84,7 +87,10 @@ if [ -n "$FOSS" ]; then
         if ! "$AAPT2" dump permissions "$apk" | grep -q 'MANAGE_EXTERNAL_STORAGE'; then
             fail "$apk LOST MANAGE_EXTERNAL_STORAGE"
         fi
-        echo "ok: $apk keeps All-files access"
+        if ! "$AAPT2" dump permissions "$apk" | grep -q 'android.permission.REQUEST_INSTALL_PACKAGES'; then
+            fail "$apk LOST REQUEST_INSTALL_PACKAGES"
+        fi
+        echo "ok: $apk keeps All-files access and FOSS APK update permission"
     done
 else
     echo "skip: no foss APK built (make apk)"
