@@ -239,6 +239,7 @@ func TestIngestPipelineArticleExceedingQueueBudget(t *testing.T) {
 }
 
 func TestIngestPipelinePreparationErrorReleasesQueues(t *testing.T) {
+	t.Setenv("WUDICT_DB_DIR", t.TempDir())
 	path := filepath.Join(t.TempDir(), "text.db")
 	r := &pipelineReader{meta: dict.Meta{Name: "Broken", Format: "mdx", EntryCount: 201}, count: 200, badAt: 20}
 	_, err := IngestPlanContext(context.Background(), r, path, Plan{FullText: true}, nil)
