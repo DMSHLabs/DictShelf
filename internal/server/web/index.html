@@ -1053,7 +1053,13 @@ window.wudictFontScale=(function(){
 <dialog id="updateInstallDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="updateInstallTitle" aria-describedby="updateInstallText">
   <h2 id="updateInstallTitle">{{T:system.updateInstallConfirmTitle}}</h2>
   <p id="updateInstallText"></p>
-  <div class="system-log-saved-actions"><button type="button" class="btn" id="updateInstallConfirm">{{T:system.installUpdate}}</button><button type="button" class="btn" id="updateInstallCancel" autofocus>{{T:panel.cancel}}</button></div>
+  <div class="system-log-saved-actions"><button type="button" class="btn" id="updateInstallCancel" autofocus>{{T:panel.cancel}}</button><button type="button" class="btn" id="updateInstallConfirm">{{T:system.installUpdate}}</button></div>
+</dialog>
+
+<dialog id="updateInstalledDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="updateInstalledTitle" aria-describedby="updateInstalledText">
+  <h2 id="updateInstalledTitle">{{T:system.updateInstalledTitle}}</h2>
+  <p id="updateInstalledText"></p>
+  <div class="system-log-saved-actions"><button type="button" class="btn" id="updateInstalledClose" autofocus>{{T:panel.close}}</button></div>
 </dialog>
 
 <dialog id="clearSystemLogDialog" lang="{{T:locale}}" class="group-dialog panel-card system-log-confirmation" aria-labelledby="clearSystemLogTitle" aria-describedby="clearSystemLogHint">
@@ -3432,7 +3438,11 @@ function refreshDictUI(now){
 }
 
 function finishDesktopStartup(){
-  if(window.wudictWindowsShell&&typeof window.wudictStartupReady==="function")window.wudictStartupReady().catch(()=>{});
+  if(window.wudictWindowsShell&&typeof window.wudictStartupReady==="function"){
+    window.wudictStartupReady().then(showPendingUpdateInstalled,showPendingUpdateInstalled);
+    return;
+  }
+  showPendingUpdateInstalled();
 }
 function updateDesktopStartupStatus(message){
   if(window.wudictWindowsShell&&typeof window.wudictStartupStatus==="function")
@@ -5030,6 +5040,18 @@ function showUpdateInstallConfirmation(){
   const dialog=$("updateInstallDialog");
   if(!dialog.open)dialog.showModal();
 }
+const updateInstallPendingKey="dictshelf_update_install_pending";
+function rememberPendingUpdateInstall(version){try{localStorage.setItem(updateInstallPendingKey,version)}catch(_){}}
+function clearPendingUpdateInstall(){try{localStorage.removeItem(updateInstallPendingKey)}catch(_){}}
+function showPendingUpdateInstalled(){
+  let installedVersion="";
+  try{installedVersion=localStorage.getItem(updateInstallPendingKey)||"";localStorage.removeItem(updateInstallPendingKey)}catch(_){}
+  if(!installedVersion||installedVersion!==currentAppVersion())return;
+  $("updateInstalledText").textContent=tx("system.updateInstalledText",{version:installedVersion});
+  const dialog=$("updateInstalledDialog");
+  if(!dialog.open)dialog.showModal();
+}
+$("updateInstalledClose").addEventListener("click",()=>$("updateInstalledDialog").close());
 $("updateInstallConfirm").addEventListener("click",()=>{
   $("updateInstallDialog").close();
   installUpdate();
@@ -5178,13 +5200,15 @@ async function installUpdate(){
   updateStarting=true;updateActionPhase="install";updateStatusMessage="";renderUpdateNotice();
   try{
     if(window.wudictAndroidUpdaterAvailable){
+      rememberPendingUpdateInstall(updateAvailable.version);
       const answer=window.prompt("wudict:android-update",JSON.stringify({action:"install",version:updateAvailable.version,androidApks:updateAvailable.androidApks||{}}));
       if(!answer)throw new Error("Android update was not started");
       const result=JSON.parse(answer);
-      if(result.permission){updateStarting=false;updateActionPhase="";updateStatusMessage=tx("system.updateAndroidPermission");updateManualResult=true;renderUpdateNotice();return}
+      if(result.permission){clearPendingUpdateInstall();updateStarting=false;updateActionPhase="";updateStatusMessage=tx("system.updateAndroidPermission");updateManualResult=true;renderUpdateNotice();return}
       if(result.error)throw new Error(result.error);
       updateStarting=false;updateInstalling=false;updateDownloaded=true;updateStatusMessage=tx("system.updateAndroidInstallStarted");updateManualResult=true;renderUpdateNotice();
     }else if(window.wudictUpdateWindows){
+      rememberPendingUpdateInstall(updateAvailable.version);
       await window.wudictUpdateWindows(JSON.stringify({
         action:"install",version:updateAvailable.version,
         installer:updateAvailable.windowsInstaller||null,portable:updateAvailable.windowsPortable||null,
@@ -5192,6 +5216,7 @@ async function installUpdate(){
       }));
     }else throw new Error("Update is unavailable in this app");
   }catch(error){
+    clearPendingUpdateInstall();
     updateStarting=false;updateActionPhase="";
     if(window.wudictAndroidUpdaterAvailable){updateDownloaded=false;downloadedUpdateVersion="";pendingAndroidUpdateState=null}
     updateStatusMessage=tx("system.updateStartFailed",{error:window.wudictI18n.errorText(error.message)});
@@ -5242,6 +5267,7 @@ window.wudictUpdateFinished=function(ok,message,willClose){
   updateManualResult=true;renderUpdateNotice();
   if(willClose)setTimeout(()=>window.wudictWindowsExit?.(),400);
   if(!ok){
+    clearPendingUpdateInstall();
     updateInstalling=false;updateDownloaded=false;downloadedUpdateVersion="";
     try{localStorage.removeItem(updateDownloadedKey(updateAvailable?.version||""))}catch(_){}
     $("checkUpdates").disabled=false;

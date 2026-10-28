@@ -6,6 +6,8 @@
 
 2026-10-29 Update action now stays `Install update`; after downloading, a themed EN/RU confirmation asks whether to install. Cancel preserves the verified download. The Update section heading shares the orange alert mark with ☰. Catalog checks and runtime behavior remain unverified.
 
+2026-10-29 After a user confirms installation, the target version is saved. On the next ready startup with that version, a themed EN/RU success dialog confirms installation; starting the old version clears the pending marker. Catalog checks and runtime behavior remain unverified.
+
 2026-10-29 Update channel selection now includes more stable channels: Beta checks Beta, Pre-release, and Release; Pre-release checks Pre-release and Release; Release checks Release only. When several newer versions qualify, the app offers the newest. EN/RU hints and no-update messages describe this behavior. Catalog and diff checks pass; runtime behavior is not verified.
 
 2026-10-28 Full-text search mode hints now have matching EN/RU example text,

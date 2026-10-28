@@ -1111,6 +1111,8 @@
   "system.updateDownloaded": "Обновление загружено и готово к установке.",
   "system.updateInstallConfirmTitle": "Установить обновление?",
   "system.updateInstallConfirmText": "Версия {version} загружена и готова к установке. Продолжить?",
+  "system.updateInstalledTitle": "Обновление установлено",
+  "system.updateInstalledText": "Версия {version} успешно установлена.",
   "system.updateDownloadFailed": "Не удалось загрузить обновление.",
   "system.updateAndroidDownloadStarted": "APK загружается в папку «Загрузки». Android сообщит, когда его можно будет установить.",
   "system.updateAndroidPermission": "Разрешите DictShelf устанавливать приложения в настройках Android, затем нажмите «Установить обновление». Также APK можно установить вручную из папки «Загрузки».",
