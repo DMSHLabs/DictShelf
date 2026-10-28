@@ -54,7 +54,11 @@ func bindWindowsUpdater(w webview.WebView) {
 		}
 		go func() {
 			var js string
-			if request.Action == "download" {
+			if request.Action == "status" {
+				ready := windowsUpdateAlreadyDownloaded(request)
+				versionJSON, _ := json.Marshal(request.Version)
+				js = fmt.Sprintf("window.wudictWindowsUpdateStatus&&window.wudictWindowsUpdateStatus(%s,%t)", versionJSON, ready)
+			} else if request.Action == "download" {
 				err := downloadWindowsUpdateForRunningExecutable(request, func(percent int) {
 					w.Dispatch(func() {
 						w.Eval(fmt.Sprintf("window.wudictUpdateProgress&&window.wudictUpdateProgress(%d)", percent))
@@ -88,6 +92,32 @@ func bindWindowsUpdater(w webview.WebView) {
 		w.Dispatch(func() { w.Terminate() })
 		return nil
 	})
+}
+
+func windowsUpdateAlreadyDownloaded(request windowsUpdateRequest) bool {
+	if !windowsVersionPattern.MatchString(request.Version) {
+		return false
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	if _, installed := installedWindowsExecutable(exe); installed {
+		if request.Installer == nil {
+			return false
+		}
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return false
+		}
+		path := filepath.Join(home, "Downloads", "DictShelf-setup-"+request.Version+".exe")
+		return verifyWindowsUpdate(path, *request.Installer) == nil
+	}
+	if request.Portable == nil {
+		return false
+	}
+	path := filepath.Join(filepath.Dir(exe), "_DictShelf.exe")
+	return verifyWindowsUpdate(path, *request.Portable) == nil
 }
 
 var windowsVersionPattern = regexp.MustCompile(`^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$`)
@@ -487,7 +517,9 @@ func moveWindowsFile(from, to string) error {
 func startWindowsExecutable(path, helperPath string) error {
 	cmd := exec.Command(path)
 	cmd.Dir = filepath.Dir(path)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	// DictShelf.exe is built as a GUI executable and has no console to hide.
+	// Do not pass SW_HIDE as its startup show state: the WebView window must be
+	// shown when the updater starts the replacement process.
 	for _, entry := range os.Environ() {
 		if !strings.HasPrefix(strings.ToUpper(entry), strings.ToUpper(windowsUpdaterHelperEnv)+"=") {
 			cmd.Env = append(cmd.Env, entry)
