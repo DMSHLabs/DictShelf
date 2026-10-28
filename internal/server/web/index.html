@@ -6527,7 +6527,7 @@ function beginSearchProgress(seq,total){
     done:window.wudictI18n.number(0),total:window.wudictI18n.number(total)}),()=>{
       if(seq!==searchSeq)return;
       searchAC?.abort();finishSearchProgress(seq);
-    },{done:0,total});
+    },{done:0,total,background:true});
 }
 function advanceSearchProgress(seq){
   if(searchProgressGeneration!==seq)return;
