@@ -804,8 +804,33 @@ func bindNativeBridge(w webview.WebView, baseURL string, request func(context.Co
 			})
 			return nil
 		}
-		if method == "saveArticle" {
+		if method == "chooseArticleSave" {
 			var request struct {
+				Filename string `json:"filename"`
+			}
+			if err := json.Unmarshal([]byte(argument), &request); err != nil || filepath.Base(request.Filename) != request.Filename || !strings.HasSuffix(strings.ToLower(request.Filename), ".html") {
+				return fmt.Errorf("invalid article filename")
+			}
+			go func() {
+				path, mode, ok := chooseArticleSavePath(uintptr(w.Window()), request.Filename)
+				var value any
+				var err error
+				if ok {
+					value = map[string]string{"path": path, "mode": mode}
+				} else {
+					err = fmt.Errorf("article save canceled")
+				}
+				payload, _ := json.Marshal(value)
+				errorJSON, _ := json.Marshal(errorText(err))
+				w.Dispatch(func() {
+					w.Eval("window.wudictNativeReply(" + strconv.Itoa(id) + "," + string(payload) + "," + string(errorJSON) + ",true)")
+				})
+			}()
+			return nil
+		}
+		if method == "writeArticle" {
+			var request struct {
+				Path      string            `json:"path"`
 				Filename  string            `json:"filename"`
 				Content   string            `json:"content"`
 				Mode      string            `json:"mode"`
@@ -813,39 +838,34 @@ func bindNativeBridge(w webview.WebView, baseURL string, request func(context.Co
 			}
 			if err := json.Unmarshal([]byte(argument), &request); err != nil || len(argument) > 128*1024*1024 ||
 				len(request.Content) == 0 || len(request.Content) > 64*1024*1024 ||
-				(request.Mode != "html" && request.Mode != "complete" && request.Mode != "single") || filepath.Base(request.Filename) != request.Filename || !strings.HasSuffix(strings.ToLower(request.Filename), ".html") {
+				(request.Mode != "html" && request.Mode != "complete" && request.Mode != "single") || filepath.Base(request.Filename) != request.Filename || !strings.HasSuffix(strings.ToLower(request.Filename), ".html") || filepath.Base(request.Path) != request.Filename {
 				return fmt.Errorf("invalid article export")
 			}
 			go func() {
-				path, ok := chooseArticleSavePath(uintptr(w.Window()), request.Filename)
 				var value any
-				var err error
-				if ok {
-					err = os.WriteFile(path, []byte(request.Content), 0600)
-					if err == nil && request.Mode == "complete" && len(request.Resources) > 0 {
-						folder := strings.TrimSuffix(path, filepath.Ext(path)) + "_files"
-						err = os.MkdirAll(folder, 0700)
-						for name, encoded := range request.Resources {
-							if err != nil {
-								break
-							}
-							comma := strings.IndexByte(encoded, ',')
-							if comma < 0 || filepath.Base(name) != name {
-								err = fmt.Errorf("invalid article resource")
-								break
-							}
-							var data []byte
-							data, err = base64.StdEncoding.DecodeString(encoded[comma+1:])
-							if err == nil {
-								err = os.WriteFile(filepath.Join(folder, name), data, 0600)
-							}
+				path := request.Path
+				err := os.WriteFile(path, []byte(request.Content), 0600)
+				if err == nil && request.Mode == "complete" && len(request.Resources) > 0 {
+					folder := strings.TrimSuffix(path, filepath.Ext(path)) + "_files"
+					err = os.MkdirAll(folder, 0700)
+					for name, encoded := range request.Resources {
+						if err != nil {
+							break
+						}
+						comma := strings.IndexByte(encoded, ',')
+						if comma < 0 || filepath.Base(name) != name {
+							err = fmt.Errorf("invalid article resource")
+							break
+						}
+						var data []byte
+						data, err = base64.StdEncoding.DecodeString(encoded[comma+1:])
+						if err == nil {
+							err = os.WriteFile(filepath.Join(folder, name), data, 0600)
 						}
 					}
-					if err == nil {
-						value = map[string]string{"path": path, "filename": filepath.Base(path)}
-					}
-				} else {
-					err = fmt.Errorf("article save canceled")
+				}
+				if err == nil {
+					value = map[string]string{"path": path, "filename": filepath.Base(path)}
 				}
 				payload, _ := json.Marshal(value)
 				errorJSON, _ := json.Marshal(errorText(err))
@@ -1428,7 +1448,7 @@ func chooseDesktopArchive(owner uintptr) (string, bool) {
 	return "", false
 }
 
-func chooseArticleSavePath(owner uintptr, filename string) (string, bool) {
+func chooseArticleSavePath(owner uintptr, filename string) (string, string, bool) {
 	const (
 		ofExplorer         = 0x00080000
 		ofOverwritePrompt  = 0x00000002
@@ -1457,12 +1477,12 @@ func chooseArticleSavePath(owner uintptr, filename string) (string, bool) {
 	buffer := make([]uint16, 32768)
 	defaultName, _ := syscall.UTF16FromString(filepath.Base(filename))
 	copy(buffer, defaultName)
-	filter := utf16MultiString("HTML article\x00*.html\x00All files\x00*.*")
+	filter := utf16MultiString("Article, HTML Only (*.html)\x00*.html\x00Article, Complete (*.html)\x00*.html\x00Article, Single File (*.html)\x00*.html")
 	title, _ := syscall.UTF16PtrFromString("Save article")
 	extension, _ := syscall.UTF16PtrFromString("html")
 	info := openFileName{
 		structSize: uint32(unsafe.Sizeof(openFileName{})), owner: owner,
-		filter: &filter[0], filterIndex: 1, file: &buffer[0], maxFile: uint32(len(buffer)),
+		filter: &filter[0], filterIndex: 2, file: &buffer[0], maxFile: uint32(len(buffer)),
 		title: title, defaultExtension: extension,
 		flags: ofExplorer | ofOverwritePrompt | ofPathMustExist | ofNoChangeDir | ofNoTestFileCreate,
 	}
@@ -1472,14 +1492,18 @@ func chooseArticleSavePath(owner uintptr, filename string) (string, bool) {
 	runtime.KeepAlive(extension)
 	runtime.KeepAlive(buffer)
 	if ok == 0 {
-		return "", false
+		return "", "", false
+	}
+	mode := map[uint32]string{1: "html", 2: "complete", 3: "single"}[info.filterIndex]
+	if mode == "" {
+		mode = "complete"
 	}
 	for i, ch := range buffer {
 		if ch == 0 {
-			return syscall.UTF16ToString(buffer[:i]), true
+			return syscall.UTF16ToString(buffer[:i]), mode, true
 		}
 	}
-	return "", false
+	return "", "", false
 }
 
 func utf16MultiString(value string) []uint16 {

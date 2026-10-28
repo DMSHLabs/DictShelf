@@ -57,7 +57,8 @@ type preset struct {
 	// RequiresImage hides the preset until the shell has a background image
 	// active - it has nothing to show otherwise, exactly like the old menu
 	// item it replaces.
-	RequiresImage bool
+	RequiresImage    bool
+	HiddenFromLayers bool
 	// App / Article name the DAY files inside Dir; AppNight / ArticleNight the
 	// NIGHT ones; "" when the preset has no half for that scope.
 	//
@@ -81,7 +82,7 @@ type preset struct {
 	// own: the server attaches the half as a <link> there (pagePresetLinks).
 	//
 	// It is for a preset that speaks in TOKENS rather than in rules about the
-	// app's markup (Quiet labels is the first): the app's own classes do not
+	// app's markup: the app's own classes do not
 	// exist on those pages, so a half that restyles them would land on nothing.
 	// A page preset must name ONE file for both themes (a test enforces it),
 	// because the pages resolve their theme themselves - the OS preference, or
@@ -144,8 +145,10 @@ func (p *preset) Theme() string {
 }
 
 type presetGroup struct {
-	Dir, Title string
-	Presets    []*preset
+	// Dir remains the asset directory and mutual-exclusion group. Section is
+	// only the higher-level heading used to organize the Style layers pane.
+	Dir, Title, Section string
+	Presets             []*preset
 }
 
 var (
@@ -162,10 +165,11 @@ func presetRegistry() ([]*presetGroup, map[string]*preset) {
 	presetOnce.Do(func() {
 		var man struct {
 			Groups []struct {
-				Dir, Title string
-				Presets    []struct {
+				Dir, Title, Section string
+				Presets             []struct {
 					ID, Title, Desc        string
 					RequiresImage          bool
+					HiddenFromLayers       bool
 					Pages                  bool
 					App, Article           string
 					AppNight, ArticleNight string
@@ -180,11 +184,11 @@ func presetRegistry() ([]*presetGroup, map[string]*preset) {
 		}
 		presetIndex = map[string]*preset{}
 		for _, g := range man.Groups {
-			group := &presetGroup{Dir: g.Dir, Title: g.Title}
+			group := &presetGroup{Dir: g.Dir, Title: g.Title, Section: g.Section}
 			for _, p := range g.Presets {
 				preset := &preset{
 					ID: p.ID, Title: p.Title, Desc: p.Desc,
-					Dir: g.Dir, RequiresImage: p.RequiresImage, Pages: p.Pages,
+					Dir: g.Dir, RequiresImage: p.RequiresImage, HiddenFromLayers: p.HiddenFromLayers, Pages: p.Pages,
 					App: p.App, Article: p.Article,
 					AppNight: p.AppNight, ArticleNight: p.ArticleNight,
 					Paper:      presetPaper(p.ID, p.Paper),
@@ -449,12 +453,13 @@ func (s *Server) presetPayload() map[string]any {
 		presets := make([]map[string]any, 0, len(g.Presets))
 		for _, p := range g.Presets {
 			row := map[string]any{
-				"id":            p.ID,
-				"title":         p.Title,
-				"desc":          p.Desc,
-				"requiresImage": p.RequiresImage,
-				"theme":         p.Theme(),
-				"enabled":       on[p.ID],
+				"id":               p.ID,
+				"title":            p.Title,
+				"desc":             p.Desc,
+				"requiresImage":    p.RequiresImage,
+				"hiddenFromLayers": p.HiddenFromLayers,
+				"theme":            p.Theme(),
+				"enabled":          on[p.ID],
 			}
 			// Every half the preset has, each with the URL the page needs to
 			// attach it and the text it needs to compose the article layer.
@@ -473,7 +478,7 @@ func (s *Server) presetPayload() map[string]any {
 			}
 			presets = append(presets, row)
 		}
-		out = append(out, map[string]any{"dir": g.Dir, "title": g.Title, "presets": presets})
+		out = append(out, map[string]any{"dir": g.Dir, "title": g.Title, "section": g.Section, "presets": presets})
 	}
 	return map[string]any{
 		"writable": s.User.Style() != "",

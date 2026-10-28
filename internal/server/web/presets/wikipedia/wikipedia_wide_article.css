@@ -1,0 +1,26 @@
+/**
+ * Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+/* MediaWiki Vector layout: remove the centered max-width and empty left rail. */
+.mw-page-container {
+  width: 100% !important;
+  max-width: none !important;
+  margin-inline: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.mw-page-container-inner {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-areas:
+    "siteNotice"
+    "pageContent"
+    "columnStart"
+    "footer" !important;
+}
+
+.mw-body {
+  grid-template-columns: minmax(0, 1fr) min-content !important;
+  justify-content: stretch !important;
+}

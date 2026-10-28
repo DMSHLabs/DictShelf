@@ -654,7 +654,7 @@ window.wudictFontScale=(function(){
        definitions, and nothing in this app changes until the reader asks.
        The WORK is split between the two files that own it: examples.js marks
        the lines that hold nothing but examples as the articles are built, and
-       this layer's article half (presets/examples/) is the rule that hides
+       the examples preset's article half (presets/examples/) is the rule that hides
        them - so the switch needs no call into the script, and folding examples
        back is taking a rule away, in the articles already on screen included. -->
   <label class="facts panel-setting-checkbox" id="examplesRow" hidden><input class="panel-checkbox" type="checkbox" data-layer-checkbox="off" id="examplesToggle"> {{T:panel.showExamples}}</label>
@@ -1921,7 +1921,7 @@ async function loadPrefs(){
       $("countAllResultsInBackground").checked=countAllResultsInBackground;
       combinedDictionaryLimit=Math.max(1,Math.min(Number(st.ui.combinedDictionaryLimit)||defaultCombinedDictionaryLimit,maxCombinedDictionaryLimit));syncCombinedDictionaryLimitUI()}
     syncUpdateControls();restoreCachedUpdate();
-    scheduleUpdateCheck();
+    scheduleUpdateCheck(true);
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
     prefOrder=rows.map(d=>d.id);prefPinned=rows.filter(d=>d.pinned).map(d=>d.id);
     dictTitles=new Map(rows.filter(d=>d.title).map(d=>[d.id,d.title]));
@@ -5045,6 +5045,11 @@ function versionIsNewer(candidate,current){
   if(ap&&bp&&ap[1]===bp[1])return Number(ap[2])>Number(bp[2]);
   return a.suffix.localeCompare(b.suffix,undefined,{numeric:true})>0;
 }
+const updateChannelsForSelection={
+  beta:["beta","prerelease","release"],
+  prerelease:["prerelease","release"],
+  release:["release"]
+};
 function currentAppVersion(){
   const raw=(document.querySelector(".ver")?.textContent||"0.0.0").replace(/-\d+-g[0-9a-f]+(?:-dirty)?$/i,"");
   return (raw.match(/(?:dictshelf|wudict2)-v?(\d+\.\d+\.\d+(?:[-+][0-9a-z.-]+)?)/i)||[])[1]||raw.replace(/^v/i,"");
@@ -5052,20 +5057,27 @@ function currentAppVersion(){
 async function checkForUpdates(silent=false){
   if(silent&&!updateNotifications)return;
   updateManualResult=!silent;updateStatusMessage=silent?"":tx("system.checkingUpdates");renderUpdateNotice();
+  let controller=null,timeoutId=0;
+  let checkTimedOut=false;
   try{
-    const r=await fetch("https://raw.githubusercontent.com/DMSHLabs/DictShelf/update-catalog/update-catalog.json?channel="+encodeURIComponent(updateChannel),{cache:"no-store"});
+    controller=new AbortController();
+    timeoutId=setTimeout(()=>{checkTimedOut=true;controller.abort()},10000);
+    const r=await fetch("https://raw.githubusercontent.com/DMSHLabs/DictShelf/update-catalog/update-catalog.json?channel="+encodeURIComponent(updateChannel),{cache:"no-store",signal:controller.signal});
     if(!r.ok&&r.status!==404)throw new Error("HTTP "+r.status);
-    const catalog=r.status===404?{schema:1,[updateChannel]:[]}:await r.json();
-    if(catalog.schema!==1||!Array.isArray(catalog[updateChannel]))throw new Error(tx("system.invalidUpdateCatalog"));
+    const channels=updateChannelsForSelection[updateChannel]||updateChannelsForSelection.release;
+    const catalog=r.status===404?{schema:1,release:[],prerelease:[],beta:[]}:await r.json();
+    if(catalog.schema!==1||channels.some(channel=>!Array.isArray(catalog[channel])))throw new Error(tx("system.invalidUpdateCatalog"));
     const current=currentAppVersion();
     let found=null;
-    for(const entry of catalog[updateChannel]){
-      if(!entry||typeof entry.version!=="string"||typeof entry.url!=="string"||
-         !/^https:\/\/github\.com\/DMSHLabs\/DictShelf\/releases\/tag\//.test(entry.url))continue;
-      if(!versionIsNewer(entry.version,current))continue;
-      found={version:entry.version,url:entry.url,
-        windowsInstaller:entry.windowsInstaller||null,windowsPortable:entry.windowsPortable||null,
-        androidApks:entry.androidApks||null};break;
+    for(const channel of channels){
+      for(const entry of catalog[channel]){
+        if(!entry||typeof entry.version!=="string"||typeof entry.url!=="string"||
+           !/^https:\/\/github\.com\/DMSHLabs\/DictShelf\/releases\/tag\//.test(entry.url))continue;
+        if(!versionIsNewer(entry.version,current)||found&&!versionIsNewer(entry.version,found.version))continue;
+        found={version:entry.version,url:entry.url,
+          windowsInstaller:entry.windowsInstaller||null,windowsPortable:entry.windowsPortable||null,
+          androidApks:entry.androidApks||null};
+      }
     }
     updateAvailable=found;updateStatusMessage=found?"":(!silent?tx("system.noUpdates"):"");
     updateDownloaded=!!found&&localStorage.getItem(updateDownloadedKey(found.version))==="1";
@@ -5079,7 +5091,9 @@ async function checkForUpdates(silent=false){
     renderUpdateNotice();
   }catch(e){
     if(silent){try{localStorage.removeItem("dictshelf_update_check_"+updateChannel)}catch(_){}}
-    else{updateStatusMessage=tx("system.updateCheckFailed",{error:window.wudictI18n.errorText(e.message)});updateManualResult=true;renderUpdateNotice()}
+    else{updateStatusMessage=tx("system.updateCheckFailed",{error:checkTimedOut?tx("system.updateCheckTimeout"):window.wudictI18n.errorText(e.message)});updateManualResult=true;renderUpdateNotice()}
+  }finally{
+    if(timeoutId)clearTimeout(timeoutId);
   }
   if(updateNotifications)scheduleNextUpdateCheck();
 }
@@ -6400,6 +6414,13 @@ $("articleCopy").onclick=async()=>{
 };
 $("articleSave").onclick=()=>{
   const target=articleSearchContextTarget;articleSearchContextHide();if(!target?.body)return;
+  if(window.wudictWindowsShell&&typeof window.wudictNativeCall==="function"){
+    const filename=target.title.replace(/[\\/:*?\"<>|]+/g,"_").trim()+".html";
+    window.wudictNativeCall("chooseArticleSave",JSON.stringify({filename})).then(result=>{
+      if(result&&result.path)articleSaveBuild(target,result.mode,result.path);
+    }).catch(error=>{if(error.message!=="article save canceled")alert(window.wudictI18n.errorText(error.message))});
+    return;
+  }
   window.wudictArticleSaveTarget=target;
   $("articleSaveDialog").showModal();
 };
@@ -6408,7 +6429,12 @@ $("articleSaveDialog").addEventListener("close",()=>{window.wudictArticleSaveTar
 $("articleSaveGo").onclick=async()=>{
   const target=window.wudictArticleSaveTarget,mode=document.querySelector('input[name="articleSaveFormat"]:checked')?.value||"complete";
   $("articleSaveDialog").close();window.wudictArticleSaveTarget=null;if(!target?.body)return;
+  await articleSaveBuild(target,mode,null);
+};
+async function articleSaveBuild(target,mode,destination){
   const root=document.createElement("div");root.innerHTML=target.body;
+  const filename=target.title.replace(/[\\/:*?\"<>|]+/g,"_").trim()+".html";
+  const assetsFolder=filename.replace(/\.html$/i,"")+"_files/";
   const resources={},resourceNames=new Map();let resourceNumber=0;
   const saveResource=async(url)=>{
     if(mode==="html")return url;
@@ -6419,7 +6445,7 @@ $("articleSaveGo").onclick=async()=>{
     try{
       const response=await fetch(url);if(!response.ok)return url;
       const blob=await response.blob(),ext=(new URL(url).pathname.match(/\.[a-z0-9]{1,8}$/i)||[""])[0]||".bin";
-      const name="resource-"+(++resourceNumber)+ext,path="_files/"+name;
+      const name="resource-"+(++resourceNumber)+ext,path=assetsFolder+name;
       const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(blob)});
       resources[name]=data;resourceNames.set(url,path);return path;
     }catch(_){return url}
@@ -6467,21 +6493,22 @@ $("articleSaveGo").onclick=async()=>{
   for(const el of root.querySelectorAll("[style]"))el.setAttribute("style",await inlineCSS(el.getAttribute("style"),location.href));
   const body=root.innerHTML;
   const doc="<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>"+esc(target.title)+"</title></head><body>"+body+"</body></html>";
-  const filename=target.title.replace(/[\\/:*?\"<>|]+/g,"_").trim()+".html";
   if(typeof window.wudictNativeCall==="function"){
-    const argument=JSON.stringify({filename,content:doc,mode,resources});
+    const argument=JSON.stringify({filename,content:doc,mode,resources,path:destination||""});
     if(window.wudictAndroidGo){
       const response=window.prompt("wudict:save-article",argument);
       if(response&&response!=="ok")alert(response);
+    }else if(destination){
+      await window.wudictNativeCall("writeArticle",argument).catch(error=>alert(window.wudictI18n.errorText(error.message)));
     }else{
-      window.wudictNativeCall("saveArticle",argument).catch(error=>alert(window.wudictI18n.errorText(error.message)));
+      await window.wudictNativeCall("saveArticle",argument).catch(error=>alert(window.wudictI18n.errorText(error.message)));
     }
     return;
   }
   if(mode==="complete"&&Object.keys(resources).length){alert(tx("articleFind.saveCompleteAppOnly"));return}
   const blob=new Blob([doc],{type:"text/html;charset=utf-8"});
   const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download=filename;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(link.href),1000);
-};
+}
 document.addEventListener("pointerdown",e=>{if(!e.target.closest("#articleSearchContextMenu"))articleSearchContextHide()});
 document.addEventListener("keydown",e=>{if(e.key==="Escape")articleSearchContextHide()});
 addEventListener("message",e=>{
@@ -11297,76 +11324,92 @@ function presetsPaneRender(){
   }
   const hasImage=document.documentElement.hasAttribute("data-shell-image");
   const dark=themeIsDark();
+  const sections=new Map();
   for(const g of (PRESETS.groups||[])){
+    const visiblePresets=g.presets.filter(p=>!p.hiddenFromLayers);
+    if(!visiblePresets.length)continue;
+    const section=g.section||g.dir;
+    if(!sections.has(section))sections.set(section,[]);
+    sections.get(section).push({group:g,presets:visiblePresets});
+  }
+  for(const [section,groups] of sections){
     const head=document.createElement("div");head.className="ph";
-    head.textContent=layerText("layers.group."+g.dir,g.title)+(g.presets.length>1?tx("panel.pickOne"):"");
+    head.textContent=layerText("layers.section."+section,section);
     pane.appendChild(head);
-    for(const p of g.presets){
-      // A preset that cannot take effect WHERE THE READER IS is SHOWN and
-      // disabled, with the reason written on the row, rather than hidden. A
-      // missing row answers "why is this not here?" with silence, and the
-      // wallpaper and the two themes are not properties of the preset - they
-      // are where it works, which is the one thing a reader deciding whether to
-      // switch it on has to know. Both facts are the manifest's: requiresImage
-      // and theme.
-      const blocked=p.requiresImage&&!hasImage?tx("panel.layerNeedsImage")
-                   :p.theme==="light"&&dark?tx("panel.layerLightOnly")
-                   :p.theme==="dark"&&!dark?tx("panel.layerDarkOnly")
-                   :"";
-      const row=document.createElement("div");row.className="pr"+(blocked?" off":"");
-      const sw=document.createElement("input");
-      sw.type="checkbox";sw.checked=!!p.enabled;
-      if(blocked)sw.disabled=true;
-      sw.setAttribute("aria-label",layerTitle(p));
-      sw.onchange=()=>presetToggle(p.id,sw.checked);
-      row.appendChild(sw);
-      const n=document.createElement("div");n.className="n";
-      const b=document.createElement("b");b.textContent=layerTitle(p);
-      n.appendChild(b);
-      const s=document.createElement("s");
-      // The reason REPLACES the description while it is in force: the row has
-      // one line for explaining itself, and "why can I not switch this on" is
-      // the question in front of the reader.
-      // WHERE it works, on the row. Within one group the reader learns that
-      // Sepia is light-only and True black is dark-only, so the one that works
-      // in both has to say so too - otherwise the group reads as a set of
-      // restrictions with one silent member. `theme` is the manifest's, and
-      // "both" is as explicit as the other two: a preset that says nothing says
-      // nothing, which is the fourteen that are not about a theme at all.
-      // Left off while a reason is in force, because that reason IS about the
-      // theme and the line has room for one.
-      const themeNote=p.theme==="light"?tx("panel.lightTheme")
-                     :p.theme==="dark"?tx("panel.darkTheme")
-                     :p.theme==="both"?tx("panel.bothThemes"):"";
-      s.textContent=(blocked||layerText("layers."+p.id+".desc",p.desc))+(p.enabled?tx("panel.layerOn"):"")
-        +(blocked||!themeNote?"":" · "+themeNote);
-      n.appendChild(s);
-      // Legacy pastes, detected by their exact text in a box: the switch
-      // and the pasted copy would apply the same rules twice, and the copy
-      // would win by being later. The removal is confirmed because it rewrites
-      // the box and spends its undo history.
-      const pasted=stylerLoaded&&(p.app&&stylerText.app.includes(p.app.css)
-        ||p.article&&stylerText.article.includes(p.article.css));
-      if(pasted){
-        const tag=document.createElement("u");
-        tag.textContent=tx("panel.pasted");
-        n.appendChild(tag);
-        const rm=document.createElement("button");
-        rm.type="button";rm.className="btn";rm.textContent=tx("panel.remove");
-        rm.title=tx("panel.removePasteHint");
-        rm.onclick=()=>{
-          if(!confirm(tx("panel.removePastedQuestion",{name:layerTitle(p)})))return;
-          presetRemovePasted(p);
-        };
-        n.appendChild(rm);
+    for(const item of groups){
+      const g=item.group,visiblePresets=item.presets;
+      if(visiblePresets.length>1){
+        const sub=document.createElement("div");sub.className="ph sub";
+        sub.textContent=layerText("layers.group."+g.dir,g.title)+tx("panel.pickOne");
+        pane.appendChild(sub);
       }
-      row.appendChild(n);
-      const ins=document.createElement("button");
-      ins.type="button";ins.className="btn";ins.title=tx("panel.insertLayerHint");
-      ins.textContent=tx("panel.insert");
-      ins.onclick=()=>stylerInsertPreset(p);
-      row.appendChild(ins);
-      pane.appendChild(row);
+      for(const p of visiblePresets){
+        // A preset that cannot take effect WHERE THE READER IS is SHOWN and
+        // disabled, with the reason written on the row, rather than hidden. A
+        // missing row answers "why is this not here?" with silence, and the
+        // wallpaper and the two themes are not properties of the preset - they
+        // are where it works, which is the one thing a reader deciding whether to
+        // switch it on has to know. Both facts are the manifest's: requiresImage
+        // and theme.
+        const blocked=p.requiresImage&&!hasImage?tx("panel.layerNeedsImage")
+                     :p.theme==="light"&&dark?tx("panel.layerLightOnly")
+                     :p.theme==="dark"&&!dark?tx("panel.layerDarkOnly")
+                     :"";
+        const row=document.createElement("div");row.className="pr"+(blocked?" off":"");
+        const sw=document.createElement("input");
+        sw.type="checkbox";sw.checked=!!p.enabled;
+        if(blocked)sw.disabled=true;
+        sw.setAttribute("aria-label",layerTitle(p));
+        sw.onchange=()=>presetToggle(p.id,sw.checked);
+        row.appendChild(sw);
+        const n=document.createElement("div");n.className="n";
+        const b=document.createElement("b");b.textContent=layerTitle(p);
+        n.appendChild(b);
+        const s=document.createElement("s");
+        // The reason REPLACES the description while it is in force: the row has
+        // one line for explaining itself, and "why can I not switch this on" is
+        // the question in front of the reader.
+        // WHERE it works, on the row. Within one group the reader learns that
+        // Sepia is light-only and True black is dark-only, so the one that works
+        // in both has to say so too - otherwise the group reads as a set of
+        // restrictions with one silent member. `theme` is the manifest's, and
+        // "both" is as explicit as the other two: a preset that says nothing says
+        // nothing, which is the fourteen that are not about a theme at all.
+        // Left off while a reason is in force, because that reason IS about the
+        // theme and the line has room for one.
+        const themeNote=p.theme==="light"?tx("panel.lightTheme")
+                       :p.theme==="dark"?tx("panel.darkTheme")
+                       :p.theme==="both"?tx("panel.bothThemes"):"";
+        s.textContent=(blocked||layerText("layers."+p.id+".desc",p.desc))+(p.enabled?tx("panel.layerOn"):"")
+          +(blocked||!themeNote?"":" · "+themeNote);
+        n.appendChild(s);
+        // Legacy pastes, detected by their exact text in a box: the switch
+        // and the pasted copy would apply the same rules twice, and the copy
+        // would win by being later. The removal is confirmed because it rewrites
+        // the box and spends its undo history.
+        const pasted=stylerLoaded&&(p.app&&stylerText.app.includes(p.app.css)
+          ||p.article&&stylerText.article.includes(p.article.css));
+        if(pasted){
+          const tag=document.createElement("u");
+          tag.textContent=tx("panel.pasted");
+          n.appendChild(tag);
+          const rm=document.createElement("button");
+          rm.type="button";rm.className="btn";rm.textContent=tx("panel.remove");
+          rm.title=tx("panel.removePasteHint");
+          rm.onclick=()=>{
+            if(!confirm(tx("panel.removePastedQuestion",{name:layerTitle(p)})))return;
+            presetRemovePasted(p);
+          };
+          n.appendChild(rm);
+        }
+        row.appendChild(n);
+        const ins=document.createElement("button");
+        ins.type="button";ins.className="btn";ins.title=tx("panel.insertLayerHint");
+        ins.textContent=tx("panel.insert");
+        ins.onclick=()=>stylerInsertPreset(p);
+        row.appendChild(ins);
+        pane.appendChild(row);
+      }
     }
   }
 }
