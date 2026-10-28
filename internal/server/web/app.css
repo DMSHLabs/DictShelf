@@ -48,13 +48,8 @@ html[data-desktop-image] { background-color:var(--paper-bg) !important;
      wants --fg and a smaller size, never a grey.
      --label / --label-quiet are what every LABEL, heading, hint, count and
      meta line actually reads, and their default is the ink, so the sentence
-     above stays true wherever nothing turns them. They exist for ONE reason:
-     the greys they used to carry are wanted back by some readers, and a preset
-     can restore them without touching a single rule - `presets/labels/
-     quiet_labels_app.css` points both at the greys, and the same file is
-     attached to the three standalone pages (which alias --fg-soft/--fg-faint
-     to their own --soft/--faint so one file serves all four documents). Read
-     them as "the label register", never as a colour of their own. */
+     above stays true wherever nothing turns them. They are aliases for the
+     label register, not colours of their own. */
   --fg:#2b2a28; --fg-soft:#6d6a64; --fg-faint:#a5a19a;
   --label:var(--fg); --label-quiet:var(--fg);
   --accent:#e08600; --accent-soft:#fff3e0;
@@ -958,9 +953,8 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    check after the ink rule): the group names, the sentences under them, the
    row names, the MB beside a field, the two notes and the fold's ▸. They read
    --label / --label-quiet, never --fg and never the greys directly, so the
-   window follows the "Quiet labels" preset like every other window - and its
-   published default is the ink, so nothing here is grey unless the reader asks
-   for the old hierarchy (measured: this pane was written with --fg-soft on
+   published default is the ink. Nothing here is grey by default
+   (measured: this pane was written with --fg-soft on
    four of them, which made it grey in BOTH looks, the one thing the register
    exists to prevent). The greys are LEFT to things the reader cannot act on,
    which in this window is nothing: no row here can be disabled. */
@@ -1340,6 +1334,7 @@ html[data-native-appearance]{--styler-h:min(65vh,560px)}
   color:var(--label-quiet);font-size:12px}
 #stylerPresetsPane .ph{padding:.55em .6em .2em;font-size:11px;font-weight:600;
   color:var(--label);text-transform:uppercase;letter-spacing:.04em}
+#stylerPresetsPane .ph.sub{padding-top:.35em;font-size:10px;color:var(--label-quiet)}
 /* A preset that cannot take effect where the reader is: shown, dimmed and
    inert, with the reason on its own line - see presetsPaneRender. Hiding it
    instead answered "why is this not here?" with silence. */

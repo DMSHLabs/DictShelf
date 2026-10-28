@@ -3,6 +3,7 @@
     {
       "dir": "background",
       "title": "Background",
+      "section": "appearance",
       "presets": [
         {
           "id": "background",
@@ -41,6 +42,7 @@
     {
       "dir": "contrast",
       "title": "Contrast",
+      "section": "appearance",
       "presets": [
         {
           "id": "high_contrast",
@@ -55,6 +57,7 @@
     {
       "dir": "wider_column",
       "title": "Wider column",
+      "section": "layout",
       "presets": [
         {
           "id": "wider_column",
@@ -68,8 +71,23 @@
       ]
     },
     {
+      "dir": "wikipedia",
+      "title": "Wikipedia",
+      "section": "layout",
+      "presets": [
+        {
+          "id": "wikipedia_wide",
+          "title": "Wikipedia: full width",
+          "desc": "Expand MediaWiki Vector articles to the full available width.",
+          "article": "wikipedia_wide_article.css",
+          "articleNight": "wikipedia_wide_article.css"
+        }
+      ]
+    },
+    {
       "dir": "compact",
       "title": "Compact",
+      "section": "layout",
       "presets": [
         {
           "id": "compact",
@@ -85,6 +103,7 @@
     {
       "dir": "quieter_results",
       "title": "Quieter results",
+      "section": "appearance",
       "presets": [
         {
           "id": "quieter_results",
@@ -98,6 +117,7 @@
     {
       "dir": "roomier_lines",
       "title": "Roomier lines",
+      "section": "typography",
       "presets": [
         {
           "id": "roomier_lines",
@@ -111,6 +131,7 @@
     {
       "dir": "fonts",
       "title": "Fonts",
+      "section": "typography",
       "presets": [
         {
           "id": "serif",
@@ -144,6 +165,7 @@
     {
       "dir": "bolder_text",
       "title": "Bolder text",
+      "section": "typography",
       "presets": [
         {
           "id": "bolder_text",
@@ -159,6 +181,7 @@
     {
       "dir": "justified_text",
       "title": "Justified text",
+      "section": "typography",
       "presets": [
         {
           "id": "justified_text",
@@ -172,6 +195,7 @@
     {
       "dir": "wide_tables",
       "title": "Wide tables",
+      "section": "layout",
       "presets": [
         {
           "id": "wide_tables",
@@ -185,6 +209,7 @@
     {
       "dir": "dictionary_roles",
       "title": "Dictionary roles",
+      "section": "dictionary_content",
       "presets": [
         {
           "id": "dictionary_roles",
@@ -196,40 +221,15 @@
       ]
     },
     {
-      "dir": "quiet_examples",
-      "title": "Quiet examples",
-      "presets": [
-        {
-          "id": "quiet_examples",
-          "title": "Quiet examples",
-          "desc": "Examples in the text colour instead of blue, one size down.",
-          "article": "quiet_examples_article.css",
-          "articleNight": "quiet_examples_article.css"
-        }
-      ]
-    },
-    {
-      "dir": "labels",
-      "title": "Labels",
-      "presets": [
-        {
-          "id": "quiet_labels",
-          "title": "Quiet labels",
-          "desc": "Show labels, headings, hints and counts in the muted greys.",
-          "app": "quiet_labels_app.css",
-          "appNight": "quiet_labels_app.css",
-          "pages": true
-        }
-      ]
-    },
-    {
       "dir": "examples",
       "title": "Examples",
+      "section": "dictionary_content",
       "presets": [
         {
           "id": "hide_examples",
           "title": "Hide examples",
           "desc": "Lines that hold nothing but examples are folded away, leaving the entry's own text. The lines are marked by examples.js as the articles are built.",
+          "hiddenFromLayers": true,
           "article": "hide_examples_article.css",
           "articleNight": "hide_examples_article.css"
         }
@@ -238,6 +238,7 @@
     {
       "dir": "tighter_indents",
       "title": "Tighter indents",
+      "section": "dictionary_content",
       "presets": [
         {
           "id": "tighter_indents",
