@@ -260,7 +260,7 @@ html[data-webview2] #barBackWords:not([hidden]){display:inline-flex;align-items:
   background:var(--bg-bar);backdrop-filter:blur(10px);
   -webkit-backdrop-filter:blur(10px);
   border-top:1px solid var(--line);padding:var(--sp-1) 0;
-  padding-bottom:calc(var(--sp-1) + var(--wd-inset-bottom,0px))}
+  padding-bottom:calc(var(--sp-1) + var(--wd-inset-bottom,0px) + 3px)}
 .sbar[hidden]{display:none}
 #sbarBackWords{display:inline-flex;align-items:center;justify-content:center;gap:.35em;flex:none;margin-right:.35em;white-space:nowrap;text-decoration:none;font-size:calc(var(--ui-font-addition) * 1rem);line-height:1}
 #sbarBackWords svg{display:block;flex:none;width:1.15em;height:1.15em}

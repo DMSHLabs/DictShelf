@@ -27,6 +27,7 @@
   style.textContent += `#serverWorkNotice .work-single-progress{display:block;flex:1 1 100%;width:100%;height:12px;box-sizing:border-box;overflow:hidden;border-radius:9px;background:color-mix(in srgb,var(--accent,#865000) 18%,transparent)}#serverWorkNotice .work-single-progress[hidden]{display:none}#serverWorkNotice .work-single-progress>span{display:block;height:100%;background:var(--accent,#865000);transition:width .12s linear}`;
   style.textContent += `#serverWorkNotice .work-summary{display:grid;grid-template-columns:max-content max-content minmax(0,1fr);align-items:center;gap:8px;width:100%;box-sizing:border-box}#serverWorkNotice .work-toggle{grid-column:1;grid-row:1;box-sizing:border-box;width:max-content;max-width:100%;min-width:0;flex:none;white-space:normal;text-align:center;overflow-wrap:anywhere;padding-inline:8px!important}#serverWorkNotice .work-parallel-count{grid-column:2;grid-row:1;white-space:nowrap;font-variant-numeric:tabular-nums}#serverWorkNotice .work-summary-text{grid-column:3;grid-row:1}#serverWorkNotice .work-pulse-row{grid-column:1/-1;grid-row:2;display:flex;align-items:center;gap:8px;min-width:0;width:100%}#serverWorkNotice .work-pulse{flex:1 1 auto;width:auto;min-width:0;max-width:none;height:12px;box-sizing:border-box;margin:0}#serverWorkNotice .work-pulse::after{width:42%}#serverWorkNotice .work-stop-all{flex:none;white-space:nowrap;overflow-wrap:normal}#serverWorkNotice .work-task-list{display:block;flex:0 1 100%;align-self:stretch;width:100%;height:auto;min-height:1.5em;box-sizing:border-box}#serverWorkNotice .work-task-label{grid-column:1/-1;display:flex;justify-content:flex-start;align-items:baseline;gap:2px 6px;flex-wrap:wrap;min-width:0}#serverWorkNotice .work-task-name{flex:0 1 auto;min-width:0;white-space:normal;overflow-wrap:anywhere}#serverWorkNotice .work-task-count{flex:none;white-space:nowrap;font-variant-numeric:tabular-nums}#serverWorkNotice .work-task-progress{grid-column:1;grid-row:2;height:12px;width:100%;box-sizing:border-box}#serverWorkNotice .work-task-stop{grid-column:2;grid-row:2;flex:none;white-space:nowrap;overflow-wrap:normal;font-size:.9em;padding:1px 7px}#serverWorkNotice .work-task-progress>span[data-indeterminate]{width:42%!important}`;
   style.textContent += `#serverWorkNotice .work-summary[hidden],#serverWorkNotice .work-task-list[hidden]{display:none!important}`;
+  style.textContent += `#serverBackgroundProgress{position:fixed;left:0;right:0;bottom:var(--wd-vv-bottom,0px);z-index:9999;height:3px;background:color-mix(in srgb,var(--accent,#865000) 18%,transparent);overflow:hidden;pointer-events:none}#serverBackgroundProgress[hidden]{display:none}#serverBackgroundProgress>span{display:block;height:100%;width:100%;background:var(--accent,#865000);transform-origin:left center;transition:transform .16s linear}#serverBackgroundProgress>span[data-indeterminate]{width:42%;background:linear-gradient(90deg,transparent,var(--accent,#865000),transparent);animation:work-pulse 1.8s ease-in-out infinite}html.server-work-background-only #serverWorkNotice,html.server-work-background-only #serverWorkBacking{display:none!important}@media(prefers-reduced-motion:reduce){#serverBackgroundProgress>span[data-indeterminate]{animation:none;width:100%;opacity:.45}}`;
   style.textContent += ``;
   document.head.append(style);
   const backing = document.createElement('div');
@@ -37,6 +38,7 @@
   const summary = document.createElement('div'), toggle = document.createElement('button'), parallelCount = document.createElement('span'), summaryText = document.createElement('span');
   const pulseRow = document.createElement('div'), pulse = document.createElement('div'), stopAll = document.createElement('button'), taskList = document.createElement('div');
   const singleProgress=document.createElement('div'),singleProgressBar=document.createElement('span');
+  const backgroundProgress=document.createElement('div'),backgroundProgressBar=document.createElement('span');
   spinner.className = 'work-spinner'; spinner.setAttribute('aria-hidden','true');
   button.type = 'button';
   summary.className='work-summary';summary.hidden=true;
@@ -44,8 +46,9 @@
   summaryText.className='work-summary-text';pulseRow.className='work-pulse-row';pulse.className='work-pulse';pulse.setAttribute('aria-hidden','true');
   stopAll.type='button';stopAll.className='work-stop-all';
   singleProgress.className='work-single-progress';singleProgress.hidden=true;singleProgress.setAttribute('role','progressbar');singleProgress.setAttribute('aria-valuemin','0');singleProgressBar.style.width='0%';singleProgress.append(singleProgressBar);
+  backgroundProgress.id='serverBackgroundProgress';backgroundProgress.hidden=true;backgroundProgress.setAttribute('role','progressbar');backgroundProgress.setAttribute('aria-label',t('work.backgroundProgress'));backgroundProgressBar.dataset.indeterminate='';backgroundProgress.append(backgroundProgressBar);
   taskList.className='work-task-list';taskList.hidden=true;
-  pulseRow.append(pulse,stopAll);summary.append(toggle,parallelCount,summaryText,pulseRow);box.append(spinner,text,button,singleProgress,summary,taskList);document.body.append(backing,box);
+  pulseRow.append(pulse,stopAll);summary.append(toggle,parallelCount,summaryText,pulseRow);box.append(spinner,text,button,singleProgress,summary,taskList);document.body.append(backing,box,backgroundProgress);
   let status = null, pending = false, starting = false, refreshSequence = 0, waiting = 0;
   const tasks=new Map(),renderedProgress=new Map();let nextTaskID=0,expanded=false,indexTaskID=0,renderQueued=false;
   // The main page may already have a startup loading task when this deferred
@@ -81,7 +84,7 @@
     type=String(type||'work').slice(0,64);
     let id;
     do{id=(nextTaskID+1)>>>0;nextTaskID=id}while(id===0||tasks.has(id));
-    tasks.set(id,{id,type,label:String(label||''),message:'',singleWhenAlone:options.singleWhenAlone!==false,done:Math.max(0,Number(options.done)||0),total:Math.max(0,Number(options.total)||0),children:Array.isArray(options.children)?options.children.map(child=>typeof child==='string'?{label:child}:child).filter(child=>child&&child.label).map(child=>({label:String(child.label),done:Math.max(0,Number(child.done)||0),total:Math.max(0,Number(child.total)||0),percent:Number.isFinite(child.percent)?Math.max(0,Math.min(100,Number(child.percent))):null,active:typeof child.active==='boolean'?child.active:undefined,stop:typeof child.stop==='function'?child.stop:null,stopRequested:!!child.stopRequested})):[],stop:options.stop||null,stopRequested:!!options.stopRequested});
+    tasks.set(id,{id,type,label:String(label||''),message:'',background:options.background===true,singleWhenAlone:options.singleWhenAlone!==false,done:Math.max(0,Number(options.done)||0),total:Math.max(0,Number(options.total)||0),children:Array.isArray(options.children)?options.children.map(child=>typeof child==='string'?{label:child}:child).filter(child=>child&&child.label).map(child=>({label:String(child.label),done:Math.max(0,Number(child.done)||0),total:Math.max(0,Number(child.total)||0),percent:Number.isFinite(child.percent)?Math.max(0,Math.min(100,Number(child.percent))):null,active:typeof child.active==='boolean'?child.active:undefined,stop:typeof child.stop==='function'?child.stop:null,stopRequested:!!child.stopRequested})):[],stop:options.stop||null,stopRequested:!!options.stopRequested});
     const task=tasks.get(id);task.dictionaryDone=Math.max(0,Number(options.dictionaryDone)||0);task.dictionaryTotal=Math.max(0,Number(options.dictionaryTotal)||0);task.elapsedMs=Math.max(0,Number(options.elapsedMs)||0);
     if(Array.isArray(options.children))task.children=task.children.map((child,index)=>({...child,elapsedMs:Math.max(0,Number(options.children[index]?.elapsedMs)||0)}));
     rememberTaskProgress(task);renderTasks();return id;
@@ -90,6 +93,7 @@
     const task=tasks.get(Number(id));if(!task||!patch||typeof patch!=='object')return false;
     for(const key of ['type','label','message'])if(Object.hasOwn(patch,key))task[key]=String(patch[key]||'');
     if(Object.hasOwn(patch,'singleWhenAlone'))task.singleWhenAlone=patch.singleWhenAlone!==false;
+    if(Object.hasOwn(patch,'background'))task.background=patch.background===true;
     if(Object.hasOwn(patch,'children'))task.children=Array.isArray(patch.children)?patch.children.map(child=>typeof child==='string'?{label:child}:child).filter(child=>child&&child.label).map(child=>({label:String(child.label),done:Math.max(0,Number(child.done)||0),total:Math.max(0,Number(child.total)||0),percent:Number.isFinite(child.percent)?Math.max(0,Math.min(100,Number(child.percent))):null,active:typeof child.active==='boolean'?child.active:undefined,stop:typeof child.stop==='function'?child.stop:null,stopRequested:!!child.stopRequested})):[];
     if(Object.hasOwn(patch,'children')&&Array.isArray(patch.children))task.children=task.children.map((child,index)=>({...child,elapsedMs:Math.max(0,Number(patch.children[index]?.elapsedMs)||0)}));
     if(Object.hasOwn(patch,'done'))task.done=Math.max(0,Number(patch.done)||0);
@@ -131,6 +135,7 @@
   }
   function renderTasks(){
     const active=[...tasks.values()],running=active.length>0;
+    const background=active.filter(task=>task.background),backgroundOnly=background.length>0&&background.length===active.length;
     let detailCount=0,trackedChildren=0,activeChildren=0;
     for(const task of active){
       if(task.children?.length){detailCount+=task.children.length;for(const child of task.children)if(typeof child.active==='boolean'){trackedChildren++;if(child.active)activeChildren++}}
@@ -140,9 +145,16 @@
     // updates (or only one dictionary is selected). Keep its disclosure stable
     // so a progress refresh cannot replace the Show tasks control mid-click.
     const multiple=detailCount>1||active.some(task=>task.type==='wildcards'||(task.type==='indexing'&&task.children?.length));
-    box.hidden=!running;backing.hidden=!running;
-    document.documentElement.classList.toggle('server-work-active',running);
-    const single=active.length===1&&!multiple&&active[0].singleWhenAlone;box.classList.toggle('work-multiple',multiple&&running);
+    box.hidden=!running||backgroundOnly;backing.hidden=!running||backgroundOnly;backgroundProgress.hidden=!backgroundOnly;
+    document.documentElement.classList.toggle('server-work-active',running&&!backgroundOnly);
+    document.documentElement.classList.toggle('server-work-background-only',backgroundOnly);
+    if(backgroundOnly)document.documentElement.style.setProperty('--workh','0px');
+    if(backgroundOnly){
+      const values=background.map(task=>task.total>0?task.done/task.total*100:null);
+      if(values.every(value=>value!==null)){backgroundProgressBar.removeAttribute('data-indeterminate');const percent=values.reduce((sum,value)=>sum+value,0)/values.length;backgroundProgressBar.style.transform=`scaleX(${Math.max(0,Math.min(100,percent))/100})`;backgroundProgress.setAttribute('aria-valuemin','0');backgroundProgress.setAttribute('aria-valuemax','100');backgroundProgress.setAttribute('aria-valuenow',String(Math.round(percent)))}
+      else{backgroundProgressBar.dataset.indeterminate='';backgroundProgressBar.style.transform='';backgroundProgress.removeAttribute('aria-valuenow');backgroundProgress.removeAttribute('aria-valuemax')}
+    }
+    const single=active.length===1&&!multiple&&active[0].singleWhenAlone;box.classList.toggle('work-multiple',multiple&&running&&!backgroundOnly);
     spinner.hidden=!single;text.hidden=!single;button.hidden=!single||!active[0]?.stop;
     const singleWithProgress=single&&active[0].total>0;
     singleProgress.hidden=!singleWithProgress;
@@ -378,6 +390,7 @@
   }
   new ResizeObserver(entries => {
     if(!tasks.size)return;
+    if(document.documentElement.classList.contains('server-work-background-only')){document.documentElement.style.setProperty('--workh','0px');return;}
     const entry=entries[entries.length-1];
     const borderBox=entry?.borderBoxSize;
     const height=borderBox?(Array.isArray(borderBox)?borderBox[0]?.blockSize:borderBox.blockSize):box.getBoundingClientRect().height;

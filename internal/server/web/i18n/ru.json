@@ -976,6 +976,7 @@
   "search.searching": "Поиск…",
   "search.progress": "Проверено словарей: {done} из {total}",
   "search.countingArticles": "Подсчёт найденных статей…",
+  "work.backgroundProgress": "Ход фоновой задачи",
   "search.fullListUnavailable": "Полный список недоступен",
   "search.stop": "Остановить",
   "search.emptyDict": "В этом словаре ничего не найдено",
