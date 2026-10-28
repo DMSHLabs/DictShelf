@@ -706,6 +706,21 @@ public class MainActivity extends Activity {
         speech.stop(); // a reading does not follow the reader out of the app
     }
 
+    void notifyAndroidUpdateReady(String version) {
+        String value = org.json.JSONObject.quote(version == null ? "" : version);
+        runOnUiThread(() -> {
+            if (web != null) web.evaluateJavascript(
+                    "window.wudictAndroidUpdateReady&&window.wudictAndroidUpdateReady(" + value + ")", null);
+        });
+    }
+
+    void notifyAndroidUpdateFailed() {
+        runOnUiThread(() -> {
+            if (web != null) web.evaluateJavascript(
+                    "window.wudictAndroidUpdateFailed&&window.wudictAndroidUpdateFailed()", null);
+        });
+    }
+
     private void showPage() {
         runOnUiThread(() -> {
             if (gone) return; // the activity died while the server was starting
