@@ -706,11 +706,12 @@ public class MainActivity extends Activity {
         speech.stop(); // a reading does not follow the reader out of the app
     }
 
-    void notifyAndroidUpdateReady(String version) {
+    void notifyAndroidUpdateReady(String version, String sha256) {
         String value = org.json.JSONObject.quote(version == null ? "" : version);
+        String digest = org.json.JSONObject.quote(sha256 == null ? "" : sha256);
         runOnUiThread(() -> {
             if (web != null) web.evaluateJavascript(
-                    "window.wudictAndroidUpdateReady&&window.wudictAndroidUpdateReady(" + value + ")", null);
+                    "window.wudictAndroidUpdateReady&&window.wudictAndroidUpdateReady(" + value + "," + digest + ")", null);
         });
     }
 
