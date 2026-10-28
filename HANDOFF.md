@@ -6,8 +6,10 @@ evicts least recently used page rows at 128 MiB and closes the prior database
 when a new main search starts. Focused LRU, reset, growing-result and shared
 search tests pass; `go build ./internal/server` passes. The full server suite
 still fails in `TestI18nPagesAndCache` and `TestRemoveTakesTheEmptiedFolderWithIt`.
-Desktop and Android UI checks remain pending. Article-find match-count
-bookkeeping across visited blocks remains a separate task.
+Desktop and Android UI checks remain pending. Find in articles now retains
+per-dictionary, per-block match counts in browser memory and recomputes the
+global position from examined blocks. It can revisit an evicted article page
+for Go to match. JavaScript syntax passes; runtime UI verification is pending.
 
 The shared bottom dock and background task progress are on `dev` through
 `fda62b4`. Find in articles now places the query and mode labels beside their
