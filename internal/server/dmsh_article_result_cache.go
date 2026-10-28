@@ -109,7 +109,7 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 			}
 		}
 		entry, token, err := s.wildcardPages.begin(request.CacheID, signature, indexconst.BrowsePageSize,
-			max(1, request.CacheCount), e.ID, e.probeName(), request.CacheOrder, "", false, s.wildcardCacheDir())
+			max(1, request.CacheCount), e.ID, e.probeName(), request.CacheOrder, "", false, s.wildcardCacheDir(), request.SearchDiagnostics)
 		if err != nil {
 			return err
 		}

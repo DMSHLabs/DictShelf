@@ -66,7 +66,7 @@ func traceBrowseFind(ctx context.Context, q url.Values, send func(browseFindStre
 		}
 		return send(event)
 	})
-	logx.System("headword_find mode=%s source=%s matchmode=%s strategy=%s candidate_literal=%q dict=%q query=%q within_mode=%s within=%q mask=%v within_mask=%v first_event_ms=%d first_word_ms=%d total_ms=%d found=%d scanned=%d events=%d error=%v",
+	logx.SystemDiagnostic("headword_find mode=%s source=%s matchmode=%s strategy=%s candidate_literal=%q dict=%q query=%q within_mode=%s within=%q mask=%v within_mask=%v first_event_ms=%d first_word_ms=%d total_ms=%d found=%d scanned=%d events=%d error=%v",
 		mode, source, matchMode, strategy, candidateLiteral, q.Get("dict"), q.Get("q"), withinMode, q.Get("within"),
 		matchMode == "wildcards", withinMode == "wildcards", firstEventMs, firstWordMs,
 		time.Since(started).Milliseconds(), found, scanned, events, err)

@@ -200,7 +200,7 @@ func classifyAutomaticIndex(item *pendingDictionaryIndex, budget int, strategy i
 		item.mode = indexconst.ModePipeline
 		item.cost = automaticPipelineCost(strategy, budget)
 	}
-	logx.System("automatic indexing classified strategy=%s source=%q format=%q entries=%d source_bytes=%d mode=%s processor_cost=%d", indexconst.ModeString(strategy), path, format, entries, size, indexconst.ModeString(item.mode), item.cost)
+	store.IndexDiagnostic("automatic indexing classified strategy=%s source=%q format=%q entries=%d source_bytes=%d mode=%s processor_cost=%d", indexconst.ModeString(strategy), path, format, entries, size, indexconst.ModeString(item.mode), item.cost)
 }
 
 func adaptiveSingleIndexContext(ctx context.Context, e *entry) context.Context {
@@ -599,7 +599,7 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 	}
 	if indexconst.IsAutomaticMode(mode) {
 		small, heavy := orderAutomaticIndexes(pending, budget, mode)
-		logx.System("automatic index queue started strategy=%s dictionaries=%d small=%d pipeline=%d processor_budget=%d", indexconst.ModeString(mode), len(pending), small, heavy, budget)
+		store.IndexDiagnostic("automatic index queue started strategy=%s dictionaries=%d small=%d pipeline=%d processor_budget=%d", indexconst.ModeString(mode), len(pending), small, heavy, budget)
 		if queueJob != nil {
 			queueJob.update(func(st *jobStatus) {
 				st.QueuedDicts = st.QueuedDicts[:0]
@@ -628,7 +628,7 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 	if indexconst.IsAutomaticMode(mode) {
 		started := time.Now()
 		runHybridPriorityDictionaryQueue(queue, budget, stopped, process)
-		logx.System("automatic index queue finished strategy=%s dictionaries=%d elapsed_ms=%d", indexconst.ModeString(mode), len(pending), time.Since(started).Milliseconds())
+		store.IndexDiagnostic("automatic index queue finished strategy=%s dictionaries=%d elapsed_ms=%d", indexconst.ModeString(mode), len(pending), time.Since(started).Milliseconds())
 	} else {
 		workers := min(cap(currentIndexLimit()), len(pending))
 		runPriorityDictionaryQueue(queue, workers, stopped, process)

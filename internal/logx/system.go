@@ -93,6 +93,19 @@ func SystemDiagnostic(format string, args ...any) {
 	writeSystem(false, true, format, args...)
 }
 
+// SystemDiagnosticIf records an explicitly enabled diagnostic. When it is
+// disabled, error records still pass through the normal error-retention path.
+func SystemDiagnosticIf(enabled bool, format string, args ...any) {
+	if enabled {
+		SystemDiagnostic(format, args...)
+		return
+	}
+	message := fmt.Sprintf(format, args...)
+	if isSystemError(message) {
+		System("%s", message)
+	}
+}
+
 // SystemError records an error and makes it visible in the panel's Info section.
 func SystemError(format string, args ...any) {
 	writeSystem(true, false, "error: "+format, args...)
@@ -123,7 +136,8 @@ func writeSystem(isError, diagnostic bool, format string, args ...any) {
 	}
 	systemMu.Lock()
 	defer systemMu.Unlock()
-	if !systemLogEnabled || !diagnostic && (isWebSystemEvent(message) && !systemLogWebEvents ||
+	errorEvent := isError || isSystemError(message)
+	if !systemLogEnabled || !diagnostic && !errorEvent && (isWebSystemEvent(message) && !systemLogWebEvents ||
 		!isWebSystemEvent(message) && !systemLogBaseEvents) {
 		return
 	}

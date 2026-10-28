@@ -105,7 +105,7 @@ func (c *wildcardPageCache) init(dir string) {
 }
 
 func (c *wildcardPageCache) begin(id string, signature wildcardCacheSignature, pageSize, dictCount int,
-	dictID, dictName string, dictOrder int, within string, withinMask bool, dir string) (*wildcardCacheEntry, uint64, error) {
+	dictID, dictName string, dictOrder int, within string, withinMask bool, dir string, diagnostics ...bool) (*wildcardCacheEntry, uint64, error) {
 	if !wildcardCacheIDPattern.MatchString(id) {
 		return nil, 0, errors.New("invalid wildcard cache id")
 	}
@@ -123,7 +123,7 @@ func (c *wildcardPageCache) begin(id string, signature wildcardCacheSignature, p
 	if entry == nil {
 		c.pruneLocked(now, filepath.Join(dir, "wildcard_"+id+".db"), false)
 		var err error
-		entry, err = openWildcardCache(id, signature, pageSize, dictCount, dir)
+		entry, err = openWildcardCache(id, signature, pageSize, dictCount, dir, diagnosticEnabled(diagnostics))
 		if err != nil {
 			c.mu.Unlock()
 			return nil, 0, err
@@ -181,7 +181,9 @@ func (c *wildcardPageCache) begin(id string, signature wildcardCacheSignature, p
 	return entry, token, nil
 }
 
-func openWildcardCache(id string, signature wildcardCacheSignature, pageSize, dictCount int, dir string) (*wildcardCacheEntry, error) {
+func diagnosticEnabled(values []bool) bool { return len(values) > 0 && values[0] }
+
+func openWildcardCache(id string, signature wildcardCacheSignature, pageSize, dictCount int, dir string, diagnostics ...bool) (*wildcardCacheEntry, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create wildcard cache directory: %w", err)
 	}
@@ -201,7 +203,9 @@ func openWildcardCache(id string, signature wildcardCacheSignature, pageSize, di
 			entry.closeAndRemoveLocked()
 			return nil, err
 		}
-		logx.System("wildcard_cache_open status=create id=%q query=%q group=%q fts=%t trigram=%t dicts=%d", id, signature.query, signature.group, signature.fts, signature.trigram, dictCount)
+		if diagnosticEnabled(diagnostics) {
+			logx.SystemDiagnostic("wildcard_cache_open status=create id=%q query=%q group=%q fts=%t trigram=%t dicts=%d", id, signature.query, signature.group, signature.fts, signature.trigram, dictCount)
+		}
 		return entry, nil
 	}
 	var saved wildcardCacheSignature
@@ -224,11 +228,15 @@ func openWildcardCache(id string, signature wildcardCacheSignature, pageSize, di
 				entry.closeAndRemoveLocked()
 				return nil, err
 			}
-			logx.System("wildcard_cache_open status=recreate id=%q query=%q group=%q fts=%t trigram=%t dicts=%d metadata_error=%q", id, signature.query, signature.group, signature.fts, signature.trigram, dictCount, metadataErr)
+			if diagnosticEnabled(diagnostics) {
+				logx.SystemDiagnostic("wildcard_cache_open status=recreate id=%q query=%q group=%q fts=%t trigram=%t dicts=%d metadata_error=%q", id, signature.query, signature.group, signature.fts, signature.trigram, dictCount, metadataErr)
+			}
 			return entry, nil
 		}
 		_ = db.Close()
-		logx.System("wildcard_cache_open status=mismatch id=%q query=%q group=%q fts=%t trigram=%t dicts=%d saved_id=%q saved_query=%q saved_group=%q saved_fts=%t saved_trigram=%t saved_dicts=%d", id, signature.query, signature.group, signature.fts, signature.trigram, dictCount, savedID, saved.query, saved.group, saved.fts, saved.trigram, savedDictCount)
+		if diagnosticEnabled(diagnostics) {
+			logx.SystemDiagnostic("wildcard_cache_open status=mismatch id=%q query=%q group=%q fts=%t trigram=%t dicts=%d saved_id=%q saved_query=%q saved_group=%q saved_fts=%t saved_trigram=%t saved_dicts=%d", id, signature.query, signature.group, signature.fts, signature.trigram, dictCount, savedID, saved.query, saved.group, saved.fts, saved.trigram, savedDictCount)
+		}
 		return nil, errors.New("wildcard cache metadata mismatch")
 	}
 	if err := prepareWildcardCacheDB(db, pageSize); err != nil {
@@ -239,7 +247,9 @@ func openWildcardCache(id string, signature wildcardCacheSignature, pageSize, di
 	if err := db.QueryRow(`SELECT accessed_ms FROM wildcard_cache_meta LIMIT 1`).Scan(&accessed); err == nil {
 		entry.updated = time.UnixMilli(accessed)
 	}
-	logx.System("wildcard_cache_open status=reuse id=%q query=%q group=%q fts=%t trigram=%t dicts=%d", id, signature.query, signature.group, signature.fts, signature.trigram, dictCount)
+	if diagnosticEnabled(diagnostics) {
+		logx.SystemDiagnostic("wildcard_cache_open status=reuse id=%q query=%q group=%q fts=%t trigram=%t dicts=%d", id, signature.query, signature.group, signature.fts, signature.trigram, dictCount)
+	}
 	return entry, nil
 }
 
@@ -595,7 +605,7 @@ type wildcardCachePage struct {
 // Match-all wildcard searches already know their exact total and alphabet, so
 // they can page on demand instead of scanning every key to build the cache.
 func (c *wildcardPageCache) storePage(id string, signature wildcardCacheSignature, pageSize, dictCount int,
-	dictID, dictName string, dictOrder, page int, result browseFindResp, dir string) error {
+	dictID, dictName string, dictOrder, page int, result browseFindResp, dir string, diagnostics ...bool) error {
 	if !wildcardCacheIDPattern.MatchString(id) || pageSize != indexconst.WildcardCacheBlockSize || dictCount < 1 ||
 		dictOrder < 0 || dictOrder >= dictCount || page < 1 {
 		return errors.New("invalid wildcard cache page")
@@ -607,7 +617,7 @@ func (c *wildcardPageCache) storePage(id string, signature wildcardCacheSignatur
 	if entry == nil {
 		c.pruneLocked(now, filepath.Join(dir, "wildcard_"+id+".db"), false)
 		var err error
-		entry, err = openWildcardCache(id, signature, pageSize, dictCount, dir)
+		entry, err = openWildcardCache(id, signature, pageSize, dictCount, dir, diagnosticEnabled(diagnostics))
 		if err != nil {
 			c.mu.Unlock()
 			return err

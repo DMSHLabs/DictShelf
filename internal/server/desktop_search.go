@@ -678,7 +678,7 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 					status = failure.status
 				}
 			}
-			logx.System("browse_page_dispatch status=%d elapsed_us=%d", status, time.Since(started).Microseconds())
+			logx.SystemDiagnostic("browse_page_dispatch status=%d elapsed_us=%d", status, time.Since(started).Microseconds())
 		}
 		if err != nil {
 			var failure *browsePageFailure

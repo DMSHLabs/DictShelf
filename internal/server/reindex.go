@@ -234,11 +234,11 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 		}
 		mode := indexconst.CurrentMode()
 		small, heavy := orderAutomaticIndexes(items, budget, mode)
-		logx.System("automatic rebuild queue started strategy=%s dictionaries=%d small=%d pipeline=%d processor_budget=%d", indexconst.ModeString(mode), len(items), small, heavy, budget)
+		store.IndexDiagnostic("automatic rebuild queue started strategy=%s dictionaries=%d small=%d pipeline=%d processor_budget=%d", indexconst.ModeString(mode), len(items), small, heavy, budget)
 		queue := newPriorityDictionaryQueue(items, nil)
 		started := time.Now()
 		runHybridPriorityDictionaryQueue(queue, budget, j.canceled, func(item pendingDictionaryIndex) { process(item.entry, item.mode) })
-		logx.System("automatic rebuild queue finished strategy=%s dictionaries=%d elapsed_ms=%d", indexconst.ModeString(mode), len(items), time.Since(started).Milliseconds())
+		store.IndexDiagnostic("automatic rebuild queue finished strategy=%s dictionaries=%d elapsed_ms=%d", indexconst.ModeString(mode), len(items), time.Since(started).Milliseconds())
 	} else {
 		singleMode := indexconst.CurrentMode()
 		if len(todo) == 1 {

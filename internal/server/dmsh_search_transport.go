@@ -22,11 +22,13 @@ func searchRequestFromQuery(q url.Values) SearchRequest {
 	highlight, _ := queryFlag(q, "hl")
 	ignoreDiacritics, _ := queryFlag(q, "ignoreDiacritics")
 	pageCacheDiagnostics, _ := queryFlag(q, "pageCacheDiagnostics")
+	searchDiagnostics, _ := queryFlag(q, "searchDiagnostics")
 	return SearchRequest{
 		Query: q.Get("q"), Mode: q.Get("mode"), Format: q.Get("format"),
 		Dictionary: q.Get("dict"), Limit: n, Highlight: highlight,
 		IgnoreDiacritics:     ignoreDiacritics,
 		PageCacheDiagnostics: pageCacheDiagnostics,
+		SearchDiagnostics:    searchDiagnostics,
 		CacheAction:          q.Get("cacheAction"), CacheID: q.Get("cacheID"), CacheCount: cacheCount,
 		ReturnCacheID:      q.Get("returnCacheID"),
 		ReturnCacheStorage: q.Get("returnCacheStorage"),

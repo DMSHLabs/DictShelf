@@ -29,7 +29,7 @@ func (s *Server) streamSimpleWildcardCache(ctx context.Context, request browseFi
 		query: request.query, group: request.cacheGroup, wildcards: request.mask,
 		fts: request.cacheFTS, trigram: request.cacheTrigram,
 	}, browsePageSize, request.cacheCount, request.entry.ID, request.entry.probeName(), request.cacheOrder,
-		"", false, s.wildcardCacheDir())
+		"", false, s.wildcardCacheDir(), request.diagnostics)
 	if err != nil {
 		return err
 	}

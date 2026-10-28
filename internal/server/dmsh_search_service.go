@@ -44,6 +44,7 @@ type SearchRequest struct {
 	Size                 int    `json:"size,omitempty"`
 	Rung                 string `json:"rung,omitempty"`
 	PageCacheDiagnostics bool   `json:"pageCacheDiagnostics,omitempty"`
+	SearchDiagnostics    bool   `json:"searchDiagnostics,omitempty"`
 
 	skipArticlePageCache bool
 }
@@ -146,9 +147,13 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 		})
 	}
 	if request.CacheAction == "returnReplay" {
-		logx.System("search_return_cache stage=replay_start id=%q query=%q mode=%q scope=%q", request.CacheID, request.Query, request.Mode, request.Dictionary)
-		if err := s.replaySearchReturnCache(parent, request.CacheID, emit); err == nil {
-			logx.System("search_return_cache stage=replay_result id=%q result=hit", request.CacheID)
+		if request.SearchDiagnostics {
+			logx.SystemDiagnostic("search_return_cache stage=replay_start id=%q query=%q mode=%q scope=%q", request.CacheID, request.Query, request.Mode, request.Dictionary)
+		}
+		if err := s.replaySearchReturnCache(parent, request.CacheID, emit, request.SearchDiagnostics); err == nil {
+			if request.SearchDiagnostics {
+				logx.SystemDiagnostic("search_return_cache stage=replay_result id=%q result=hit", request.CacheID)
+			}
 			return nil
 		} else if parent.Err() != nil {
 			return parent.Err()
@@ -156,7 +161,9 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 			logx.System("search_return_cache stage=replay_result id=%q result=failed error=%q", request.CacheID, err)
 			return err
 		} else {
-			logx.System("search_return_cache stage=fallback id=%q reason=%q query=%q mode=%q scope=%q", request.CacheID, err, request.Query, request.Mode, request.Dictionary)
+			if request.SearchDiagnostics {
+				logx.SystemDiagnostic("search_return_cache stage=fallback id=%q reason=%q query=%q mode=%q scope=%q", request.CacheID, err, request.Query, request.Mode, request.Dictionary)
+			}
 			request.CacheAction = ""
 			request.ReturnCacheID = request.CacheID
 		}
@@ -223,7 +230,9 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	if len(entries) == 0 && dictParam != "" && dictParam != "all" {
 		return searchRequestError(SearchDictionaryNotFound, "dictionary variant unavailable")
 	}
-	logx.System("search start query=%q mode=%q scope=%q dictionaries=%d", q, mode, dictParam, len(entries))
+	if request.SearchDiagnostics {
+		logx.SystemDiagnostic("search start query=%q mode=%q scope=%q dictionaries=%d", q, mode, dictParam, len(entries))
+	}
 
 	ctx, stop := context.WithCancel(parent)
 	defer stop()
@@ -232,12 +241,12 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	}
 	var returnCache *searchReturnCacheEntry
 	if request.ReturnCacheID != "" {
-		returnCache, err = s.beginSearchReturnCache(request.ReturnCacheID, request.ReturnCacheStorage)
+		returnCache, err = s.beginSearchReturnCache(request.ReturnCacheID, request.ReturnCacheStorage, request.SearchDiagnostics)
 		if err != nil {
 			logx.System("search_return_cache stage=create_failed id=%q requested_storage=%q query=%q mode=%q scope=%q dictionaries=%d error=%q",
 				request.ReturnCacheID, request.ReturnCacheStorage, q, mode, dictParam, len(entries), err)
-		} else {
-			logx.System("search_return_cache stage=search_attached id=%q query=%q mode=%q scope=%q dictionaries=%d storage=%s",
+		} else if request.SearchDiagnostics {
+			logx.SystemDiagnostic("search_return_cache stage=search_attached id=%q query=%q mode=%q scope=%q dictionaries=%d storage=%s",
 				request.ReturnCacheID, q, mode, dictParam, len(entries), returnCache.storage)
 		}
 	}
@@ -308,7 +317,9 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 				return d, err
 			}
 			backend, database, index := searchLocationForLog(e, d, mode)
-			logx.System("search database query=%q mode=%q dictionary=%q backend=%q database=%q index=%q", q, mode, e.probeName(), backend, database, index)
+			if request.SearchDiagnostics {
+				logx.SystemDiagnostic("search database query=%q mode=%q dictionary=%q backend=%q database=%q index=%q", q, mode, e.probeName(), backend, database, index)
+			}
 			return d, nil
 		}
 	}
@@ -348,7 +359,9 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 			h.Results[j].Body = applyFormat(h.Results[j].Body, format, origin, st)
 		}
 		m := SearchEvent{T: "hit", I: i, Dict: id, Name: name, Results: h.Results, Skipped: h.Skipped, Rung: h.Rung, Term: h.Term}
-		logx.System("search result query=%q mode=%q dictionary=%q results=%d skipped=%t", q, mode, name, len(h.Results), h.Skipped)
+		if request.SearchDiagnostics {
+			logx.SystemDiagnostic("search result query=%q mode=%q dictionary=%q results=%d skipped=%t", q, mode, name, len(h.Results), h.Skipped)
+		}
 		var heavy tooHeavy
 		switch {
 		case errors.As(h.Err, &heavy):

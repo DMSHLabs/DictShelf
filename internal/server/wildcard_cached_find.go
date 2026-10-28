@@ -31,7 +31,7 @@ func (s *Server) streamCachedWildcardWithin(ctx context.Context, request browseF
 		request.within = resolved
 	}
 	if diagnostic {
-		logx.System("headword_find_wildcard_filter stage=start dict=%q dict_name=%q cache=%q upper_query=%q mode=%s typed_query=%q effective_queries=%q base_total_pending=true",
+		logx.SystemDiagnostic("headword_find_wildcard_filter stage=start dict=%q dict_name=%q cache=%q upper_query=%q mode=%s typed_query=%q effective_queries=%q base_total_pending=true",
 			request.entry.ID, request.entry.probeName(), request.cacheID, request.query, request.withinMode,
 			typedWithin, strings.Split(request.within, mergedHeadwordAlternativeSeparator))
 	}
@@ -50,7 +50,7 @@ func (s *Server) streamCachedWildcardWithin(ctx context.Context, request browseF
 		query: request.query, group: request.cacheGroup, wildcards: request.mask,
 		fts: request.cacheFTS, trigram: request.cacheTrigram,
 	}, browsePageSize, request.cacheCount, request.entry.ID, request.entry.probeName(), request.cacheOrder,
-		cacheWithin, request.withinMask, s.wildcardCacheDir())
+		cacheWithin, request.withinMask, s.wildcardCacheDir(), request.diagnostics)
 	if err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func (s *Server) streamCachedWildcardWithin(ctx context.Context, request browseF
 			}
 			if candidateTotal < baseTotal {
 				if diagnostic {
-					logx.System("headword_find_wildcard_filter stage=plan dict=%q mode=%s typed_query=%q effective_queries=%q index=%s index_query=%q candidates=%d base_total=%d strategy=index_candidates",
+					logx.SystemDiagnostic("headword_find_wildcard_filter stage=plan dict=%q mode=%s typed_query=%q effective_queries=%q index=%s index_query=%q candidates=%d base_total=%d strategy=index_candidates",
 						request.entry.ID, request.withinMode, typedWithin,
 						strings.Split(request.within, mergedHeadwordAlternativeSeparator), index, match, candidateTotal, baseTotal)
 				}
@@ -185,25 +185,25 @@ func (s *Server) streamCachedWildcardWithin(ctx context.Context, request browseF
 					return err
 				}
 				if diagnostic {
-					logx.System("headword_find_wildcard_filter stage=done dict=%q mode=%s typed_query=%q effective_queries=%q strategy=index_candidates scanned=%d candidates=%d found=%d elapsed_ms=%d",
+					logx.SystemDiagnostic("headword_find_wildcard_filter stage=done dict=%q mode=%s typed_query=%q effective_queries=%q strategy=index_candidates scanned=%d candidates=%d found=%d elapsed_ms=%d",
 						request.entry.ID, request.withinMode, typedWithin,
 						strings.Split(request.within, mergedHeadwordAlternativeSeparator), scanned, candidateTotal, found, time.Since(started).Milliseconds())
 				}
 				return nil
 			}
 			if diagnostic {
-				logx.System("headword_find_wildcard_filter stage=plan dict=%q mode=%s typed_query=%q effective_queries=%q index=%s index_query=%q candidates=%d base_total=%d strategy=full_block_scan reason=index_not_selective",
+				logx.SystemDiagnostic("headword_find_wildcard_filter stage=plan dict=%q mode=%s typed_query=%q effective_queries=%q index=%s index_query=%q candidates=%d base_total=%d strategy=full_block_scan reason=index_not_selective",
 					request.entry.ID, request.withinMode, typedWithin,
 					strings.Split(request.within, mergedHeadwordAlternativeSeparator), index, match, candidateTotal, baseTotal)
 			}
 		} else if diagnostic {
-			logx.System("headword_find_wildcard_filter stage=plan dict=%q mode=%s typed_query=%q effective_queries=%q index=%s strategy=full_block_scan reason=index_word_count_mismatch indexed_words=%d base_total=%d",
+			logx.SystemDiagnostic("headword_find_wildcard_filter stage=plan dict=%q mode=%s typed_query=%q effective_queries=%q index=%s strategy=full_block_scan reason=index_word_count_mismatch indexed_words=%d base_total=%d",
 				request.entry.ID, request.withinMode, typedWithin,
 				strings.Split(request.within, mergedHeadwordAlternativeSeparator), index, indexedTotal, baseTotal)
 		}
 	}
 	if diagnostic && index == "" {
-		logx.System("headword_find_wildcard_filter stage=plan dict=%q mode=%s typed_query=%q effective_queries=%q strategy=full_block_scan reason=no_usable_index base_total=%d",
+		logx.SystemDiagnostic("headword_find_wildcard_filter stage=plan dict=%q mode=%s typed_query=%q effective_queries=%q strategy=full_block_scan reason=no_usable_index base_total=%d",
 			request.entry.ID, request.withinMode, typedWithin,
 			strings.Split(request.within, mergedHeadwordAlternativeSeparator), baseTotal)
 	}
@@ -255,7 +255,7 @@ func (s *Server) streamCachedWildcardWithin(ctx context.Context, request browseF
 		return err
 	}
 	if diagnostic {
-		logx.System("headword_find_wildcard_filter stage=done dict=%q mode=%s typed_query=%q effective_queries=%q strategy=full_block_scan scanned=%d base_total=%d found=%d elapsed_ms=%d",
+		logx.SystemDiagnostic("headword_find_wildcard_filter stage=done dict=%q mode=%s typed_query=%q effective_queries=%q strategy=full_block_scan scanned=%d base_total=%d found=%d elapsed_ms=%d",
 			request.entry.ID, request.withinMode, typedWithin,
 			strings.Split(request.within, mergedHeadwordAlternativeSeparator), scanned, baseTotal, found, time.Since(started).Milliseconds())
 	}

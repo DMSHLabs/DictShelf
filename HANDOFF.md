@@ -1,5 +1,10 @@
 # Agent handoff — current state
 
+System log cleanup is on `dev`: search, Browse/Wildcards cache, folder timing,
+and indexing traces use their diagnostic options; detected errors remain in
+the log when basic events are disabled. `go build ./...` and `git diff --check`
+pass. Runtime log-volume verification is pending.
+
 The active main search now has a bounded, unnamed temporary SQLite cache for
 article page responses shared by manual paging and Find in articles. It
 evicts least recently used page rows at 128 MiB and closes the prior database

@@ -38,6 +38,7 @@ type searchReturnCacheEntry struct {
 	eventCounts  map[string]int
 	complete     bool
 	interrupted  bool
+	diagnostics  bool
 	insert       *sql.Stmt
 }
 
@@ -46,7 +47,7 @@ type searchReturnCacheStore struct {
 	entries map[string]*searchReturnCacheEntry
 }
 
-func (s *Server) beginSearchReturnCache(id, storage string) (*searchReturnCacheEntry, error) {
+func (s *Server) beginSearchReturnCache(id, storage string, diagnostics bool) (*searchReturnCacheEntry, error) {
 	if !wildcardCacheIDPattern.MatchString(id) {
 		return nil, errors.New("invalid search return cache id")
 	}
@@ -70,7 +71,7 @@ func (s *Server) beginSearchReturnCache(id, storage string) (*searchReturnCacheE
 	}
 	entry := &searchReturnCacheEntry{
 		db: db, id: id, storage: map[bool]string{true: "memory", false: "disk-temp"}[memory],
-		created: time.Now(), insert: statement, eventCounts: make(map[string]int),
+		created: time.Now(), insert: statement, eventCounts: make(map[string]int), diagnostics: diagnostics,
 	}
 	s.searchReturns.mu.Lock()
 	if s.searchReturns.entries == nil {
@@ -106,7 +107,9 @@ func (e *searchReturnCacheEntry) append(event SearchEvent, interrupted bool) err
 	bodyBytes := searchReturnEventBodyBytes(event)
 	e.articleBytes += bodyBytes
 	e.eventCounts[event.T]++
-	logSearchReturnCacheEvent("write_event", e.id, e.nextSeq, event, int64(len(data)), bodyBytes, e.payloadBytes, e.articleBytes, time.Since(e.created))
+	if e.diagnostics {
+		logSearchReturnCacheEvent("write_event", e.id, e.nextSeq, event, int64(len(data)), bodyBytes, e.payloadBytes, e.articleBytes, time.Since(e.created))
+	}
 	if event.T == "end" {
 		e.complete = true
 		e.interrupted = interrupted
@@ -119,13 +122,15 @@ func (e *searchReturnCacheEntry) append(event SearchEvent, interrupted bool) err
 	return nil
 }
 
-func (e *searchReturnCacheEntry) replay(ctx context.Context, emit func(SearchEvent) error) error {
+func (e *searchReturnCacheEntry) replay(ctx context.Context, emit func(SearchEvent) error, diagnostics bool) error {
 	started := time.Now()
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.db == nil || !e.complete {
-		logx.System("search_return_cache stage=replay_unavailable id=%q storage=%s db_open=%t complete=%t interrupted=%t events=%d age_ms=%d",
-			e.id, e.storage, e.db != nil, e.complete, e.interrupted, e.nextSeq, time.Since(e.created).Milliseconds())
+		if diagnostics {
+			logx.SystemDiagnostic("search_return_cache stage=replay_unavailable id=%q storage=%s db_open=%t complete=%t interrupted=%t events=%d age_ms=%d",
+				e.id, e.storage, e.db != nil, e.complete, e.interrupted, e.nextSeq, time.Since(e.created).Milliseconds())
+		}
 		return errSearchReturnCacheUnavailable
 	}
 	rows, err := e.db.QueryContext(ctx, `SELECT event_json FROM search_return_event ORDER BY seq`)
@@ -138,8 +143,10 @@ func (e *searchReturnCacheEntry) replay(ctx context.Context, emit func(SearchEve
 	eventCounts := make(map[string]int)
 	replayResult := "hit"
 	defer func() {
-		logx.System("search_return_cache stage=replay_end id=%q result=%s source_interrupted=%t source_events=%d source_bytes=%d source_article_bytes=%d source_sqlite_bytes=%d replay_events=%d replay_bytes=%d replay_article_bytes=%d elapsed_ms=%d",
-			e.id, replayResult, e.interrupted, e.nextSeq, e.payloadBytes, e.articleBytes, e.sqliteBytes, replayed, payloadBytes, articleBytes, time.Since(started).Milliseconds())
+		if diagnostics {
+			logx.SystemDiagnostic("search_return_cache stage=replay_end id=%q result=%s source_interrupted=%t source_events=%d source_bytes=%d source_article_bytes=%d source_sqlite_bytes=%d replay_events=%d replay_bytes=%d replay_article_bytes=%d elapsed_ms=%d",
+				e.id, replayResult, e.interrupted, e.nextSeq, e.payloadBytes, e.articleBytes, e.sqliteBytes, replayed, payloadBytes, articleBytes, time.Since(started).Milliseconds())
+		}
 	}()
 	for rows.Next() {
 		var data []byte
@@ -157,7 +164,9 @@ func (e *searchReturnCacheEntry) replay(ctx context.Context, emit func(SearchEve
 		bodyBytes := searchReturnEventBodyBytes(event)
 		articleBytes += bodyBytes
 		eventCounts[event.T]++
-		logSearchReturnCacheEvent("replay_event", e.id, replayed, event, int64(len(data)), bodyBytes, payloadBytes, articleBytes, time.Since(started))
+		if diagnostics {
+			logSearchReturnCacheEvent("replay_event", e.id, replayed, event, int64(len(data)), bodyBytes, payloadBytes, articleBytes, time.Since(started))
+		}
 		if err := emit(event); err != nil {
 			replayResult = "emit_error"
 			return fmt.Errorf("%w: %w", errSearchReturnCacheEmit, err)
@@ -167,8 +176,10 @@ func (e *searchReturnCacheEntry) replay(ctx context.Context, emit func(SearchEve
 		replayResult = "read_error"
 		return err
 	}
-	logx.System("search_return_cache stage=replay_counts id=%q begin=%d hit=%d morph=%d end=%d",
-		e.id, eventCounts["begin"], eventCounts["hit"], eventCounts["morph"], eventCounts["end"])
+	if diagnostics {
+		logx.SystemDiagnostic("search_return_cache stage=replay_counts id=%q begin=%d hit=%d morph=%d end=%d",
+			e.id, eventCounts["begin"], eventCounts["hit"], eventCounts["morph"], eventCounts["end"])
+	}
 	return nil
 }
 
@@ -179,10 +190,12 @@ func (e *searchReturnCacheEntry) logStatsLocked(stage, reason string) {
 		_ = e.db.QueryRow(`PRAGMA page_size`).Scan(&pageSize)
 		e.sqliteBytes = pageCount * pageSize
 	}
-	logx.System("search_return_cache stage=%s id=%q storage=%s reason=%q complete=%t interrupted=%t events=%d begin=%d hit=%d morph=%d end=%d payload_bytes=%d article_bytes=%d sqlite_bytes=%d age_ms=%d",
-		stage, e.id, e.storage, reason, e.complete, e.interrupted, e.nextSeq,
-		e.eventCounts["begin"], e.eventCounts["hit"], e.eventCounts["morph"], e.eventCounts["end"],
-		e.payloadBytes, e.articleBytes, e.sqliteBytes, time.Since(e.created).Milliseconds())
+	if e.diagnostics {
+		logx.SystemDiagnostic("search_return_cache stage=%s id=%q storage=%s reason=%q complete=%t interrupted=%t events=%d begin=%d hit=%d morph=%d end=%d payload_bytes=%d article_bytes=%d sqlite_bytes=%d age_ms=%d",
+			stage, e.id, e.storage, reason, e.complete, e.interrupted, e.nextSeq,
+			e.eventCounts["begin"], e.eventCounts["hit"], e.eventCounts["morph"], e.eventCounts["end"],
+			e.payloadBytes, e.articleBytes, e.sqliteBytes, time.Since(e.created).Milliseconds())
+	}
 }
 
 func searchReturnEventBodyBytes(event SearchEvent) int64 {
@@ -194,7 +207,7 @@ func searchReturnEventBodyBytes(event SearchEvent) int64 {
 }
 
 func logSearchReturnCacheEvent(stage, id string, seq int64, event SearchEvent, eventBytes, bodyBytes, totalBytes, totalBodyBytes int64, elapsed time.Duration) {
-	logx.System("search_return_cache stage=%s id=%q seq=%d event=%s slot=%d dict=%q name=%q results=%d event_bytes=%d article_bytes=%d cumulative_bytes=%d cumulative_article_bytes=%d elapsed_ms=%d",
+	logx.SystemDiagnostic("search_return_cache stage=%s id=%q seq=%d event=%s slot=%d dict=%q name=%q results=%d event_bytes=%d article_bytes=%d cumulative_bytes=%d cumulative_article_bytes=%d elapsed_ms=%d",
 		stage, id, seq, event.T, event.I, event.Dict, event.Name, len(event.Results), eventBytes, bodyBytes,
 		totalBytes, totalBodyBytes, elapsed.Milliseconds())
 }
@@ -240,9 +253,11 @@ func (s *searchReturnCacheStore) pruneLocked(now time.Time, keep string) {
 	}
 }
 
-func (s *Server) replaySearchReturnCache(ctx context.Context, id string, emit func(SearchEvent) error) error {
+func (s *Server) replaySearchReturnCache(ctx context.Context, id string, emit func(SearchEvent) error, diagnostics bool) error {
 	if !wildcardCacheIDPattern.MatchString(id) {
-		logx.System("search_return_cache stage=replay_miss id=%q reason=invalid_id", id)
+		if diagnostics {
+			logx.SystemDiagnostic("search_return_cache stage=replay_miss id=%q reason=invalid_id", id)
+		}
 		return errSearchReturnCacheUnavailable
 	}
 	s.searchReturns.mu.Lock()
@@ -260,8 +275,10 @@ func (s *Server) replaySearchReturnCache(ctx context.Context, id string, emit fu
 		if expired {
 			reason = "expired"
 		}
-		logx.System("search_return_cache stage=replay_miss id=%q reason=%s", id, reason)
+		if diagnostics {
+			logx.SystemDiagnostic("search_return_cache stage=replay_miss id=%q reason=%s", id, reason)
+		}
 		return errSearchReturnCacheUnavailable
 	}
-	return entry.replay(ctx, emit)
+	return entry.replay(ctx, emit, diagnostics)
 }

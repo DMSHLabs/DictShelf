@@ -48,7 +48,7 @@ func (s *Server) streamCachedWildcardGroupWithin(ctx context.Context, request br
 		query: request.query, group: request.cacheGroup, wildcards: true,
 		fts: request.cacheFTS, trigram: request.cacheTrigram,
 	}, browsePageSize, request.cacheCount, request.entry.ID, request.entry.probeName(), 0,
-		firstKey.within, request.withinMask, s.wildcardCacheDir())
+		firstKey.within, request.withinMask, s.wildcardCacheDir(), request.diagnostics)
 	if err != nil {
 		return err
 	}
@@ -217,7 +217,7 @@ func (s *Server) streamCachedWildcardGroupWithin(ctx context.Context, request br
 		}
 	}
 	if browseFindDiagnosticEnabled(ctx) {
-		logx.System("headword_find_wildcard_group stage=plan cache=%q mode=%s typed_query=%q dictionaries=%d base_total=%d index=%s index_query=%q candidates=%d materialized=%t",
+		logx.SystemDiagnostic("headword_find_wildcard_group stage=plan cache=%q mode=%s typed_query=%q dictionaries=%d base_total=%d index=%s index_query=%q candidates=%d materialized=%t",
 			request.cacheID, request.withinMode, request.typedWithin, len(groupRows), baseTotal, index, match, scanTotal, candidateTable != "")
 	}
 	scanned, found := 0, 0
@@ -458,7 +458,7 @@ func (s *Server) streamCachedWildcardGroupWithin(ctx context.Context, request br
 		}
 	}
 	if browseFindDiagnosticEnabled(ctx) {
-		logx.System("headword_find_wildcard_group stage=done cache=%q mode=%s typed_query=%q dictionaries=%d strategy=%s scanned=%d found=%d elapsed_ms=%d",
+		logx.SystemDiagnostic("headword_find_wildcard_group stage=done cache=%q mode=%s typed_query=%q dictionaries=%d strategy=%s scanned=%d found=%d elapsed_ms=%d",
 			request.cacheID, request.withinMode, request.typedWithin, len(groupRows), map[bool]string{true: "index_candidates", false: "full_block_scan"}[index != ""], scanned, found, time.Since(started).Milliseconds())
 	}
 	return nil

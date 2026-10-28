@@ -318,7 +318,7 @@ func (s *Server) userGroupsSnapshot(trace bool) ([]groupView, error) {
 	started := time.Now()
 	stage := func(name string, count int) {
 		if trace {
-			logx.System("dictionary_picker_go stage=%s elapsed_ms=%d count=%d", name, time.Since(started).Milliseconds(), count)
+			logx.SystemDiagnostic("dictionary_picker_go stage=%s elapsed_ms=%d count=%d", name, time.Since(started).Milliseconds(), count)
 		}
 	}
 	stage("start", 0)
@@ -420,7 +420,7 @@ func (s *Server) syncLinkedGroups(entries []*entry, trace bool) error {
 	defer p.editMu.Unlock()
 	defer func() {
 		if trace {
-			logx.System("dictionary_picker_groups version=%d cached=%t linked=%d dictionaries=%d metadata_reads=%d metadata_ms=%d match_ms=%d update_ms=%d total_ms=%d", s.linkedGroups.version, cached, linkedGroups, len(entries), metadataReads, metadataTime.Milliseconds(), matchTime.Milliseconds(), updateTime.Milliseconds(), time.Since(started).Milliseconds())
+			logx.SystemDiagnostic("dictionary_picker_groups version=%d cached=%t linked=%d dictionaries=%d metadata_reads=%d metadata_ms=%d match_ms=%d update_ms=%d total_ms=%d", s.linkedGroups.version, cached, linkedGroups, len(entries), metadataReads, metadataTime.Milliseconds(), matchTime.Milliseconds(), updateTime.Milliseconds(), time.Since(started).Milliseconds())
 		}
 	}()
 	state := p.file.fresh()
