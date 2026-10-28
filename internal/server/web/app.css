@@ -278,7 +278,11 @@ html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image
 #articleFindCount:disabled{opacity:.65;cursor:default}
 #articleFindStrip>button:not(#articleFindLabel){flex:none}
 #articleFindPrev,#articleFindNext{min-width:44px;min-height:44px}
+#articleFindScrollToMatch{display:grid;place-items:center;min-width:44px;min-height:44px}
+#articleFindScrollToMatch svg{width:20px;height:20px}
 #articleFindNext{margin-left:var(--sp-2)}
+.article-find-query-row,.article-find-mode{display:grid;grid-template-columns:max-content minmax(0,1fr);align-items:center;gap:calc(var(--ui-control-gap) * 1em)}
+.article-find-query-row input,.article-find-mode select{width:100%;min-width:0}
 /* Gaps scale with the viewport and button height; fixed end gutters keep
    the controls clear of the screen edges. The dictionary label gives up
    width before any of the gaps becomes smaller than its shared minimum. */

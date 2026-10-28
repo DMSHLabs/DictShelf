@@ -1186,6 +1186,7 @@
   "articleFind.hiddenHint": "Попробуйте искать в скрытых примерах.",
   "articleFind.previous": "Найти предыдущее",
   "articleFind.next": "Найти следующее",
+  "articleFind.scrollToMatch": "Прокрутить к текущему совпадению",
   "articleFind.position": "{current} из {total}",
   "articleFind.resultBlock": "статьи {start}–{end}",
   "articleFind.noMatches": "Совпадений нет",
