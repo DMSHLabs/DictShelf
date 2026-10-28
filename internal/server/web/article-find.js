@@ -14,6 +14,43 @@ const block = "p,div,li,dt,dd,td,th,h1,h2,h3,h4,h5,h6,blockquote,pre,.wu-m";
 let options = {query:"", mode:"contains", matchCase:false, all:true, examples:false, blocks:true};
 try { Object.assign(options, JSON.parse(localStorage.getItem("wudict_article_find") || "{}")); } catch (_) {}
 let matches = [], index = -1, active = false, restored = [], docs = new Set(), timer, fullTextNavigation = null, fullTextGeneration = null, searchAnchor = null;
+const examinedBlocks = new Map();
+function resetCounts(){examinedBlocks.clear()}
+function blockPages(det){
+  return [...(examinedBlocks.get(det.dataset.searchDict||"")||new Map())]
+    .map(([start,count])=>({start,count})).sort((a,b)=>a.start-b.start);
+}
+function recordCounts(){
+  const counts=new Map();
+  for(const hit of matches){
+    const det=hit.host.closest("details.dict");
+    if(det)counts.set(det,(counts.get(det)||0)+1);
+  }
+  for(const det of $("out").querySelectorAll("details.dict")){
+    const hosts=[...det.querySelectorAll(".article")];
+    if(!hosts.length||hosts.some(host=>!rootFor(host))||
+       hosts.some(host=>host.matches("iframe")&&host.contentDocument?.readyState!=="complete"))continue;
+    if(options.mode==="wordLemma"&&hosts.some(host=>lemmaLookups.get(host.dataset.dict+"\u0000"+options.query)?.value===null))continue;
+    const id=det.dataset.searchDict||"";
+    if(!examinedBlocks.has(id))examinedBlocks.set(id,new Map());
+    examinedBlocks.get(id).set(Number(det.dataset.searchPageStart)||0,counts.get(det)||0);
+  }
+}
+function countedPosition(){
+  const det=matches[index]?.host.closest("details.dict");
+  const dictionaries=[...$("out").querySelectorAll("details.dict")];
+  let total=0,current=0;
+  for(const section of dictionaries){
+    const start=Number(section.dataset.searchPageStart)||0;
+    for(const page of blockPages(section)){
+      if(section===det&&page.start===start){
+        current=total+matches.slice(0,index+1).filter(hit=>hit.host.closest("details.dict")===det).length;
+      }
+      total+=page.count;
+    }
+  }
+  return {current,total};
+}
 let settle = null;
 let laidOutList = null;
 const fallbackSelections = new Map();
@@ -45,9 +82,11 @@ function save() {
   try { localStorage.setItem("wudict_article_find", JSON.stringify(options)); } catch (_) {}
 }
 function readOptions() {
+  const previous=options;
   options = {query:$("articleFindQuery").value.trim(), mode:$("articleFindMode").value,
     matchCase:$("articleFindCase").checked, all:$("articleFindAll").checked,
     examples:$("articleFindExamples").checked, blocks:$("articleFindBlocks").checked};
+  if(previous.query!==options.query||previous.mode!==options.mode||previous.matchCase!==options.matchCase||previous.examples!==options.examples)resetCounts();
   save();
 }
 function fillOptions() {
@@ -105,6 +144,8 @@ function syncControls() {
 function canStep(step){
   if(options.mode==="fts")return !!(step<0?fullTextNavigation?.canPrevious:fullTextNavigation?.canNext);
   if(matches.length>=2)return true;
+  if(!matches.length)return countedPosition().total>0 || options.blocks!==false &&
+    [...$("out").querySelectorAll("details.dict")].some(det=>window.wudictArticleBlockHasMore?.(det,step));
   const hit=matches[index>=0?index:0];
   return !!(options.query&&hit&&options.blocks!==false&&window.wudictArticleBlockHasMore?.(hit.host.closest("details.dict"),step));
 }
@@ -121,6 +162,7 @@ function lemmaFor(host,query){
       .then(response=>response.ok?response.json():null)
       .then(data=>{
         record.value=typeof data?.lemma==="string"&&data.lemma?data.lemma:query;
+        examinedBlocks.delete(id);
         if(active&&options.mode==="wordLemma"&&options.query===query)schedule();
       }).catch(()=>{record.value=query});
   }
@@ -144,13 +186,20 @@ function paint() {
     win.CSS.highlights.set("wudict-find-all", all);
     win.CSS.highlights.set("wudict-find-current", current);
   }
-  const partial = matches.length > 0 && !!window.wudictArticleFindHasMore?.();
-  const total = String(matches.length)+(partial?"+":"");
+  const position=countedPosition();
+  const partial = [...$("out").querySelectorAll("details.dict")].some(det=>{
+    if(det.dataset.searchExact!=="true")return true;
+    const total=Number(det.dataset.searchTotal)||0;
+    const size=Number(det.dataset.searchPageSize)||20,first=Number(det.dataset.searchFirstPageSize)||size;
+    const expected=total>0?1+Math.ceil(Math.max(0,total-first)/size):0;
+    return (examinedBlocks.get(det.dataset.searchDict||"")?.size||0)<expected;
+  });
+  const total = String(position.total)+(partial?"+":"");
   const block = index >= 0 ? window.wudictArticleFindBlockRange?.(matches[index]?.host.closest("details.dict")) : "";
-  const count = matches.length ? t("articleFind.position", {current:index < 0 ? 0 : index+1, total})+(block?" · "+block:"") : t("articleFind.noMatches");
+  const count = position.total ? t("articleFind.position", {current:position.current, total})+(block?" · "+block:"") : t("articleFind.noMatches");
   if(blockNavigationPending)return;
   $("articleFindCount").textContent = count;
-  $("articleFindCount").disabled = !matches.length;
+  $("articleFindCount").disabled = !position.total;
   $("articleFindStatus").textContent = options.query ? count : "";
   $("articleFindHiddenHint").hidden = !options.query || !!matches.length || options.examples || !hiddenExamples;
   $("articleFindLabel").textContent = options.query;
@@ -243,6 +292,7 @@ function rebuild() {
     }
   }
   index = previous ? matches.findIndex(hit => hit.range.startContainer === previous.range.startContainer && hit.range.startOffset === previous.range.startOffset) : -1;
+  recordCounts();
   if (index < 0 && !window.wudictNativeShell) forceLayout(null);
   if (index >= 0) showExample(matches[index]);
   paint();
@@ -370,10 +420,14 @@ async function crossResultBlocks(current,step){
   if(blockNavigationPending)return;
   blockNavigationPending=true;
   const token=++blockNavigationToken,query=options.query,mode=options.mode;
-  let det=current.host.closest("details.dict"),changed=false;
+  let det=current.matches?.("details.dict")?current:current.host.closest("details.dict"),changed=false;
   const originStart=Number(det?.dataset.searchPageStart)||0;
   try{
-    for(let page=0;page<100&&det&&window.wudictArticleBlockHasMore?.(det,step);page++){
+    const visited=new Set();
+    while(det&&window.wudictArticleBlockHasMore?.(det,step)){
+      const start=Number(det.dataset.searchPageStart)||0;
+      if(visited.has(start))break;
+      visited.add(start);
       const replacement=await window.wudictRequestArticleBlock?.(det,step);
       if(token!==blockNavigationToken||!active||options.query!==query||options.mode!==mode||options.blocks===false)return;
       if(!replacement)break;
@@ -393,7 +447,7 @@ async function crossResultBlocks(current,step){
       if(token!==blockNavigationToken||!active||options.query!==query||options.mode!==mode||options.blocks===false)return;
       if(restored)det=restored;
       rebuild();blockNavigationPending=false;selectAfterBlock(det,step);
-    }else{blockNavigationPending=false;advanceLoaded(step)}
+    }else{blockNavigationPending=false;if(matches.length)advanceLoaded(step);else paint()}
   }finally{
     if(token===blockNavigationToken)blockNavigationPending=false;
   }
@@ -407,7 +461,15 @@ function go(step) {
   }
   if (dialog.open || !active) { clearTimeout(timer); readOptions(); active = !!options.query; rebuild(); }
   if (!active) return;
-  if (!matches.length) { paint(); return; }
+  if (!matches.length) {
+    const sections=[...$("out").querySelectorAll("details.dict")];
+    const candidates=step>0?sections:sections.reverse();
+    const det=options.blocks!==false&&candidates.find(section=>window.wudictArticleBlockHasMore?.(section,step));
+    if(det){crossResultBlocks(det,step);return}
+    const {total}=countedPosition();
+    if(total){goto(step>0?1:total);return}
+    paint();return;
+  }
   let wrapped = false;
   if (index < 0) {
     if (searchAnchor) {
@@ -440,8 +502,33 @@ function go(step) {
 function goto(page) {
   if ($("articleFindMode").value === "fts") { fullTextNavigation?.goto?.(page); return true; }
   if (dialog.open || !active) { clearTimeout(timer); readOptions(); active = !!options.query; rebuild(); }
-  if (!Number.isInteger(page) || page < 1 || page > matches.length) return false;
-  index = page-1; revealCurrent(); return true;
+  const {total}=countedPosition();
+  if (!Number.isInteger(page) || page < 1 || page > total) return false;
+  let offset=0;
+  for(const det of $("out").querySelectorAll("details.dict")){
+    for(const entry of blockPages(det)){
+      if(page>offset+entry.count){offset+=entry.count;continue}
+      const local=page-offset-1;
+      if((Number(det.dataset.searchPageStart)||0)===entry.start){
+        const hits=matches.map((hit,i)=>({hit,i})).filter(row=>row.hit.host.closest("details.dict")===det);
+        if(!hits[local])return false;
+        index=hits[local].i;revealCurrent();return true;
+      }
+      const token=blockNavigationToken,query=options.query;
+      window.wudictRestoreArticleBlock?.(det,entry.start)?.then(async replacement=>{
+        if(!replacement||!active||token!==blockNavigationToken||query!==options.query)return;
+        for(let attempt=0;attempt<10;attempt++){
+          if(attempt)await new Promise(resolve=>setTimeout(resolve,100));
+          if(!active||token!==blockNavigationToken||query!==options.query)return;
+          rebuild();
+          const hits=matches.map((hit,i)=>({hit,i})).filter(row=>row.hit.host.closest("details.dict")===replacement);
+          if(hits[local]){index=hits[local].i;revealCurrent();return}
+        }
+      });
+      return true;
+    }
+  }
+  return false;
 }
 function searchFrom(host,node,offset,direction) {
   if (!host?.isConnected || !node) return;
@@ -456,12 +543,14 @@ function searchFrom(host,node,offset,direction) {
 }
 function gotoOpen() {
   const isFTS = $("articleFindMode").value === "fts" && !!fullTextNavigation;
-  const total=isFTS ? Number(fullTextNavigation.total)||0 : (active ? matches.length : 0);
-  const current=isFTS ? Number(fullTextNavigation.current)||1 : Math.max(1,index+1);
+  const position=countedPosition();
+  const total=isFTS ? Number(fullTextNavigation.total)||0 : (active ? position.total : 0);
+  const current=isFTS ? Number(fullTextNavigation.current)||1 : Math.max(1,position.current);
   if (total) window.wudictOpenArticleFindGoto?.(total,current);
 }
 function stop() {
   blockNavigationToken++;blockNavigationPending=false;
+  resetCounts();
   const navigation = fullTextNavigation;
   fullTextNavigation = null;
   if (settle) settle();
