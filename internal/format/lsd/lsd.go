@@ -113,9 +113,9 @@ func openSource(path string) (*source, error) {
 	}
 	if h.version == 0x100000 {
 		// Lingvo 10 stores no pagesEnd/resource offsets in its variable
-		// header. The index ends at the beginning of the article section; this
-		// dictionary has no overlay resource block.
-		pagesEnd = uint32(st.Size())
+		// header. Its fixed-header lastPage field gives the final 512-byte
+		// index page, followed by the resource block.
+		pagesEnd = h.pagesOffset + (uint32(h.lastPage)+1)*pageSize
 		overlayEnd = uint32(st.Size())
 	}
 	decoderSize := h.articlesOffset - h.decoderOffset
