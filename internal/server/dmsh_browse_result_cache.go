@@ -42,7 +42,7 @@ func (s *Server) streamBrowseResultCache(ctx context.Context, request browseFind
 	}
 	const pageSize = indexconst.BrowsePageSize
 	entry, token, err := s.wildcardPages.begin(request.browseCacheID, signature, pageSize, 1,
-		request.entry.ID, request.dict.Meta().Name, 0, "", false, s.wildcardCacheDir())
+		request.entry.ID, request.dict.Meta().Name, 0, "", false, s.wildcardCacheDir(), request.diagnostics)
 	if err != nil {
 		return err
 	}

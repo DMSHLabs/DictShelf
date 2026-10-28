@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/wuweidict/wudict/internal/indexconst"
-	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/store"
 )
 
@@ -44,10 +43,10 @@ func runIndexDictionaryGroups(groups [][]indexOperation, stopped func() bool, ru
 	if workers > len(groups) {
 		workers = len(groups)
 	}
-	logx.System("index dictionary queue started dictionaries=%d workers=%d mode=%s", len(groups), workers, indexconst.ModeName())
+	store.IndexDiagnostic("index dictionary queue started dictionaries=%d workers=%d mode=%s", len(groups), workers, indexconst.ModeName())
 	for i, group := range groups {
 		if len(group) > 0 {
-			logx.System("index dictionary queued dictionary=%q position=%d/%d", group[0].Dict, i+1, len(groups))
+			store.IndexDiagnostic("index dictionary queued dictionary=%q position=%d/%d", group[0].Dict, i+1, len(groups))
 		}
 	}
 	var active atomic.Int32
@@ -58,15 +57,15 @@ func runIndexDictionaryGroups(groups [][]indexOperation, stopped func() bool, ru
 		}
 		count := active.Add(1)
 		started := time.Now()
-		logx.System("index dictionary started dictionary=%q active=%d workers=%d", name, count, workers)
+		store.IndexDiagnostic("index dictionary started dictionary=%q active=%d workers=%d", name, count, workers)
 		defer func() {
 			count := active.Add(-1)
 			elapsed := time.Since(started)
-			logx.System("index dictionary worker released dictionary=%q active=%d elapsed=%s elapsed_ms=%d", name, count, elapsed.Round(time.Millisecond), elapsed.Milliseconds())
+			store.IndexDiagnostic("index dictionary worker released dictionary=%q active=%d elapsed=%s elapsed_ms=%d", name, count, elapsed.Round(time.Millisecond), elapsed.Milliseconds())
 		}()
 		run(group)
 	})
-	logx.System("index dictionary queue finished dictionaries=%d", len(groups))
+	store.IndexDiagnostic("index dictionary queue finished dictionaries=%d", len(groups))
 }
 
 func runIndexTasks[T any](items []T, stopped func() bool, run func(T)) {
@@ -85,7 +84,7 @@ func runIndexTasks[T any](items []T, stopped func() bool, run func(T)) {
 	if workers > len(items) {
 		workers = len(items)
 	}
-	logx.System("index task queue started tasks=%d workers=%d dictionary_worker_limit=%d logical_cpus=%d gomaxprocs=%d mode=%s",
+	store.IndexDiagnostic("index task queue started tasks=%d workers=%d dictionary_worker_limit=%d logical_cpus=%d gomaxprocs=%d mode=%s",
 		len(items), workers, cap(currentIndexLimit()), runtime.NumCPU(), runtime.GOMAXPROCS(0), indexconst.ModeName())
 	queue := make(chan T, len(items))
 	var wg sync.WaitGroup
@@ -109,7 +108,7 @@ func runIndexTasks[T any](items []T, stopped func() bool, run func(T)) {
 	close(queue)
 	wg.Wait()
 	elapsed := time.Since(startedAt)
-	logx.System("index task queue finished tasks_started=%d tasks_queued=%d elapsed=%s elapsed_ms=%d", started.Load(), len(items), elapsed.Round(time.Millisecond), elapsed.Milliseconds())
+	store.IndexDiagnostic("index task queue finished tasks_started=%d tasks_queued=%d elapsed=%s elapsed_ms=%d", started.Load(), len(items), elapsed.Round(time.Millisecond), elapsed.Milliseconds())
 }
 
 func groupIndexOperations(operations []indexOperation) [][]indexOperation {

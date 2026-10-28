@@ -77,7 +77,7 @@ func logBrowseMemory(event string, active, completed, dictionaries int) {
 	}
 	metrics.Read(mem)
 	process := browseProcessMemory()
-	logx.System("browse_memory event=%s active=%d completed=%d dictionaries=%d go_heap_objects_bytes=%d go_total_bytes=%d go_released_bytes=%d go_gc=%d server_working_bytes=%d server_private_bytes=%d app_webview_processes=%d app_webview_working_bytes=%d app_webview_private_bytes=%d all_webview_processes=%d all_webview_working_bytes=%d all_webview_private_bytes=%d process_sample_error=%q",
+	logx.SystemDiagnostic("browse_memory event=%s active=%d completed=%d dictionaries=%d go_heap_objects_bytes=%d go_total_bytes=%d go_released_bytes=%d go_gc=%d server_working_bytes=%d server_private_bytes=%d app_webview_processes=%d app_webview_working_bytes=%d app_webview_private_bytes=%d all_webview_processes=%d all_webview_working_bytes=%d all_webview_private_bytes=%d process_sample_error=%q",
 		event, active, completed, dictionaries, mem[0].Value.Uint64(), mem[1].Value.Uint64(), mem[2].Value.Uint64(), mem[3].Value.Uint64(),
 		process.serverWorking, process.serverPrivate, process.appWebviewCount, process.appWebviewWorking, process.appWebviewPrivate,
 		process.webviewCount, process.webviewWorking, process.webviewPrivate, process.err)
@@ -239,7 +239,7 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 			!bounded(d.Total, 100_000) || !bounded(d.Slots, 100_000) || !bounded(d.ResultCount, 1_000_000) {
 			return errors.New("invalid diagnostic")
 		}
-		logx.System("browse_return_route stage=%s elapsed_ms=%d url=%q referrer=%q return_param=%q origin_url=%q target_url=%q query=%q mode=%q dict=%q has_origin=%t has_from=%t chooser=%t slots=%d result_count=%d any_results=%t error=%q skipped=%t",
+		logx.SystemDiagnostic("browse_return_route stage=%s elapsed_ms=%d url=%q referrer=%q return_param=%q origin_url=%q target_url=%q query=%q mode=%q dict=%q has_origin=%t has_from=%t chooser=%t slots=%d result_count=%d any_results=%t error=%q skipped=%t",
 			d.Stage, d.ElapsedMS, d.URL, d.Referrer, d.ReturnParam, d.OriginURL, d.TargetURL,
 			d.Query, d.Mode, d.Dict, d.HasOrigin, d.HasFrom, d.Chooser,
 			max(d.Slots, d.Total), d.ResultCount, d.AnyResults, d.Error, d.Skipped)
@@ -257,7 +257,7 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 			len(d.Name) > 256 || strings.ContainsAny(d.Name, "\r\n") || len(d.Detail) > 1024 || strings.ContainsAny(d.Detail, "\r\n") {
 			return errors.New("invalid diagnostic")
 		}
-		logx.System("search_article run=%d stage=%s query=%q mode=%q group=%q slot=%d dict=%q name=%q elapsed_ms=%d completed=%d total=%d results=%d detail=%q",
+		logx.SystemDiagnostic("search_article run=%d stage=%s query=%q mode=%q group=%q slot=%d dict=%q name=%q elapsed_ms=%d completed=%d total=%d results=%d detail=%q",
 			d.RunID, d.Stage, d.Query, d.Mode, d.Group, d.Page, d.Dict, d.Name, d.ElapsedMS, d.Completed, d.Total, d.ResultCount, d.Detail)
 		return nil
 	}
@@ -268,7 +268,7 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 			len(d.Query) > 1024 || strings.ContainsAny(d.Query, "\r\n") || len(d.Group) > 256 || strings.ContainsAny(d.Group, "\r\n") || len(d.Detail) > 1024 || strings.ContainsAny(d.Detail, "\r\n") {
 			return errors.New("invalid diagnostic")
 		}
-		logx.System("wildcard_view switch=%d run=%d stage=%q source=%q dict=%q query=%q group=%q fts=%t trigram=%t detail=%q elapsed_ms=%d merged=%t spinner=%t notice=%t busy_wanted=%t tasks=%d ready=%d dictionaries=%d notice_text=%q", d.SwitchID, d.RunID, d.Stage, d.Resource, d.Dict, d.Query, d.Group, d.FTS, d.Trigram, d.Detail, d.ElapsedMS, d.MergedView, d.SpinnerVisible, d.NoticeVisible, d.BusyWanted, d.Active, d.Completed, d.Dictionaries, d.NoticeText)
+		logx.SystemDiagnostic("wildcard_view switch=%d run=%d stage=%q source=%q dict=%q query=%q group=%q fts=%t trigram=%t detail=%q elapsed_ms=%d merged=%t spinner=%t notice=%t busy_wanted=%t tasks=%d ready=%d dictionaries=%d notice_text=%q", d.SwitchID, d.RunID, d.Stage, d.Resource, d.Dict, d.Query, d.Group, d.FTS, d.Trigram, d.Detail, d.ElapsedMS, d.MergedView, d.SpinnerVisible, d.NoticeVisible, d.BusyWanted, d.Active, d.Completed, d.Dictionaries, d.NoticeText)
 		return nil
 	}
 	switch d.Event {
@@ -308,7 +308,7 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 		default:
 			return errors.New("invalid diagnostic")
 		}
-		logx.System("browse_article_transition nav_start_ms=%d stage=%s dict=%q browse_page=%d elapsed_ms=%d duration_ms=%d",
+		logx.SystemDiagnostic("browse_article_transition nav_start_ms=%d stage=%s dict=%q browse_page=%d elapsed_ms=%d duration_ms=%d",
 			d.StartedAt, d.Stage, d.Dict, d.Page, d.ElapsedMS, d.DurationMS)
 		return nil
 	}
@@ -318,7 +318,7 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 		default:
 			return errors.New("invalid diagnostic")
 		}
-		logx.System("browse_navigation nav_start_ms=%d stage=%s dict=%q browse_page=%d elapsed_ms=%d duration_ms=%d words=%d status=%d",
+		logx.SystemDiagnostic("browse_navigation nav_start_ms=%d stage=%s dict=%q browse_page=%d elapsed_ms=%d duration_ms=%d words=%d status=%d",
 			d.StartedAt, d.Stage, d.Dict, d.Page, d.ElapsedMS, d.DurationMS, d.Words, d.Status)
 		return nil
 	}
@@ -326,12 +326,12 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 		if d.Resource == "" || !strings.HasPrefix(d.Resource, "/assets/") && !strings.HasPrefix(d.Resource, "/style/") {
 			return errors.New("invalid diagnostic")
 		}
-		logx.System("navigation_resource nav_start_ms=%d resource=%q start_ms=%d duration_ms=%d response_end_ms=%d elapsed_ms=%d",
+		logx.SystemDiagnostic("navigation_resource nav_start_ms=%d resource=%q start_ms=%d duration_ms=%d response_end_ms=%d elapsed_ms=%d",
 			d.StartedAt, d.Resource, d.FetchMS, d.DurationMS, d.TotalMS, d.ElapsedMS)
 		return nil
 	}
 	if d.Event == "storage_bootstrap" {
-		logx.System("storage_bootstrap nav_start_ms=%d elapsed_ms=%d first_document_script_ms=%d document_script_start_ms=%d bootstrap_start_ms=%d i18n_markup_ms=%d duration_ms=%d restored=%t",
+		logx.SystemDiagnostic("storage_bootstrap nav_start_ms=%d elapsed_ms=%d first_document_script_ms=%d document_script_start_ms=%d bootstrap_start_ms=%d i18n_markup_ms=%d duration_ms=%d restored=%t",
 			d.StartedAt, d.ElapsedMS, d.StripBuildMS, d.ReadMS, d.FetchMS, d.WordsMS, d.DurationMS, d.Restored)
 		return nil
 	}
@@ -345,7 +345,7 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 		return nil
 	}
 	if d.Event == "wildcard_progress" {
-		logx.System("wildcard_progress dict=%q stage=%s elapsed_ms=%d stream_events=%d stream_bytes=%d published_updates=%d ui_renders=%d ui_render_ms=%d ui_render_max_ms=%d task_updates=%d task_update_ms=%d task_update_max_ms=%d scanned=%d scan_total=%d",
+		logx.SystemDiagnostic("wildcard_progress dict=%q stage=%s elapsed_ms=%d stream_events=%d stream_bytes=%d published_updates=%d ui_renders=%d ui_render_ms=%d ui_render_max_ms=%d task_updates=%d task_update_ms=%d task_update_max_ms=%d scanned=%d scan_total=%d",
 			d.Dict, d.Stage, d.ReadMS, d.ProgressEvents, d.ProgressBytes, d.ProgressPublished, d.ProgressRenders,
 			d.ProgressRenderMS, d.ProgressRenderMaxMS, d.ProgressTaskUpdates, d.ProgressTaskUpdateMS, d.ProgressTaskMaxMS,
 			d.ProgressScanned, d.ProgressScanTotal)
@@ -357,36 +357,36 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 		default:
 			return errors.New("invalid diagnostic")
 		}
-		logx.System("wildcard_ribbon stage=%s dict=%q items=%d sections=%d visible=%d anchor=%d adapter_ms=%d build_ms=%d paint_ms=%d viewport_width=%d viewport_height=%d resize_events=%d resize_start_width=%d resize_burst_ms=%d metrics_changed=%t paint_deferred=%t",
+		logx.SystemDiagnostic("wildcard_ribbon stage=%s dict=%q items=%d sections=%d visible=%d anchor=%d adapter_ms=%d build_ms=%d paint_ms=%d viewport_width=%d viewport_height=%d resize_events=%d resize_start_width=%d resize_burst_ms=%d metrics_changed=%t paint_deferred=%t",
 			d.Stage, d.Dict, d.RibbonItems, d.RibbonSections, d.RibbonVisible, d.RibbonAnchor,
 			d.RibbonAdapterMS, d.RibbonBuildMS, d.RibbonPaintMS, d.ViewportWidth, d.ViewportHeight,
 			d.ResizeEvents, d.ResizeStartWidth, d.ResizeBurstMS, d.RibbonMetricsChanged, d.RibbonPaintDeferred)
 		return nil
 	}
 	if d.Event == "dictionary_picker_open" {
-		logx.System("dictionary_picker_diag group_fetch_ms=%d rows_render_ms=%d rows=%d total_ms=%d",
+		logx.SystemDiagnostic("dictionary_picker_diag group_fetch_ms=%d rows_render_ms=%d rows=%d total_ms=%d",
 			d.FetchMS, d.WordsMS, d.Words, d.TotalMS)
 		return nil
 	}
 	if d.Event == "dictionary_picker_stage" {
-		logx.System("dictionary_picker_stage stage=%s context=%q elapsed_ms=%d duration_ms=%d rows=%d", d.Stage, d.Resource, d.ElapsedMS, d.DurationMS, d.Words)
+		logx.SystemDiagnostic("dictionary_picker_stage stage=%s context=%q elapsed_ms=%d duration_ms=%d rows=%d", d.Stage, d.Resource, d.ElapsedMS, d.DurationMS, d.Words)
 		return nil
 	}
 	if d.Event == "alphabet_task" {
-		logx.System("browse_alphabet_task dict=%q stage=%s active_tasks=%d panel_hidden=%t", d.Dict, d.Stage, d.Words, d.Status == 1)
+		logx.SystemDiagnostic("browse_alphabet_task dict=%q stage=%s active_tasks=%d panel_hidden=%t", d.Dict, d.Stage, d.Words, d.Status == 1)
 		return nil
 	}
 	if d.Event == "dictionary_list_client" {
-		logx.System("dictionary_list_client dictionaries=%d begin_ms=%d first_row_ms=%d stream_ms=%d render_ms=%d",
+		logx.SystemDiagnostic("dictionary_list_client dictionaries=%d begin_ms=%d first_row_ms=%d stream_ms=%d render_ms=%d",
 			d.Words, d.FetchMS, d.WordsMS, d.TotalMS, d.StripBuildMS)
 		return nil
 	}
 	if d.Event == "alphabet_measure_done" {
-		logx.System("browse_alphabet_measure dict=%q letters=%d measured=%d chunks=%d elapsed_ms=%d", d.Dict, d.Letters, d.Measured, d.Words, d.StripBuildMS)
+		logx.SystemDiagnostic("browse_alphabet_measure dict=%q letters=%d measured=%d chunks=%d elapsed_ms=%d", d.Dict, d.Letters, d.Measured, d.Words, d.StripBuildMS)
 		return nil
 	}
 	if d.Event == "work_resize" {
-		logx.System("work_resize width=%d height=%d events=%d burst_ms=%d handler_delay_max_ms=%d frame_delay_max_ms=%d paint_delay_max_ms=%d active_tasks=%d",
+		logx.SystemDiagnostic("work_resize width=%d height=%d events=%d burst_ms=%d handler_delay_max_ms=%d frame_delay_max_ms=%d paint_delay_max_ms=%d active_tasks=%d",
 			d.ViewportWidth, d.ViewportHeight, d.ResizeEvents, d.DurationMS, d.HandlerDelayMaxMS, d.FrameDelayMaxMS, d.PaintDelayMaxMS, d.ActiveTasks)
 		return nil
 	}
@@ -398,7 +398,7 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 			d.Resource, d.Stage, d.Letters, d.Measured, d.Words, d.Page, d.TotalPages)
 		return nil
 	}
-	logx.System("browse_diag event=%s dict=%q page=%d words=%d page_heap_est_bytes=%d page_json_bytes=%d cache_pages=%d cache_heap_est_bytes=%d cache_json_bytes=%d cache_stored_pages=%d cache_stored_bytes=%d total_pages=%d all_pages_heap_est_bytes=%d letters=%d bytes=%d read_ms=%d fetch_ms=%d total_ms=%d words_ms=%d strip_build_ms=%d strip_mark_ms=%d status=%d restored=%t stream_alphabet=%t",
+	logx.SystemDiagnostic("browse_diag event=%s dict=%q page=%d words=%d page_heap_est_bytes=%d page_json_bytes=%d cache_pages=%d cache_heap_est_bytes=%d cache_json_bytes=%d cache_stored_pages=%d cache_stored_bytes=%d total_pages=%d all_pages_heap_est_bytes=%d letters=%d bytes=%d read_ms=%d fetch_ms=%d total_ms=%d words_ms=%d strip_build_ms=%d strip_mark_ms=%d status=%d restored=%t stream_alphabet=%t",
 		d.Event, d.Dict, d.Page, d.Words, d.PageBytes, d.PageJSONBytes, d.CachePages, d.CacheBytes, d.CacheJSONBytes, d.CacheStoredPages, d.CacheStoredBytes, d.TotalPages, d.EstimatedAllPagesBytes, d.Letters, d.Bytes, d.ReadMS, d.FetchMS, d.TotalMS, d.WordsMS, d.StripBuildMS, d.StripMarkMS, d.Status, d.Restored, d.StreamAlphabet)
 	return nil
 }

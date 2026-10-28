@@ -209,7 +209,7 @@ func ensureMergedBrowseCache(ctx context.Context, path, signature string, source
 		_ = db.Close()
 		if err == nil && saved == signature {
 			if diagnostic {
-				logx.System("headword_merged_browse cache=hit fts=%t trigram=%t elapsed_ms=%d", useFTS, useTrigram, time.Since(started).Milliseconds())
+				logx.SystemDiagnostic("headword_merged_browse cache=hit fts=%t trigram=%t elapsed_ms=%d", useFTS, useTrigram, time.Since(started).Milliseconds())
 			}
 			return nil
 		}
@@ -400,7 +400,7 @@ func ensureMergedBrowseCache(ctx context.Context, path, signature string, source
 	}
 	_ = os.Chtimes(path, time.Now(), time.Now())
 	if diagnostic {
-		logx.System("headword_merged_browse cache=built fts=%t trigram=%t source_words=%d unique_words=%d elapsed_ms=%d", useFTS, useTrigram, scanned, unique, time.Since(started).Milliseconds())
+		logx.SystemDiagnostic("headword_merged_browse cache=built fts=%t trigram=%t source_words=%d unique_words=%d elapsed_ms=%d", useFTS, useTrigram, scanned, unique, time.Since(started).Milliseconds())
 	}
 	return nil
 }
@@ -502,7 +502,7 @@ func readMergedBrowsePage(ctx context.Context, path string, q url.Values, cacheI
 	pageMS := time.Since(pageStarted).Milliseconds()
 	_ = os.Chtimes(path, time.Now(), time.Now())
 	if diagnostic {
-		logx.System("headword_merged_page page=%d offset=%d total=%d words=%d open_ms=%d metadata_ms=%d locate_ms=%d read_ms=%d total_ms=%d", page, offset, total, len(words), openMS, metadataMS, locateMS, pageMS, time.Since(started).Milliseconds())
+		logx.SystemDiagnostic("headword_merged_page page=%d offset=%d total=%d words=%d open_ms=%d metadata_ms=%d locate_ms=%d read_ms=%d total_ms=%d", page, offset, total, len(words), openMS, metadataMS, locateMS, pageMS, time.Since(started).Milliseconds())
 	}
 	return browseResp{Dict: q.Get("dict"), Total: total, Page: page, Pages: pages, Size: browsePageSize, At: mark, Words: words, Alphabet: alphabet, mergedCacheID: cacheID}, nil
 }
@@ -797,7 +797,7 @@ func ensureMergedFindCache(ctx context.Context, basePath, baseID, path, signatur
 		_ = db.Close()
 		if err == nil && saved == signature {
 			if diagnostic {
-				logx.System("headword_find_merged cache=hit query=%q filter_mode=%s filter_typed_query=%q filter_effective_queries=%q total_ms=%d",
+				logx.SystemDiagnostic("headword_find_merged cache=hit query=%q filter_mode=%s filter_typed_query=%q filter_effective_queries=%q total_ms=%d",
 					query, withinMode, typedFilterQuery, filterQueries, time.Since(traceStarted).Milliseconds())
 			}
 			_ = os.Chtimes(path, time.Now(), time.Now())
@@ -873,7 +873,7 @@ func ensureMergedFindCache(ctx context.Context, basePath, baseID, path, signatur
 		indexName = "full_merged_scan"
 	}
 	if diagnostic {
-		logx.System("headword_find_merged cache=miss query=%q filter_mode=%s filter_typed_query=%q filter_effective_queries=%q index=%s index_query=%q candidates=%d base_total=%d candidate_ms=%d",
+		logx.SystemDiagnostic("headword_find_merged cache=miss query=%q filter_mode=%s filter_typed_query=%q filter_effective_queries=%q index=%s index_query=%q candidates=%d base_total=%d candidate_ms=%d",
 			query, withinMode, typedFilterQuery, filterQueries, indexName, candidateMatch, candidateTotal, scanTotal, time.Since(traceStarted).Milliseconds())
 	}
 	var candidateRows *sql.Rows
@@ -1001,7 +1001,7 @@ func ensureMergedFindCache(ctx context.Context, basePath, baseID, path, signatur
 			if elapsed > 0 {
 				rate = int64(scanned) * int64(time.Second) / int64(elapsed)
 			}
-			logx.System("headword_find_merged stage=scan query=%q filter_mode=%s filter_queries=%q index=%s percent=%d scanned=%d candidates=%d found=%d elapsed_ms=%d rows_per_sec=%d",
+			logx.SystemDiagnostic("headword_find_merged stage=scan query=%q filter_mode=%s filter_queries=%q index=%s percent=%d scanned=%d candidates=%d found=%d elapsed_ms=%d rows_per_sec=%d",
 				query, withinMode, strings.Split(within, mergedHeadwordAlternativeSeparator), indexName, nextDiagnosticPercent, scanned, candidateTotal, ordinal, elapsed.Milliseconds(), rate)
 			nextDiagnosticPercent += 10
 		}
@@ -1049,7 +1049,7 @@ func ensureMergedFindCache(ctx context.Context, basePath, baseID, path, signatur
 		}
 	}
 	if diagnostic {
-		logx.System("headword_find_merged cache=built query=%q filter_mode=%s filter_typed_query=%q filter_effective_queries=%q index=%s candidates_scanned=%d found=%d scan_ms=%d finalize_ms=%d commit_ms=%d total_ms=%d",
+		logx.SystemDiagnostic("headword_find_merged cache=built query=%q filter_mode=%s filter_typed_query=%q filter_effective_queries=%q index=%s candidates_scanned=%d found=%d scan_ms=%d finalize_ms=%d commit_ms=%d total_ms=%d",
 			query, withinMode, typedFilterQuery, filterQueries, indexName, scanned, ordinal, scanFinished.Sub(scanStarted).Milliseconds(), commitFinished.Sub(scanFinished).Milliseconds(),
 			commitFinished.Sub(commitStarted).Milliseconds(), time.Since(traceStarted).Milliseconds())
 	}
@@ -1130,7 +1130,7 @@ func (s *Server) mergedBrowseFindPage(ctx context.Context, q url.Values) (browse
 		}
 		page = position/browsePageSize + 1
 		if browseFindDiagnosticEnabled(ctx) {
-			logx.System("headword_merged_find_page stage=locate position=%d direction=%s elapsed_ms=%d", position, q.Get("finddir"), time.Since(locateStarted).Milliseconds())
+			logx.SystemDiagnostic("headword_merged_find_page stage=locate position=%d direction=%s elapsed_ms=%d", position, q.Get("finddir"), time.Since(locateStarted).Milliseconds())
 		}
 	}
 	pages := (total + browsePageSize - 1) / browsePageSize
@@ -1163,7 +1163,7 @@ func (s *Server) mergedBrowseFindPage(ctx context.Context, q url.Values) (browse
 	pageMS := time.Since(pageStarted).Milliseconds()
 	_ = os.Chtimes(path, time.Now(), time.Now())
 	if browseFindDiagnosticEnabled(ctx) {
-		logx.System("headword_merged_find_page stage=served page=%d offset=%d words=%d total=%d base_ms=%d lock_ms=%d ensure_ms=%d open_ms=%d metadata_ms=%d read_ms=%d total_ms=%d", page, offset, len(words), total, baseMS, lockMS, ensureMS, openMS, metadataMS, pageMS, time.Since(started).Milliseconds())
+		logx.SystemDiagnostic("headword_merged_find_page stage=served page=%d offset=%d words=%d total=%d base_ms=%d lock_ms=%d ensure_ms=%d open_ms=%d metadata_ms=%d read_ms=%d total_ms=%d", page, offset, len(words), total, baseMS, lockMS, ensureMS, openMS, metadataMS, pageMS, time.Since(started).Milliseconds())
 	}
 	return browseFindResp{Words: words, Positions: positions, BasePositions: basePositions, Alphabet: alphabet, Total: total, Page: page, Pages: pages, Size: browsePageSize}, nil
 }

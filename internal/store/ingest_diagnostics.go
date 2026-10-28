@@ -31,7 +31,7 @@ type ingestParallelismSnapshot struct {
 var ingestParallelismDiagnostics atomic.Bool
 var ingestParallelismPolicyState atomic.Pointer[ingestParallelismPolicy]
 
-// SetIngestParallelismDiagnostics gates periodic ingest-pipeline snapshots.
+// SetIngestParallelismDiagnostics gates indexing stages and ingest-pipeline snapshots.
 // The surrounding system log must also be enabled to retain the records.
 func SetIngestParallelismDiagnostics(enabled bool) {
 	ingestParallelismDiagnostics.Store(enabled)
@@ -50,7 +50,7 @@ func logIngestParallelism(event, dictionary, job string) {
 		return
 	}
 	s := sharedIngestPool.snapshot()
-	logx.System("ingest_parallelism event=%s job=%s dictionary=%q mode=%s logical_cpus=%d gomaxprocs=%d power=%s active_procs=%d demand_holds=%d power_limit_reason=%s dictionary_limit=%d active_dictionaries=%d workers_created=%d worker_limit=%d worker_limit_reason=%s workers_running=%d inline_preparing=%d queued_batches=%d in_flight_batches=%d ready_batches=%d outstanding_batches=%d memory_used_bytes=%d memory_budget_bytes=%d",
+	logx.SystemDiagnostic("ingest_parallelism event=%s job=%s dictionary=%q mode=%s logical_cpus=%d gomaxprocs=%d power=%s active_procs=%d demand_holds=%d power_limit_reason=%s dictionary_limit=%d active_dictionaries=%d workers_created=%d worker_limit=%d worker_limit_reason=%s workers_running=%d inline_preparing=%d queued_batches=%d in_flight_batches=%d ready_batches=%d outstanding_batches=%d memory_used_bytes=%d memory_budget_bytes=%d",
 		event, job, dictionary, indexconst.ModeName(), s.logicalCPUs, s.gomaxprocs, s.power, s.activeProcs, s.demandHolds, s.powerLimitReason,
 		s.dictionaryLimit, s.activeDictionaries, s.workersCreated, s.workerLimit, s.workerLimitReason, s.workersRunning, s.inlinePreparing,
 		s.queuedBatches, s.inFlightBatches, s.readyBatches, s.outstandingBatches, s.usedBytes, s.memoryBudget)

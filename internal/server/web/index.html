@@ -1343,7 +1343,7 @@ function articleCacheURL(state,action,start=0,size=0){
   return "/api/search?"+new URLSearchParams({cacheAction:action,cacheID:state.id,dict:state.dict,
     cacheCount:String(state.count),cacheOrder:String(state.order),
     q:state.query,mode:state.mode,rung:state.rung,ignoreDiacritics:state.ignore?"1":"0",
-    hl:hlOn?"1":"0",start:String(start),size:String(size),pageCacheDiagnostics:articlePageCacheDiagnosticsEnabled()?"1":"0"});
+    hl:hlOn?"1":"0",start:String(start),size:String(size),pageCacheDiagnostics:articlePageCacheDiagnosticsEnabled()?"1":"0",searchDiagnostics:searchArticleDiagnosticsEnabled()?"1":"0"});
 }
 function updateArticleCacheCard(state){
   const det=[...document.querySelectorAll("details.dict")].find(node=>
@@ -6594,7 +6594,7 @@ async function fetchStream(url,onMsg,signal,options){
        (options?.method||"GET").toUpperCase()==="GET"){
       const params=requestURL.searchParams,n=Number.parseInt(params.get("n"),10);
       const flag=(value)=>!!value&&!/^(0|false|no|off)$/i.test(value.trim());
-      const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),pageCacheDiagnostics:flag(params.get("pageCacheDiagnostics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",returnCacheID:params.get("returnCacheID")||"",returnCacheStorage:params.get("returnCacheStorage")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
+      const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),pageCacheDiagnostics:flag(params.get("pageCacheDiagnostics")||""),searchDiagnostics:flag(params.get("searchDiagnostics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",returnCacheID:params.get("returnCacheID")||"",returnCacheStorage:params.get("returnCacheStorage")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
       await androidGoStream(()=>window.wudictAndroidGo.startSearchStream(window.location.origin,JSON.stringify(request)),onMsg,signal);
       return;
     }
@@ -6606,7 +6606,7 @@ async function fetchStream(url,onMsg,signal,options){
       if(requestURL.pathname==="/api/search"&&method==="GET"){
         const params=requestURL.searchParams,n=Number.parseInt(params.get("n"),10);
         const flag=(value)=>!!value&&!/^(0|false|no|off)$/i.test(value.trim());
-        const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),pageCacheDiagnostics:flag(params.get("pageCacheDiagnostics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",returnCacheID:params.get("returnCacheID")||"",returnCacheStorage:params.get("returnCacheStorage")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
+        const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),pageCacheDiagnostics:flag(params.get("pageCacheDiagnostics")||""),searchDiagnostics:flag(params.get("searchDiagnostics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",returnCacheID:params.get("returnCacheID")||"",returnCacheStorage:params.get("returnCacheStorage")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
         await window.wudictNativeCall("search",JSON.stringify(request),onMsg,signal);
         return;
       }
@@ -8894,7 +8894,7 @@ async function doSearch(ev){
   let morphNote=null,morphAll=null;const morphSeen=new Set();
   const swap=()=>{if(stale){for(const n of stale)n.remove();stale=null}};
   try{
-    const searchParams=new URLSearchParams({q,mode,hl:hlOn?"1":"0",dict:dictParam,n:String(perDict),returnCacheID:articleCacheGroupID,returnCacheStorage:searchReturnCacheStorage,ignoreDiacritics:ignoreDiacritics?"1":"0",pageCacheDiagnostics:articlePageCacheDiagnosticsEnabled()?"1":"0"});
+    const searchParams=new URLSearchParams({q,mode,hl:hlOn?"1":"0",dict:dictParam,n:String(perDict),returnCacheID:articleCacheGroupID,returnCacheStorage:searchReturnCacheStorage,ignoreDiacritics:ignoreDiacritics?"1":"0",pageCacheDiagnostics:articlePageCacheDiagnosticsEnabled()?"1":"0",searchDiagnostics:searchArticleDiagnosticsEnabled()?"1":"0"});
     if(replayReturnCacheID){searchParams.set("cacheAction","returnReplay");searchParams.set("cacheID",replayReturnCacheID)}
     await fetchStream("/api/search?"+searchParams.toString(),msg=>{
       if(seq!==searchSeq)return; // superseded by a newer search
@@ -9133,7 +9133,7 @@ async function fetchSearchPortion(det,start,options={}){
   const priority=det.querySelector(":scope>summary .priority-index"),actions=[...det.querySelectorAll(":scope>summary .result-page-action")];
   if(priority)priority.disabled=true;
   actions.forEach(button=>button.disabled=true);
-  const url="/api/search?q="+encodeURIComponent(query)+"&mode="+encodeURIComponent(mode)+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(id)+"&n="+requested+"&cacheID="+encodeURIComponent(articleCacheGroupID)+"&pageCacheDiagnostics="+(articlePageCacheDiagnosticsEnabled()?"1":"0");
+  const url="/api/search?q="+encodeURIComponent(query)+"&mode="+encodeURIComponent(mode)+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(id)+"&n="+requested+"&cacheID="+encodeURIComponent(articleCacheGroupID)+"&pageCacheDiagnostics="+(articlePageCacheDiagnosticsEnabled()?"1":"0")+"&searchDiagnostics="+(searchArticleDiagnosticsEnabled()?"1":"0");
   let received=false,loaded=null;
   try{
     await fetchStream(url,msg=>{

@@ -827,12 +827,12 @@ func (s *Server) setupResult(q url.Values, canRemove bool) (map[string]any, int)
 	phaseStart := time.Now()
 	traceStage := func(stage string, count int) {
 		if diagnostics {
-			logx.System("folder setup stage=%q elapsed=%s dictionaries=%d", stage, time.Since(phaseStart).Round(time.Millisecond), count)
+			logx.SystemDiagnostic("folder setup stage=%q elapsed=%s dictionaries=%d", stage, time.Since(phaseStart).Round(time.Millisecond), count)
 		}
 		phaseStart = time.Now()
 	}
 	if diagnostics {
-		logx.System("folder setup start folders=%d", len(q["path"]))
+		logx.SystemDiagnostic("folder setup start folders=%d", len(q["path"]))
 	}
 	// tri-state: absent leaves the setting alone, on turns the library on, off
 	// turns it off - clearing the checkbox must be able to undo an earlier yes
@@ -1615,7 +1615,10 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, "dictionary variant unavailable")
 		return
 	}
-	logx.System("search start query=%q mode=%q scope=%q dictionaries=%d", q, mode, dictParam, len(entries))
+	searchDiagnostics, _ := queryFlag(r.URL.Query(), "searchDiagnostics")
+	if searchDiagnostics {
+		logx.SystemDiagnostic("search start query=%q mode=%q scope=%q dictionaries=%d", q, mode, dictParam, len(entries))
+	}
 
 	st, ok := newStream(w, "application/x-ndjson; charset=utf-8")
 	if !ok {
@@ -1655,7 +1658,9 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 				return d, err
 			}
 			backend, database, index := searchLocationForLog(e, d, mode)
-			logx.System("search database query=%q mode=%q dictionary=%q backend=%q database=%q index=%q", q, mode, e.probeName(), backend, database, index)
+			if searchDiagnostics {
+				logx.SystemDiagnostic("search database query=%q mode=%q dictionary=%q backend=%q database=%q index=%q", q, mode, e.probeName(), backend, database, index)
+			}
 			return d, nil
 		}
 	}
@@ -1692,7 +1697,9 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 			h.Results[j].Body = applyFormat(h.Results[j].Body, format, origin, st)
 		}
 		m := streamMsg{T: "hit", I: i, Dict: id, Name: name, Results: h.Results, Skipped: h.Skipped, Rung: h.Rung, Term: h.Term}
-		logx.System("search result query=%q mode=%q dictionary=%q results=%d skipped=%t", q, mode, name, len(h.Results), h.Skipped)
+		if searchDiagnostics {
+			logx.SystemDiagnostic("search result query=%q mode=%q dictionary=%q results=%d skipped=%t", q, mode, name, len(h.Results), h.Skipped)
+		}
 		var heavy tooHeavy
 		switch {
 		case errors.As(h.Err, &heavy):

@@ -258,7 +258,7 @@ func (s *Server) browseFindPage(ctx context.Context, q url.Values) (browseFindRe
 			if err := s.wildcardPages.storePage(cacheID, wildcardCacheSignature{
 				query: query, group: q.Get("wildgroup"), wildcards: true,
 				fts: q.Get("wildfts") == "1", trigram: q.Get("wildtrigram") == "1",
-			}, browsePageSize, cacheCount, e.ID, d.Meta().Name, cacheOrder, page, result, s.wildcardCacheDir()); err != nil {
+			}, browsePageSize, cacheCount, e.ID, d.Meta().Name, cacheOrder, page, result, s.wildcardCacheDir(), q.Get("diagnostics") == "1"); err != nil {
 				logx.System("wildcard cache page save failed dict=%q page=%d error=%q", e.ID, page, err)
 			}
 		}
@@ -332,6 +332,7 @@ type browseFindStreamRequest struct {
 	cacheCount    int
 	cacheFTS      bool
 	cacheTrigram  bool
+	diagnostics   bool
 	page          int
 }
 
@@ -410,7 +411,7 @@ func (s *Server) prepareBrowseFindStream(ctx context.Context, q url.Values) (bro
 		return browseFindStreamRequest{entry: e, query: query, typedQuery: typedQuery, matchMode: matchMode, mask: mask, within: within, typedWithin: typedWithin, withinMode: withinMode,
 			withinMask: withinMask, cacheID: cacheID, cacheGroup: cacheGroup,
 			cacheOrder: cacheOrder, cacheCount: cacheCount,
-			cacheFTS: q.Get("wildfts") == "1", cacheTrigram: q.Get("wildtrigram") == "1"}, nil
+			cacheFTS: q.Get("wildfts") == "1", cacheTrigram: q.Get("wildtrigram") == "1", diagnostics: q.Get("diagnostics") == "1"}, nil
 	}
 	if !hasBrowseIndex(e.Path) {
 		return browseFindStreamRequest{}, &browseFindSetupError{status: http.StatusConflict,
@@ -443,7 +444,7 @@ func (s *Server) prepareBrowseFindStream(ctx context.Context, q url.Values) (bro
 		withinMask: withinMask, withinRE: withinRE, cacheID: cacheID, cacheGroup: cacheGroup,
 		browseCacheID: browseCacheID,
 		cacheOrder:    cacheOrder, cacheCount: cacheCount, page: page,
-		cacheFTS: q.Get("wildfts") == "1", cacheTrigram: q.Get("wildtrigram") == "1"}, nil
+		cacheFTS: q.Get("wildfts") == "1", cacheTrigram: q.Get("wildtrigram") == "1", diagnostics: q.Get("diagnostics") == "1"}, nil
 }
 
 func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) {
@@ -527,7 +528,7 @@ func (s *Server) streamBrowseFindCached(ctx context.Context, request browseFindS
 					strategy, candidateLiteral = planner.MaskCandidatePlan(request.query)
 				}
 			}
-			logx.System("headword_find_plan dict=%q mode=%s typed_query=%q effective_queries=%q within_mode=%s typed_within=%q effective_within=%q strategy=%s candidate_literal=%q",
+			logx.SystemDiagnostic("headword_find_plan dict=%q mode=%s typed_query=%q effective_queries=%q within_mode=%s typed_within=%q effective_within=%q strategy=%s candidate_literal=%q",
 				request.entry.ID, request.matchMode, request.typedQuery,
 				strings.Split(request.query, mergedHeadwordAlternativeSeparator), request.withinMode,
 				request.typedWithin, strings.Split(request.within, mergedHeadwordAlternativeSeparator),
@@ -542,7 +543,7 @@ func (s *Server) streamBrowseFindCached(ctx context.Context, request browseFindS
 		query: request.query, group: request.cacheGroup, wildcards: request.mask,
 		fts: request.cacheFTS, trigram: request.cacheTrigram,
 	}, browsePageSize, request.cacheCount, request.entry.ID, request.dict.Meta().Name, request.cacheOrder,
-		wildcardWithinCacheKey(request.within, request.withinMode), request.withinMask, s.wildcardCacheDir())
+		wildcardWithinCacheKey(request.within, request.withinMode), request.withinMask, s.wildcardCacheDir(), request.diagnostics)
 	if err != nil {
 		return err
 	}
@@ -638,7 +639,7 @@ func (s *Server) streamAllWordsPage(ctx context.Context, request browseFindStrea
 			fts: request.cacheFTS, trigram: request.cacheTrigram,
 		}, browsePageSize, count, request.entry.ID, meta.Name, cacheOrder, page,
 			browseFindResp{Words: words, Positions: positions, Alphabet: alphabet, Total: total, Page: page,
-				Pages: pages, Size: browsePageSize}, s.wildcardCacheDir()); err != nil {
+				Pages: pages, Size: browsePageSize}, s.wildcardCacheDir(), request.diagnostics); err != nil {
 			logx.System("wildcard cache page save failed dict=%q page=%d error=%q", request.entry.ID, page, err)
 		}
 	}
@@ -1052,7 +1053,7 @@ func readBrowsePage(b dict.Browser, offset, size int, diagnostics bool, transpor
 		if err != nil {
 			errorText = err.Error()
 		}
-		logx.System("browse_page transport=%s dict=%q name=%q page=%d offset=%d size=%d anchor_index=%t anchor_used=%t anchor_ordinal=%d anchor_lookup_ms=%d read_ms=%d rows_read=%d words=%d total_ms=%d error=%q",
+		logx.SystemDiagnostic("browse_page transport=%s dict=%q name=%q page=%d offset=%d size=%d anchor_index=%t anchor_used=%t anchor_ordinal=%d anchor_lookup_ms=%d read_ms=%d rows_read=%d words=%d total_ms=%d error=%q",
 			transport, dictID, name, offset/size+1, offset, size, stats.AnchorIndex, stats.AnchorUsed, stats.AnchorOrdinal,
 			stats.AnchorLookup.Milliseconds(), stats.Read.Milliseconds(), stats.RowsRead, stats.Words,
 			time.Since(started).Milliseconds(), errorText)
@@ -1063,7 +1064,7 @@ func readBrowsePage(b dict.Browser, offset, size int, diagnostics bool, transpor
 	if err != nil {
 		errorText = err.Error()
 	}
-	logx.System("browse_page transport=%s dict=%q name=%q page=%d offset=%d size=%d anchor_index=false anchor_used=false rows_read=%d words=%d total_ms=%d error=%q",
+	logx.SystemDiagnostic("browse_page transport=%s dict=%q name=%q page=%d offset=%d size=%d anchor_index=false anchor_used=false rows_read=%d words=%d total_ms=%d error=%q",
 		transport, dictID, name, offset/size+1, offset, size, len(words), len(words), time.Since(started).Milliseconds(), errorText)
 	return words, err
 }
@@ -1130,14 +1131,14 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 			httpErr(w, http.StatusInternalServerError, "%s", err)
 		}
 		if diagnostics {
-			logx.System("browse_http_page status=error page_us=%d total_us=%d", pageDone.Sub(started).Microseconds(), time.Since(started).Microseconds())
+			logx.SystemDiagnostic("browse_http_page status=error page_us=%d total_us=%d", pageDone.Sub(started).Microseconds(), time.Since(started).Microseconds())
 		}
 		return
 	}
 	writeStarted := time.Now()
 	writeJSON(w, result)
 	if diagnostics {
-		logx.System("browse_http_page status=200 page_us=%d write_us=%d total_us=%d words=%d letters=%d",
+		logx.SystemDiagnostic("browse_http_page status=200 page_us=%d write_us=%d total_us=%d words=%d letters=%d",
 			pageDone.Sub(started).Microseconds(), time.Since(writeStarted).Microseconds(), time.Since(started).Microseconds(), len(result.Words), len(result.Alphabet))
 	}
 }
@@ -1167,7 +1168,7 @@ func (s *Server) browsePage(q url.Values) (result browseResp, retErr error) {
 				status = failure.status
 			}
 		}
-		logx.System("browse_page_detail dict=%q source=%s at_len=%d requested_page=%d page=%d offset=%d stage=%s status=%d lookup_us=%d index_check_us=%d open_us=%d alphabet_us=%d locate_us=%d locate_anchor_us=%d locate_count_us=%d locate_anchor_ordinal=%d locate_count_rows=%d page_read_us=%d total_us=%d words=%d alphabet_computed=%d response_letters=%d",
+		logx.SystemDiagnostic("browse_page_detail dict=%q source=%s at_len=%d requested_page=%d page=%d offset=%d stage=%s status=%d lookup_us=%d index_check_us=%d open_us=%d alphabet_us=%d locate_us=%d locate_anchor_us=%d locate_count_us=%d locate_anchor_ordinal=%d locate_count_rows=%d page_read_us=%d total_us=%d words=%d alphabet_computed=%d response_letters=%d",
 			dictID, pageSource, atLength, requestedPage, resolvedPage, effectiveOffset, stage, status,
 			lookupTime.Microseconds(), indexCheck.Microseconds(), openTime.Microseconds(), alphabetTime.Microseconds(), locateTime.Microseconds(), locateAnchorTime.Microseconds(), locateCountTime.Microseconds(), locateAnchorOrdinal, locateCountRows, pageRead.Microseconds(), time.Since(started).Microseconds(), len(result.Words), alphabetComputed, len(result.Alphabet))
 	}()
@@ -1339,7 +1340,7 @@ func (s *Server) desktopBrowseStream(ctx context.Context, query string, emit fun
 	progressAt, progressTotal, letterCount := atomic.Int64{}, atomic.Int64{}, atomic.Int64{}
 	phases := []string{"dictionary_lookup", "dictionary_open", "page_read", "alphabet_stream", "complete"}
 	if diagnostics {
-		logx.System("browse_stream event=start transport=desktop dict=%q", q.Get("dict"))
+		logx.SystemDiagnostic("browse_stream event=start transport=desktop dict=%q", q.Get("dict"))
 		stop := make(chan struct{})
 		go func() {
 			ticker := time.NewTicker(5 * time.Second)
@@ -1351,14 +1352,14 @@ func (s *Server) desktopBrowseStream(ctx context.Context, query string, emit fun
 				case <-ctx.Done():
 					return
 				case <-ticker.C:
-					logx.System("browse_stream event=slow_phase transport=desktop dict=%q phase=%s elapsed_ms=%d progress_at=%d total=%d letters=%d",
+					logx.SystemDiagnostic("browse_stream event=slow_phase transport=desktop dict=%q phase=%s elapsed_ms=%d progress_at=%d total=%d letters=%d",
 						q.Get("dict"), phases[min(int(phase.Load()), len(phases)-1)], time.Since(started).Milliseconds(), progressAt.Load(), progressTotal.Load(), letterCount.Load())
 				}
 			}
 		}()
 		defer func() {
 			close(stop)
-			logx.System("browse_stream event=finished transport=desktop dict=%q phase=%s elapsed_ms=%d progress_at=%d total=%d letters=%d canceled=%t",
+			logx.SystemDiagnostic("browse_stream event=finished transport=desktop dict=%q phase=%s elapsed_ms=%d progress_at=%d total=%d letters=%d canceled=%t",
 				q.Get("dict"), phases[min(int(phase.Load()), len(phases)-1)], time.Since(started).Milliseconds(), progressAt.Load(), progressTotal.Load(), letterCount.Load(), ctx.Err() != nil)
 		}()
 	}
@@ -1374,7 +1375,7 @@ func (s *Server) desktopBrowseStream(ctx context.Context, query string, emit fun
 	}
 	fail := func(status int, err error) error {
 		if diagnostics {
-			logx.System("browse_stream event=error transport=desktop dict=%q phase=%s status=%d error=%q",
+			logx.SystemDiagnostic("browse_stream event=error transport=desktop dict=%q phase=%s status=%d error=%q",
 				q.Get("dict"), phases[min(int(phase.Load()), len(phases)-1)], status, err)
 		}
 		return send(browseStreamEvent{Type: "error", Status: status, Error: err.Error()})
@@ -1465,7 +1466,7 @@ func (s *Server) desktopBrowseStream(ctx context.Context, query string, emit fun
 			return ctx.Err()
 		}
 		if diagnostics {
-			logx.System("browse_stream event=error transport=desktop dict=%q phase=alphabet_stream error=%q", q.Get("dict"), err)
+			logx.SystemDiagnostic("browse_stream event=error transport=desktop dict=%q phase=alphabet_stream error=%q", q.Get("dict"), err)
 		}
 		return send(browseStreamEvent{Type: "error", Error: err.Error()})
 	}
@@ -1493,7 +1494,7 @@ func (s *Server) handleBrowseStream(w http.ResponseWriter, r *http.Request) {
 					return
 				case <-ticker.C:
 					index := min(int(phase.Load()), len(phaseNames)-1)
-					logx.System("browse_stream event=slow_phase phase=%s elapsed_ms=%d progress_at=%d total=%d letters=%d",
+					logx.SystemDiagnostic("browse_stream event=slow_phase phase=%s elapsed_ms=%d progress_at=%d total=%d letters=%d",
 						phaseNames[index], time.Since(started).Milliseconds(), progressAt.Load(), progressTotal.Load(), letterCount.Load())
 				}
 			}
@@ -1501,7 +1502,7 @@ func (s *Server) handleBrowseStream(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			close(stopHeartbeat)
 			index := min(int(phase.Load()), len(phaseNames)-1)
-			logx.System("browse_stream event=finished phase=%s elapsed_ms=%d progress_at=%d total=%d letters=%d",
+			logx.SystemDiagnostic("browse_stream event=finished phase=%s elapsed_ms=%d progress_at=%d total=%d letters=%d",
 				phaseNames[index], time.Since(started).Milliseconds(), progressAt.Load(), progressTotal.Load(), letterCount.Load())
 		}()
 	}

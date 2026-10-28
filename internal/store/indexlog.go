@@ -20,10 +20,12 @@ const indexLogLimit = logx.SystemLogLimit
 
 var indexLogID atomic.Uint64
 
-func init()                                      { logx.SetSystemLogRoot(DefaultDBDir) }
-func indexLogDir() string                        { return filepath.Clean(DefaultDBDir()) + ".logs" }
-func IndexDiagnostic(format string, args ...any) { logx.System(format, args...) }
-func IndexLog() ([]byte, error)                  { return logx.SystemSnapshot() }
+func init()               { logx.SetSystemLogRoot(DefaultDBDir) }
+func indexLogDir() string { return filepath.Clean(DefaultDBDir()) + ".logs" }
+func IndexDiagnostic(format string, args ...any) {
+	logx.SystemDiagnosticIf(ingestParallelismDiagnostics.Load(), format, args...)
+}
+func IndexLog() ([]byte, error) { return logx.SystemSnapshot() }
 
 type indexTrace struct {
 	id          string

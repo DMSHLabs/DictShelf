@@ -63,7 +63,7 @@ func (s *Server) mergedBrowseFromWildcard(ctx context.Context, q url.Values, ids
 		_ = db.Close()
 		if err == nil && saved == signature.String() {
 			if browseFindDiagnosticEnabled(ctx) {
-				logx.System("headword_merged_browse stage=cache_hit lock_ms=%d probe_ms=%d total_ms=%d", lockMS, time.Since(probeStarted).Milliseconds(), time.Since(started).Milliseconds())
+				logx.SystemDiagnostic("headword_merged_browse stage=cache_hit lock_ms=%d probe_ms=%d total_ms=%d", lockMS, time.Since(probeStarted).Milliseconds(), time.Since(started).Milliseconds())
 			}
 			return readMergedBrowsePage(ctx, path, q, cacheID)
 		}
@@ -341,7 +341,7 @@ func (s *Server) mergedBrowseFromWildcard(ctx context.Context, q url.Values, ids
 		return browseResp{}, err
 	}
 	if browseFindDiagnosticEnabled(ctx) {
-		logx.System("headword_merged_browse stage=built cache=wildcard_results source_words=%d unique_words=%d dictionaries=%d lock_ms=%d probe_ms=%d source_open_ms=%d source_meta_ms=%d source_counts_ms=%d setup_ms=%d stage_insert_ms=%d sort_insert_ms=%d finalize_ms=%d total_ms=%d",
+		logx.SystemDiagnostic("headword_merged_browse stage=built cache=wildcard_results source_words=%d unique_words=%d dictionaries=%d lock_ms=%d probe_ms=%d source_open_ms=%d source_meta_ms=%d source_counts_ms=%d setup_ms=%d stage_insert_ms=%d sort_insert_ms=%d finalize_ms=%d total_ms=%d",
 			all, unique, matched, lockMS, probeMS, sourceOpenMS, metaMS, countsMS, setupMS, stageInsertMS, sortInsertMS, time.Since(finalizeStarted).Milliseconds(), time.Since(started).Milliseconds())
 	}
 	return readMergedBrowsePage(ctx, path, q, cacheID)
