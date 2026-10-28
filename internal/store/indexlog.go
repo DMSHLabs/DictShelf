@@ -26,6 +26,7 @@ func IndexDiagnostic(format string, args ...any) {
 	logx.SystemDiagnosticIf(ingestParallelismDiagnostics.Load(), format, args...)
 }
 func IndexLog() ([]byte, error) { return logx.SystemSnapshot() }
+func ClearIndexLog() error      { return logx.ClearSystemLog() }
 
 type indexTrace struct {
 	id          string

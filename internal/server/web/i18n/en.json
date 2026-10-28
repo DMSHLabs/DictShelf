@@ -28,7 +28,11 @@
   "export.failed": "Could not export headwords: {error}",
   "export.saved": "{done} of {total} exported",
 
-  "panel.saveSystemLog": "Save System Log…",
+  "panel.saveSystemLog": "Save",
+  "panel.clearSystemLog": "Clear",
+  "panel.clearSystemLogTitle": "Clear System Log?",
+  "panel.clearSystemLogHint": "This permanently deletes saved System Log history and older crash details. New log entries will continue to be recorded.",
+  "panel.clearSystemLogFailed": "Could not clear the System Log.",
   "panel.systemLogSavedTitle": "System Log saved",
   "panel.systemLogSavedPath": "Saved to {path}",
   "panel.showInFolder": "Show in folder",

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/wuweidict/wudict/internal/store"
 )
 
 func systemLogDownloadPath(filename string) (string, error) {
@@ -537,6 +538,11 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 			return map[string]string{"filename": filename, "path": path}, nil
 		}
 		return map[string]string{"content": string(content), "filename": filename}, nil
+	case "clearSystemLog":
+		if err := store.ClearIndexLog(); err != nil {
+			return nil, fmt.Errorf("could not clear system log: %w", err)
+		}
+		return map[string]bool{"cleared": true}, nil
 	case "revealSystemLog":
 		path, err := systemLogDownloadPath(argument)
 		if err != nil {
