@@ -1867,7 +1867,8 @@ async function loadPrefs(){
       resultCacheLimitGB=Number(st.ui.resultCacheLimitGB)||defaultResultCacheLimitGB();resultCacheNoLimit=!!st.ui.resultCacheNoLimit;syncResultCacheLimitUI();
       searchReturnCacheStorage=st.ui.searchReturnCache==="memory"?"memory":"disk";syncSearchReturnCacheUI();
       countAllResultsInBackground=typeof st.ui.countAllResultsInBackground==="boolean"
-        ?st.ui.countAllResultsInBackground:st.ui.skipBackgroundResultCount===false;
+        ?st.ui.countAllResultsInBackground:typeof st.ui.skipBackgroundResultCount==="boolean"
+          ?!st.ui.skipBackgroundResultCount:true;
       $("countAllResultsInBackground").checked=countAllResultsInBackground;
       combinedDictionaryLimit=Math.max(1,Math.min(Number(st.ui.combinedDictionaryLimit)||defaultCombinedDictionaryLimit,maxCombinedDictionaryLimit));syncCombinedDictionaryLimitUI()}
     syncUpdateControls();restoreCachedUpdate();

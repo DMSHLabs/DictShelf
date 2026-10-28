@@ -51,6 +51,12 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 	}
 	user := UserDir(userDir)
 	prefs := LoadPrefs(user.State())
+	if err := prefs.recordAppVersion(version); err != nil {
+		logx.Warn("could not record app version in %s: %v", StateFile, err)
+	}
+	if err := config.RecordAppVersion(userPath, version); err != nil {
+		logx.Warn("could not record app version in %s: %v", config.Name, err)
+	}
 	mode, modeSaved := prefs.indexingMode()
 	modeSource := "state"
 	if !modeSaved {
@@ -98,6 +104,9 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 		logx.V("memory limit: %d MB", cfg.MemoryLimit>>20)
 	}
 	s.Version = version
+	if err := s.recordUserStorageAppVersion(); err != nil {
+		logx.Warn("could not record app version in %s and %s: %v", SettingsFile, SearchHistoryFile, err)
+	}
 	s.DictDirOrigin = cfg.Origin("DICT_DIR")
 	s.DictDirEditable = cfg.EditableInFile("DICT_DIR")
 	s.ConfigProblems = cfg.Problems
