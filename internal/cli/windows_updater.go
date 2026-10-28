@@ -320,7 +320,7 @@ func downloadWindowsUpdate(asset windowsUpdateAsset, destination string, progres
 	if progress != nil {
 		progress(100)
 	}
-	if err := os.Rename(name, destination); err != nil {
+	if err := moveWindowsFile(name, destination); err != nil {
 		_ = os.Remove(name)
 		return fmt.Errorf("could not move the update into place: %w", err)
 	}

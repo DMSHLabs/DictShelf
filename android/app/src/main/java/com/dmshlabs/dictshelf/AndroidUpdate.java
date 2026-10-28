@@ -38,8 +38,8 @@ final class AndroidUpdate {
         JSONObject request = new JSONObject(payload);
         switch (request.optString("action", "download")) {
             case "download": return start(activity, payload);
-            case "status": return status(activity);
-            case "install": return install(activity);
+            case "status": return status(activity, request);
+            case "install": return install(activity, request);
             default: throw new IllegalArgumentException("Unknown Android update action");
         }
     }
@@ -63,6 +63,12 @@ final class AndroidUpdate {
 
         DownloadManager manager = (DownloadManager) activity.getSystemService(Context.DOWNLOAD_SERVICE);
         if (manager == null) throw new IllegalStateException("Downloads are unavailable");
+        JSONObject existing = status(activity, request);
+        String existingState = existing.optString("state");
+        if ("ready".equals(existingState) || "downloading".equals(existingState))
+            return existing.put("ok", true);
+        android.content.SharedPreferences prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        clearDownload(manager, prefs, prefs.getLong(KEY_ID, -1));
         DownloadManager.Request download = new DownloadManager.Request(uri)
                 .setTitle(activity.getString(R.string.update_download_title))
                 .setDescription(activity.getString(R.string.update_download_description))
@@ -71,27 +77,37 @@ final class AndroidUpdate {
                 .setAllowedOverMetered(true)
                 .setAllowedOverRoaming(false)
                 .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS,
-                        "DictShelf-" + version + ".apk");
+                        "DictShelf-" + version + "-" + sha.substring(0, 12) + "-"
+                                + Long.toString(System.currentTimeMillis(), 36) + ".apk");
         long id = manager.enqueue(download);
-        activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+        prefs.edit()
                 .putLong(KEY_ID, id).putString(KEY_SHA, sha)
                 .putString(KEY_VERSION, version).putBoolean(KEY_VERIFIED, false).apply();
         return new JSONObject().put("ok", true).put("downloadId", id).put("state", "downloading");
     }
 
-    private static JSONObject status(Activity activity) throws Exception {
+    private static JSONObject status(Activity activity, JSONObject request) throws Exception {
         if (!available()) throw new SecurityException("Android updates are unavailable in this distribution");
         android.content.SharedPreferences prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         long id = prefs.getLong(KEY_ID, -1);
         String version = prefs.getString(KEY_VERSION, "");
+        String sha = prefs.getString(KEY_SHA, "");
         if (id < 0) return new JSONObject().put("state", "none");
         DownloadManager manager = (DownloadManager) activity.getSystemService(Context.DOWNLOAD_SERVICE);
         if (manager == null) throw new IllegalStateException("Downloads are unavailable");
+        String expectedVersion = request.optString("version", "");
+        if (!expectedVersion.isEmpty()) {
+            String expectedSha = expectedSha256(request);
+            if (!expectedVersion.equals(version) || !expectedSha.equalsIgnoreCase(sha)) {
+                clearDownload(manager, prefs, id);
+                return new JSONObject().put("state", "none");
+            }
+        }
         try (android.database.Cursor cursor = manager.query(new DownloadManager.Query().setFilterById(id))) {
             if (cursor == null || !cursor.moveToFirst()) return new JSONObject().put("state", "none");
             int state = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
             if (state == DownloadManager.STATUS_FAILED) {
-                return new JSONObject().put("state", "failed").put("version", version);
+                return new JSONObject().put("state", "failed").put("version", version).put("sha256", sha);
             }
             if (state != DownloadManager.STATUS_SUCCESSFUL) {
                 long downloaded = cursor.getLong(cursor.getColumnIndexOrThrow(
@@ -99,28 +115,28 @@ final class AndroidUpdate {
                 long total = cursor.getLong(cursor.getColumnIndexOrThrow(
                         DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
                 int progress = total > 0 ? (int) Math.min(100, downloaded * 100 / total) : -1;
-                return new JSONObject().put("state", "downloading").put("version", version)
+                return new JSONObject().put("state", "downloading").put("version", version).put("sha256", sha)
                         .put("progress", progress);
             }
             Uri apk = manager.getUriForDownloadedFile(id);
-            if (apk == null) return new JSONObject().put("state", "failed").put("version", version);
+            if (apk == null) return new JSONObject().put("state", "failed").put("version", version).put("sha256", sha);
             if (!prefs.getBoolean(KEY_VERIFIED, false)) {
                 String actual = sha256(activity, apk);
                 if (!actual.equalsIgnoreCase(prefs.getString(KEY_SHA, ""))) {
                     manager.remove(id);
                     prefs.edit().putBoolean(KEY_VERIFIED, false).apply();
-                    return new JSONObject().put("state", "failed").put("version", version);
+                    return new JSONObject().put("state", "failed").put("version", version).put("sha256", sha);
                 }
                 prefs.edit().putBoolean(KEY_VERIFIED, true).apply();
             }
-            return new JSONObject().put("state", "ready").put("version", version);
+            return new JSONObject().put("state", "ready").put("version", version).put("sha256", sha);
         }
     }
 
-    private static JSONObject install(Activity activity) throws Exception {
+    private static JSONObject install(Activity activity, JSONObject request) throws Exception {
         activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putBoolean(KEY_VERIFIED, false).apply();
-        JSONObject current = status(activity);
+        JSONObject current = status(activity, request);
         if (!"ready".equals(current.optString("state")))
             return new JSONObject().put("error", "The downloaded APK is not ready to install");
         if (Build.VERSION.SDK_INT >= 26
@@ -137,6 +153,21 @@ final class AndroidUpdate {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
         activity.startActivity(install);
         return new JSONObject().put("ok", true);
+    }
+
+    private static String expectedSha256(JSONObject request) throws Exception {
+        JSONObject apks = request.optJSONObject("androidApks");
+        if (apks == null) throw new IllegalArgumentException("No Android APK is listed for this release");
+        String sha = chooseAsset(apks).optString("sha256", "").toLowerCase(Locale.ROOT);
+        if (!sha.matches("[0-9a-f]{64}")) throw new IllegalArgumentException("Invalid APK checksum");
+        return sha;
+    }
+
+    private static void clearDownload(DownloadManager manager,
+            android.content.SharedPreferences prefs, long id) {
+        if (id >= 0) manager.remove(id);
+        prefs.edit().remove(KEY_ID).remove(KEY_SHA).remove(KEY_VERSION)
+                .remove(KEY_VERIFIED).apply();
     }
 
     private static JSONObject chooseAsset(JSONObject apks) throws Exception {
@@ -179,9 +210,9 @@ final class AndroidUpdate {
         android.content.SharedPreferences prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         if (id < 0 || prefs.getLong(KEY_ID, -1) != id) return;
         try {
-            JSONObject current = status(activity);
+            JSONObject current = status(activity, new JSONObject());
             if ("ready".equals(current.optString("state"))) {
-                activity.notifyAndroidUpdateReady(current.optString("version"));
+                activity.notifyAndroidUpdateReady(current.optString("version"), current.optString("sha256"));
             } else if ("failed".equals(current.optString("state"))) {
                 activity.notifyAndroidUpdateFailed();
             }
