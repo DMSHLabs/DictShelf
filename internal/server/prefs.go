@@ -69,8 +69,12 @@ type UIPrefs struct {
 	UpdateNotificationsOff bool   `json:"updateNotificationsOff,omitempty"` // notifications are on unless disabled
 	ResultCacheLimitGB     int    `json:"resultCacheLimitGB,omitempty"`
 	ResultCacheNoLimit     bool   `json:"resultCacheNoLimit,omitempty"`
-	// SkipBackgroundResultCount leaves the initial results uncounted until the reader requests more.
-	SkipBackgroundResultCount bool   `json:"skipBackgroundResultCount,omitempty"`
+	// CountAllResultsInBackground opts in to the background pass that counts
+	// every match after the initial results. Nil means off on a new profile.
+	CountAllResultsInBackground *bool `json:"countAllResultsInBackground,omitempty"`
+	// SkipBackgroundResultCount is the legacy opt-out key. Keep reading it so
+	// profiles that explicitly disabled the old default remain disabled.
+	SkipBackgroundResultCount bool `json:"skipBackgroundResultCount,omitempty"`
 	SearchReturnCache         string `json:"searchReturnCache,omitempty"`
 	CombinedDictionaryLimit   int    `json:"combinedDictionaryLimit,omitempty"`
 	DictIconsOff              bool   `json:"dictIconsOff,omitempty"`
