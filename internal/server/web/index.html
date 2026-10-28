@@ -1404,7 +1404,7 @@ function pumpArticleResultCaches(){
   if(!articleCacheAbort)articleCacheAbort=new AbortController();
   if(!maskTaskIDs.has("search-results"))
     maskTaskStart("search-results",tx("search.countingArticles"),cancelArticleResultCaches,
-      {done:articleCacheFinished,total:articleCacheTotal});
+      {done:articleCacheFinished,total:articleCacheTotal,background:true});
   while(articleCacheActive<2&&articleCacheQueue.length){
     const state=articleCacheQueue.shift(),generation=articleCacheSeq;
     state.started=true;articleCacheActive++;
@@ -7767,7 +7767,7 @@ function maskPrefetchBasePage(row,page,generation=maskGeneration){
 const maskTaskIDs=new Map();
 function maskTaskStart(type,message,stop,progress={}){
   const old=maskTaskIDs.get(type);if(old?.id)window.wudictTasks?.finish(old.id);
-  const task={id:0,message,stop,done:progress.done||0,total:progress.total||0,children:progress.children||[]};maskTaskIDs.set(type,task);
+  const task={id:0,message,stop,done:progress.done||0,total:progress.total||0,children:progress.children||[],background:progress.background===true};maskTaskIDs.set(type,task);
   if(window.wudictTasks)task.id=window.wudictTasks.start(type,message,{...progress,stop});
   return task.id;
 }
@@ -7807,7 +7807,7 @@ function maskProgressTraceFinish(row,trace,status){
 }
 function maskTaskFinish(type){const task=maskTaskIDs.get(type);if(task?.id)window.wudictTasks?.finish(task.id);maskTaskIDs.delete(type)}
 function maskTaskFinishAll(){for(const type of maskTaskIDs.keys())maskTaskFinish(type)}
-window.addEventListener("wudict-tasks-ready",()=>{for(const [type,task] of maskTaskIDs)if(!task.id)task.id=window.wudictTasks.start(type,task.message,{stop:task.stop,done:task.done,total:task.total,children:task.children})});
+window.addEventListener("wudict-tasks-ready",()=>{for(const [type,task] of maskTaskIDs)if(!task.id)task.id=window.wudictTasks.start(type,task.message,{stop:task.stop,done:task.done,total:task.total,children:task.children,background:task.background})});
 function maskFindCommittedRows(){
   const committed=[];
   for(const row of maskFindRows){

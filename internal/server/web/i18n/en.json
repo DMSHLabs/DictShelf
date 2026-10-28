@@ -968,6 +968,7 @@
   "search.searching": "Searching…",
   "search.progress": "Searched {done} of {total} dictionaries",
   "search.countingArticles": "Counting matching articles…",
+  "work.backgroundProgress": "Background task progress",
   "search.fullListUnavailable": "Complete list unavailable",
   "search.stop": "Stop",
   "search.emptyDict": "No results in this dictionary",
