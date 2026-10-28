@@ -1714,7 +1714,8 @@ $("hlBtn").addEventListener("click",()=>{
 });
 applyHL(true,false);
 /* Read aloud (D148). Off costs nothing: no listener, no fetch, no voice list.
-   On, and until a reader first selects text in an article, it costs two
+   On, and until a reader first selects text in an article or its headword
+   (the <dt> beside the article's shadow root), it costs two
    listeners — speak.js itself, and with it the platform speech engine, is
    fetched by that first selection and never before. After that speak.js owns
    the listening and this gate steps aside.
@@ -1739,7 +1740,14 @@ function speakDown(e){
   speakRoot=(host&&host.shadowRoot)||null;
 }
 function speakSel(){
-  if(!speakRoot||!speakCan())return;
+  if(!speakCan())return;
+  // A selection starting in a headword; speak.js decides how far past it may run.
+  try{
+    const s=document.getSelection(),n=s.rangeCount?s.getRangeAt(0).startContainer:null;
+    const el=n&&(n.nodeType===1?n:n.parentElement);
+    if(el&&el.closest("details.dict>dl>dt")&&String(s).trim()){speakWake();return}
+  }catch(_){}
+  if(!speakRoot)return;
   let t="";
   try{t=String(speakRoot.getSelection?speakRoot.getSelection():document.getSelection()).trim()}catch(_){}
   // Safari has no shadow-root selection and flattens the document's to the

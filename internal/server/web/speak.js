@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-// wudict read-aloud (D148): select text in an article, tap the speaker, hear
-// it in the system voice. Fetched by index.html on the first selection inside
-// an article and never before, so a reader who does not select text pays for
+// wudict read-aloud (D148): select text in an article or its headword, tap the
+// speaker, hear it in the system voice. Fetched by index.html on the first
+// such selection and never before, so a reader who does not select text pays for
 // nothing but two listeners, and one who switched it off not even those.
 //
 // Web Speech only. The Android shell has no working speechSynthesis in its
@@ -328,30 +328,39 @@ function setStash(st) {
 // The language a selection is read in: picked in the menu for this
 // selection, else picked for this dictionary and script, else decided. The
 // alternatives "Read as" offers: the decided language, the one decided without
-// the default voice (the guess it replaced), and the dictionary's two.
+// the default voice (the guess it replaced), the dictionary's two, and for a
+// headword the articles' pick it follows when it has none of its own.
 function relang(st) {
-  st.auto = decide(st.sc, st.a, st.h, ttsLang);
+  // A headword is in the headword language whatever its script shares with
+  // the articles: it settles the Latin/Latin pairs the script cannot split.
+  const [p, q] = st.kind === "head" ? [st.h, st.a] : [st.a, st.h];
+  st.auto = decide(st.sc, p, q, ttsLang);
   st.lang = st.pick || storedLang(st) || st.auto;
-  const plain = decide(st.sc, st.a, st.h, "");
-  st.alts = [...new Set([st.auto, plain, st.a, st.h])]
+  const plain = decide(st.sc, p, q, "");
+  st.alts = [...new Set([st.auto, plain, st.a, st.h, inherited(st)])]
     .filter(l => l && l !== st.lang && (!st.sc || fits(l, st.sc)));
 }
 
 // A language picked in the menu is kept per dictionary and script: an en→ru
 // dictionary may want German for its Latin text and still Russian for its
-// Cyrillic. Picking the decided language forgets the pick.
-const langKey = st => st.dict && st.sc ? LANG_KEY + st.sc + "_" + st.dict : "";
+// Cyrillic. Headwords keep their own: an en→fr pick of French for the articles
+// is not one for them. In a dictionary whose languages are both unknown they
+// follow the articles' pick until they are given their own.
+const langKey = (st, head = st.kind === "head") => st.dict && st.sc ?
+  LANG_KEY + (head ? "h" : "") + st.sc + "_" + st.dict : "";
 
-function storedLang(st) {
-  const k = langKey(st);
+function readLang(st, k) {
   let v = null;
   if (k) try { v = localStorage.getItem(k) } catch (_) { }
   return v && /^[a-z]{2,3}$/.test(v) && fits(v, st.sc) ? v : "";
 }
+const inherited = st => st.kind === "head" && !st.a && !st.h ? readLang(st, langKey(st, false)) : "";
+const storedLang = st => readLang(st, langKey(st)) || inherited(st);
 
 function choose(L) {
   const k = langKey(stash);
-  if (k) try { L === stash.auto ? localStorage.removeItem(k) : localStorage.setItem(k, L) } catch (_) { }
+  // Picking what the selection gets without a pick of its own forgets the pick.
+  if (k) try { L === (inherited(stash) || stash.auto) ? localStorage.removeItem(k) : localStorage.setItem(k, L) } catch (_) { }
   stash.pick = L;
   relang(stash);
   syncMore();
@@ -646,11 +655,70 @@ function readShadow() {
   return text ? { kind: "shadow", text, range, dict: host.dataset.dict || "", ptr } : null;
 }
 
+// The headword: a <dt> in the page's own DOM, beside the article's shadow
+// root. The selection starts in it and ends in it, or just past it with
+// nothing selected in between, as a triple click's does. One that runs on
+// into the article is a mixed selection and gets no button.
+function readHead() {
+  const doc = document.getSelection();
+  if (!doc || !doc.rangeCount) return null;
+  const sr = doc.getRangeAt(0), n = sr.startContainer;
+  const el = n.nodeType === Node.ELEMENT_NODE ? n : n.parentElement;
+  const head = el && el.closest("details.dict>dl>dt");
+  if (!head || sr.collapsed) return null;
+  const range = sr.cloneRange(), dd = head.nextElementSibling;
+  if (!head.contains(range.endContainer)) {
+    if (!nothingPast(doc, sr, head, dd && dd.firstElementChild)) return null;
+    range.setEnd(head, head.childNodes.length);
+  }
+  const text = range.toString().trim();
+  return text ? { kind: "head", text, range, dict: (dd && dd.dataset.dict) || "", ptr } : null;
+}
+
+// Chrome ends the document range of a triple click and of a drag into the
+// article alike at the shadow host, or past the article when it opens inline;
+// only the composed range shows whether article text is in it, and it stays
+// at (host, 0) when none is. Without one, an end at or past the host is a
+// drag as far as we can tell.
+function nothingPast(doc, sr, head, art) {
+  const sh = art && art.shadowRoot;
+  let c = sr.endContainer, o = sr.endOffset, cr = null;
+  if (sh && doc.getComposedRanges) {
+    try { cr = doc.getComposedRanges({ shadowRoots: [sh] })[0] }
+    catch (_) { try { cr = doc.getComposedRanges(sh)[0] } catch (_) { } }
+    if (cr) { c = cr.endContainer; o = cr.endOffset }
+  }
+  const t = document.createRange(), r = c.getRootNode();
+  if (sh && r === sh) t.setStart(sh, 0);
+  else if (r === document) t.setStart(head, head.childNodes.length);
+  else return false;
+  t.setEnd(c, o);
+  if (seesText(t)) return false;
+  return (cr && c === art && o === 0) || !(art && t.intersectsNode(art));
+}
+
+// Whether a range covers text a reader can see. toString also counts what is
+// never rendered (the <style> an article's shadow root opens with, <title>,
+// display:none), and such text has no layout box.
+function seesText(r) {
+  const w = document.createTreeWalker(r.commonAncestorContainer, NodeFilter.SHOW_TEXT), box = document.createRange();
+  for (let n = w.nextNode(); n; n = w.nextNode()) {
+    if (r.comparePoint(n, 0) > 0) break;
+    if (!r.intersectsNode(n)) continue;
+    const a = n === r.startContainer ? r.startOffset : 0, b = n === r.endContainer ? r.endOffset : n.data.length;
+    if (!n.data.slice(a, b).trim()) continue;
+    box.setStart(n, a);
+    box.setEnd(n, b);
+    if (box.getClientRects().length) return true;
+  }
+  return false;
+}
+
 function settle() {
   if (btn) return; // the drag is still going; pointerup settles it
-  const st = readShadow();
+  const st = readShadow() || readHead();
   if (st) { setStash(st); return }
-  if (stash && stash.kind === "shadow") { selLive = false; hide() }
+  if (stash && stash.kind !== "frame") { selLive = false; hide() }
 }
 
 function schedule(ms) { clearTimeout(settleT); settleT = setTimeout(settle, ms) }
