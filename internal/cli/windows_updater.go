@@ -323,15 +323,71 @@ func launchPortableReplacement(download, target string, pid int, sha256, failure
 	if err != nil {
 		return fmt.Errorf("could not locate the portable update helper: %w", err)
 	}
-	cmd := exec.Command(exe, windowsUpdateHelperArg, strconv.Itoa(pid), target, download, sha256, failureText)
+	helperExe, err := copyWindowsUpdaterHelper(exe)
+	if err != nil {
+		return fmt.Errorf("could not prepare the portable update helper: %w", err)
+	}
+	cmd := exec.Command(helperExe, windowsUpdateHelperArg, strconv.Itoa(pid), target, download, sha256, failureText)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	if err := cmd.Start(); err != nil {
+		_ = os.Remove(helperExe)
 		return fmt.Errorf("could not start the portable update helper: %w", err)
 	}
+	_ = cmd.Process.Release()
 	return nil
 }
 
 const windowsUpdateHelperArg = "--dictshelf-update-helper"
+const windowsUpdaterHelperEnv = "DICTShelf_UPDATER_HELPER_COPY"
+
+func copyWindowsUpdaterHelper(exe string) (string, error) {
+	source, err := os.Open(exe)
+	if err != nil {
+		return "", err
+	}
+	defer source.Close()
+	target, err := os.CreateTemp(os.TempDir(), "DictShelf-updater-*.exe")
+	if err != nil {
+		return "", err
+	}
+	path := target.Name()
+	if _, err := io.Copy(target, source); err != nil {
+		_ = target.Close()
+		_ = os.Remove(path)
+		return "", err
+	}
+	if err := target.Close(); err != nil {
+		_ = os.Remove(path)
+		return "", err
+	}
+	return path, nil
+}
+
+// A fresh app process removes a helper copy after its source process exits.
+// The helper cannot delete its own executable while Windows has it mapped.
+func cleanupWindowsUpdaterHelperState() {
+	if path, ok := os.LookupEnv(windowsUpdaterHelperEnv); ok {
+		_ = os.Unsetenv(windowsUpdaterHelperEnv)
+		if path != "" {
+			go func() {
+				for range 120 {
+					if err := os.Remove(path); err == nil || errors.Is(err, os.ErrNotExist) {
+						return
+					}
+					time.Sleep(500 * time.Millisecond)
+				}
+			}()
+		}
+	}
+	current, _ := os.Executable()
+	if entries, err := filepath.Glob(filepath.Join(os.TempDir(), "DictShelf-updater-*.exe")); err == nil {
+		for _, path := range entries {
+			if !strings.EqualFold(filepath.Clean(path), filepath.Clean(current)) {
+				_ = os.Remove(path)
+			}
+		}
+	}
+}
 
 // runWindowsUpdateHelper is dispatched before normal startup so the helper
 // does not acquire the desktop instance lock or initialize the main window.
@@ -350,7 +406,8 @@ func runWindowsUpdateHelper(args []string) bool {
 		return true
 	}
 	exe, err := os.Executable()
-	if err != nil || !strings.EqualFold(filepath.Clean(exe), filepath.Clean(args[2])) ||
+	if err != nil || !strings.HasPrefix(strings.ToLower(filepath.Base(exe)), "dictshelf-updater-") ||
+		strings.EqualFold(filepath.Clean(exe), filepath.Clean(args[2])) ||
 		!strings.EqualFold(filepath.Base(args[2]), "DictShelf.exe") ||
 		!strings.EqualFold(filepath.Clean(args[3]), filepath.Join(filepath.Dir(args[2]), "_DictShelf.exe")) {
 		tray.Alert("DictShelf", args[5])
@@ -378,15 +435,15 @@ func runWindowsUpdateHelper(args []string) bool {
 			tray.Alert("DictShelf", args[5]+"\n\n"+err.Error()+"\n\nCould not restore the previous executable: "+restoreErr.Error())
 			return true
 		}
-		_ = startWindowsExecutable(target)
+		_ = startWindowsExecutable(target, exe)
 		tray.Alert("DictShelf", args[5]+"\n\n"+err.Error())
 		return true
 	}
-	if err := startWindowsExecutable(target); err != nil {
+	if err := startWindowsExecutable(target, exe); err != nil {
 		_ = moveWindowsFile(target, download)
 		restoreErr := moveWindowsFile(backup, target)
 		if restoreErr == nil {
-			_ = startWindowsExecutable(target)
+			_ = startWindowsExecutable(target, exe)
 		} else {
 			err = fmt.Errorf("%w; could not restore the previous executable: %v", err, restoreErr)
 		}
@@ -427,9 +484,18 @@ func moveWindowsFile(from, to string) error {
 	return windows.MoveFileEx(fromPtr, toPtr, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH)
 }
 
-func startWindowsExecutable(path string) error {
+func startWindowsExecutable(path, helperPath string) error {
 	cmd := exec.Command(path)
 	cmd.Dir = filepath.Dir(path)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	return cmd.Start()
+	for _, entry := range os.Environ() {
+		if !strings.HasPrefix(strings.ToUpper(entry), strings.ToUpper(windowsUpdaterHelperEnv)+"=") {
+			cmd.Env = append(cmd.Env, entry)
+		}
+	}
+	cmd.Env = append(cmd.Env, windowsUpdaterHelperEnv+"="+helperPath)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return cmd.Process.Release()
 }

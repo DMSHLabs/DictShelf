@@ -29,6 +29,7 @@ import org.json.JSONObject;
 
 final class SystemLogExport {
     private static final int REQUEST = 0x574c;
+    private static final int ARTICLE_REQUEST = 0x574d;
     private static final Object EXPORT_LOCK = new Object();
 
     static void start(Activity a) {
@@ -44,7 +45,75 @@ final class SystemLogExport {
         a.startActivityForResult(intent, REQUEST);
     }
 
+    static void startArticle(Activity a, String request) throws Exception {
+        JSONObject value = new JSONObject(request);
+        String filename = value.optString("filename", "article.html");
+        if (!filename.matches("[^\\\\/:*?\"<>|]{1,180}\\.html")) filename = "article.html";
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT)
+                .addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("text/html")
+                .putExtra(Intent.EXTRA_TITLE, filename)
+                .putExtra(DocumentsContract.EXTRA_INITIAL_URI,
+                        DocumentsContract.buildDocumentUri("com.android.externalstorage.documents",
+                                "primary:" + Environment.DIRECTORY_DOWNLOADS));
+        Intent picker = intent;
+        String content = value.toString();
+        a.runOnUiThread(() -> {
+            pendingArticle = content;
+            a.startActivityForResult(picker, ARTICLE_REQUEST);
+        });
+    }
+
+    private static String pendingArticle;
+
     static void result(Activity a, int request, int code, Intent data) {
+        if (request == ARTICLE_REQUEST) {
+            String content = pendingArticle;
+            pendingArticle = null;
+            if (code != Activity.RESULT_OK || data == null || data.getData() == null || content == null) return;
+            Uri destination = data.getData();
+            new Thread(() -> {
+                try {
+                    JSONObject article = new JSONObject(content);
+                    try (OutputStream out = a.getContentResolver().openOutputStream(destination, "wt")) {
+                        if (out == null) throw new java.io.IOException("Cannot open destination");
+                        out.write(article.optString("content", "").getBytes(StandardCharsets.UTF_8));
+                        out.flush();
+                    }
+                    if ("complete".equals(article.optString("mode"))) {
+                        JSONObject resources = article.optJSONObject("resources");
+                        if (resources != null && resources.length() > 0) {
+                            String authority = destination.getAuthority();
+                            String documentId = DocumentsContract.getDocumentId(destination);
+                            String parentId = documentId.contains(":") ? documentId.substring(0, documentId.lastIndexOf('/')) : documentId.substring(0, Math.max(0, documentId.lastIndexOf('/')));
+                            Uri parent = DocumentsContract.buildDocumentUri(authority, parentId);
+                            String baseName = article.optString("filename", "article.html").replaceFirst("(?i)\\.html$", "");
+                            Uri folder = DocumentsContract.createDocument(a.getContentResolver(), parent, DocumentsContract.Document.MIME_TYPE_DIR, baseName + "_files");
+                            if (folder == null) throw new java.io.IOException("Could not create article resource folder");
+                            java.util.Iterator<String> names = resources.keys();
+                            while (names.hasNext()) {
+                                String name = names.next();
+                                if (name.contains("/") || name.contains("\\\\")) throw new java.io.IOException("Invalid article resource name");
+                                String encoded = resources.optString(name, "");
+                                int comma = encoded.indexOf(',');
+                                if (comma < 0) throw new java.io.IOException("Invalid article resource");
+                                String mime = encoded.substring(5, encoded.indexOf(';'));
+                                Uri resource = DocumentsContract.createDocument(a.getContentResolver(), folder, mime, name);
+                                if (resource == null) throw new java.io.IOException("Could not create article resource");
+                                try (OutputStream out = a.getContentResolver().openOutputStream(resource, "wt")) {
+                                    if (out == null) throw new java.io.IOException("Cannot open article resource");
+                                    out.write(android.util.Base64.decode(encoded.substring(comma + 1), android.util.Base64.DEFAULT));
+                                }
+                            }
+                        }
+                    }
+                    a.runOnUiThread(() -> Toast.makeText(a, "Article saved", Toast.LENGTH_LONG).show());
+                } catch (Exception e) {
+                    a.runOnUiThread(() -> Toast.makeText(a, "Could not save article: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                }
+            }, "wudict-article-export").start();
+            return;
+        }
         if (request != REQUEST || code != Activity.RESULT_OK || data == null || data.getData() == null) return;
         Uri destination = data.getData();
         SystemLog.record("System Log export destination selected");

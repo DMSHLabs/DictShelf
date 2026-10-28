@@ -474,6 +474,7 @@ func fail(err error) {
 }
 
 func Main() {
+	cleanupWindowsUpdaterHelperState()
 	if runWindowsUpdateHelper(os.Args[1:]) {
 		return
 	}

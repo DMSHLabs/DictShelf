@@ -8,6 +8,7 @@ package cli
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -50,6 +51,7 @@ var (
 	windowGetPathFromIDList = windowShell32.NewProc("SHGetPathFromIDListW")
 	windowComdlg32          = syscall.NewLazyDLL("comdlg32.dll")
 	windowGetOpenFileName   = windowComdlg32.NewProc("GetOpenFileNameW")
+	windowGetSaveFileName   = windowComdlg32.NewProc("GetSaveFileNameW")
 	windowOle32             = syscall.NewLazyDLL("ole32.dll")
 	windowCoTaskMemFree     = windowOle32.NewProc("CoTaskMemFree")
 	windowSetWindowsHookEx  = windowUser32.NewProc("SetWindowsHookExW")
@@ -141,12 +143,8 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 	desktopWindowMu.Lock()
 	if desktopWindow != nil {
 		w := desktopWindow
-		navigationAddress := desktopWindowAddress
 		desktopWindowMu.Unlock()
 		w.Dispatch(func() {
-			if navigationAddress != "" {
-				w.Navigate(navigationAddress)
-			}
 			restoreAndFocusWindow(uintptr(w.Window()))
 			desktopWindowHidden.Store(false)
 		})
@@ -806,6 +804,57 @@ func bindNativeBridge(w webview.WebView, baseURL string, request func(context.Co
 			})
 			return nil
 		}
+		if method == "saveArticle" {
+			var request struct {
+				Filename  string            `json:"filename"`
+				Content   string            `json:"content"`
+				Mode      string            `json:"mode"`
+				Resources map[string]string `json:"resources"`
+			}
+			if err := json.Unmarshal([]byte(argument), &request); err != nil || len(argument) > 128*1024*1024 ||
+				len(request.Content) == 0 || len(request.Content) > 64*1024*1024 ||
+				(request.Mode != "html" && request.Mode != "complete" && request.Mode != "single") || filepath.Base(request.Filename) != request.Filename || !strings.HasSuffix(strings.ToLower(request.Filename), ".html") {
+				return fmt.Errorf("invalid article export")
+			}
+			go func() {
+				path, ok := chooseArticleSavePath(uintptr(w.Window()), request.Filename)
+				var value any
+				var err error
+				if ok {
+					err = os.WriteFile(path, []byte(request.Content), 0600)
+					if err == nil && request.Mode == "complete" && len(request.Resources) > 0 {
+						folder := strings.TrimSuffix(path, filepath.Ext(path)) + "_files"
+						err = os.MkdirAll(folder, 0700)
+						for name, encoded := range request.Resources {
+							if err != nil {
+								break
+							}
+							comma := strings.IndexByte(encoded, ',')
+							if comma < 0 || filepath.Base(name) != name {
+								err = fmt.Errorf("invalid article resource")
+								break
+							}
+							var data []byte
+							data, err = base64.StdEncoding.DecodeString(encoded[comma+1:])
+							if err == nil {
+								err = os.WriteFile(filepath.Join(folder, name), data, 0600)
+							}
+						}
+					}
+					if err == nil {
+						value = map[string]string{"path": path, "filename": filepath.Base(path)}
+					}
+				} else {
+					err = fmt.Errorf("article save canceled")
+				}
+				payload, _ := json.Marshal(value)
+				errorJSON, _ := json.Marshal(errorText(err))
+				w.Dispatch(func() {
+					w.Eval("window.wudictNativeReply(" + strconv.Itoa(id) + "," + string(payload) + "," + string(errorJSON) + ",true)")
+				})
+			}()
+			return nil
+		}
 		ctx, cancel := context.WithCancel(context.Background())
 		nativeCallsMu.Lock()
 		nativeCalls[id] = nativeCall{cancel: cancel}
@@ -1367,6 +1416,60 @@ func chooseDesktopArchive(owner uintptr) (string, bool) {
 	ok, _, _ := windowGetOpenFileName.Call(uintptr(unsafe.Pointer(&info)))
 	runtime.KeepAlive(filter)
 	runtime.KeepAlive(title)
+	runtime.KeepAlive(buffer)
+	if ok == 0 {
+		return "", false
+	}
+	for i, ch := range buffer {
+		if ch == 0 {
+			return syscall.UTF16ToString(buffer[:i]), true
+		}
+	}
+	return "", false
+}
+
+func chooseArticleSavePath(owner uintptr, filename string) (string, bool) {
+	const (
+		ofExplorer         = 0x00080000
+		ofOverwritePrompt  = 0x00000002
+		ofPathMustExist    = 0x00000800
+		ofNoChangeDir      = 0x00000008
+		ofNoTestFileCreate = 0x00010000
+	)
+	type openFileName struct {
+		structSize                 uint32
+		owner, instance            uintptr
+		filter, customFilter       *uint16
+		maxCustFilter, filterIndex uint32
+		file                       *uint16
+		maxFile                    uint32
+		fileTitle                  *uint16
+		maxFileTitle               uint32
+		initialDir, title          *uint16
+		flags                      uint32
+		fileOffset, fileExtension  uint16
+		defaultExtension           *uint16
+		customData, hook           uintptr
+		templateName               *uint16
+		reservedPtr                uintptr
+		reserved, flagsEx          uint32
+	}
+	buffer := make([]uint16, 32768)
+	defaultName, _ := syscall.UTF16FromString(filepath.Base(filename))
+	copy(buffer, defaultName)
+	filter := utf16MultiString("HTML article\x00*.html\x00All files\x00*.*")
+	title, _ := syscall.UTF16PtrFromString("Save article")
+	extension, _ := syscall.UTF16PtrFromString("html")
+	info := openFileName{
+		structSize: uint32(unsafe.Sizeof(openFileName{})), owner: owner,
+		filter: &filter[0], filterIndex: 1, file: &buffer[0], maxFile: uint32(len(buffer)),
+		title: title, defaultExtension: extension,
+		flags: ofExplorer | ofOverwritePrompt | ofPathMustExist | ofNoChangeDir | ofNoTestFileCreate,
+	}
+	ok, _, _ := windowGetSaveFileName.Call(uintptr(unsafe.Pointer(&info)))
+	runtime.KeepAlive(filter)
+	runtime.KeepAlive(title)
+	runtime.KeepAlive(extension)
 	runtime.KeepAlive(buffer)
 	if ok == 0 {
 		return "", false

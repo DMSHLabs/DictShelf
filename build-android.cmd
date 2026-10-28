@@ -3,6 +3,17 @@ rem Copyright (C) 2026 DmShAl (Shepeta Dmitry)
 rem SPDX-License-Identifier: GPL-3.0-or-later
 setlocal EnableExtensions DisableDelayedExpansion
 
+set "SHOW_HELP="
+for %%A in (%*) do (
+    if /i "%%~A"=="-?" set "SHOW_HELP=1"
+    if /i "%%~A"=="--?" set "SHOW_HELP=1"
+    if /i "%%~A"=="-h" set "SHOW_HELP=1"
+    if /i "%%~A"=="--h" set "SHOW_HELP=1"
+    if /i "%%~A"=="-help" set "SHOW_HELP=1"
+    if /i "%%~A"=="--help" set "SHOW_HELP=1"
+)
+if defined SHOW_HELP goto :show_help
+
 rem ============================================================
 rem DictShelf Android FOSS build: [debug|release|all] [intel|ABI] [--channel release|pre-release|beta]
 rem
@@ -250,10 +261,10 @@ if not defined VERSION (
     set "VERSION=dev"
 )
 
-rem Set WUDICT_VERSION to build the same named release as CI, for example:
-rem   set WUDICT_VERSION=dictshelf-v1.02.01
+rem Set DICTSHELF_VERSION to build the same named release as CI, for example:
+rem   set DICTSHELF_VERSION=dictshelf-v1.02.01
 rem Without an override, use the version derived from this checkout's Git history.
-if defined WUDICT_VERSION set "VERSION=%WUDICT_VERSION%"
+if defined DICTSHELF_VERSION set "VERSION=%DICTSHELF_VERSION%"
 
 rem An explicitly selected channel stamps a classifier into preview builds.
 rem GitHub still decides whether a published release is marked Pre-release.
@@ -510,4 +521,31 @@ if not defined STAGE_FOUND (
     echo ERROR: Could not stage the %~1 release APK.
     exit /b 1
 )
+exit /b 0
+
+:show_help
+echo DictShelf Android FOSS build
+echo.
+echo Usage:
+echo   build-android.cmd [debug^|release^|all] [intel^|arm64-v8a^|armeabi-v7a^|universal] [--channel release^|pre-release^|beta]
+echo.
+echo Help keys: -?, --?, -h, --h, -help, --help
+echo.
+echo Build types:
+echo   debug       Debug APK; default build type. Use intel to include x86_64 for emulators.
+echo   release     Release APK; defaults to arm64-v8a.
+echo   all         Build arm64-v8a, armeabi-v7a and universal release APKs.
+echo.
+echo ABI values:
+echo   arm64-v8a, armeabi-v7a, universal; intel is an alias for an x86_64 debug build.
+echo.
+echo Update channels:
+echo   --channel release^|pre-release^|beta
+echo.
+echo Set DICTSHELF_VERSION before running to choose a version, for example:
+echo   set "DICTSHELF_VERSION=dictshelf-v1.02.01"
+echo   build-android.cmd release arm64-v8a
+echo.
+echo Without DICTSHELF_VERSION, the version is read from Git.
+endlocal
 exit /b 0

@@ -348,6 +348,7 @@ Java_com_dmshlabs_dictshelf_GoBridge_nativeHeadwordExport(JNIEnv *env, jclass ow
     return answer;
 }
 
+
 JNIEXPORT jstring JNICALL
 Java_com_dmshlabs_dictshelf_GoBridge_nativeIntake(JNIEnv *env, jclass owner,
     jstring action, jstring argument) {
