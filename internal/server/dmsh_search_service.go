@@ -43,6 +43,8 @@ type SearchRequest struct {
 	Start              int    `json:"start,omitempty"`
 	Size               int    `json:"size,omitempty"`
 	Rung               string `json:"rung,omitempty"`
+
+	skipArticlePageCache bool
 }
 
 type SearchErrorKind string
@@ -132,6 +134,15 @@ const demandSearchBudget = 5 * time.Minute
 func (s *Server) Search(parent context.Context, request SearchRequest, emit func(SearchEvent) error) error {
 	if emit == nil {
 		return searchRequestError(SearchInvalidRequest, "search event callback is required")
+	}
+	if !request.skipArticlePageCache && request.ReturnCacheID != "" && request.CacheAction == "" {
+		s.articlePages.resetFor(request.ReturnCacheID)
+	}
+	if !request.skipArticlePageCache && s.articlePages.eligible(request) {
+		return s.articlePages.serve(parent, request, emit, func(capture func(SearchEvent) error) error {
+			request.skipArticlePageCache = true
+			return s.Search(parent, request, capture)
+		})
 	}
 	if request.CacheAction == "returnReplay" {
 		logx.System("search_return_cache stage=replay_start id=%q query=%q mode=%q scope=%q", request.CacheID, request.Query, request.Mode, request.Dictionary)
