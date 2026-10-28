@@ -295,6 +295,118 @@ func SystemSnapshot() ([]byte, error) {
 	return result, nil
 }
 
+// ClearSystemLog removes retained diagnostic history and truncates the active
+// session so logging can continue in the same file. The active crash outputs
+// remain open and are kept for this process.
+func ClearSystemLog() error {
+	systemMu.Lock()
+	defer systemMu.Unlock()
+	root := systemDir()
+	if root == "" {
+		return fmt.Errorf("system log location is not configured")
+	}
+	if _, err := os.Stat(root); os.IsNotExist(err) {
+		systemHasErrors = false
+		systemErrorStatusKnown = true
+		return nil
+	} else if err != nil {
+		return err
+	}
+	unlock, err := systemFileGuard(root)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	systemErrorStatusKnown = false
+
+	activeLog := ""
+	activeCrashPrefix := ""
+	if systemSessionPath != "" && filepath.Dir(systemSessionPath) == root {
+		activeLog = filepath.Base(systemSessionPath)
+		stamp := strings.TrimSuffix(strings.TrimPrefix(activeLog, "system_"), ".log")
+		activeCrashPrefix = "crash_" + stamp
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == activeLog && activeLog != "" {
+			continue
+		}
+		if strings.HasPrefix(name, activeCrashPrefix) && activeCrashPrefix != "" &&
+			(name == activeCrashPrefix+".log" || name == activeCrashPrefix+"_windows.log" || name == activeCrashPrefix+"_windows.dmp") {
+			continue
+		}
+		if !clearableSystemLogName(name) && !clearableCrashLogName(name) {
+			continue
+		}
+		if entry.IsDir() {
+			continue
+		}
+		if err := os.Remove(filepath.Join(root, name)); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	if activeLog != "" {
+		f, err := os.OpenFile(filepath.Join(root, activeLog), os.O_WRONLY|os.O_TRUNC, 0o600)
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		if f != nil {
+			if err := f.Close(); err != nil {
+				return err
+			}
+		}
+	}
+	systemHasErrors = false
+	systemErrorStatusKnown = true
+	return nil
+}
+
+func clearableSystemLogName(name string) bool {
+	if name == "system.log" {
+		return true
+	}
+	if strings.HasPrefix(name, "system.log.") {
+		return numericRotation(name[len("system.log."):])
+	}
+	if !strings.HasPrefix(name, "system_") {
+		return false
+	}
+	marker := strings.Index(name, ".log")
+	if marker < 0 {
+		return false
+	}
+	suffix := name[marker+4:]
+	if suffix == "" {
+		return true
+	}
+	if !strings.HasPrefix(suffix, ".") || len(suffix) == 1 {
+		return false
+	}
+	return numericRotation(suffix[1:])
+}
+
+func numericRotation(suffix string) bool {
+	if suffix == "" {
+		return false
+	}
+	for _, r := range suffix {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func clearableCrashLogName(name string) bool {
+	return strings.HasPrefix(name, "crash_") &&
+		(strings.HasSuffix(name, ".log") || strings.HasSuffix(name, "_windows.log") || strings.HasSuffix(name, "_windows.dmp")) ||
+		name == "crash.log" || name == "crash.log.1"
+}
+
 func ensureSystemLogSession(root string) error {
 	if systemSessionPath != "" && filepath.Dir(systemSessionPath) == root {
 		return nil

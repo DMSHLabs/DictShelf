@@ -10,10 +10,10 @@ fallback icon just because their text.db is not ready. Focused store-size and
 dictionary-icon tests and `go build ./internal/server` pass; desktop runtime
 verification remains pending.
 
-System log cleanup is on `dev`: search, Browse/Wildcards cache, folder timing,
-and indexing traces use their diagnostic options; detected errors remain in
-the log when basic events are disabled. `go build ./...` and `git diff --check`
-pass. Runtime log-volume verification is pending.
+System Log includes Save and Clear actions. Clear requires confirmation, uses
+the selected paper colour and image, deletes retained history, and keeps the
+active session logging. Browser, Windows and Android routes share the same
+clear operation. Runtime verification is pending.
 
 The two formerly failing Windows server tests now match current behavior:
 the search-mode assertion checks the compact `=` mark and localized menu label,
@@ -50,7 +50,7 @@ selected. Focused indexing tests and `go build ./...` pass. The full server
 package test has an unrelated reproducible Windows failure in
 `TestRemoveTakesTheEmptiedFolderWithIt`; device timing remains unverified.
 
-Canonical checkout: `D:\Projects\Android\DictShelf\`, branch `dev` at `5f52ad7`; one uncommitted change isolates the expected failing-ingest test log in a temporary directory. Release workflow dispatch offers `release`, `pre-release`, and `beta` for Android, Windows, and Linux/macOS native builds. New tags use `dictshelf-vMAJOR.MINOR.PATCH`; previews add `-pre-release.N` or `-beta.N` and are GitHub pre-releases. The Update panel stores the selected channel and an enabled-by-default notification preference in `state.json`; it checks the static `update-catalog.json` on the dedicated `update-catalog` branch daily while the page runs and marks ☰ when it finds an update. The version links to the release page. Windows desktop offers an Update button: installed copies launch the matching Inno Setup update; portable copies replace only the running EXE through a waiting helper, then restart. Publishing workflows regenerate the catalog from non-draft GitHub Releases; client checks do not call the GitHub API or change version history. Windows and native workflows load the tag resolver from the workflow revision while using the selected source checkout for tag history. The FOSS Android updater downloads an ABI-matched APK into Downloads, checks its catalogue SHA-256, and opens Android's installer when allowed; the DownloadManager notification provides the manual route. Play omits install permission and the update button. Windows and Android updater behavior remains unverified at runtime or in Actions. Older notes below are historical snapshots.
+Canonical checkout: `D:\Projects\Android\DictShelf\`, branch `dev` at `9b46944`; System Log Save/Clear changes are uncommitted. Release workflow dispatch offers `release`, `pre-release`, and `beta` for Android, Windows, and Linux/macOS native builds. New tags use `dictshelf-vMAJOR.MINOR.PATCH`; previews add `-pre-release.N` or `-beta.N` and are GitHub pre-releases. The Update panel stores the selected channel and an enabled-by-default notification preference in `state.json`; it checks the static `update-catalog.json` on the dedicated `update-catalog` branch daily while the page runs and marks ☰ when it finds an update. The version links to the release page. Windows desktop offers an Update button: installed copies launch the matching Inno Setup update; portable copies replace only the running EXE through a waiting helper, then restart. Publishing workflows regenerate the catalog from non-draft GitHub Releases; client checks do not call the GitHub API or change version history. Windows and native workflows load the tag resolver from the workflow revision while using the selected source checkout for tag history. The FOSS Android updater downloads an ABI-matched APK into Downloads, checks its catalogue SHA-256, and opens Android's installer when allowed; the DownloadManager notification provides the manual route. Play omits install permission and the update button. Windows and Android updater behavior remains unverified at runtime or in Actions. Older notes below are historical snapshots.
 
 Historical snapshot at `da540c7`. The two previously reported server
 test failures are fixed: `TestDictsRunningJobIsNotKept` now waits for the

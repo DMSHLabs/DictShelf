@@ -142,6 +142,13 @@ paths:
                 type: string
         '500':
           description: Could not read the log
+    delete:
+      summary: Clear retained System Log history and older crash details
+      responses:
+        '200':
+          description: The retained history was cleared; the active session continues logging
+        '500':
+          description: Could not clear the log
   /api/browse-diagnostic:
     post:
       tags: [internal]

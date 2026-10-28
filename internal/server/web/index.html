@@ -888,6 +888,7 @@ window.wudictFontScale=(function(){
   <div class="facts">
     <button type="button" class="mrow door" id="editSysSettings" title="{{T:panel.systemHint}}">{{T:panel.systemDoor}}</button>
     <a class="mrow door" id="saveSystemLog" href="/api/system-log" download>{{T:panel.saveSystemLog}}</a>
+    <button type="button" class="mrow door" id="clearSystemLog">{{T:panel.clearSystemLog}}</button>
   </div>
 </details>
 
@@ -1037,6 +1038,13 @@ window.wudictFontScale=(function(){
   <h2 id="systemLogSavedTitle">{{T:panel.systemLogSavedTitle}}</h2>
   <p id="systemLogSavedText"></p>
   <div class="system-log-saved-actions"><button type="button" class="btn" id="systemLogShowFolder">{{T:panel.showInFolder}}</button><button type="button" class="btn" id="systemLogSavedClose">{{T:panel.close}}</button></div>
+</dialog>
+
+<dialog id="clearSystemLogDialog" lang="{{T:locale}}" class="group-dialog panel-card system-log-confirmation" aria-labelledby="clearSystemLogTitle" aria-describedby="clearSystemLogHint">
+  <h2 id="clearSystemLogTitle">{{T:panel.clearSystemLogTitle}}</h2>
+  <p id="clearSystemLogHint">{{T:panel.clearSystemLogHint}}</p>
+  <p id="clearSystemLogStatus" role="status"></p>
+  <div class="system-log-saved-actions"><button type="button" class="btn" id="clearSystemLogConfirm">{{T:panel.clear}}</button><button type="button" class="btn" id="clearSystemLogCancel">{{T:panel.cancel}}</button></div>
 </dialog>
 
 <!-- System: the shell's own settings, drawn by the page. It is the second view
@@ -1567,6 +1575,25 @@ $("systemLogShowFolder").addEventListener("click",()=>{
     .catch(error=>alert(window.wudictI18n.errorText(error.message)));
 });
 $("saveSystemLog").addEventListener("click",systemLogClick);
+$("clearSystemLog").addEventListener("click",()=>{
+  $("clearSystemLogStatus").textContent="";
+  $("clearSystemLogDialog").showModal();
+});
+$("clearSystemLogCancel").addEventListener("click",()=>$("clearSystemLogDialog").close());
+$("clearSystemLogConfirm").addEventListener("click",async event=>{
+  const button=event.currentTarget;
+  button.disabled=true;
+  try{
+    const response=await apiFetch("/api/system-log",{method:"DELETE"});
+    if(!response.ok)throw new Error((await response.json()).error||"system log clear failed");
+    $("clearSystemLogDialog").close();
+    $("systemLogErrorWarning")?.remove();
+  }catch(error){
+    $("clearSystemLogStatus").textContent=tx("panel.clearSystemLogFailed");
+  }finally{
+    button.disabled=false;
+  }
+});
 window.wuSearchHistory.setSearch(word=>{ if($("mode").value==="wildcards"){ $("q").value=word;window.wuSearchHistory.hide();maskSubmitRequested=true;commitOnce=true;doSearch(); } else searchFor(word,{preserveMode:true}); });
 window.wuSearchHistory.setSuggest((q,onHit,signal)=>{
   const mode=$("mode").value,sel=$("dict").value||"all";
@@ -1655,6 +1682,12 @@ async function apiFetch(url,options){
       const result=JSON.parse(window.wudictAndroidGo.removeLibrary(requestURL.searchParams.toString()));
       const value=result.body||{error:"dictionary removal failed"};
       return {ok:result.status>=200&&result.status<300,status:result.status,
+        json:async()=>value,text:async()=>JSON.stringify(value)};
+    }
+    if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/system-log"&&method==="DELETE"){
+      const result=JSON.parse(window.wudictAndroidGo.userFileOperation("clearSystemLog",""));
+      const value=result.ok?result.value:{error:result.error||"could not clear system log"};
+      return {ok:!!result.ok,status:result.status||500,
         json:async()=>value,text:async()=>JSON.stringify(value)};
     }
     if(requestURL.origin===window.location.origin&&
@@ -1767,6 +1800,7 @@ async function apiFetch(url,options){
       else if(requestURL.pathname==="/api/library"&&method==="DELETE"){
         nativeMethod="removeLibrary";argument=requestURL.searchParams.toString();
       }
+      else if(requestURL.pathname==="/api/system-log"&&method==="DELETE")nativeMethod="clearSystemLog";
       else if(requestURL.pathname==="/api/orphans"&&method==="GET")nativeMethod="orphans";
       else if(requestURL.pathname==="/api/orphans"&&method==="POST"){
         nativeMethod="resolveOrphans";argument=options.body||"{}";
@@ -5333,7 +5367,7 @@ async function loadFolders(){
   paintPickerGroup(); // the row that says which group the search is on
   b.innerHTML="";
   if(c.systemLogHasErrors){
-    const warning=document.createElement("div");warning.className="warn";
+    const warning=document.createElement("div");warning.id="systemLogErrorWarning";warning.className="warn";
     warning.append(document.createTextNode(tx("panel.logErrors")+" "));
     const save=document.createElement("a");save.href="/api/system-log";save.download="";
     save.textContent=tx("panel.saveSystemLog");save.addEventListener("click",systemLogClick);

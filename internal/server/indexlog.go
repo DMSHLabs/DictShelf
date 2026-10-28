@@ -17,6 +17,14 @@ import (
 )
 
 func (s *Server) handleIndexLog(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodDelete {
+		if err := store.ClearIndexLog(); err != nil {
+			httpErr(w, 500, "could not clear system log: %v", err)
+			return
+		}
+		writeJSON(w, map[string]bool{"cleared": true})
+		return
+	}
 	b, filename, err := s.systemLogSnapshot()
 	if err != nil {
 		httpErr(w, 500, "could not read system log: %v", err)

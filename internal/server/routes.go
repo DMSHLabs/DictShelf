@@ -88,6 +88,7 @@ func (s *Server) routes() []route {
 		{"GET", "/api/ingest", s.handleIngest, "/api/ingest", false},
 		{"DELETE", "/api/ingest", s.handleIngest, "/api/ingest", false},
 		{"GET", "/api/system-log", s.handleIndexLog, "/api/system-log", false},
+		{"DELETE", "/api/system-log", s.handleIndexLog, "/api/system-log", false},
 		{"POST", "/api/browse-diagnostic", s.handleBrowseDiagnostic, "/api/browse-diagnostic", false},
 		{"POST", "/api/exit", s.handleDesktopExit, "/api/exit", false},
 		{"GET", "/api/index-work", s.handleIndexWork, "/api/index-work", false},
