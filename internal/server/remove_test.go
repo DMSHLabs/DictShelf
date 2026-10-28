@@ -182,8 +182,7 @@ func TestRemoveEverything(t *testing.T) {
 	waitNewDictionaryIndexing(t, s.reg)
 	id := idOf(t, s, "test.dsl")
 
-	rec := deleteReq(t, s, "/api/library?dict="+id)
-	if rec.Code != 200 {
+	if rec := deleteReq(t, s, "/api/library?dict="+id); rec.Code != 200 {
 		t.Fatalf("DELETE = %d: %s", rec.Code, rec.Body.String())
 	}
 	var rep removal
@@ -234,9 +233,11 @@ func TestRemoveTakesTheEmptiedFolderWithIt(t *testing.T) {
 	if err := s.reg.Rescan(); err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, s.reg)
 	id := idOf(t, s, "imported.dsl")
 
-	if rec := deleteReq(t, s, "/api/library?dict="+id); rec.Code != 200 {
+	rec := deleteReq(t, s, "/api/library?dict="+id)
+	if rec.Code != 200 {
 		t.Fatalf("DELETE = %d: %s", rec.Code, rec.Body.String())
 	}
 	if _, err := os.Stat(own); !os.IsNotExist(err) {
