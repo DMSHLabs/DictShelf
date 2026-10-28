@@ -549,7 +549,7 @@ window.wudictFontScale=(function(){
     </div>
   </div>
   <div class="facts">
-    <label class="rowlabel"><input class="panel-checkbox" type="checkbox" id="countAllResultsInBackground" checked> {{T:panel.searchAllResultsInBackground}}</label>
+    <label class="rowlabel"><input class="panel-checkbox" type="checkbox" id="countAllResultsInBackground"> {{T:panel.searchAllResultsInBackground}}</label>
   </div>
   <div class="facts">
     <div class="history-setting">
@@ -1315,7 +1315,7 @@ const articleFindPageLoads=new Set();
 let articleCacheQueue=[],articleCacheActive=0,articleCacheAbort=null,articleCacheSeq=0,articleCacheFinished=0,articleCacheTotal=0;
 let articleCacheGroupID="",articleCacheGroupCount=1;
 let articleCacheSearchSettled=false,articleCacheFirstOrder=Infinity;
-let countAllResultsInBackground=true,activeSearchCountsInBackground=true;
+let countAllResultsInBackground=false,activeSearchCountsInBackground=false;
 function newArticleResultCacheID(){
   const bytes=new Uint8Array(16);
   try{crypto.getRandomValues(bytes)}catch(_){for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256)}
@@ -1866,7 +1866,8 @@ async function loadPrefs(){
       updateNotifications=!st.ui.updateNotificationsOff;
       resultCacheLimitGB=Number(st.ui.resultCacheLimitGB)||defaultResultCacheLimitGB();resultCacheNoLimit=!!st.ui.resultCacheNoLimit;syncResultCacheLimitUI();
       searchReturnCacheStorage=st.ui.searchReturnCache==="memory"?"memory":"disk";syncSearchReturnCacheUI();
-      countAllResultsInBackground=st.ui.skipBackgroundResultCount!==true;
+      countAllResultsInBackground=typeof st.ui.countAllResultsInBackground==="boolean"
+        ?st.ui.countAllResultsInBackground:st.ui.skipBackgroundResultCount===false;
       $("countAllResultsInBackground").checked=countAllResultsInBackground;
       combinedDictionaryLimit=Math.max(1,Math.min(Number(st.ui.combinedDictionaryLimit)||defaultCombinedDictionaryLimit,maxCombinedDictionaryLimit));syncCombinedDictionaryLimitUI()}
     syncUpdateControls();restoreCachedUpdate();
@@ -1923,11 +1924,11 @@ function savePrefs(now){
   // real one.
   if(!prefsReady){setStatus(esc(tx("panel.prefsUnavailable")));return}
   if(!now){prefsTimer=setTimeout(()=>savePrefs(true),400);return}
-  // Default-on settings are serialized as opt-outs, so enabling them again
-  // writes false and clears the saved opt-out.
+  // Default-on settings are serialized as opt-outs; background match counting
+  // is an explicit opt-in and is stored under its own positive key.
   const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:d.name||d.path.split("/").pop(),title:dictTitles.get(d.id)||"",pinned:prefPinned.includes(d.id)})),
     ui:{fontSize:articleFS,fontWeight:articleFW,fontFamily:articleFont,hlOff:!hlOn,speakOff:!speakOn,dictIconsOff:!dictIconsOn,fastFirst:!orderFirst,hideUnmarkedExamples,exampleBackgroundOff:!dimExampleBackground,fadeExampleText,customOrder:prefCustomOrder,
-      skipBackgroundResultCount:!countAllResultsInBackground,
+      countAllResultsInBackground,
       resultCacheLimitGB,resultCacheNoLimit,combinedDictionaryLimit,searchReturnCache:searchReturnCacheStorage,updateChannel,
       updateNotificationsOff:!updateNotifications}});
   if(body===prefsSent)return;
