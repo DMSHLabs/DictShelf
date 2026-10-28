@@ -1099,6 +1099,8 @@
   "system.updateDownloaded": "The update is downloaded and ready to install.",
   "system.updateInstallConfirmTitle": "Install update?",
   "system.updateInstallConfirmText": "Version {version} is downloaded and ready to install. Continue?",
+  "system.updateInstalledTitle": "Update installed",
+  "system.updateInstalledText": "Version {version} was installed successfully.",
   "system.updateDownloadFailed": "The update download failed.",
   "system.updateAndroidDownloadStarted": "The APK is downloading to Downloads. Android will notify you when it is ready to install.",
   "system.updateAndroidPermission": "Allow DictShelf to install apps in Android settings, then select Install update. You can also install the APK from Downloads.",

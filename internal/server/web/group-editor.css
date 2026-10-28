@@ -6,11 +6,14 @@
 
 dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560px,94vw);height:fit-content;max-height:85vh;max-height:85dvh;padding:1em;border:1px solid var(--line);border-radius:12px;color:var(--fg);background-color:var(--bg);box-shadow:var(--shadow);overflow:auto;z-index:300;font-size:calc(var(--ui-font-base) * 1rem)}
 .system-log-saved-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:calc(var(--ui-control-gap) * 1em)}
+#updateInstallDialog .system-log-saved-actions{justify-content:space-between;width:100%}
 #systemLogSavedDialog.group-dialog[open]{gap:.35em}
 #systemLogSavedDialog p{margin:0;line-height:1.3;overflow-wrap:anywhere}
 #systemLogSavedDialog .system-log-saved-actions{margin-top:.35em}
 dialog#clearSystemLogDialog.group-dialog.panel-card{height:fit-content;margin:auto;background-color:var(--paper-bg,var(--bg))}
 html[data-shell-image] dialog#clearSystemLogDialog.group-dialog.panel-card{background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%;background-position:center;background-repeat:no-repeat}
+dialog#updateInstallDialog.group-dialog.panel-card,dialog#updateInstalledDialog.group-dialog.panel-card{height:fit-content;margin:auto;background-color:var(--paper-bg,var(--bg))}
+html[data-shell-image] dialog#updateInstallDialog.group-dialog.panel-card,html[data-shell-image] dialog#updateInstalledDialog.group-dialog.panel-card{background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%;background-position:center;background-repeat:no-repeat}
 #clearSystemLogDialog p{margin:0;line-height:1.4}
 #clearSystemLogDialog #clearSystemLogStatus:empty{display:none}
 #clearSystemLogDialog .system-log-saved-actions{margin-top:.35em}
