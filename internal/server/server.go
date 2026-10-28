@@ -1051,14 +1051,16 @@ type dictInfo struct {
 
 	// provenance (panel display): where the dictionary came from and what
 	// derived files exist. All optional and filesystem-cheap.
-	Source   string   `json:"source,omitempty"`    // foreign source file, if still on disk
-	MediaSrc []string `json:"mediaSrc,omitempty"`  // companion media sources (.mdd, .files.zip, res/)
-	TextDB   string   `json:"textDB,omitempty"`    // prepared text.db, if present
-	MediaDB  string   `json:"mediaDB,omitempty"`   // packed media.db, if present
-	Folder   string   `json:"folder,omitempty"`    // library folder holding them (the transferable unit)
-	DBSize   int64    `json:"dbSize,omitempty"`    // bytes of text.db - what the indexes actually cost
-	MediaSz  int64    `json:"mediaSize,omitempty"` // bytes of media.db
-	HasMedia bool     `json:"hasMedia,omitempty"`  // packable binary resources exist (drives "pack media")
+	Source       string   `json:"source,omitempty"`   // foreign source file, if still on disk
+	MediaSrc     []string `json:"mediaSrc,omitempty"` // companion media sources (.mdd, .files.zip, res/)
+	TextDB       string   `json:"textDB,omitempty"`   // prepared text.db, if present
+	MediaDB      string   `json:"mediaDB,omitempty"`  // packed media.db, if present
+	Folder       string   `json:"folder,omitempty"`   // library folder holding them (the transferable unit)
+	DBSize       int64    `json:"dbSize,omitempty"`   // bytes of text.db - what the indexes actually cost
+	ContainsSize int64    `json:"containsSize,omitempty"`
+	FullTextSize int64    `json:"fullTextSize,omitempty"`
+	MediaSz      int64    `json:"mediaSize,omitempty"` // bytes of media.db
+	HasMedia     bool     `json:"hasMedia,omitempty"`  // packable binary resources exist (drives "pack media")
 
 	// Builtin: shipped with the app (the wudict howto), not added by the user.
 	// It cannot be removed, and a library of builtins alone is an empty one.
@@ -1199,6 +1201,7 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 			Outdated:          rebuildable(e.Path) && (!formatHasSelfIndex(meta["format"]) || isZIMPath(e.Path)) && len(p.Stale(e.Path)) > 0,
 			DiacriticsPending: rebuildable(e.Path) && needsFoldedReindex(meta),
 		}
+		info.ContainsSize, info.FullTextSize = p.ContainsSize, p.FullTextSize
 		s.langFacts(&info, meta["name"], meta["index_lang"], meta["contents_lang"])
 		return info
 	}

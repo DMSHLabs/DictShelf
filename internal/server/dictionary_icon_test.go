@@ -46,6 +46,41 @@ func TestDictionaryIconUsesFallbackWhenDictionaryHasNoIcon(t *testing.T) {
 	}
 }
 
+func TestDictionaryIconLoadsAdjacentIconBeforePreparation(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "sample.dsl")
+	if err := os.WriteFile(source, []byte("sample"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	want := []byte("GIF89a")
+	if err := os.WriteFile(filepath.Join(dir, "sample.bmp"), want, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e := &entry{ID: "sample", Path: source}
+	s := &Server{reg: &Registry{byID: map[string]*entry{"sample": e}}}
+	r := httptest.NewRequest("GET", "/dict-icon/sample", nil)
+	w := httptest.NewRecorder()
+	s.handleDictionaryIcon(w, r)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("first status = %d, want %d while lookup starts", w.Code, http.StatusAccepted)
+	}
+	waitUntil(t, "dictionary icon lookup", func() bool {
+		_, _, ready := s.reg.cachedDictionaryIcon(e)
+		return ready
+	})
+	w = httptest.NewRecorder()
+	s.handleDictionaryIcon(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	if got := w.Header().Get("Content-Type"); got != "image/bmp" {
+		t.Fatalf("Content-Type = %q, want image/bmp", got)
+	}
+	if string(w.Body.Bytes()) != string(want) {
+		t.Fatalf("body = %q, want adjacent icon %q", w.Body.Bytes(), want)
+	}
+}
+
 func TestShrinkDictionaryBMPIconKeepsBrowserMIME(t *testing.T) {
 	icon := make([]byte, 14)
 	copy(icon, "BM")

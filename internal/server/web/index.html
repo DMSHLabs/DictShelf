@@ -962,7 +962,6 @@ window.wudictFontScale=(function(){
     <div id="bulkIndexes"></div>
     <div id="bulkIndexStatus" hidden class="bulkbox">
       <div id="bulkIndexConfirm" role="status" aria-live="polite"></div>
-      <button type="button" class="btn" id="bulkIndexStop" hidden>{{T:dictUI.bulkStop}}</button>
     </div>
     <p id="dictSettingsOrderHint"><span>{{T:dictUI.orderHint}}</span> <a href="#" id="dictSettingsGroupsLink">{{T:panel.groups}}</a></p>
     <div id="panelList"></div>
@@ -3836,8 +3835,8 @@ function renderPanel(){
        makes it reversible, and why none of this needs a confirmation. */
     const canToggle=!!d.source;
     const feats=[
-      ["contains",tx("dictUI.contains"),d.caps?.Contains,0],
-      ["fts",tx("dictUI.fts"),d.caps?.FTS,0],
+      ["contains",tx("dictUI.contains"),d.caps?.Contains,d.containsSize||0],
+      ["fts",tx("dictUI.fts"),d.caps?.FTS,d.fullTextSize||0],
     ];
     /* The index itself, first in the run of chips. Two states: "🚀 index"
        while there is none, and the size once
@@ -5454,11 +5453,8 @@ function requestIndexStop(){
 	}
 	else if(activeIngestID){window.wudictWork.stop().catch(()=>{});}
 	else return;
-	$("bulkIndexStop").disabled=true;
-	$("bulkIndexStop").textContent=tx("dictUI.bulkStopping");
 	setGlobalStop(requestIndexStop,tx("dictUI.bulkStopping"));
 }
-$("bulkIndexStop").onclick=requestIndexStop;
 function bulkFeatureLabels(d,feat){
   const selector=feat==="base"?'[data-feat="base"],[data-delete-index]':`[data-feat="${feat}"]`;
   if(d.dsl)return [...document.querySelectorAll(selector)].filter(el=>el.dataset.target===d.id);
@@ -5516,9 +5512,6 @@ $("bulkIndexes").addEventListener("click",async e=>{
     bulkIndexBusy=true;
     bulkIndexStopRequested=false;
     setGlobalStop(requestIndexStop);
-    $("bulkIndexStop").hidden=false;
-    $("bulkIndexStop").disabled=false;
-    $("bulkIndexStop").textContent=tx("dictUI.bulkStop");
     $("bulkIndexes").querySelectorAll("button,select").forEach(b=>b.disabled=true);
     const queued=new Map(todo.map(job=>[job,bulkFeatureLabels(job.d,job.feat).map(label=>({label,text:label.textContent}))]));
     for(const [job,fields] of queued)for(const {label} of fields){
@@ -5535,7 +5528,6 @@ $("bulkIndexes").addEventListener("click",async e=>{
     finally{
       bulkIndexBusy=false;
       clearGlobalStop();
-      $("bulkIndexStop").hidden=true;
       await loadDicts();renderBulkIndexes();
       setIndexStatus(esc(report));
       if(lastScope&&dicts.some(d=>d.id===lastScope&&d.unavailable)){lastScope=null;scopeOnce=null;refreshDictUI(true)}
@@ -5882,7 +5874,6 @@ function runIngest(id,opts,label){
   label.dataset.busy="1";
   following.add(id);
   activeIngestID=id;
-  $("bulkIndexStop").hidden=false;$("bulkIndexStop").disabled=false;$("bulkIndexStop").textContent=tx("dictUI.stop");
   setGlobalStop(requestIndexStop);
   const name=dictLabel(dicts.find(d=>d.id===id)||{path:""});
   /* Two lengths of the same message: the chip is one of four in a row inside
@@ -5928,7 +5919,6 @@ function runIngest(id,opts,label){
       if(finished)return;
       finished=true;clearInterval(reconcile);es.close();following.delete(id);activeIngestID=null;
       delete label.dataset.busy;label.classList.remove("busy");
-      $("bulkIndexStop").hidden=bulkIndexBusy;$("bulkIndexStop").disabled=false;
       if(!bulkIndexBusy)clearGlobalStop();
       // The shared banner polls independently. Refresh it at this terminal
       // event so its last progress count cannot linger on screen.
@@ -5972,7 +5962,6 @@ function runIngest(id,opts,label){
     };
     const onStopping=()=>{
       lastEventAt=Date.now();
-      $("bulkIndexStop").disabled=true;$("bulkIndexStop").textContent=tx("dictUI.bulkStopping");
       show(tx("dictUI.bulkStopping"),tx("dictUI.bulkStopping"));
     };
     es.addEventListener("progress",onProgress);
@@ -6408,8 +6397,6 @@ window.addEventListener("wudict-work",event=>{
   if(s.running){
     serverBulkWasRunning=true;bulkIndexBusy=true;
     $("bulkIndexes").querySelectorAll("button,select").forEach(el=>el.disabled=true);
-    $("bulkIndexStop").hidden=false;$("bulkIndexStop").disabled=s.stopRequested;
-    $("bulkIndexStop").textContent=tx(s.stopRequested?"dictUI.bulkStopping":"dictUI.stop");
     setIndexStatus(esc(s.text),false);
     if(s.taskID&&Array.isArray(s.busyProgress))window.wudictTasks?.update(s.taskID,{children:activeDictionaryRows(workDictionaryOrder(s),s.busyProgress,s.id)});
     const perDictionary=s.busyProgress||[];
@@ -6425,7 +6412,7 @@ window.addEventListener("wudict-work",event=>{
       }
     }
   }else if(serverBulkWasRunning){
-    serverBulkWasRunning=false;bulkIndexBusy=false;$("bulkIndexStop").hidden=true;
+    serverBulkWasRunning=false;bulkIndexBusy=false;
     const report=s.error?bulkFailureReport(s.done,s.failed,s.damaged,s.error):
       s.canceled||s.stopRequested?tx("dictUI.bulkStopped",{number:s.done}):tx("dictUI.bulkFinished",{number:s.done});
     setIndexStatus(esc(report));loadDicts().then(renderBulkIndexes);

@@ -5,6 +5,7 @@
 package store
 
 import (
+	"database/sql"
 	"os"
 	"strconv"
 
@@ -107,6 +108,9 @@ type Prepared struct {
 	Schema int               // PRAGMA user_version; meaningful only with Meta
 	Plan   Plan              // what it was built with; zero when Meta is nil
 	Media  bool              // a media.db lies beside it (paired or not)
+	// Optional search-index sizes, measured from SQLite's dbstat virtual table.
+	ContainsSize int64
+	FullTextSize int64
 }
 
 // Inspect reads textDB's meta table and notes whether a media.db lies beside
@@ -114,13 +118,53 @@ type Prepared struct {
 // to every caller that is simply "not prepared".
 func Inspect(textDB string) Prepared {
 	p := Prepared{TextDB: textDB}
-	if m, schema, err := ReadMetaSchema(textDB); err == nil {
-		p.Meta, p.Schema, p.Plan = m, schema, PlanFromMeta(m)
+	if _, err := os.Stat(textDB); err == nil {
+		db, openErr := openRO(textDB)
+		if openErr == nil {
+			defer db.Close()
+			var schema int
+			if db.QueryRow("PRAGMA user_version").Scan(&schema) == nil {
+				if m, metaErr := readMeta(db); metaErr == nil {
+					p.Meta, p.Schema, p.Plan = m, schema, PlanFromMeta(m)
+					if p.Plan.Contains || p.Plan.FullText {
+						p.ContainsSize, p.FullTextSize = searchIndexSizes(db, p.Plan)
+					}
+				}
+			}
+		}
 	}
 	if sib := MediaSibling(textDB); sib != "" && fsx.FileExists(sib) {
 		p.Media = true
 	}
 	return p
+}
+
+// SearchIndexSizes returns the on-disk bytes used by the optional FTS5 indexes.
+// dbstat is absent from some SQLite builds, in which case sizes remain zero.
+func SearchIndexSizes(textDB string, plan Plan) (contains, fullText int64) {
+	db, err := openRO(textDB)
+	if err != nil {
+		return 0, 0
+	}
+	defer db.Close()
+	return searchIndexSizes(db, plan)
+}
+
+func searchIndexSizes(db *sql.DB, plan Plan) (contains, fullText int64) {
+	measure := func(table string) int64 {
+		var size int64
+		if err := db.QueryRow(`SELECT COALESCE(SUM(pgsize), 0) FROM dbstat WHERE name = ? OR name LIKE ?`, table, table+"_%").Scan(&size); err != nil {
+			return 0
+		}
+		return size
+	}
+	if plan.Contains {
+		contains = measure("entry_trigram")
+	}
+	if plan.FullText {
+		fullText = measure("article_fts")
+	}
+	return contains, fullText
 }
 
 // Usable reports that this build can open it: readable, and this schema.

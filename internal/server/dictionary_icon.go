@@ -167,12 +167,21 @@ func (r *Registry) refreshDictionaryIcons() {
 	if workers < 1 {
 		workers = 1
 	}
-	if workers > len(entries) {
-		workers = len(entries)
-	}
 	queue := make(chan *entry, len(entries))
+	queued := 0
 	for _, e := range entries {
-		queue <- e
+		_, dir, source := preparedIconInfo(e)
+		if dir != "" || source != "" && (dictionaryIconFile(source) != "" || strings.EqualFold(filepath.Ext(source), ".lsd") || strings.EqualFold(filepath.Ext(source), ".zim") || strings.EqualFold(filepath.Ext(source), ".zimaa")) {
+			queue <- e
+			queued++
+		}
+	}
+	if queued == 0 {
+		close(queue)
+		return
+	}
+	if workers > queued {
+		workers = queued
 	}
 	close(queue)
 	var wg sync.WaitGroup
@@ -204,9 +213,34 @@ func (r *Registry) refreshDictionaryIcons() {
 }
 
 func (r *Registry) dictionaryIcon(e *entry, gen uint64) ([]byte, string) {
-	prepared, dir, source, ok := preparedIconInfo(e)
-	if !ok {
-		return nil, ""
+	prepared, dir, source := preparedIconInfo(e)
+	indexUUID := ""
+	if prepared.Meta != nil {
+		indexUUID = prepared.Meta["dict_uuid"]
+	}
+	if dir == "" {
+		// A source can have a useful adjacent icon before its prepared index is
+		// ready. Keep that result in memory; there is no library folder yet in
+		// which to persist icon.cache.
+		external := currentDictionaryIconFile(source, "")
+		body, mime := sourceDictionaryIcon(source, external)
+		if len(body) == 0 && source != "" && strings.EqualFold(filepath.Ext(source), ".lsd") {
+			body, mime, _ = lsdformat.ReadIcon(source)
+		}
+		if len(body) == 0 && source != "" && (strings.EqualFold(filepath.Ext(source), ".zim") || strings.EqualFold(filepath.Ext(source), ".zimaa")) {
+			if d, err := e.open(); err == nil {
+				body, mime = iconFromDictionary(d)
+			}
+		}
+		if len(body) > 0 {
+			if shrunk, shrunkMIME, err := shrinkDictionaryIcon(body, mime); err == nil {
+				body, mime = shrunk, shrunkMIME
+			}
+		}
+		if e.gen.Load() != gen {
+			return nil, ""
+		}
+		return body, mime
 	}
 	cachePath := filepath.Join(dir, dictionaryIconCacheName)
 	cached, cacheErr := readDictionaryIconCache(cachePath)
@@ -232,9 +266,8 @@ func (r *Registry) dictionaryIcon(e *entry, gen uint64) ([]byte, string) {
 	}
 	isZIM := strings.EqualFold(filepath.Ext(source), ".zim") || strings.EqualFold(filepath.Ext(source), ".zimaa")
 	if len(body) == 0 && isZIM && source != "" {
-		if d, err := dict.Open(source); err == nil {
+		if d, err := e.open(); err == nil {
 			body, mime = iconFromDictionary(d)
-			_ = d.Close()
 		} else {
 			probeComplete = false
 		}
@@ -247,7 +280,7 @@ func (r *Registry) dictionaryIcon(e *entry, gen uint64) ([]byte, string) {
 	}
 
 	cache := dictionaryIconCache{
-		Version: dictionaryIconCacheVersion, IndexUUID: prepared.Meta["dict_uuid"],
+		Version: dictionaryIconCacheVersion, IndexUUID: indexUUID,
 		Status: "absent", ExternalPath: external, ExternalStamp: externalStamp,
 	}
 	if len(body) > 0 {
@@ -260,8 +293,12 @@ func (r *Registry) dictionaryIcon(e *entry, gen uint64) ([]byte, string) {
 	if e.gen.Load() != gen {
 		return nil, ""
 	}
-	latest, _, _, stillPrepared := preparedIconInfo(e)
-	if !stillPrepared || latest.Meta["dict_uuid"] != cache.IndexUUID {
+	latest, _, _ := preparedIconInfo(e)
+	latestUUID := ""
+	if latest.Meta != nil {
+		latestUUID = latest.Meta["dict_uuid"]
+	}
+	if latestUUID != cache.IndexUUID {
 		return nil, ""
 	}
 	data, err := json.Marshal(cache)
@@ -305,25 +342,27 @@ func (s *Server) dictionaryIcon(e *entry) ([]byte, string) {
 	return s.reg.dictionaryIcon(e, e.gen.Load())
 }
 
-func preparedIconInfo(e *entry) (store.Prepared, string, string, bool) {
+func preparedIconInfo(e *entry) (store.Prepared, string, string) {
 	var prepared store.Prepared
 	if store.IsTextDB(e.Path) {
 		prepared = store.Inspect(e.Path)
 		if !prepared.Usable() {
-			return store.Prepared{}, "", "", false
+			prepared = store.Prepared{}
 		}
 	} else {
-		var ok bool
-		prepared, ok = store.FindPrepared(e.Path)
-		if !ok {
-			return store.Prepared{}, "", "", false
+		if p, ok := store.FindPrepared(e.Path); ok {
+			prepared = p
 		}
 	}
 	source := e.Path
-	if store.IsTextDB(e.Path) || !fsx.FileExists(source) {
+	if (store.IsTextDB(e.Path) || !fsx.FileExists(source)) && prepared.Meta != nil {
 		source = prepared.Meta["source_path"]
 	}
-	return prepared, filepath.Dir(prepared.TextDB), source, true
+	dir := ""
+	if prepared.TextDB != "" {
+		dir = filepath.Dir(prepared.TextDB)
+	}
+	return prepared, dir, source
 }
 
 func readDictionaryIconCache(path string) (dictionaryIconCache, error) {

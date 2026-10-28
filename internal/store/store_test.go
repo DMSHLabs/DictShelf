@@ -1147,6 +1147,30 @@ func TestOptionalHeadwordAndArticleIndexes(t *testing.T) {
 	}
 }
 
+func TestInspectReportsOptionalIndexSizes(t *testing.T) {
+	for _, plan := range []Plan{{Contains: true}, {FullText: true}, {Contains: true, FullText: true}} {
+		path := filepath.Join(t.TempDir(), "text.db")
+		r := &fakeReader{meta: dict.Meta{Name: "sizes", Format: "test", Path: "/x"}, entries: []dict.Entry{
+			h("work", "<p>working with words</p>"),
+			h("workshop", "<p>a place to work</p>"),
+		}}
+		if _, err := IngestPlan(r, path, plan, nil); err != nil {
+			t.Fatal(err)
+		}
+		got := Inspect(path)
+		contains, fullText := SearchIndexSizes(path, plan)
+		if got.ContainsSize != contains || got.FullTextSize != fullText {
+			t.Fatalf("Inspect sizes = (%d, %d), direct measurement = (%d, %d)", got.ContainsSize, got.FullTextSize, contains, fullText)
+		}
+		if plan.Contains && got.ContainsSize <= 0 {
+			t.Errorf("contains index size = %d, want positive", got.ContainsSize)
+		}
+		if plan.FullText && got.FullTextSize <= 0 {
+			t.Errorf("full-text index size = %d, want positive", got.FullTextSize)
+		}
+	}
+}
+
 func TestOptionalIndexMaintenanceKeepsFeaturesIndependent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "text.db")
 	r := &fakeReader{meta: dict.Meta{Name: "maintenance", Format: "test", Path: "/x"}, entries: []dict.Entry{

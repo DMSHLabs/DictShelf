@@ -1,5 +1,15 @@
 # Agent handoff — current state
 
+Dictionary Settings now show measured Contains and Full-text index sizes from
+SQLite dbstat when supported; the measurement is included in prepared-row
+metadata and cached with dictionary rows. Indexing Stop is available only in
+the shared bottom progress panel, not beside the Dictionary Settings status.
+Dictionary icons can load from adjacent files and embedded LSD/ZIM resources
+before preparation finishes, so newly discovered dictionaries do not show a
+fallback icon just because their text.db is not ready. Focused store-size and
+dictionary-icon tests and `go build ./internal/server` pass; desktop runtime
+verification remains pending.
+
 System log cleanup is on `dev`: search, Browse/Wildcards cache, folder timing,
 and indexing traces use their diagnostic options; detected errors remain in
 the log when basic events are disabled. `go build ./...` and `git diff --check`
