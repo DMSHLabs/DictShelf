@@ -182,7 +182,8 @@ printf 'dictshelf.icns  '
 ls -l "$icns" | awk '{print $5 " bytes"}'
 
 # ---- the Windows app icon (P86) -----------------------------------------
-# Same DictShelf mark, same rule. An .ico is a directory of images; since Vista each
+# Windows ICO uses separate small and large SVG marks so their geometry stays
+# crisp at native sizes. An .ico is a directory of images; since Vista each
 # entry may be a PNG verbatim, so the container is a 6-byte header plus one
 # 16-byte record per size and needs no image library to assemble — python3
 # (already required by nothing else here, but present on every dev machine
@@ -191,18 +192,23 @@ ls -l "$icns" | awk '{print $5 " bytes"}'
 # The installer uses this for Setup, shortcuts and dictionary files. The same
 # ICO is embedded into the Windows/amd64 executable by packaging/windows/dictshelf.rc.
 ico="$root/packaging/windows/dictshelf.ico"
+ico_small="$root/packaging/brand/dictshelf-ico-16-47.svg"
+ico_large="$root/packaging/brand/dictshelf-ico-48-plus.svg"
 
 mkdir -p "$tmp/ico" "$(dirname "$ico")"
-# Include common Windows shell and DPI sizes; the 256-pixel image remains the
-# high-resolution Vista+ entry. Render each size from SVG, never from a bitmap.
-for s in 16 20 24 32 40 48 64 96 128 256; do
-	render "$s" "$s" "$fork" "$tmp/ico/$s.png"
+# These two tailored source marks use different geometry for small and large
+# icon frames. Keep the ICO frames on their native-size SVG renderings.
+for s in 16 24 32; do
+	render "$s" "$s" "$ico_small" "$tmp/ico/$s.png"
+done
+for s in 48 96 128 256; do
+	render "$s" "$s" "$ico_large" "$tmp/ico/$s.png"
 done
 
 run_python3 - "$tmp/ico" "$ico" <<'PY'
 import struct, sys, os
 srcdir, out = sys.argv[1], sys.argv[2]
-sizes = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256]
+sizes = [16, 24, 32, 48, 96, 128, 256]
 blobs = [open(os.path.join(srcdir, "%d.png" % s), "rb").read() for s in sizes]
 # ICONDIR: reserved, type=1 (icon), count. Then one 16-byte ICONDIRENTRY each.
 head = struct.pack("<HHH", 0, 1, len(sizes))
