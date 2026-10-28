@@ -1,5 +1,13 @@
 # Agent handoff — current state
 
+The shared bottom dock and background task progress are on `dev` through
+`fda62b4`. Find in articles now places the query and mode labels beside their
+controls and offers a scroll-to-current-match button. Crossing article result
+blocks keeps the displayed match count stable, checks ready articles without a
+fixed delay per block, and restores the original result page before wrapping
+when later blocks contain no match. JavaScript syntax and diff checks pass;
+Windows and Android runtime verification of this navigation remains pending.
+
 Indexing modes in `dev` are now Parallel dictionaries and Adaptive (the former
 `auto2` schedule). Saved `auto`, `auto2`, and `pipeline` selections load as
 Adaptive; existing Parallel selections remain Parallel. A job involving one

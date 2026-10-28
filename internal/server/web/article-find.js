@@ -148,6 +148,7 @@ function paint() {
   const total = String(matches.length)+(partial?"+":"");
   const block = index >= 0 ? window.wudictArticleFindBlockRange?.(matches[index]?.host.closest("details.dict")) : "";
   const count = matches.length ? t("articleFind.position", {current:index < 0 ? 0 : index+1, total})+(block?" · "+block:"") : t("articleFind.noMatches");
+  if(blockNavigationPending)return;
   $("articleFindCount").textContent = count;
   $("articleFindCount").disabled = !matches.length;
   $("articleFindStatus").textContent = options.query ? count : "";
@@ -158,6 +159,7 @@ function paint() {
   $("articleFindNext").disabled = !canStep(1);
   $("articleFindDialogPrev").disabled = !canStep(-1);
   $("articleFindDialogNext").disabled = !canStep(1);
+  $("articleFindScrollToMatch").disabled = options.mode === "fts" || !matches.length || index < 0;
 }
 let hiddenExamples = false;
 // Build a text stream per paragraph, retaining offsets across inline formatting.
@@ -369,6 +371,7 @@ async function crossResultBlocks(current,step){
   blockNavigationPending=true;
   const token=++blockNavigationToken,query=options.query,mode=options.mode;
   let det=current.host.closest("details.dict"),changed=false;
+  const originStart=Number(det?.dataset.searchPageStart)||0;
   try{
     for(let page=0;page<100&&det&&window.wudictArticleBlockHasMore?.(det,step);page++){
       const replacement=await window.wudictRequestArticleBlock?.(det,step);
@@ -376,15 +379,21 @@ async function crossResultBlocks(current,step){
       if(!replacement)break;
       changed=true;det=replacement;index=-1;
       for(let check=0;check<10;check++){
-        await new Promise(resolve=>setTimeout(resolve,100));
+        if(check)await new Promise(resolve=>setTimeout(resolve,100));
         if(token!==blockNavigationToken||!active||options.query!==query||options.mode!==mode||options.blocks===false)return;
         rebuild();
         const found=matches.map((hit,i)=>({hit,i})).filter(row=>row.hit.host.closest("details.dict")===det);
-        if(found.length){index=step>0?found[0].i:found.at(-1).i;revealCurrent();return}
+        if(found.length){index=step>0?found[0].i:found.at(-1).i;blockNavigationPending=false;revealCurrent();return}
+        const frames=[...det.querySelectorAll("iframe.article")];
+        if(frames.every(frame=>frame.contentDocument?.readyState==="complete"))break;
       }
     }
-    if(changed){rebuild();selectAfterBlock(det,step)}
-    else advanceLoaded(step);
+    if(changed){
+      const restored=await window.wudictRestoreArticleBlock?.(det,originStart);
+      if(token!==blockNavigationToken||!active||options.query!==query||options.mode!==mode||options.blocks===false)return;
+      if(restored)det=restored;
+      rebuild();blockNavigationPending=false;selectAfterBlock(det,step);
+    }else{blockNavigationPending=false;advanceLoaded(step)}
   }finally{
     if(token===blockNavigationToken)blockNavigationPending=false;
   }
@@ -510,6 +519,11 @@ $("articleFindClose").onclick = () => dialog.close();
 $("articleFindStop").onclick = stop;
 $("articleFindPrev").onclick = () => fullTextNavigation && options.mode === "fts" ? fullTextNavigation.previous?.() : go(-1);
 $("articleFindNext").onclick = () => fullTextNavigation && options.mode === "fts" ? fullTextNavigation.next?.() : go(1);
+$("articleFindScrollToMatch").onclick = () => {
+  if(options.mode === "fts" || !matches.length)return;
+  if(index<0)index=0;
+  revealCurrent();
+};
 $("articleFindDialogPrev").onclick = () => go(-1);
 $("articleFindDialogNext").onclick = () => go(1);
 $("articleFindMode").onchange = () => {

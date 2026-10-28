@@ -928,11 +928,11 @@ window.wudictFontScale=(function(){
   <button type="button" class="btn" id="articleFindCount" aria-live="polite" aria-haspopup="dialog" aria-controls="maskGotoDialog" disabled></button>
   <button type="button" class="btn" id="articleFindPrev" aria-label="{{T:articleFind.previous}}" title="{{T:articleFind.previous}}">↑</button>
   <button type="button" class="btn" id="articleFindNext" aria-label="{{T:articleFind.next}}" title="{{T:articleFind.next}}">↓</button>
+  <button type="button" class="btn" id="articleFindScrollToMatch" aria-label="{{T:articleFind.scrollToMatch}}" title="{{T:articleFind.scrollToMatch}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="2"/></svg></button>
 </div>
 <dialog id="articleFindDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="articleFindTitle">
   <h2 id="articleFindTitle">{{T:articleFind.title}}<button type="button" class="btn" id="articleFindClose" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
-  <label for="articleFindQuery">{{T:articleFind.query}}</label>
-  <input type="text" id="articleFindQuery" autocomplete="off" spellcheck="false">
+  <div class="article-find-query-row"><label for="articleFindQuery">{{T:articleFind.query}}</label><input type="text" id="articleFindQuery" autocomplete="off" spellcheck="false"></div>
   <label class="article-find-mode" for="articleFindMode">{{T:articleFind.mode}}<select id="articleFindMode" aria-label="{{T:articleFind.mode}}">
     <option value="prefix">{{T:search.prefix}}</option><option value="suffix">{{T:search.suffix}}</option><option value="contains" selected>{{T:dictUI.contains}}</option><option value="word">{{T:browse.findModeWord}}</option><option value="wordLemma">{{T:browse.findModeWordLemma}}</option><option value="fts" hidden>{{T:articleFind.fullText}}</option>
   </select></label>
@@ -9540,6 +9540,12 @@ async function requestArticleBlock(det,direction){
 }
 window.wudictRequestArticleBlock=(source,direction)=>requestArticleBlock(
   source?.matches?.("details.dict")?source:source?.closest?.("details.dict"),direction);
+window.wudictRestoreArticleBlock=(det,start)=>{
+  if(!det?.isConnected)return null;
+  const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
+  const firstPageSize=Math.max(0,Number(det.dataset.searchFirstPageSize)||0);
+  return fetchSearchPortion(det,start,{openAfter:true,size:start===0&&firstPageSize?firstPageSize:size,pageSize:size,firstPageSize});
+};
 window.wudictArticleBlockHasMore=(det,direction)=>{
   if(!det?.isConnected)return false;
   if(direction>0)return det.dataset.searchHasNext!=="false";
