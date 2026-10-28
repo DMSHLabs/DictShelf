@@ -9127,7 +9127,7 @@ async function fetchSearchPortion(det,start,options={}){
   const priority=det.querySelector(":scope>summary .priority-index"),actions=[...det.querySelectorAll(":scope>summary .result-page-action")];
   if(priority)priority.disabled=true;
   actions.forEach(button=>button.disabled=true);
-  const url="/api/search?q="+encodeURIComponent(query)+"&mode="+encodeURIComponent(mode)+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(id)+"&n="+requested;
+  const url="/api/search?q="+encodeURIComponent(query)+"&mode="+encodeURIComponent(mode)+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(id)+"&n="+requested+"&cacheID="+encodeURIComponent(articleCacheGroupID);
   let received=false,loaded=null;
   try{
     await fetchStream(url,msg=>{

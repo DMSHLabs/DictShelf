@@ -184,6 +184,7 @@ type Server struct {
 
 	wildcardPages wildcardPageCache
 	searchReturns searchReturnCacheStore
+	articlePages  articlePageCache
 
 	// dictRows keeps /api/dicts rows between requests (dictrows.go).
 	dictRows rowCache
@@ -1497,8 +1498,8 @@ func queryFlag(q url.Values, name string) (on, sent bool) {
 // Compiled once per (term, rung) and cached, because a fan-out asks the same
 // question of a hundred dictionaries and they do not all answer on the same
 // rung. The cache is unsynchronised on purpose: search.StreamOpen serialises
-	// its emit callbacks, so there is never a second goroutine here. It is
-	// bounded by the query's full-text relaxation rungs.
+// its emit callbacks, so there is never a second goroutine here. It is
+// bounded by the query's full-text relaxation rungs.
 //
 // on=false returns a function that always yields nil, which every caller may
 // pass straight to Mark: an API client that did not ask for marks gets the

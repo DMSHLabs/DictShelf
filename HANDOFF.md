@@ -1,5 +1,14 @@
 # Agent handoff — current state
 
+The active main search now has a bounded, unnamed temporary SQLite cache for
+article page responses shared by manual paging and Find in articles. It
+evicts least recently used page rows at 128 MiB and closes the prior database
+when a new main search starts. Focused LRU, reset, growing-result and shared
+search tests pass; `go build ./internal/server` passes. The full server suite
+still fails in `TestI18nPagesAndCache` and `TestRemoveTakesTheEmptiedFolderWithIt`.
+Desktop and Android UI checks remain pending. Article-find match-count
+bookkeeping across visited blocks remains a separate task.
+
 The shared bottom dock and background task progress are on `dev` through
 `fda62b4`. Find in articles now places the query and mode labels beside their
 controls and offers a scroll-to-current-match button. Crossing article result
@@ -18,16 +27,16 @@ selected. Focused indexing tests and `go build ./...` pass. The full server
 package test has an unrelated reproducible Windows failure in
 `TestRemoveTakesTheEmptiedFolderWithIt`; device timing remains unverified.
 
-Canonical checkout: `D:\Projects\Android\DictShelf\`, branch `dev` at `da540c7`. Release workflow dispatch offers `release`, `pre-release`, and `beta` for Android, Windows, and Linux/macOS native builds. New tags use `dictshelf-vMAJOR.MINOR.PATCH`; previews add `-pre-release.N` or `-beta.N` and are GitHub pre-releases. The Update panel stores the selected channel and an enabled-by-default notification preference in `state.json`; it checks the static `update-catalog.json` on the dedicated `update-catalog` branch daily while the page runs and marks ☰ when it finds an update. The version links to the release page. Windows desktop offers an Update button: installed copies launch the matching Inno Setup update; portable copies replace only the running EXE through a waiting helper, then restart. Publishing workflows regenerate the catalog from non-draft GitHub Releases; client checks do not call the GitHub API or change version history. Windows and native workflows load the tag resolver from the workflow revision while using the selected source checkout for tag history. The FOSS Android updater downloads an ABI-matched APK into Downloads, checks its catalogue SHA-256, and opens Android's installer when allowed; the DownloadManager notification provides the manual route. Play omits install permission and the update button. Windows and Android updater behavior remains unverified at runtime or in Actions. Older notes below are historical snapshots.
+Canonical checkout: `D:\Projects\Android\DictShelf\`, branch `dev`. Release workflow dispatch offers `release`, `pre-release`, and `beta` for Android, Windows, and Linux/macOS native builds. New tags use `dictshelf-vMAJOR.MINOR.PATCH`; previews add `-pre-release.N` or `-beta.N` and are GitHub pre-releases. The Update panel stores the selected channel and an enabled-by-default notification preference in `state.json`; it checks the static `update-catalog.json` on the dedicated `update-catalog` branch daily while the page runs and marks ☰ when it finds an update. The version links to the release page. Windows desktop offers an Update button: installed copies launch the matching Inno Setup update; portable copies replace only the running EXE through a waiting helper, then restart. Publishing workflows regenerate the catalog from non-draft GitHub Releases; client checks do not call the GitHub API or change version history. Windows and native workflows load the tag resolver from the workflow revision while using the selected source checkout for tag history. The FOSS Android updater downloads an ABI-matched APK into Downloads, checks its catalogue SHA-256, and opens Android's installer when allowed; the DownloadManager notification provides the manual route. Play omits install permission and the update button. Windows and Android updater behavior remains unverified at runtime or in Actions. Older notes below are historical snapshots.
 
-Current checkout is `dev` at `da540c7`. The two previously reported server
+Historical snapshot at `da540c7`. The two previously reported server
 test failures are fixed: `TestDictsRunningJobIsNotKept` now waits for the
 first stable dictionary-list validator instead of assuming a fixed number of
 requests is enough, and the EN/RU full-text mode hint catalogs no longer have
 empty values. Both targeted tests passed five repetitions, and
 `go test ./internal/server -count=1` passes on Windows; search keeps five articles in the first populated section, later sections use Settings → Results, and later pages in that first section start after its five-result first page.
 
-Current checkout: branch `dev` at `da540c7`. Settings checkboxes use one shared customizable control, and the bottom status bar is always visible; preserve untracked `help/changelog.txt`. pipeline from `8b3ee97e` merged. Per active dictionary, it runs a source-reader goroutine and a coordinator/writer; CPU preparation uses a shared pool sized from logical processors and concurrent indexing sessions, with 16 outstanding batches per dictionary. `INDEX_WORKERS` is now obsolete and ignored; per-dictionary and global worker limits derive from logical processors. `Contains` creates and inserts both `entry_fts` (headword token FTS) and `entry_trigram`; `article_fts` is independent FullText and remains absent when disabled. Verified in generated DB schemas. Full `go test -tags sqlite_fts5 ./... -count=1` passes. Old `dev` (`c79732e4`) does one sequential read/prepare/write pass per dictionary, with only cross-dictionary parallelism. With `-headwords -contains`, single-run dev/DictShelf2 times: Oxford DSL 9.4/7.3 s (71,293 rows); Urban DSL 107.3/78.3 s (1,418,551); Longman MDX 10.2/8.0 s (69,172); Russian Wiktionary ZIM first run 39.4/47.7 s. Three ZIM runs gave medians 38.8/47.4 s (dev/DictShelf2); new pipeline is slower on this title-only ZIM case. Entry row counts match; DB byte sizes differ slightly due to layout. LSD Longman DOCE 5 on DictShelf2: 54,819 entries in 3.9 s; dev has no LSD ingest Reader. Output DBs are under `D:\Dictionaries\wuDict\Test\index-contains-{dev,dictshelf2}-2026-10-25`.
+Historical snapshot at `da540c7`. Settings checkboxes use one shared customizable control, and the bottom status bar is always visible; preserve untracked `help/changelog.txt`. pipeline from `8b3ee97e` merged. Per active dictionary, it runs a source-reader goroutine and a coordinator/writer; CPU preparation uses a shared pool sized from logical processors and concurrent indexing sessions, with 16 outstanding batches per dictionary. `INDEX_WORKERS` is now obsolete and ignored; per-dictionary and global worker limits derive from logical processors. `Contains` creates and inserts both `entry_fts` (headword token FTS) and `entry_trigram`; `article_fts` is independent FullText and remains absent when disabled. Verified in generated DB schemas. Full `go test -tags sqlite_fts5 ./... -count=1` passes. Old `dev` (`c79732e4`) does one sequential read/prepare/write pass per dictionary, with only cross-dictionary parallelism. With `-headwords -contains`, single-run dev/DictShelf2 times: Oxford DSL 9.4/7.3 s (71,293 rows); Urban DSL 107.3/78.3 s (1,418,551); Longman MDX 10.2/8.0 s (69,172); Russian Wiktionary ZIM first run 39.4/47.7 s. Three ZIM runs gave medians 38.8/47.4 s (dev/DictShelf2); new pipeline is slower on this title-only ZIM case. Entry row counts match; DB byte sizes differ slightly due to layout. LSD Longman DOCE 5 on DictShelf2: 54,819 entries in 3.9 s; dev has no LSD ingest Reader. Output DBs are under `D:\Dictionaries\wuDict\Test\index-contains-{dev,dictshelf2}-2026-10-25`.
 
 The boot screen reports dictionary-file checks and metadata reads. The native
 WebView2 splash says `DictShelf`, then updates with localized dictionary-check
@@ -100,117 +109,7 @@ its value field. Runtime visual verification remains pending.
 - Android runs Go through JNI without an HTTP listener; Windows listenerless desktop uses WebView2 and a native bridge. Build recipes are in `docs/WINDOWS-VERIFY.md`; Android uses `build-android.cmd debug intel`. Do not install APKs or commit unless requested.
 - Windows/Android search, index maintenance and visual checks remain pending. Other open items include portable Windows write-path gaps (`docs/PORTABLE-WRITES-AUDIT.md`), Edit Folders verification, icon visibility and MDX ad-slot reindex/display.
 - No upstream is configured. DSL uses one GoldenDict-compatible reader and article preparation path. The LSD decoder and reader are in this branch; `docs/DSL.md` and `tools/dslcompare/README.md` describe the DSL architecture.
-Filter mode now explicitly requests the visible dictionary's first result page when its SQL metadata is
-ready but no page is loaded; this avoids leaving the headword pane on its loading message after a ribbon
-selection was skipped.
-
-The shared Browse/Wildcards bottom search now shows recent queries on focus. Wildcards mode has a
-separate list; all other match modes share the regular list. The lists use the main search's persisted
-history and length setting, and Clear history clears the active list. `node --check` on both history
-scripts and `git diff --check` pass; UI verification remains pending.
-
-The shared Browse/Wildcards match-mode menu now expands to all available vertical space, scrolling only
-when the complete menu cannot fit. Prefix, suffix and contains descriptions now state that the single
-query is compared with each word in a headword. Whole word and Exact now also explain what part of the
-headword they match. Section headings use `--ui-font-section`, and options use `--ui-font-addition`. JSON
-parsing, JavaScript syntax and `git diff --check` pass; visual verification remains pending.
-
-Wildcards dictionary searches now use the folded exact-key index for masks without `*` or `?`. Masks
-containing wildcards use the optional trigram index when the longest safe literal run is at least three
-characters; for example, `asd*rtyu?rgfhfb*` uses `rgfhfb`. The full mask still validates every candidate.
-Both the plan and final diagnostic record the selected path and trigram literal. `go build ./...` and
-`git diff --check` pass; runtime timing is pending.
-
-The shared headword-mode menu now moves to the document layer while open, so scrolling containers around
-the Browse and Wildcards controls cannot cover or clip it. Its fixed position follows the button on
-resize and scroll. The menu is width-limited and aligns each mode icon and its wrapping description in
-two columns. JS syntax and `git diff --check` pass; Windows/Android visual verification is pending.
-
-Browse now marks and scrolls to the current `Whole word + lemmatization` match even when the matched
-headword is the lemma and does not contain the typed form. Inline script syntax and runtime verification
-remain pending.
-
-Exact and Exact + lemmatization highlighting now checks the full folded headword against the typed query,
-instead of highlighting every headword with letters. A selected lemma match remains marked as the current
-match.
-
-Wildcards now shows the number of dictionaries with matches beside the result total in separate mode.
-Switching a completed separate result to Combined list builds its sorted, deduplicated SQLite list from
-the saved result blocks instead of scanning all dictionary indexes. The existing combined list path is
-retained for a search started directly in that mode. `go build ./internal/server` passes; that direct
-path has no per-dictionary match count until a separate result is available. Windows/Android runtime
-checks remain pending.
-
-Browse and the Wildcards lower search share an eight-mode headword picker: prefix, suffix, contains,
-Whole word, Whole word + lemmatization, Exact, Exact + lemmatization, and wildcards. Whole word +
-lemmatization includes the typed form and its lemma; Exact + lemmatization matches both the typed
-headword and its lemma as exact headwords. Prefix, suffix, contains and both Whole word modes accept one
-word; paste keeps the first whitespace-delimited word without changing modes. The menu explains lemma
-search. Cache identities were advanced to avoid reusing results from the previous lemma fallback
-behavior. `go build ./...`, JS syntax, translation JSON parsing and `git diff --check` pass; UI
-verification on Windows and Android is pending.
-
-Wildcards lower-search diagnostics now include the typed term, expanded lemma alternatives, match mode,
-selected index query, candidate count and whether the SQL result used indexed candidates or scanned
-cached blocks. Combined-list filter diagnostics log the same query and candidate plan. Build verification
-is passing with `go build ./...` and `git diff --check`.
-
-Fresh Browse diagnostics showed Exact and Exact + lemmatization taking about 1.1 s, while prefix, suffix,
-contains and whole-word modes took 1–5 ms. Exact queries compared `wf` without the `NOCASE` collation
-required by `idx_entry_wf`; the ordinary and streaming queries now specify it. Build verification is
-passing with `go build ./...` and `git diff --check`; rerunning the timing on Windows is pending.
-
-The first separate-to-combined switch exposed SQLite locks and a 98-second wait before its first page.
-The generated merged database uses WAL, but page reads, cache-group marking and cache pruning could
-reopen it with the default DELETE journal mode. Merged-base readers now consistently use WAL, including
-the cache-pruning metadata read; the merged-find cache remains DELETE. `go build ./internal/server` and
-`git diff --check` pass; Windows/Android runtime recheck is pending.
-
-Separate/Combined Wildcards switches now emit correlated client timings for cache reuse, restore, stream
-headers/first event and first SQL page. Go diagnostics split merged cache lock wait, source validation,
-block copy, sorting/indexing, base page read and merged-find page/cache preparation. The opt-in Browse
-and article diagnostics setting enables these records; runtime capture is pending.
-
-System Settings no longer duplicates the Save System Log action; saving remains available from the System
-menu. The disabled cache-limit field expands to show the complete localized unlimited value while
-respecting narrow dialogs.
-
-The 2026-10-24 02:06 log traced a 109-second Combined-list 99% pause to the first-page request rebuilding
-a full merged Browse index (14.6M source rows) after the 59-word Wildcards merge had already completed in
-67 ms. That page request now validates and reuses the `mergedcache` produced by the Wildcards stream. `go
-build ./internal/server` and `git diff --check` pass; runtime confirmation is pending.
-
-At commit `f44e7127`, the 2026-10-23 Windows log confirmed Dictionary settings
-blocked WebView2's UI thread while serving the English Wiktionary ZIM icon: its `/dict-icon/fb1c556f5740`
-request took about 105 seconds, then the queued article resources resumed. Dictionary icon discovery now
-starts in the background, returns HTTP 202 while pending, and the UI retries without blocking. Found and
-absent results are atomically persisted in the prepared folder's `icon.cache`, keyed to its text database
-UUID and the neighboring image's size/modification time. Decodable raster icons larger than 128 px are
-reduced before saving. Rescan and successful reindex queue background refreshes; lookup is skipped unless
-a usable prepared index exists. The Windows desktop System Settings window also includes the Search and
-article diagnostics checkbox; its row existed in the main dialog but was omitted from the desktop
-dialog's manually assembled list. `go build ./internal/server` and `git diff --check` pass;
-Windows/Android runtime checks remain pending.
-
-Browse A–Z now shows dictionary icons in its chooser and active dictionary header, and Wildcards shows
-the selected dictionary icon in its dropdown. These surfaces use the async icon route and honor the saved
-icon visibility setting; Windows/Android visual confirmation is pending.
-
-System Log now has an independent Search and article diagnostics checkbox. When enabled, it records the
-selected query/mode/scope, ordered dictionary slots, each dictionary's response and result count, the
-opened result, first article paint, and stream completion/cancellation/errors. English and Russian labels
-are added; build and Windows/Android runtime verification remain pending.
-
-Edit Folders in the embedded main-window dialog now uses the main window cached folder configuration
-immediately, reveals the import section as soon as the configured destination is known, and no longer
-writes index defaults on open. Folder validation no longer appears as a global indexing task. `node
---check internal/server/web/setup.js` and `git diff --check` pass; Windows runtime confirmation is
-pending. Settings → Appearance has a saved On/Off control for dictionary icons. It defaults on; the
-shared icon style hides current and future icons without rebuilding result lists. Go build and Windows UI
-verification remain pending. MDX prepared indexes now remove empty elements with known advertising-slot
-IDs (including numbered `ad_contentslot_N` slots); nonempty and media-bearing slots remain. MDX Reader
-version is 2, so old prepared indexes are offered for Rebuild. `go build ./internal/format/mdx` and `git
-diff --check` pass; end-to-end Windows reindex/display verification is pending.
+Earlier Browse/Wildcards controls, diagnostics, icon handling and settings changes are recorded in commit history; their Windows/Android visual checks remain pending.
 
 The Oxford Advanced Learner's Dictionary 10th source MDX now has `Title="Oxford Advanced Learner's
 Dictionary 10th"` instead of `OALDWU`; its UTF-16 header length and Adler-32 were updated, and the reader
