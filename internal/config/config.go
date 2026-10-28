@@ -173,7 +173,7 @@ func defaults() Config {
 		ImportKeep:   ImportKeepAsk,
 		// Nil: any site (D139). Dictionaries come from wherever the user
 		// found them, and the link is one they handed over deliberately.
-		ImportURLHosts:    nil,
+		ImportURLHosts: nil,
 		// both are platform-dependent, and for reasons that are about the
 		// platform's opinion of us rather than its capability - see tuning.go
 		PreviewMemory: previewMemoryDefault(),
@@ -461,6 +461,8 @@ const configTemplate = `# DictShelf configuration  (~/.dmshlabs/dictshelf/dictsh
 # Priority: CLI flag > environment variable > this file > built-in default.
 # All keys are optional - uncomment a line to override its default.
 
+# APP_VERSION = "v1.02.09"             # maintained by DictShelf
+
 # DICT_DIR    = "~/Dictionaries"      # folder with dictionaries (.mdx, .ifo, .slob, .dsl, .bgl, .zim)
 #                                     # several folders: ["~/Dictionaries", "/Volumes/Ext/Dicts"]
 #                                     # (in the environment separate them with ":", ";" on Windows)
@@ -679,6 +681,27 @@ func firstRunConfigTemplate(network bool) string {
 // the rest of the file; the key is appended when absent.
 func SaveKey(path, key, value string) error {
 	return SaveKeyRaw(path, key, QuoteTOML(value))
+}
+
+// RecordAppVersion stores build metadata in the active config without
+// rewriting it when the value is already current. APP_VERSION is recognized
+// as metadata and does not affect effective configuration.
+func RecordAppVersion(path, version string) error {
+	if path == "" || version == "" {
+		return nil
+	}
+	data, err := fsx.ReadBounded(path, maxConfigBytes)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	values, _ := parseTOML(string(data))
+	if values["APP_VERSION"] == version {
+		return nil
+	}
+	return SaveKey(path, "APP_VERSION", version)
 }
 
 // QuoteTOML renders one value as TOML.

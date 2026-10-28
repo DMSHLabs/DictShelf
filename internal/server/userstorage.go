@@ -29,8 +29,9 @@ const (
 )
 
 type userStorageDocument struct {
-	Version int               `json:"version"`
-	Values  map[string]string `json:"values"`
+	Version    int               `json:"version"`
+	AppVersion string            `json:"appVersion,omitempty"`
+	Values     map[string]string `json:"values"`
 }
 
 var userStorageHistoryKeys = map[string]bool{
@@ -232,13 +233,13 @@ func (s *Server) importLegacyStorageContext(ctx context.Context, raw string) err
 			settings[row[0]] = row[1]
 		}
 	}
-	if err := writeUserStorage(historyPath, history); err != nil {
+	if err := writeUserStorage(historyPath, history, s.Version); err != nil {
 		return fmt.Errorf("could not save %s: %w", SearchHistoryFile, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := writeUserStorage(settingsPath, settings); err != nil {
+	if err := writeUserStorage(settingsPath, settings, s.Version); err != nil {
 		return fmt.Errorf("could not save %s: %w", SettingsFile, err)
 	}
 	return nil
@@ -282,10 +283,10 @@ func (s *Server) saveUserStorage(raw string) error {
 			settings[row[0]] = row[1]
 		}
 	}
-	if err := writeUserStorage(historyPath, history); err != nil {
+	if err := writeUserStorage(historyPath, history, s.Version); err != nil {
 		return fmt.Errorf("could not save %s: %w", SearchHistoryFile, err)
 	}
-	if err := writeUserStorage(settingsPath, settings); err != nil {
+	if err := writeUserStorage(settingsPath, settings, s.Version); err != nil {
 		return fmt.Errorf("could not save %s: %w", SettingsFile, err)
 	}
 	return nil
@@ -321,11 +322,11 @@ func readUserStorage(path string) (map[string]string, error) {
 	return values, nil
 }
 
-func writeUserStorage(path string, values map[string]string) error {
+func writeUserStorage(path string, values map[string]string, appVersion string) error {
 	if path == "" {
 		return errors.New("settings folder is unavailable")
 	}
-	document := userStorageDocument{Version: userStorageVersion, Values: values}
+	document := userStorageDocument{Version: userStorageVersion, AppVersion: appVersion, Values: values}
 	b, err := json.MarshalIndent(document, "", "  ")
 	if err != nil {
 		return err
@@ -334,4 +335,49 @@ func writeUserStorage(path string, values map[string]string) error {
 		return errors.New("settings exceed the file size limit")
 	}
 	return fsx.WriteAtomic(path, b, 0o600)
+}
+
+// recordUserStorageAppVersion updates existing snapshots without creating
+// settings.json before Android's legacy-localStorage import can complete.
+func (s *Server) recordUserStorageAppVersion() error {
+	if s.Version == "" {
+		return nil
+	}
+	settingsPath, historyPath := s.userStoragePaths()
+	userStorageMu.Lock()
+	defer userStorageMu.Unlock()
+	for _, path := range []string{settingsPath, historyPath} {
+		if path == "" {
+			continue
+		}
+		data, err := fsx.ReadBounded(path, maxUserStorageBytes)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		var document userStorageDocument
+		if err := json.Unmarshal(data, &document); err != nil {
+			return fmt.Errorf("invalid settings file %s: %w", filepath.Base(path), err)
+		}
+		if document.Version != userStorageVersion {
+			return fmt.Errorf("unsupported settings file version %d in %s", document.Version, filepath.Base(path))
+		}
+		if document.AppVersion == s.Version {
+			continue
+		}
+		document.AppVersion = s.Version
+		updated, err := json.MarshalIndent(document, "", "  ")
+		if err != nil {
+			return err
+		}
+		if int64(len(updated)) > maxUserStorageBytes {
+			return fmt.Errorf("%s exceeds the file size limit", filepath.Base(path))
+		}
+		if err := fsx.WriteAtomic(path, updated, 0o600); err != nil {
+			return err
+		}
+	}
+	return nil
 }

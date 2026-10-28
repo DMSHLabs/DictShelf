@@ -148,10 +148,12 @@ func (r *Registry) runDictionaryIconLoad(e *entry, gen uint64) {
 			logx.Warn("dictionary icon lookup failed for %s: %v", e.ID, recovered)
 		}
 		e.iconMu.Lock()
-		if e.iconGen == gen && e.gen.Load() == gen {
-			e.iconBody, e.iconMIME = body, mime
-			e.iconReady = true
+		if e.iconGen == gen {
 			e.iconLoading = false
+			if e.gen.Load() == gen {
+				e.iconBody, e.iconMIME = body, mime
+				e.iconReady = true
+			}
 		}
 		e.iconMu.Unlock()
 	}()

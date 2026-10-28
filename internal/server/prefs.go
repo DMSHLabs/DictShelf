@@ -69,12 +69,13 @@ type UIPrefs struct {
 	UpdateNotificationsOff bool   `json:"updateNotificationsOff,omitempty"` // notifications are on unless disabled
 	ResultCacheLimitGB     int    `json:"resultCacheLimitGB,omitempty"`
 	ResultCacheNoLimit     bool   `json:"resultCacheNoLimit,omitempty"`
-	// CountAllResultsInBackground opts in to the background pass that counts
-	// every match after the initial results. Nil means off on a new profile.
+	// CountAllResultsInBackground controls the background pass that counts
+	// every match after the initial results. A new profile and the first launch
+	// of each app version enable it; an explicit later choice is saved here.
 	CountAllResultsInBackground *bool `json:"countAllResultsInBackground,omitempty"`
-	// SkipBackgroundResultCount is the legacy opt-out key. Keep reading it so
-	// profiles that explicitly disabled the old default remain disabled.
-	SkipBackgroundResultCount bool `json:"skipBackgroundResultCount,omitempty"`
+	// SkipBackgroundResultCount is the legacy opt-out key. Keep reading it for
+	// older state files; CountAllResultsInBackground takes precedence.
+	SkipBackgroundResultCount bool   `json:"skipBackgroundResultCount,omitempty"`
 	SearchReturnCache         string `json:"searchReturnCache,omitempty"`
 	CombinedDictionaryLimit   int    `json:"combinedDictionaryLimit,omitempty"`
 	DictIconsOff              bool   `json:"dictIconsOff,omitempty"`
@@ -266,6 +267,7 @@ func facetIDs(in []string) []string {
 // prefsFile stores collection state. Unknown legacy parser-selection fields
 // are ignored by JSON decoding and disappear on the next save.
 type prefsFile struct {
+	AppVersion      string                  `json:"appVersion,omitempty"`
 	DSLTitleRepairs *bool                   `json:"dslTitleRepairs,omitempty"`
 	IndexingMode    string                  `json:"indexingMode,omitempty"`
 	IndexDefaults   *indexOptions           `json:"indexDefaults,omitempty"`
@@ -375,6 +377,29 @@ func LoadPrefs(path string) *Prefs {
 		logx.Warn("ignoring %s: %s", path, st.why)
 	}
 	return p
+}
+
+// recordAppVersion marks the first startup of each build version. Background
+// match search is enabled once when the version changes; later preference
+// edits survive every restart of that same build.
+func (p *Prefs) recordAppVersion(version string) error {
+	if version == "" {
+		return nil
+	}
+	p.write.Lock()
+	defer p.write.Unlock()
+	f := p.file.fresh().val.clone()
+	if f.AppVersion == version {
+		return nil
+	}
+	f.AppVersion = version
+	if f.UI == nil {
+		f.UI = &UIPrefs{}
+	}
+	on := true
+	f.UI.CountAllResultsInBackground = &on
+	f.UI.SkipBackgroundResultCount = false
+	return p.saveRecord(f)
 }
 
 func (p *Prefs) refresh() { p.file.refresh() }

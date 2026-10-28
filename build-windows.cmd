@@ -239,6 +239,26 @@ echo.
 rem A running server holds DictShelf.exe open, and Windows then refuses to let the
 rem linker replace it - the "Access is denied" trap docs\WINDOWS-VERIFY.md
 rem records for preview servers. Said here, where it can still be acted on.
+
+rem The executable's Explorer icon comes from this compiled PE resource, not
+rem directly from the ICO file. Rebuild it on every Windows build so changing
+rem packaging\windows\dictshelf.ico cannot leave a stale icon in the EXE.
+set "WINDRES_PATH="
+for /f "delims=" %%W in ('where windres 2^>nul') do if not defined WINDRES_PATH set "WINDRES_PATH=%%W"
+if not defined WINDRES_PATH if defined GCC_PATH for %%D in ("%GCC_PATH%") do if exist "%%~dpDwindres.exe" set "WINDRES_PATH=%%~dpDwindres.exe"
+if not defined WINDRES_PATH if defined CC_PATH for %%D in ("%CC_PATH%") do if exist "%%~dpDwindres.exe" set "WINDRES_PATH=%%~dpDwindres.exe"
+if not defined WINDRES_PATH (
+    echo ERROR: windres.exe was not found. It is needed to embed the current app icon.
+    echo   Add windres.exe to PATH or install it beside the configured GCC compiler.
+    exit /b 1
+)
+echo Updating the embedded Windows icon...
+"%WINDRES_PATH%" -F pe-x86-64 -i packaging\windows\dictshelf.rc -o dictshelf_windows_amd64.syso
+if errorlevel 1 (
+    echo ERROR: Could not compile packaging\windows\dictshelf.ico into the Windows executable resource.
+    exit /b 1
+)
+
 tasklist /FI "IMAGENAME eq %OUTPUT_EXE%" 2>nul | findstr /i /c:"%OUTPUT_EXE%" >nul
 if not errorlevel 1 (
     echo WARNING: %OUTPUT_EXE% is running. The build will try to stop it before
