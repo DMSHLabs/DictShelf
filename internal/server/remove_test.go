@@ -182,7 +182,8 @@ func TestRemoveEverything(t *testing.T) {
 	waitNewDictionaryIndexing(t, s.reg)
 	id := idOf(t, s, "test.dsl")
 
-	if rec := deleteReq(t, s, "/api/library?dict="+id); rec.Code != 200 {
+	rec := deleteReq(t, s, "/api/library?dict="+id)
+	if rec.Code != 200 {
 		t.Fatalf("DELETE = %d: %s", rec.Code, rec.Body.String())
 	}
 	var rep removal

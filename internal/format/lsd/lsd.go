@@ -23,7 +23,7 @@ import (
 const pageSize = 512
 
 // ReaderVersion tracks the behavior of the sequential ingest reader.
-const ReaderVersion = 5
+const ReaderVersion = 6
 
 func init() {
 	dict.RegisterFormat(".lsd", func(path string) (dict.Dictionary, error) { return Open(path) })
@@ -97,12 +97,26 @@ func openSource(path string) (*source, error) {
 	if err != nil {
 		return fail(err)
 	}
-	if !supportedVersion(h.version) {
+	decoderVersion := h.version
+	if decoderVersion == 0x100000 {
+		// Early Lingvo 10 dictionaries use the decoder and article bitstream
+		// layout shared with the 11/12 user dictionary format. Their variable
+		// header predates embedded icons and resource offsets.
+		decoderVersion = 0x110001
+	}
+	if !supportedVersion(decoderVersion) {
 		return fail(fmt.Errorf("lsd: unsupported dictionary version %#x", h.version))
 	}
 	name, pagesEnd, overlayEnd, icon, err := readVariableHeader(f, h, st.Size())
 	if err != nil {
 		return fail(err)
+	}
+	if h.version == 0x100000 {
+		// Lingvo 10 stores no pagesEnd/resource offsets in its variable
+		// header. The index ends at the beginning of the article section; this
+		// dictionary has no overlay resource block.
+		pagesEnd = uint32(st.Size())
+		overlayEnd = uint32(st.Size())
 	}
 	decoderSize := h.articlesOffset - h.decoderOffset
 	if decoderSize > 128<<20 {
@@ -115,7 +129,7 @@ func openSource(path string) (*source, error) {
 	if h.version == 0x151005 {
 		x6XOR(decoderBytes)
 	}
-	d, err := readDecoder(decoderBytes, h.version)
+	d, err := readDecoder(decoderBytes, decoderVersion)
 	if err != nil {
 		return fail(err)
 	}
@@ -137,7 +151,7 @@ func openSource(path string) (*source, error) {
 
 func supportedVersion(version uint32) bool {
 	switch version {
-	case 0x110001, 0x120001, 0x131001, 0x132001, 0x141004, 0x142001, 0x145001, 0x151005, 0x152001, 0x155001:
+	case 0x100000, 0x110001, 0x120001, 0x131001, 0x132001, 0x141004, 0x142001, 0x145001, 0x151005, 0x152001, 0x155001:
 		return true
 	default:
 		return false

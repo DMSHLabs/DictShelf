@@ -74,6 +74,39 @@ func TestReaderSimpleFixture(t *testing.T) {
 	}
 }
 
+func TestReaderLingvo10Dictionary(t *testing.T) {
+	path := `D:\Dictionaries\Test\(RUS-RUS) Русский экономический словарь (#2).lsd`
+	r, err := NewReader(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if r.Meta().EntryCount != 18370 {
+		t.Fatalf("entry count = %d; want 18370", r.Meta().EntryCount)
+	}
+	first, err := r.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Headwords) == 0 || first.Headwords[0] != `"АВАНСЫ ОТ ЗАКАЗЧИКОВ"` || !strings.Contains(first.Body, "счет") {
+		t.Fatalf("unexpected first entry: %#v", first)
+	}
+	count := 1
+	for {
+		_, err := r.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("entry %d: %v", count, err)
+		}
+		count++
+	}
+	if count != 18370 {
+		t.Fatalf("read %d entries; want 18370", count)
+	}
+}
+
 func TestFormatRegistration(t *testing.T) {
 	path := "testdata/simple_testdict1/test.lsd"
 	r, err := dict.OpenReader(path)
