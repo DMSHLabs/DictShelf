@@ -1131,6 +1131,7 @@
   "system.logWeb": "Записывать действия WebView",
   "system.logHint": "Включите нужные замеры, повторите задержку и сохраните журнал. Каждый флажок включает только свой вид диагностики.",
   "system.searchArticleDiagnostics": "Записывать результаты поиска и открытие словарных статей",
+  "system.articlePageCacheDiagnostics": "Записывать работу кэша страниц статей",
   "system.browseArticleDiagnostics": "Записывать время загрузки Browse и переходов к статьям",
   "system.browseDiagnostics": "Записывать замеры Browse и прогресса Wildcards",
   "system.dictionaryListDiagnostics": "Записывать время списка словарей и его открытия",

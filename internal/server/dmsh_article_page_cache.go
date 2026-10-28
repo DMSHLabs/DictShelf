@@ -27,7 +27,7 @@ type articlePageCache struct {
 	maxBytes int64
 }
 
-func (c *articlePageCache) resetFor(id string) {
+func (c *articlePageCache) resetFor(id string, diagnostics bool) {
 	if !wildcardCacheIDPattern.MatchString(id) {
 		return
 	}
@@ -42,7 +42,9 @@ func (c *articlePageCache) resetFor(id string) {
 		c.db = nil
 	}
 	c.id, c.access = id, 0
-	logx.System("article_page_cache stage=reset id=%q previous_id=%q", id, previous)
+	if diagnostics {
+		logx.SystemDiagnostic("article_page_cache stage=reset id=%q previous_id=%q", id, previous)
+	}
 }
 
 func (c *articlePageCache) eligible(r SearchRequest) bool {
@@ -86,6 +88,7 @@ func (c *articlePageCache) serve(ctx context.Context, r SearchRequest, emit func
 	}{r, r.Origin})
 	var cached []byte
 	cacheReady := false
+	diagnostics := r.PageCacheDiagnostics
 	c.mu.Lock()
 	if c.id == r.CacheID && c.openLocked() == nil {
 		cacheReady = true
@@ -98,7 +101,9 @@ func (c *articlePageCache) serve(ctx context.Context, r SearchRequest, emit func
 	if len(cached) > 0 {
 		var events []SearchEvent
 		if json.Unmarshal(cached, &events) == nil {
-			logx.System("article_page_cache stage=hit id=%q dict=%q start=%d size=%d bytes=%d events=%d elapsed_ms=%d", r.CacheID, r.Dictionary, pageStart, pageSize, len(cached), len(events), time.Since(started).Milliseconds())
+			if diagnostics {
+				logx.SystemDiagnostic("article_page_cache stage=hit id=%q dict=%q start=%d size=%d bytes=%d events=%d elapsed_ms=%d", r.CacheID, r.Dictionary, pageStart, pageSize, len(cached), len(events), time.Since(started).Milliseconds())
+			}
 			for _, event := range events {
 				if err := emit(event); err != nil {
 					return err
@@ -107,7 +112,9 @@ func (c *articlePageCache) serve(ctx context.Context, r SearchRequest, emit func
 			return nil
 		}
 	}
-	logx.System("article_page_cache stage=miss id=%q dict=%q start=%d size=%d cache_ready=%t reason=%s", r.CacheID, r.Dictionary, pageStart, pageSize, cacheReady, map[bool]string{true: "not_found", false: "inactive_or_unavailable"}[cacheReady])
+	if diagnostics {
+		logx.SystemDiagnostic("article_page_cache stage=miss id=%q dict=%q start=%d size=%d cache_ready=%t reason=%s", r.CacheID, r.Dictionary, pageStart, pageSize, cacheReady, map[bool]string{true: "not_found", false: "inactive_or_unavailable"}[cacheReady])
+	}
 	var events []SearchEvent
 	err := load(func(event SearchEvent) error {
 		if err := emit(event); err != nil {
@@ -125,7 +132,9 @@ func (c *articlePageCache) serve(ctx context.Context, r SearchRequest, emit func
 	// A growing result list can change both Total and HasNext. Re-read it
 	// until its ID scan is complete instead of freezing intermediate metadata.
 	if r.CacheAction == "page" && (len(events) != 1 || events[0].T != "hit" || !events[0].Complete) {
-		logx.System("article_page_cache stage=skip id=%q dict=%q start=%d size=%d reason=incomplete_page events=%d", r.CacheID, r.Dictionary, pageStart, pageSize, len(events))
+		if diagnostics {
+			logx.SystemDiagnostic("article_page_cache stage=skip id=%q dict=%q start=%d size=%d reason=incomplete_page events=%d", r.CacheID, r.Dictionary, pageStart, pageSize, len(events))
+		}
 		return nil
 	}
 	for _, event := range events {
@@ -136,7 +145,9 @@ func (c *articlePageCache) serve(ctx context.Context, r SearchRequest, emit func
 	payload, err := json.Marshal(events)
 	if err != nil || int64(len(payload)) > limit {
 		if err == nil {
-			logx.System("article_page_cache stage=skip id=%q dict=%q start=%d size=%d reason=over_limit bytes=%d limit=%d", r.CacheID, r.Dictionary, pageStart, pageSize, len(payload), limit)
+			if diagnostics {
+				logx.SystemDiagnostic("article_page_cache stage=skip id=%q dict=%q start=%d size=%d reason=over_limit bytes=%d limit=%d", r.CacheID, r.Dictionary, pageStart, pageSize, len(payload), limit)
+			}
 		}
 		return nil
 	}
@@ -149,7 +160,9 @@ func (c *articlePageCache) serve(ctx context.Context, r SearchRequest, emit func
 	if _, err = c.db.ExecContext(ctx, `INSERT OR REPLACE INTO article_page(cache_key,dict_id,page_start,page_size,payload,bytes,accessed) VALUES(?,?,?,?,?,?,?)`, string(key), r.Dictionary, pageStart, pageSize, payload, len(payload), c.access); err != nil {
 		return nil
 	}
-	logx.System("article_page_cache stage=store id=%q dict=%q start=%d size=%d bytes=%d events=%d elapsed_ms=%d", r.CacheID, r.Dictionary, pageStart, pageSize, len(payload), len(events), time.Since(started).Milliseconds())
+	if diagnostics {
+		logx.SystemDiagnostic("article_page_cache stage=store id=%q dict=%q start=%d size=%d bytes=%d events=%d elapsed_ms=%d", r.CacheID, r.Dictionary, pageStart, pageSize, len(payload), len(events), time.Since(started).Milliseconds())
+	}
 	for {
 		var total int64
 		if c.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(bytes),0) FROM article_page`).Scan(&total) != nil || total <= limit {
@@ -164,7 +177,9 @@ func (c *articlePageCache) serve(ctx context.Context, r SearchRequest, emit func
 		if _, err = c.db.ExecContext(ctx, `DELETE FROM article_page WHERE cache_key=?`, evictedKey); err != nil {
 			break
 		}
-		logx.System("article_page_cache stage=evict id=%q dict=%q start=%d size=%d bytes=%d stored_bytes_before=%d", r.CacheID, evictedDict, evictedStart, evictedSize, evictedBytes, total)
+		if diagnostics {
+			logx.SystemDiagnostic("article_page_cache stage=evict id=%q dict=%q start=%d size=%d bytes=%d stored_bytes_before=%d", r.CacheID, evictedDict, evictedStart, evictedSize, evictedBytes, total)
+		}
 	}
 	return nil
 }

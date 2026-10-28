@@ -84,15 +84,21 @@ func systemDir() string {
 // System writes diagnostics independently of verbose console output. Logging
 // failures never replace the original failure and never recurse into logging.
 func System(format string, args ...any) {
-	writeSystem(false, format, args...)
+	writeSystem(false, false, format, args...)
+}
+
+// SystemDiagnostic writes an explicitly enabled diagnostic without requiring
+// the basic-events or WebView-events categories to be enabled.
+func SystemDiagnostic(format string, args ...any) {
+	writeSystem(false, true, format, args...)
 }
 
 // SystemError records an error and makes it visible in the panel's Info section.
 func SystemError(format string, args ...any) {
-	writeSystem(true, "error: "+format, args...)
+	writeSystem(true, false, "error: "+format, args...)
 }
 
-func writeSystem(isError bool, format string, args ...any) {
+func writeSystem(isError, diagnostic bool, format string, args ...any) {
 	message := fmt.Sprintf(format, args...)
 	// URL queries can carry access keys. Keep the host/path for diagnosis.
 	message = diagnosticURL.ReplaceAllStringFunc(message, func(value string) string {
@@ -117,8 +123,8 @@ func writeSystem(isError bool, format string, args ...any) {
 	}
 	systemMu.Lock()
 	defer systemMu.Unlock()
-	if !systemLogEnabled || (isWebSystemEvent(message) && !systemLogWebEvents) ||
-		(!isWebSystemEvent(message) && !systemLogBaseEvents) {
+	if !systemLogEnabled || !diagnostic && (isWebSystemEvent(message) && !systemLogWebEvents ||
+		!isWebSystemEvent(message) && !systemLogBaseEvents) {
 		return
 	}
 	root := systemDir()
