@@ -3,14 +3,26 @@ rem Copyright (C) 2026 DmShAl (Shepeta Dmitry)
 rem SPDX-License-Identifier: GPL-3.0-or-later
 setlocal EnableExtensions DisableDelayedExpansion
 
+set "SHOW_HELP="
+for %%A in (%*) do (
+    if /i "%%~A"=="-?" set "SHOW_HELP=1"
+    if /i "%%~A"=="--?" set "SHOW_HELP=1"
+    if /i "%%~A"=="-h" set "SHOW_HELP=1"
+    if /i "%%~A"=="--h" set "SHOW_HELP=1"
+    if /i "%%~A"=="-help" set "SHOW_HELP=1"
+    if /i "%%~A"=="--help" set "SHOW_HELP=1"
+)
+if defined SHOW_HELP goto :show_help
+
 rem ============================================================
-rem DictShelf Windows builds: [cli|server|installer] [--channel release|pre-release|beta]
+rem DictShelf Windows builds: [cli|server|installer] [--channel release|pre-release|beta] [--update-icon]
 rem
 rem   (no args)             listenerless Windows WebView app: DictShelf.exe
 rem   cli                  console CLI: DictShelf-cli.exe (does not start a server)
 rem   server               console HTTP server: DictShelf-server.exe
 rem   installer            package the existing DictShelf.exe from the default build
 rem                        under dist\ (needs Inno Setup 6.3+)
+rem   --update-icon        recompile packaging\windows\dictshelf.ico into the executable
 rem
 rem The installer mode packages the exact GUI executable built by the default mode.
 rem
@@ -73,6 +85,7 @@ set "DEFAULT_SERVE=1"
 set "CHANNEL=release"
 set "CHANNEL_SPECIFIED="
 set "NEED_CHANNEL="
+set "UPDATE_ICON="
 
 if not "%~1"=="" for %%A in (%*) do (
     if defined NEED_CHANNEL (
@@ -85,6 +98,12 @@ if not "%~1"=="" for %%A in (%*) do (
             exit /b 1
         )
         set "NEED_CHANNEL=1"
+    ) else if /i "%%A"=="--update-icon" (
+        if defined UPDATE_ICON (
+            echo ERROR: specify --update-icon only once.
+            exit /b 1
+        )
+        set "UPDATE_ICON=1"
     ) else if /i "%%A"=="installer" (
         set "BUILD_TYPE=installer"
     ) else if /i "%%A"=="cli" (
@@ -101,7 +120,7 @@ if not "%~1"=="" for %%A in (%*) do (
         set "DEFAULT_SERVE=1"
     ) else (
         echo ERROR: unknown option "%%A".
-        echo Usage: build-windows.cmd [cli^|server^|installer] [--channel release^|pre-release^|beta]
+        echo Usage: build-windows.cmd [cli^|server^|installer] [--channel release^|pre-release^|beta] [--update-icon]
         exit /b 1
     )
 )
@@ -111,7 +130,11 @@ if defined NEED_CHANNEL (
 )
 if defined CHANNEL_SPECIFIED if /i not "%CHANNEL%"=="release" if /i not "%CHANNEL%"=="pre-release" if /i not "%CHANNEL%"=="beta" (
     echo ERROR: unknown update channel "%CHANNEL%".
-    echo Usage: build-windows.cmd [cli^|server^|installer] [--channel release^|pre-release^|beta]
+    echo Usage: build-windows.cmd [cli^|server^|installer] [--channel release^|pre-release^|beta] [--update-icon]
+    exit /b 1
+)
+if /i "%BUILD_TYPE%"=="installer" if defined UPDATE_ICON (
+    echo ERROR: --update-icon applies to executable builds, not installer packaging.
     exit /b 1
 )
 
@@ -174,7 +197,7 @@ if not defined VERSION (
 )
 
 rem CI supplies the release tag so installer metadata matches the published artifact.
-if defined WUDICT_VERSION set "VERSION=%WUDICT_VERSION%"
+if defined DICTSHELF_VERSION set "VERSION=%DICTSHELF_VERSION%"
 
 if defined CHANNEL_SPECIFIED (
     call :stamp_channel
@@ -236,39 +259,22 @@ echo Output:
 echo   %CD%\%OUTPUT_EXE%
 echo.
 
-rem A running server holds DictShelf.exe open, and Windows then refuses to let the
-rem linker replace it - the "Access is denied" trap docs\WINDOWS-VERIFY.md
-rem records for preview servers. Said here, where it can still be acted on.
-
-rem The executable's Explorer icon comes from this compiled PE resource, not
-rem directly from the ICO file. Rebuild it on every Windows build so changing
-rem packaging\windows\dictshelf.ico cannot leave a stale icon in the EXE.
-set "WINDRES_PATH="
-for /f "delims=" %%W in ('where windres 2^>nul') do if not defined WINDRES_PATH set "WINDRES_PATH=%%W"
-if not defined WINDRES_PATH if defined GCC_PATH for %%D in ("%GCC_PATH%") do if exist "%%~dpDwindres.exe" set "WINDRES_PATH=%%~dpDwindres.exe"
-if not defined WINDRES_PATH if defined CC_PATH for %%D in ("%CC_PATH%") do if exist "%%~dpDwindres.exe" set "WINDRES_PATH=%%~dpDwindres.exe"
-if not defined WINDRES_PATH (
-    echo ERROR: windres.exe was not found. It is needed to embed the current app icon.
-    echo   Add windres.exe to PATH or install it beside the configured GCC compiler.
-    exit /b 1
-)
-echo Updating the embedded Windows icon...
-"%WINDRES_PATH%" -F pe-x86-64 -i packaging\windows\dictshelf.rc -o dictshelf_windows_amd64.syso
-if errorlevel 1 (
-    echo ERROR: Could not compile packaging\windows\dictshelf.ico into the Windows executable resource.
+rem Recompile the PE icon resource only when explicitly requested. The checked-in
+rem .syso keeps ordinary builds and clean CI builds self-contained.
+if defined UPDATE_ICON call :update_embedded_icon
+if errorlevel 1 exit /b 1
+if not defined UPDATE_ICON if not exist "dictshelf_windows_amd64.syso" (
+    echo ERROR: the embedded icon resource is missing.
+    echo   Restore dictshelf_windows_amd64.syso or run build-windows.cmd --update-icon.
     exit /b 1
 )
 
-tasklist /FI "IMAGENAME eq %OUTPUT_EXE%" 2>nul | findstr /i /c:"%OUTPUT_EXE%" >nul
-if not errorlevel 1 (
-    echo WARNING: %OUTPUT_EXE% is running. The build will try to stop it before
-    echo   replacing the file; if that fails, close it and run the build again:
-    echo     taskkill /F /IM %OUTPUT_EXE%
-    echo.
-)
+rem taskkill may return before Windows releases the image file. Wait for the
+rem process to disappear before deleting the old executable or invoking Go.
+call :stop_running_output_executable
+if errorlevel 1 exit /b 1
 
-rem Only replace the current executable after all prerequisites are present.
-taskkill /IM "%OUTPUT_EXE%" /F >nul 2>&1
+rem Only replace the current executable after the old process has exited.
 del /F /Q "%OUTPUT_EXE%"
 if exist "%OUTPUT_EXE%~" del /F /Q "%OUTPUT_EXE%~"
 
@@ -388,6 +394,74 @@ echo.
 
 endlocal
 exit /b 0
+
+:show_help
+echo DictShelf Windows build
+echo.
+echo Usage:
+echo   build-windows.cmd [cli^|server^|installer] [--channel release^|pre-release^|beta] [--update-icon]
+echo.
+echo Help keys: -?, --?, -h, --h, -help, --help
+echo.
+echo Build targets:
+echo   ^(no target^)  Build the desktop DictShelf.exe application. This is the default.
+echo   cli          Build DictShelf-cli.exe, the console command-line application.
+echo   server       Build DictShelf-server.exe, the console HTTP server.
+echo   installer    Package the existing DictShelf.exe with Inno Setup 6.3 or newer.
+echo.
+echo Update channels:
+echo   --channel release^|pre-release^|beta
+echo   The channel is stamped into the version shown by the application.
+echo.
+echo Icon:
+echo   --update-icon  Rebuild the embedded Windows icon before building the executable.
+echo.
+echo Version:
+echo   Set DICTSHELF_VERSION to override the version read from Git, for example:
+echo     set "DICTSHELF_VERSION=dictshelf-v1.02.01"
+echo     build-windows.cmd --channel beta
+endlocal
+exit /b 0
+
+:update_embedded_icon
+set "WINDRES_PATH="
+for /f "delims=" %%W in ('where windres 2^>nul') do if not defined WINDRES_PATH set "WINDRES_PATH=%%W"
+if not defined WINDRES_PATH if defined GCC_PATH for %%D in ("%GCC_PATH%") do if exist "%%~dpDwindres.exe" set "WINDRES_PATH=%%~dpDwindres.exe"
+if not defined WINDRES_PATH if defined CC_PATH for %%D in ("%CC_PATH%") do if exist "%%~dpDwindres.exe" set "WINDRES_PATH=%%~dpDwindres.exe"
+if not defined WINDRES_PATH (
+    echo ERROR: windres.exe was not found. It is needed to embed the current app icon.
+    echo   Add windres.exe to PATH or install it beside the configured GCC compiler.
+    exit /b 1
+)
+echo Updating the embedded Windows icon...
+"%WINDRES_PATH%" -F pe-x86-64 -i packaging\windows\dictshelf.rc -o dictshelf_windows_amd64.syso
+if errorlevel 1 (
+    echo ERROR: Could not compile packaging\windows\dictshelf.ico into the Windows executable resource.
+    exit /b 1
+)
+exit /b 0
+
+:stop_running_output_executable
+tasklist /FI "IMAGENAME eq %OUTPUT_EXE%" /NH 2>nul | findstr /i /c:"%OUTPUT_EXE%" >nul
+if errorlevel 1 exit /b 0
+
+echo Stopping %OUTPUT_EXE%...
+taskkill /IM "%OUTPUT_EXE%" /F >nul 2>&1
+set "STOP_WAIT=0"
+:wait_for_output_executable
+tasklist /FI "IMAGENAME eq %OUTPUT_EXE%" /NH 2>nul | findstr /i /c:"%OUTPUT_EXE%" >nul
+if errorlevel 1 (
+    echo %OUTPUT_EXE% has exited.
+    exit /b 0
+)
+set /a STOP_WAIT+=1
+if %STOP_WAIT% GEQ 60 (
+    echo ERROR: %OUTPUT_EXE% did not exit after 60 seconds.
+    echo   Close it manually, then run the build again.
+    exit /b 1
+)
+timeout /t 1 /nobreak >nul
+goto :wait_for_output_executable
 
 :print_version
 set "DISPLAY_VERSION=dictshelf-%VERSION%"

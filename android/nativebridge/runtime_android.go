@@ -383,6 +383,7 @@ func WudictGoBridgeHeadwordExport(action, argument *C.char) *C.char {
 	return C.CString(string(data))
 }
 
+
 //export WudictGoBridgeIntake
 func WudictGoBridgeIntake(action, argument *C.char) *C.char {
 	if action == nil || argument == nil {

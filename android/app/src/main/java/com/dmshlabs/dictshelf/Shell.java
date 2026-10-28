@@ -706,6 +706,16 @@ final class Shell {
                     }
                     return true;
                 }
+                if ("wudict:save-article".equals(message)) {
+                    try {
+                        SystemLogExport.startArticle(a, defaultValue == null ? "{}" : defaultValue);
+                        a.runOnUiThread(() -> result.confirm("ok"));
+                    } catch (Exception e) {
+                        String detail = e.getMessage() == null ? "Could not save article" : e.getMessage();
+                        a.runOnUiThread(() -> result.confirm(detail));
+                    }
+                    return true;
+                }
                 if ("wudict:exit".equals(message)) {
                     result.confirm("ok");
                     a.runOnUiThread(() -> AppExit.request(a));

@@ -50,9 +50,13 @@ them are in `docs/handoff-archive.md`.
   process after a restart. The page also caches its CSS by the `?v=` hash, so
   the browser must be reloaded after the server is really new.
 - Go: `go build ./...`; targeted `go test ./internal/<pkg> -run '...' -count=1`.
-- **`build-windows.cmd [cli|server|installer]`** — the fork's Windows builds:
-  the default command builds listenerless WebView `DictShelf.exe`, `cli` builds
-  console `DictShelf-cli.exe`, `server` builds console HTTP-server
+- **`build-windows.cmd [cli|server|installer] [--channel ...] [--update-icon]`** —
+  the fork's Windows builds. The embedded PE icon is reused from the checked-in
+  `dictshelf_windows_amd64.syso`; pass `--update-icon` after changing
+  `packaging\windows\dictshelf.ico` to regenerate it. Before replacing a
+  running output executable, the script force-stops it and waits up to 60 seconds
+  for Windows to release the file. The default command builds listenerless WebView
+  `DictShelf.exe`, `cli` builds console `DictShelf-cli.exe`, `server` builds console HTTP-server
   `DictShelf-server.exe`, and `installer` packages the existing desktop exe.
   Machine-specific overrides belong in the ignored `build-windows.local.bat`
   or the environment: `GCC_PATH` (empty falls back to `%CC%`, then `gcc.exe`

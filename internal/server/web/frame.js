@@ -674,7 +674,9 @@
 		var el = e.composedPath ? e.composedPath()[0] : e.target;
 		if (el && el.closest && el.closest("a,button,input,textarea,select,audio,video,[contenteditable]")) return;
 		e.preventDefault();
-		HOST.postMessage({ t: "findhere", fid: fid, x: e.clientX, y: e.clientY }, "*");
+		var selected = String(document.getSelection() || "");
+		if (selected) e.preventDefault();
+		HOST.postMessage({ t: "findhere", fid: fid, x: e.clientX, y: e.clientY, selected: selected }, "*");
 	}, true);
 	document.addEventListener("dblclick", function (e) {
 		var el = e.composedPath ? e.composedPath()[0] : e.target;

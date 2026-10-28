@@ -6,4 +6,6 @@
 
 package cli
 
+func cleanupWindowsUpdaterHelperState() {}
+
 func runWindowsUpdateHelper([]string) bool { return false }

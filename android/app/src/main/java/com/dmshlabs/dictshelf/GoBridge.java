@@ -210,6 +210,7 @@ final class GoBridge {
         return result;
     }
 
+
     static String intake(String action, String argument) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         String result = nativeIntake(action, argument);

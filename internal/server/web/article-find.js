@@ -646,5 +646,5 @@ new ResizeObserver(measure).observe(strip);
 new MutationObserver(() => { measure(); if (active) schedule(); }).observe($("sbar"),{attributes:true,attributeFilter:["hidden"]});
 $("sbarExamples").addEventListener("click",schedule);
 $("examplesRow")?.addEventListener("click",schedule);
-window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation, fullTextModeActive:()=>options.mode === "fts", searchAcrossBlocks:()=>options.blocks!==false, searchFrom, goto};
+window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation, fullTextModeActive:()=>options.mode === "fts", isActive:()=>active&&!!options.query, searchAcrossBlocks:()=>options.blocks!==false, searchFrom, goto};
 })();

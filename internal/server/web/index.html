@@ -944,9 +944,20 @@ window.wudictFontScale=(function(){
   <p id="articleFindStatus" role="status"></p>
   <div class="article-find-actions"><button type="button" class="btn" id="articleFindDialogPrev">{{T:articleFind.previous}}</button><button type="button" class="btn" id="articleFindDialogNext">{{T:articleFind.next}}</button></div>
 </dialog>
+<dialog id="articleSaveDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="articleSaveTitle">
+  <h2 id="articleSaveTitle">{{T:articleFind.saveArticle}}</h2>
+  <label><input type="radio" name="articleSaveFormat" value="html">{{T:articleFind.saveHtmlOnly}}</label>
+  <label><input type="radio" name="articleSaveFormat" value="complete" checked>{{T:articleFind.saveHtmlComplete}}</label>
+  <label><input type="radio" name="articleSaveFormat" value="single">{{T:articleFind.saveHtmlSingle}}</label>
+  <div class="article-find-actions"><button type="button" class="btn" id="articleSaveGo">{{T:panel.save}}</button><button type="button" class="btn" id="articleSaveCancel">{{T:panel.cancel}}</button></div>
+</dialog>
 <div id="articleSearchContextMenu" class="mask-word-context-menu menu-card" role="menu" hidden>
-  <button type="button" id="articleSearchBelow" role="menuitem">{{T:articleFind.searchBelow}}</button>
-  <button type="button" id="articleSearchAbove" role="menuitem">{{T:articleFind.searchAbove}}</button>
+  <button type="button" id="articleSearchBelow" role="menuitem" disabled>{{T:articleFind.searchBelow}}</button>
+  <button type="button" id="articleSearchAbove" role="menuitem" disabled>{{T:articleFind.searchAbove}}</button>
+  <hr>
+  <button type="button" id="articleCopy" role="menuitem" disabled>{{T:articleFind.copy}}</button>
+  <hr>
+  <button type="button" id="articleSave" role="menuitem">{{T:articleFind.saveArticle}}</button>
 </div>
 <dialog id="dictSettings" lang="{{T:locale}}" class="group-dialog panel-card workspace-dialog" aria-labelledby="dictSettingsTitle">
   <h2 id="dictSettingsTitle">{{T:dictUI.title}} <button type="button" class="btn" id="closeDictSettings" aria-label="{{T:dictUI.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
@@ -1549,6 +1560,11 @@ function browseOriginQuery(openDict=""){
 function systemLogClick(event){
   if(!window.wudictNativeShell)return;
   event.preventDefault();
+  if(window.wudictAndroidGo){
+    const result=window.prompt("wudict:save-article",JSON.stringify({filename,content:doc}));
+    if(result&&result!=="ok")alert(result);
+    return;
+  }
   if(typeof window.wudictNativeCall==="function"){
     window.wudictNativeCall("systemLog").then(({content,filename,path})=>{
       if(window.wudictWindowsShell===true){
@@ -6349,9 +6365,16 @@ function frameDoc(content,fid,dark,dictID,frag){
 /* bridge messages from article iframes */
 const jsErrSeen=new Set();   // one console line per (dictionary, message) per session
 let articleSearchContextTarget=null;
-function articleSearchContextShow(host,node,offset,x,y){
+function articleSearchContextShow(host,node,offset,x,y,frameSelection){
   if(!host||!node)return;
-  articleSearchContextTarget={host,node,offset};
+  const id=host.dataset.dict||"",d=dicts.find(item=>item.id===id);
+  const selection=host.contentDocument?.getSelection?.()||host.shadowRoot?.getSelection?.()||window.getSelection();
+  const selected=frameSelection?String(frameSelection):selection&&!selection.isCollapsed?selection.toString():"";
+  const searching=!!window.wudictArticleFind?.isActive?.();
+  articleSearchContextTarget={host,node,offset,body:host.shadowRoot?.innerHTML||host.contentDocument?.body?.innerHTML||"",dict:id,title:d?dictLabel(d):"Article",selected};
+  $("articleSearchBelow").disabled=!searching;
+  $("articleSearchAbove").disabled=!searching;
+  $("articleCopy").disabled=!selected;
   const menu=$("articleSearchContextMenu");menu.hidden=false;menu.style.left="0px";menu.style.top="0px";
   const rect=menu.getBoundingClientRect();menu.style.left=Math.max(4,Math.min(x,innerWidth-rect.width-4))+"px";
   menu.style.top=Math.max(4,Math.min(y,innerHeight-rect.height-4))+"px";
@@ -6369,6 +6392,96 @@ $("out").addEventListener("contextmenu",e=>{
 },true);
 $("articleSearchBelow").onclick=()=>{const target=articleSearchContextTarget;articleSearchContextHide();if(target)window.wudictArticleFind?.searchFrom(target.host,target.node,target.offset,1)};
 $("articleSearchAbove").onclick=()=>{const target=articleSearchContextTarget;articleSearchContextHide();if(target)window.wudictArticleFind?.searchFrom(target.host,target.node,target.offset,-1)};
+$("articleCopy").onclick=async()=>{
+  const target=articleSearchContextTarget;articleSearchContextHide();if(!target?.selected)return;
+  try{await navigator.clipboard.writeText(target.selected)}catch(_){
+    const area=document.createElement("textarea");area.value=target.selected;area.style.position="fixed";area.style.opacity="0";document.body.appendChild(area);area.select();document.execCommand("copy");area.remove();
+  }
+};
+$("articleSave").onclick=()=>{
+  const target=articleSearchContextTarget;articleSearchContextHide();if(!target?.body)return;
+  window.wudictArticleSaveTarget=target;
+  $("articleSaveDialog").showModal();
+};
+$("articleSaveCancel").onclick=()=>{$("articleSaveDialog").close();window.wudictArticleSaveTarget=null};
+$("articleSaveDialog").addEventListener("close",()=>{window.wudictArticleSaveTarget=null});
+$("articleSaveGo").onclick=async()=>{
+  const target=window.wudictArticleSaveTarget,mode=document.querySelector('input[name="articleSaveFormat"]:checked')?.value||"complete";
+  $("articleSaveDialog").close();window.wudictArticleSaveTarget=null;if(!target?.body)return;
+  const root=document.createElement("div");root.innerHTML=target.body;
+  const resources={},resourceNames=new Map();let resourceNumber=0;
+  const saveResource=async(url)=>{
+    if(mode==="html")return url;
+    const existing=resourceNames.get(url);if(existing)return existing;
+    if(mode==="single"){
+      const value=await toDataURL(url);return value||url;
+    }
+    try{
+      const response=await fetch(url);if(!response.ok)return url;
+      const blob=await response.blob(),ext=(new URL(url).pathname.match(/\.[a-z0-9]{1,8}$/i)||[""])[0]||".bin";
+      const name="resource-"+(++resourceNumber)+ext,path="_files/"+name;
+      const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(blob)});
+      resources[name]=data;resourceNames.set(url,path);return path;
+    }catch(_){return url}
+  };
+  const toDataURL=async(url)=>{
+    try{
+      const response=await fetch(url);if(!response.ok)throw new Error(String(response.status));
+      const blob=await response.blob();
+      return await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(blob)});
+    }catch(_){return null}
+  };
+  const inlineCSS=async(css,baseURL,seen=new Set())=>{
+    const matches=[...css.matchAll(/url\(\s*(["']?)(.*?)\1\s*\)|@import\s+(?:url\()?\s*(["'])(.*?)\3\s*\)?/gi)];
+    for(const match of matches){
+      const ref=match[2]||match[4];if(!ref||/^(data:|blob:|#|about:)/i.test(ref))continue;
+      let url;try{url=new URL(ref,baseURL)}catch(_){continue}
+      if(url.origin!==location.origin||seen.has(url.href))continue;
+      seen.add(url.href);
+      if(match[4]){
+        try{const response=await fetch(url.href);if(response.ok)css=css.replace(match[0],await inlineCSS(await response.text(),url.href,seen))}catch(_){}
+        continue;
+      }
+      const saved=await saveResource(url.href);
+      css=css.replace(match[0],'url("'+saved+'")');
+    }
+    return css;
+  };
+  for(const link of [...root.querySelectorAll("link[rel~='stylesheet' i]")]){
+    try{
+      if(mode==="html")continue;
+      const url=new URL(link.getAttribute("href"),location.href),response=await fetch(url.href);
+      if(!response.ok)continue;
+      const css=await inlineCSS(await response.text(),url.href);
+      const style=document.createElement("style");style.textContent=css;link.replaceWith(style);
+    }catch(_){}
+  }
+  for(const el of root.querySelectorAll("img,source,video,audio,track,object,embed,input[type=image],image")){
+    for(const attr of ["src","poster","data"]){
+      const ref=el.getAttribute(attr);if(!ref||ref.startsWith("data:"))continue;
+      const url=new URL(ref,location.href).href,saved=await saveResource(url);if(saved)el.setAttribute(attr,saved);
+    }
+    for(const attr of ["srcset"]){const set=el.getAttribute(attr);if(!set)continue;const entries=set.split(",");for(let i=0;i<entries.length;i++){const parts=entries[i].trim().split(/\s+/);if(!parts[0])continue;const saved=await saveResource(new URL(parts[0],location.href).href);if(saved)parts[0]=saved;entries[i]=parts.join(" ")}el.setAttribute(attr,entries.join(","))}
+  }
+  for(const style of root.querySelectorAll("style"))style.textContent=await inlineCSS(style.textContent,location.href);
+  for(const el of root.querySelectorAll("[style]"))el.setAttribute("style",await inlineCSS(el.getAttribute("style"),location.href));
+  const body=root.innerHTML;
+  const doc="<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>"+esc(target.title)+"</title></head><body>"+body+"</body></html>";
+  const filename=target.title.replace(/[\\/:*?\"<>|]+/g,"_").trim()+".html";
+  if(typeof window.wudictNativeCall==="function"){
+    const argument=JSON.stringify({filename,content:doc,mode,resources});
+    if(window.wudictAndroidGo){
+      const response=window.prompt("wudict:save-article",argument);
+      if(response&&response!=="ok")alert(response);
+    }else{
+      window.wudictNativeCall("saveArticle",argument).catch(error=>alert(window.wudictI18n.errorText(error.message)));
+    }
+    return;
+  }
+  if(mode==="complete"&&Object.keys(resources).length){alert(tx("articleFind.saveCompleteAppOnly"));return}
+  const blob=new Blob([doc],{type:"text/html;charset=utf-8"});
+  const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download=filename;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+};
 document.addEventListener("pointerdown",e=>{if(!e.target.closest("#articleSearchContextMenu"))articleSearchContextHide()});
 document.addEventListener("keydown",e=>{if(e.key==="Escape")articleSearchContextHide()});
 addEventListener("message",e=>{
@@ -6391,7 +6504,7 @@ addEventListener("message",e=>{
   }else if(d.t==="findhere"&&d.fid){
     const frame=document.querySelector('iframe[data-fid="'+CSS.escape(d.fid)+'"]');
     let pos=null;try{pos=frame?.contentDocument?.caretPositionFromPoint?.(+d.x||0,+d.y||0)}catch(_){}
-    if(frame&&pos?.offsetNode)articleSearchContextShow(frame,pos.offsetNode,pos.offset,+d.x||0,+d.y||0);
+    if(frame&&pos?.offsetNode)articleSearchContextShow(frame,pos.offsetNode,pos.offset,+d.x||0,+d.y||0,d.selected||"");
   }else if(d.t==="pickword"&&d.w){
     searchFor(d.w);
   }else if(d.t==="pick"&&d.w){
