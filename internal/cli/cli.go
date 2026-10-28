@@ -474,6 +474,9 @@ func fail(err error) {
 }
 
 func Main() {
+	if runWindowsUpdateHelper(os.Args[1:]) {
+		return
+	}
 	guiLaunch = tray.GUILaunched()
 	if !informationalCommand(os.Args[1:]) {
 		release, err := acquireProcessLock()

@@ -24,14 +24,24 @@ final class AndroidUpdate {
     private static final String PREFS = "dictshelf_updates";
     private static final String KEY_ID = "download_id";
     private static final String KEY_SHA = "download_sha256";
+    private static final String KEY_VERSION = "download_version";
     private static final String KEY_VERIFIED = "download_verified";
-    private static final String KEY_LAUNCHED = "install_launched";
     private BroadcastReceiver receiver;
 
     AndroidUpdate() {}
 
     static boolean available() {
         return "foss".equals(BuildConfig.FLAVOR);
+    }
+
+    static JSONObject request(Activity activity, String payload) throws Exception {
+        JSONObject request = new JSONObject(payload);
+        switch (request.optString("action", "download")) {
+            case "download": return start(activity, payload);
+            case "status": return status(activity);
+            case "install": return install(activity);
+            default: throw new IllegalArgumentException("Unknown Android update action");
+        }
     }
 
     static JSONObject start(Activity activity, String payload) throws Exception {
@@ -65,8 +75,68 @@ final class AndroidUpdate {
         long id = manager.enqueue(download);
         activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putLong(KEY_ID, id).putString(KEY_SHA, sha)
-                .putBoolean(KEY_VERIFIED, false).putBoolean(KEY_LAUNCHED, false).apply();
-        return new JSONObject().put("ok", true).put("downloadId", id);
+                .putString(KEY_VERSION, version).putBoolean(KEY_VERIFIED, false).apply();
+        return new JSONObject().put("ok", true).put("downloadId", id).put("state", "downloading");
+    }
+
+    private static JSONObject status(Activity activity) throws Exception {
+        if (!available()) throw new SecurityException("Android updates are unavailable in this distribution");
+        android.content.SharedPreferences prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        long id = prefs.getLong(KEY_ID, -1);
+        String version = prefs.getString(KEY_VERSION, "");
+        if (id < 0) return new JSONObject().put("state", "none");
+        DownloadManager manager = (DownloadManager) activity.getSystemService(Context.DOWNLOAD_SERVICE);
+        if (manager == null) throw new IllegalStateException("Downloads are unavailable");
+        try (android.database.Cursor cursor = manager.query(new DownloadManager.Query().setFilterById(id))) {
+            if (cursor == null || !cursor.moveToFirst()) return new JSONObject().put("state", "none");
+            int state = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+            if (state == DownloadManager.STATUS_FAILED) {
+                return new JSONObject().put("state", "failed").put("version", version);
+            }
+            if (state != DownloadManager.STATUS_SUCCESSFUL) {
+                long downloaded = cursor.getLong(cursor.getColumnIndexOrThrow(
+                        DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+                long total = cursor.getLong(cursor.getColumnIndexOrThrow(
+                        DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+                int progress = total > 0 ? (int) Math.min(100, downloaded * 100 / total) : -1;
+                return new JSONObject().put("state", "downloading").put("version", version)
+                        .put("progress", progress);
+            }
+            Uri apk = manager.getUriForDownloadedFile(id);
+            if (apk == null) return new JSONObject().put("state", "failed").put("version", version);
+            if (!prefs.getBoolean(KEY_VERIFIED, false)) {
+                String actual = sha256(activity, apk);
+                if (!actual.equalsIgnoreCase(prefs.getString(KEY_SHA, ""))) {
+                    manager.remove(id);
+                    prefs.edit().putBoolean(KEY_VERIFIED, false).apply();
+                    return new JSONObject().put("state", "failed").put("version", version);
+                }
+                prefs.edit().putBoolean(KEY_VERIFIED, true).apply();
+            }
+            return new JSONObject().put("state", "ready").put("version", version);
+        }
+    }
+
+    private static JSONObject install(Activity activity) throws Exception {
+        activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putBoolean(KEY_VERIFIED, false).apply();
+        JSONObject current = status(activity);
+        if (!"ready".equals(current.optString("state")))
+            return new JSONObject().put("error", "The downloaded APK is not ready to install");
+        if (Build.VERSION.SDK_INT >= 26
+                && !activity.getPackageManager().canRequestPackageInstalls()) {
+            return new JSONObject().put("permission", true).put("version", current.optString("version"));
+        }
+        android.content.SharedPreferences prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        long id = prefs.getLong(KEY_ID, -1);
+        DownloadManager manager = (DownloadManager) activity.getSystemService(Context.DOWNLOAD_SERVICE);
+        Uri apk = manager == null ? null : manager.getUriForDownloadedFile(id);
+        if (apk == null) return new JSONObject().put("error", "The downloaded APK is unavailable");
+        Intent install = new Intent(Intent.ACTION_VIEW)
+                .setDataAndType(apk, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        activity.startActivity(install);
+        return new JSONObject().put("ok", true);
     }
 
     private static JSONObject chooseAsset(JSONObject apks) throws Exception {
@@ -104,42 +174,19 @@ final class AndroidUpdate {
         receiver = null;
     }
 
-    private static void handleCompleted(Activity activity, long id) {
+    private void handleCompleted(MainActivity activity, long id) {
         if (!available()) return;
         android.content.SharedPreferences prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         if (id < 0 || prefs.getLong(KEY_ID, -1) != id) return;
-        DownloadManager manager = (DownloadManager) activity.getSystemService(Context.DOWNLOAD_SERVICE);
-        if (manager == null) return;
-        DownloadManager.Query query = new DownloadManager.Query().setFilterById(id);
-        try (android.database.Cursor cursor = manager.query(query)) {
-            if (cursor == null || !cursor.moveToFirst()) return;
-            int status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
-            if (status == DownloadManager.STATUS_FAILED) {
-                prefs.edit().remove(KEY_ID).apply();
-                return;
+        try {
+            JSONObject current = status(activity);
+            if ("ready".equals(current.optString("state"))) {
+                activity.notifyAndroidUpdateReady(current.optString("version"));
+            } else if ("failed".equals(current.optString("state"))) {
+                activity.notifyAndroidUpdateFailed();
             }
-            if (status != DownloadManager.STATUS_SUCCESSFUL) return;
-            Uri apk = manager.getUriForDownloadedFile(id);
-            if (apk == null) return;
-            if (!prefs.getBoolean(KEY_VERIFIED, false)) {
-                String actual = sha256(activity, apk);
-                if (!actual.equalsIgnoreCase(prefs.getString(KEY_SHA, ""))) {
-                    manager.remove(id);
-                    prefs.edit().remove(KEY_ID).apply();
-                    return;
-                }
-                prefs.edit().putBoolean(KEY_VERIFIED, true).apply();
-            }
-            if (Build.VERSION.SDK_INT >= 26
-                    && !activity.getPackageManager().canRequestPackageInstalls()) return;
-            if (prefs.getBoolean(KEY_LAUNCHED, false)) return;
-            Intent install = new Intent(Intent.ACTION_VIEW)
-                    .setDataAndType(apk, "application/vnd.android.package-archive")
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            activity.startActivity(install);
-            prefs.edit().putBoolean(KEY_LAUNCHED, true).apply();
         } catch (Exception error) {
-            SystemLog.warn("update", "could not prepare Android update", error);
+            SystemLog.warn("update", "could not check Android update download", error);
         }
     }
 

@@ -713,7 +713,7 @@ final class Shell {
                 }
                 if ("wudict:android-update".equals(message)) {
                     try {
-                        result.confirm(AndroidUpdate.start(a, defaultValue).toString());
+                        result.confirm(AndroidUpdate.request(a, defaultValue).toString());
                     } catch (Exception error) {
                         SystemLog.warn(TAG, "could not start Android update", error);
                         String detail = error.getMessage() == null

@@ -9,10 +9,9 @@ package cli
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,11 +19,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
-	"unicode/utf16"
 
 	webview "github.com/jchv/go-webview2"
+	"github.com/wuweidict/wudict/internal/tray"
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -36,6 +39,8 @@ type windowsUpdateAsset struct {
 }
 
 type windowsUpdateRequest struct {
+	Action          string              `json:"action"`
+	Version         string              `json:"version"`
 	Installer       *windowsUpdateAsset `json:"installer"`
 	Portable        *windowsUpdateAsset `json:"portable"`
 	PortableFailure string              `json:"portableFailure"`
@@ -48,13 +53,31 @@ func bindWindowsUpdater(w webview.WebView) {
 			return fmt.Errorf("invalid update request")
 		}
 		go func() {
-			message, closeApp, err := startWindowsUpdate(request)
-			ok := err == nil
-			if err != nil {
-				message = err.Error()
+			var js string
+			if request.Action == "download" {
+				err := downloadWindowsUpdateForRunningExecutable(request, func(percent int) {
+					w.Dispatch(func() {
+						w.Eval(fmt.Sprintf("window.wudictUpdateProgress&&window.wudictUpdateProgress(%d)", percent))
+					})
+				})
+				message := ""
+				if err != nil {
+					message = err.Error()
+				}
+				messageJSON, _ := json.Marshal(message)
+				versionJSON, _ := json.Marshal(request.Version)
+				js = fmt.Sprintf("window.wudictUpdateDownloaded(%t,%s,%s)", err == nil, versionJSON, messageJSON)
+			} else if request.Action == "install" {
+				message, closeApp, err := installWindowsUpdate(request)
+				if err != nil {
+					message = err.Error()
+				}
+				messageJSON, _ := json.Marshal(message)
+				js = fmt.Sprintf("window.wudictUpdateFinished(%t,%s,%t)", err == nil, messageJSON, closeApp)
+			} else {
+				messageJSON, _ := json.Marshal("invalid update action")
+				js = fmt.Sprintf("window.wudictUpdateDownloaded(false,%s,%s)", `""`, messageJSON)
 			}
-			messageJSON, _ := json.Marshal(message)
-			js := fmt.Sprintf("window.wudictUpdateFinished(%t,%s,%t)", ok, messageJSON, closeApp)
 			w.Dispatch(func() {
 				w.Eval(js)
 			})
@@ -67,7 +90,50 @@ func bindWindowsUpdater(w webview.WebView) {
 	})
 }
 
-func startWindowsUpdate(request windowsUpdateRequest) (string, bool, error) {
+var windowsVersionPattern = regexp.MustCompile(`^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$`)
+
+func downloadWindowsUpdateForRunningExecutable(request windowsUpdateRequest, progress func(int)) error {
+	if !windowsVersionPattern.MatchString(request.Version) {
+		return fmt.Errorf("the update version is invalid")
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("cannot locate the running executable")
+	}
+	if _, installed := installedWindowsExecutable(exe); installed {
+		if request.Installer == nil {
+			return fmt.Errorf("the installer is not available for this release")
+		}
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("could not locate the Downloads folder")
+		}
+		dir := filepath.Join(home, "Downloads")
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			return fmt.Errorf("could not create the Downloads folder: %w", err)
+		}
+		return downloadWindowsUpdate(*request.Installer, filepath.Join(dir, "DictShelf-setup-"+request.Version+".exe"), progress)
+	}
+	if request.Portable == nil {
+		return fmt.Errorf("the portable executable is not available for this release")
+	}
+	target, err := filepath.Abs(exe)
+	if err != nil {
+		return fmt.Errorf("cannot locate the running executable")
+	}
+	probe, err := os.CreateTemp(filepath.Dir(target), ".dictshelf-update-check-*")
+	if err != nil {
+		return fmt.Errorf("this folder does not allow updating the executable; download the new file and replace it manually")
+	}
+	_ = probe.Close()
+	_ = os.Remove(probe.Name())
+	return downloadWindowsUpdate(*request.Portable, filepath.Join(filepath.Dir(target), "_DictShelf.exe"), progress)
+}
+
+func installWindowsUpdate(request windowsUpdateRequest) (string, bool, error) {
+	if !windowsVersionPattern.MatchString(request.Version) {
+		return "", false, fmt.Errorf("the update version is invalid")
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return "", false, fmt.Errorf("cannot locate the running executable")
@@ -76,12 +142,15 @@ func startWindowsUpdate(request windowsUpdateRequest) (string, bool, error) {
 		if request.Installer == nil {
 			return "", false, fmt.Errorf("the installer is not available for this release")
 		}
-		setup, err := downloadWindowsUpdate(*request.Installer, "dictshelf-setup-*.exe")
+		home, err := os.UserHomeDir()
 		if err != nil {
+			return "", false, fmt.Errorf("could not locate the Downloads folder")
+		}
+		setup := filepath.Join(home, "Downloads", "DictShelf-setup-"+request.Version+".exe")
+		if err := verifyWindowsUpdate(setup, *request.Installer); err != nil {
 			return "", false, err
 		}
 		if err := exec.Command(setup, installMode).Start(); err != nil {
-			_ = os.Remove(setup)
 			return "", false, fmt.Errorf("could not start the installer: %w", err)
 		}
 		return "", false, nil
@@ -93,18 +162,11 @@ func startWindowsUpdate(request windowsUpdateRequest) (string, bool, error) {
 	if err != nil {
 		return "", false, fmt.Errorf("cannot locate the running executable")
 	}
-	probe, err := os.CreateTemp(filepath.Dir(target), ".dictshelf-update-check-*")
-	if err != nil {
-		return "", false, fmt.Errorf("this folder does not allow updating the executable; download the new file and replace it manually")
-	}
-	_ = probe.Close()
-	_ = os.Remove(probe.Name())
-	newExe, err := downloadWindowsUpdate(*request.Portable, "dictshelf-portable-*.exe")
-	if err != nil {
+	newExe := filepath.Join(filepath.Dir(target), "_DictShelf.exe")
+	if err := verifyWindowsUpdate(newExe, *request.Portable); err != nil {
 		return "", false, err
 	}
-	if err := launchPortableReplacement(newExe, target, os.Getpid(), request.PortableFailure); err != nil {
-		_ = os.Remove(newExe)
+	if err := launchPortableReplacement(newExe, target, os.Getpid(), request.Portable.SHA256, request.PortableFailure); err != nil {
 		return "", false, err
 	}
 	return "", true, nil
@@ -137,94 +199,237 @@ func installedWindowsExecutable(exe string) (string, bool) {
 	return "", false
 }
 
-func downloadWindowsUpdate(asset windowsUpdateAsset, pattern string) (string, error) {
+func downloadWindowsUpdate(asset windowsUpdateAsset, destination string, progress func(int)) error {
 	u, err := url.Parse(asset.URL)
 	if err != nil || u.Scheme != "https" || !strings.EqualFold(u.Host, "github.com") ||
 		!strings.HasPrefix(u.Path, "/DMSHLabs/DictShelf/releases/download/") {
-		return "", fmt.Errorf("the update download link is invalid")
+		return fmt.Errorf("the update download link is invalid")
 	}
 	digest, err := hex.DecodeString(asset.SHA256)
 	if err != nil || len(digest) != sha256.Size {
-		return "", fmt.Errorf("the update file has no valid SHA-256 checksum")
+		return fmt.Errorf("the update file has no valid SHA-256 checksum")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return "", fmt.Errorf("could not prepare the update download")
+		return fmt.Errorf("could not prepare the update download")
 	}
 	response, err := (&http.Client{Timeout: 5 * time.Minute}).Do(req)
 	if err != nil {
-		return "", fmt.Errorf("could not download the update: %w", err)
+		return fmt.Errorf("could not download the update: %w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("could not download the update: HTTP %d", response.StatusCode)
+		return fmt.Errorf("could not download the update: HTTP %d", response.StatusCode)
 	}
 	const maxUpdateSize = 512 << 20
 	if response.ContentLength > maxUpdateSize {
-		return "", fmt.Errorf("the update file is unexpectedly large")
+		return fmt.Errorf("the update file is unexpectedly large")
 	}
-	f, err := os.CreateTemp("", pattern)
+	if progress != nil {
+		progress(-1)
+		if response.ContentLength > 0 {
+			progress(0)
+		}
+	}
+	dir := filepath.Dir(destination)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("could not prepare the update folder: %w", err)
+	}
+	f, err := os.CreateTemp(dir, ".dictshelf-update-download-*")
 	if err != nil {
-		return "", fmt.Errorf("could not create a temporary update file: %w", err)
+		return fmt.Errorf("could not create a temporary update file: %w", err)
 	}
 	name := f.Name()
 	hash := sha256.New()
-	written, copyErr := io.Copy(io.MultiWriter(f, hash), io.LimitReader(response.Body, maxUpdateSize+1))
+	buf := make([]byte, 64<<10)
+	var written int64
+	lastPercent := -1
+	var copyErr error
+	for {
+		count, readErr := response.Body.Read(buf)
+		if count > 0 {
+			if written+int64(count) > maxUpdateSize {
+				copyErr = fmt.Errorf("the update file is unexpectedly large")
+				break
+			}
+			if _, copyErr = f.Write(buf[:count]); copyErr != nil {
+				break
+			}
+			_, _ = hash.Write(buf[:count])
+			written += int64(count)
+			if progress != nil && response.ContentLength > 0 {
+				percent := int(written * 100 / response.ContentLength)
+				if percent > 100 {
+					percent = 100
+				}
+				if percent != lastPercent {
+					progress(percent)
+					lastPercent = percent
+				}
+			}
+		}
+		if readErr != nil {
+			if readErr != io.EOF {
+				copyErr = readErr
+			}
+			break
+		}
+	}
 	closeErr := f.Close()
 	if copyErr != nil || closeErr != nil || written > maxUpdateSize {
 		_ = os.Remove(name)
-		return "", fmt.Errorf("could not save the update file")
+		return fmt.Errorf("could not save the update file")
 	}
 	if !strings.EqualFold(hex.EncodeToString(hash.Sum(nil)), asset.SHA256) {
 		_ = os.Remove(name)
-		return "", fmt.Errorf("the downloaded update failed its SHA-256 check")
+		return fmt.Errorf("the downloaded update failed its SHA-256 check")
 	}
-	return name, nil
+	if progress != nil {
+		progress(100)
+	}
+	if err := os.Rename(name, destination); err != nil {
+		_ = os.Remove(name)
+		return fmt.Errorf("could not move the update into place: %w", err)
+	}
+	return nil
 }
 
-func launchPortableReplacement(download, target string, pid int, failureText string) error {
-	psQuote := func(value string) string { return "'" + strings.ReplaceAll(value, "'", "''") + "'" }
-	script := fmt.Sprintf(`$ErrorActionPreference='Stop'
-$target=%s
-$download=%s
-$pidToWait=%d
-$failureText=%s
-try { Wait-Process -Id $pidToWait -ErrorAction SilentlyContinue } catch {}
-$staged=$target+'.dictshelf-new-'+$pidToWait
-$backup=$target+'.dictshelf-old-'+$pidToWait
-try {
-  Copy-Item -LiteralPath $download -Destination $staged -Force
-  Move-Item -LiteralPath $target -Destination $backup -Force
-  try { Move-Item -LiteralPath $staged -Destination $target -Force }
-  catch { Move-Item -LiteralPath $backup -Destination $target -Force; throw }
-  Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue
-  Start-Process -FilePath $target -WorkingDirectory (Split-Path -Parent $target)
-  Remove-Item -LiteralPath $download -Force -ErrorAction SilentlyContinue
-} catch {
-  if ((Test-Path -LiteralPath $backup) -and -not (Test-Path -LiteralPath $target)) {
-    Move-Item -LiteralPath $backup -Destination $target -Force
-  }
-  if (Test-Path -LiteralPath $target) {
-    Start-Process -FilePath $target -WorkingDirectory (Split-Path -Parent $target)
-  }
-  Remove-Item -LiteralPath $staged -Force -ErrorAction SilentlyContinue
-  Remove-Item -LiteralPath $download -Force -ErrorAction SilentlyContinue
-  Add-Type -AssemblyName PresentationFramework
-  [System.Windows.MessageBox]::Show($failureText, 'DictShelf') | Out-Null
-}
-`, psQuote(target), psQuote(download), pid, psQuote(failureText))
-	units := utf16.Encode([]rune(script))
-	bytes := make([]byte, len(units)*2)
-	for i, unit := range units {
-		binary.LittleEndian.PutUint16(bytes[i*2:], unit)
+func verifyWindowsUpdate(path string, asset windowsUpdateAsset) error {
+	expected, err := hex.DecodeString(asset.SHA256)
+	if err != nil || len(expected) != sha256.Size {
+		return fmt.Errorf("the update file has no valid SHA-256 checksum")
 	}
-	encoded := base64.StdEncoding.EncodeToString(bytes)
-	cmd := exec.Command("powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", encoded)
+	f, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("the downloaded update is missing; download it again")
+	}
+	hash := sha256.New()
+	_, copyErr := io.Copy(hash, io.LimitReader(f, (512<<20)+1))
+	closeErr := f.Close()
+	if copyErr != nil || closeErr != nil {
+		return fmt.Errorf("could not verify the downloaded update")
+	}
+	if !strings.EqualFold(hex.EncodeToString(hash.Sum(nil)), asset.SHA256) {
+		return fmt.Errorf("the downloaded update failed its SHA-256 check; download it again")
+	}
+	return nil
+}
+
+func launchPortableReplacement(download, target string, pid int, sha256, failureText string) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("could not locate the portable update helper: %w", err)
+	}
+	cmd := exec.Command(exe, windowsUpdateHelperArg, strconv.Itoa(pid), target, download, sha256, failureText)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("could not start the portable update helper: %w", err)
 	}
 	return nil
+}
+
+const windowsUpdateHelperArg = "--dictshelf-update-helper"
+
+// runWindowsUpdateHelper is dispatched before normal startup so the helper
+// does not acquire the desktop instance lock or initialize the main window.
+func runWindowsUpdateHelper(args []string) bool {
+	if len(args) == 0 || args[0] != windowsUpdateHelperArg {
+		return false
+	}
+	if len(args) != 6 {
+		tray.Alert("DictShelf", "The portable update helper received invalid arguments.")
+		return true
+	}
+
+	pid, err := strconv.ParseUint(args[1], 10, 32)
+	if err != nil || pid == 0 {
+		tray.Alert("DictShelf", args[5])
+		return true
+	}
+	exe, err := os.Executable()
+	if err != nil || !strings.EqualFold(filepath.Clean(exe), filepath.Clean(args[2])) ||
+		!strings.EqualFold(filepath.Base(args[2]), "DictShelf.exe") ||
+		!strings.EqualFold(filepath.Clean(args[3]), filepath.Join(filepath.Dir(args[2]), "_DictShelf.exe")) {
+		tray.Alert("DictShelf", args[5])
+		return true
+	}
+	if err := waitForWindowsProcess(uint32(pid)); err != nil {
+		tray.Alert("DictShelf", args[5]+"\n\n"+err.Error())
+		return true
+	}
+
+	target, download := args[2], args[3]
+	if err := verifyWindowsUpdate(download, windowsUpdateAsset{SHA256: args[4]}); err != nil {
+		tray.Alert("DictShelf", args[5]+"\n\n"+err.Error())
+		return true
+	}
+	backup := target + ".bak"
+	_ = os.Remove(backup)
+	if err := moveWindowsFile(target, backup); err != nil {
+		tray.Alert("DictShelf", args[5]+"\n\n"+err.Error())
+		return true
+	}
+	if err := moveWindowsFile(download, target); err != nil {
+		restoreErr := moveWindowsFile(backup, target)
+		if restoreErr != nil {
+			tray.Alert("DictShelf", args[5]+"\n\n"+err.Error()+"\n\nCould not restore the previous executable: "+restoreErr.Error())
+			return true
+		}
+		_ = startWindowsExecutable(target)
+		tray.Alert("DictShelf", args[5]+"\n\n"+err.Error())
+		return true
+	}
+	if err := startWindowsExecutable(target); err != nil {
+		_ = moveWindowsFile(target, download)
+		restoreErr := moveWindowsFile(backup, target)
+		if restoreErr == nil {
+			_ = startWindowsExecutable(target)
+		} else {
+			err = fmt.Errorf("%w; could not restore the previous executable: %v", err, restoreErr)
+		}
+		tray.Alert("DictShelf", args[5]+"\n\n"+err.Error())
+	}
+	return true
+}
+
+func waitForWindowsProcess(pid uint32) error {
+	h, err := windows.OpenProcess(windows.SYNCHRONIZE, false, pid)
+	if err != nil {
+		// The app may already have exited before Windows opened its handle.
+		if errors.Is(err, windows.ERROR_INVALID_PARAMETER) {
+			return nil
+		}
+		return fmt.Errorf("could not wait for DictShelf to close: %w", err)
+	}
+	defer windows.CloseHandle(h)
+	result, err := windows.WaitForSingleObject(h, windows.INFINITE)
+	if err != nil {
+		return fmt.Errorf("could not wait for DictShelf to close: %w", err)
+	}
+	if result != windows.WAIT_OBJECT_0 {
+		return fmt.Errorf("could not wait for DictShelf to close (Windows result %d)", result)
+	}
+	return nil
+}
+
+func moveWindowsFile(from, to string) error {
+	fromPtr, err := windows.UTF16PtrFromString(from)
+	if err != nil {
+		return err
+	}
+	toPtr, err := windows.UTF16PtrFromString(to)
+	if err != nil {
+		return err
+	}
+	return windows.MoveFileEx(fromPtr, toPtr, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH)
+}
+
+func startWindowsExecutable(path string) error {
+	cmd := exec.Command(path)
+	cmd.Dir = filepath.Dir(path)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	return cmd.Start()
 }

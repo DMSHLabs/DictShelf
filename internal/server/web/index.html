@@ -862,7 +862,6 @@ window.wudictFontScale=(function(){
     <span class="panel-select-wrap panel-dropdown"><select id="updateChannel" aria-label="{{T:system.updateChannel}}"><option value="release">{{T:system.updateRelease}}</option><option value="prerelease">{{T:system.updatePrerelease}}</option><option value="beta">{{T:system.updateBeta}}</option></select></span>
   </div>
   <p id="updateStatus" class="panel-update-status" role="status" aria-live="polite" hidden></p>
-  <div class="facts update-install-row"><button type="button" class="btn" id="installUpdate" hidden>{{T:system.updateAction}}</button></div>
   <div class="facts update-check-row"><button type="button" class="btn" id="checkUpdates">{{T:system.checkUpdates}}</button></div>
 </details>
 
@@ -1922,6 +1921,7 @@ async function loadPrefs(){
 const defaultUpdateChannel=window.wudictWindowsShell===true||window.wudictAndroidShell===true?"beta":"release";
 let prefsTimer=null,prefsSent=null,updateChannel=defaultUpdateChannel,updateNotifications=true;
 let updateAvailable=null,updateStatusMessage="",updateManualResult=false,updateStarting=false;
+let updateDownloaded=false,downloadedUpdateVersion="",updateInstalling=false,updateDownloadPending=false,updateDownloadProgress=-1,updateActionPhase="",pendingAndroidUpdateState=null,androidUpdatePollTimer=null;
 function defaultResultCacheLimitGB(){return window.wudictAndroidShell||window.wudictAndroidGo||window.wudictWindowsShell?16:8}
 let resultCacheLimitGB=defaultResultCacheLimitGB(),resultCacheNoLimit=false;
 let searchReturnCacheStorage="disk";
@@ -4910,6 +4910,7 @@ $("sysShare").addEventListener("change",e=>sysSwitch("share",e.target.checked));
 $("sysLink").addEventListener("change",e=>sysSwitch("link",e.target.checked));
 $("sysReader").addEventListener("change",e=>sysSwitch("reader",e.target.checked));
 function updateAvailableKey(channel=updateChannel){return "dictshelf_update_available_"+channel}
+function updateDownloadedKey(version){return "dictshelf_update_downloaded_"+version}
 function syncUpdateControls(){
   const notifications=$("updateNotifications"),channel=$("updateChannel");
   if(notifications)notifications.checked=updateNotifications;
@@ -4917,45 +4918,62 @@ function syncUpdateControls(){
   renderUpdateNotice();
 }
 function renderUpdateNotice(){
-  const badge=$("panelUpdateBadge"),button=$("panelBtn"),note=$("updateStatus"),install=$("installUpdate");
-  if(!badge||!button||!note||!install)return;
+  const badge=$("panelUpdateBadge"),button=$("panelBtn"),note=$("updateStatus"),action=$("checkUpdates");
+  if(!badge||!button||!note||!action)return;
   const marked=!!updateAvailable&&updateNotifications;
-  badge.hidden=!marked;
-  const label=tx(marked?"panel.settingsUpdateAvailable":"panel.settings");
+  const downloading=updateDownloadPending||updateStarting&&updateActionPhase==="download";
+  badge.hidden=!marked||downloading;
+  button.classList.toggle("update-downloading",downloading);
+  button.classList.toggle("update-progress-indeterminate",downloading&&updateDownloadProgress<0);
+  if(downloading)button.style.setProperty("--update-download-progress",(updateDownloadProgress<0?24:updateDownloadProgress)+"%");
+  else button.style.removeProperty("--update-download-progress");
+  const label=downloading?(updateDownloadProgress>=0?tx("system.updateDownloadProgress",{percent:updateDownloadProgress}):tx("system.updateDownloading")):
+    tx(marked?"panel.settingsUpdateAvailable":"panel.settings");
   button.setAttribute("aria-label",label);button.title=label;
   note.replaceChildren();
   const showUpdate=!!updateAvailable&&(updateNotifications||updateManualResult);
   const showMessage=!!updateStatusMessage&&(updateNotifications||updateManualResult);
   note.hidden=!showUpdate&&!showMessage;
-  install.hidden=true;
+  let canDownload=false;
+  if(updateAvailable&&/^https:\/\/github\.com\/DMSHLabs\/DictShelf\/releases\//.test(updateAvailable.url)){
+    const validAsset=asset=>asset&&typeof asset.url==="string"&&typeof asset.sha256==="string"&&/^[0-9a-f]{64}$/i.test(asset.sha256);
+    const hasWindows=window.wudictWindowsShell&&(validAsset(updateAvailable.windowsInstaller)||validAsset(updateAvailable.windowsPortable));
+    const androidApks=updateAvailable.androidApks&&Object.values(updateAvailable.androidApks).some(validAsset);
+    canDownload=!!hasWindows||!!(window.wudictAndroidUpdaterAvailable&&androidApks);
+  }
   if(showUpdate){
     const versionLink=document.createElement("a");versionLink.href=updateAvailable.url;versionLink.target="_blank";versionLink.rel="noopener";
     versionLink.textContent=tx("system.updateAvailable",{version:updateAvailable.version});versionLink.title=tx("system.viewRelease");
     versionLink.addEventListener("click",()=>setTimeout(clearUpdateAvailable,0));note.append(versionLink);
-    if(/^https:\/\/github\.com\/DMSHLabs\/DictShelf\/releases\//.test(updateAvailable.url)){
-      const validAsset=asset=>asset&&typeof asset.url==="string"&&typeof asset.sha256==="string"&&/^[0-9a-f]{64}$/i.test(asset.sha256);
-      const hasWindows=window.wudictWindowsShell&&(validAsset(updateAvailable.windowsInstaller)||validAsset(updateAvailable.windowsPortable));
-      const androidApks=updateAvailable.androidApks&&Object.values(updateAvailable.androidApks).some(validAsset);
-      const hasAndroid=window.wudictAndroidUpdaterAvailable&&androidApks;
-      install.hidden=!hasWindows&&!hasAndroid;
-      install.disabled=updateStarting;
-      install.textContent=tx(updateStarting?"system.updatePreparing":"system.updateAction");
-    }
+    if(downloading){const progress=document.createElement("span");progress.className="update-download-progress";
+      progress.textContent=updateDownloadProgress>=0?tx("system.updateDownloadProgress",{percent:updateDownloadProgress}):tx("system.updateDownloading");
+      note.append(document.createElement("br"),progress)}
   }else if(showMessage){note.textContent=updateStatusMessage}
+  const downloaded=updateDownloaded&&downloadedUpdateVersion===updateAvailable?.version;
+  action.disabled=updateStarting||updateDownloadPending||updateInstalling||!!updateAvailable&&!canDownload;
+  action.textContent=updateStarting?tx(updateActionPhase==="download"?"system.updateDownloading":"system.updatePreparing"):
+    updateDownloadPending?tx("system.updateDownloading"):
+    updateInstalling?tx("system.updateInstalling"):
+    updateAvailable&&canDownload?(downloaded?tx("system.installUpdate"):tx("system.downloadUpdate")):tx("system.checkUpdates");
 }
 function restoreCachedUpdate(){
-  updateAvailable=null;updateStatusMessage="";updateManualResult=false;
+  updateAvailable=null;updateStatusMessage="";updateManualResult=false;updateDownloaded=false;downloadedUpdateVersion="";updateInstalling=false;updateDownloadPending=false;updateDownloadProgress=-1;updateActionPhase="";
   try{
     const item=JSON.parse(localStorage.getItem(updateAvailableKey())||"null");
     if(item&&typeof item.version==="string"&&typeof item.url==="string"&&
        /^https:\/\/github\.com\/DMSHLabs\/DictShelf\/releases\//.test(item.url)&&
-       versionIsNewer(item.version,currentAppVersion()))updateAvailable=item;
+       versionIsNewer(item.version,currentAppVersion())){
+      updateAvailable=item;
+      updateDownloaded=localStorage.getItem(updateDownloadedKey(item.version))==="1";
+      if(updateDownloaded)downloadedUpdateVersion=item.version;
+    }
     else if(item)localStorage.removeItem(updateAvailableKey());
   }catch(_){}
   renderUpdateNotice();
 }
 function clearUpdateAvailable(){
   updateAvailable=null;
+  updateDownloaded=false;downloadedUpdateVersion="";updateInstalling=false;updateDownloadPending=false;updateDownloadProgress=-1;updateActionPhase="";
   try{localStorage.removeItem(updateAvailableKey())}catch(_){}
   renderUpdateNotice();
 }
@@ -5034,6 +5052,11 @@ async function checkForUpdates(silent=false){
         androidApks:entry.androidApks||null};break;
     }
     updateAvailable=found;updateStatusMessage=found?"":(!silent?tx("system.noUpdates"):"");
+    updateDownloaded=!!found&&localStorage.getItem(updateDownloadedKey(found.version))==="1";
+    downloadedUpdateVersion=updateDownloaded?found.version:"";updateInstalling=false;
+    if(found&&pendingAndroidUpdateState?.state==="ready"&&pendingAndroidUpdateState.version===found.version){
+      updateDownloaded=true;downloadedUpdateVersion=found.version;
+    }
     if(found&&updateNotifications){try{localStorage.setItem(updateAvailableKey(),JSON.stringify(found))}catch(_){}}
     else if(!found){try{localStorage.removeItem(updateAvailableKey())}catch(_){}}
     if(!silent)updateManualResult=true;
@@ -5044,36 +5067,127 @@ async function checkForUpdates(silent=false){
   }
   if(updateNotifications)scheduleNextUpdateCheck();
 }
-$("checkUpdates").addEventListener("click",()=>checkForUpdates(false));
-$("installUpdate").addEventListener("click",async()=>{
+$("checkUpdates").addEventListener("click",async()=>{
+  if(!updateAvailable){await checkForUpdates(false);return}
+  if(updateDownloaded&&downloadedUpdateVersion===updateAvailable.version){await installUpdate();return}
+  await downloadUpdate();
+});
+async function downloadUpdate(){
   if(!updateAvailable)return;
-  updateStarting=true;updateStatusMessage="";renderUpdateNotice();
+  updateStarting=true;updateDownloadProgress=0;updateActionPhase="download";updateStatusMessage="";renderUpdateNotice();
   try{
     if(window.wudictAndroidUpdaterAvailable){
-      const answer=window.prompt("wudict:android-update",JSON.stringify({version:updateAvailable.version,androidApks:updateAvailable.androidApks||{}}));
+      const answer=window.prompt("wudict:android-update",JSON.stringify({action:"download",version:updateAvailable.version,androidApks:updateAvailable.androidApks||{}}));
       if(!answer)throw new Error("Android update was not started");
       const result=JSON.parse(answer);if(result.error)throw new Error(result.error);
-      updateStarting=false;updateStatusMessage=tx("system.updateAndroidDownloadStarted");updateManualResult=true;renderUpdateNotice();
+      updateStarting=false;updateDownloadPending=result.state!=="ready";updateDownloadProgress=-1;updateStatusMessage=tx("system.updateAndroidDownloadStarted");updateManualResult=true;renderUpdateNotice();
+      if(updateDownloadPending)pollAndroidUpdateProgress();
+      if(result.state==="ready")window.wudictAndroidUpdateReady(result.version||updateAvailable.version);
     }else if(window.wudictUpdateWindows){
       await window.wudictUpdateWindows(JSON.stringify({
-        installer:updateAvailable.windowsInstaller||null,
-        portable:updateAvailable.windowsPortable||null,
+        action:"download",version:updateAvailable.version,
+        installer:updateAvailable.windowsInstaller||null,portable:updateAvailable.windowsPortable||null
+      }));
+    }else throw new Error("Update is unavailable in this app");
+  }catch(error){
+    updateStarting=false;updateDownloadPending=false;updateDownloadProgress=-1;updateActionPhase="";updateStatusMessage=tx("system.updateStartFailed",{error:window.wudictI18n.errorText(error.message)});
+    updateManualResult=true;renderUpdateNotice();
+  }
+}
+async function installUpdate(){
+  if(!updateAvailable||downloadedUpdateVersion!==updateAvailable.version)return;
+  updateStarting=true;updateActionPhase="install";updateStatusMessage="";renderUpdateNotice();
+  try{
+    if(window.wudictAndroidUpdaterAvailable){
+      const answer=window.prompt("wudict:android-update",JSON.stringify({action:"install",version:updateAvailable.version}));
+      if(!answer)throw new Error("Android update was not started");
+      const result=JSON.parse(answer);
+      if(result.permission){updateStarting=false;updateActionPhase="";updateStatusMessage=tx("system.updateAndroidPermission");updateManualResult=true;renderUpdateNotice();return}
+      if(result.error)throw new Error(result.error);
+      updateStarting=false;updateInstalling=false;updateDownloaded=true;updateStatusMessage=tx("system.updateAndroidInstallStarted");updateManualResult=true;renderUpdateNotice();
+    }else if(window.wudictUpdateWindows){
+      await window.wudictUpdateWindows(JSON.stringify({
+        action:"install",version:updateAvailable.version,
+        installer:updateAvailable.windowsInstaller||null,portable:updateAvailable.windowsPortable||null,
         portableFailure:tx("system.updatePortableFailed")
       }));
     }else throw new Error("Update is unavailable in this app");
   }catch(error){
-    updateStarting=false;updateStatusMessage=tx("system.updateStartFailed",{error:window.wudictI18n.errorText(error.message)});
+    updateStarting=false;updateActionPhase="";updateStatusMessage=tx("system.updateStartFailed",{error:window.wudictI18n.errorText(error.message)});
     updateManualResult=true;renderUpdateNotice();
   }
-});
+}
+window.wudictAndroidUpdateReady=function(version){
+  pendingAndroidUpdateState={state:"ready",version};
+  clearTimeout(androidUpdatePollTimer);androidUpdatePollTimer=null;updateDownloadPending=false;updateDownloadProgress=-1;
+  if(!updateAvailable||version!==updateAvailable.version)return;
+  updateDownloaded=true;updateDownloadPending=false;downloadedUpdateVersion=version;updateStarting=false;updateActionPhase="";
+  updateStatusMessage=tx("system.updateDownloaded");updateManualResult=true;renderUpdateNotice();
+};
+window.wudictAndroidUpdateFailed=function(){
+  pendingAndroidUpdateState={state:"failed"};
+  clearTimeout(androidUpdatePollTimer);androidUpdatePollTimer=null;updateStarting=false;updateDownloadPending=false;updateDownloadProgress=-1;updateActionPhase="";updateStatusMessage=tx("system.updateDownloadFailed");updateManualResult=true;renderUpdateNotice();
+};
+window.wudictUpdateProgress=function(percent){
+  updateStarting=false;updateDownloadPending=true;
+  updateDownloadProgress=Number.isInteger(percent)&&percent>=0&&percent<=100?percent:-1;
+  updateManualResult=true;renderUpdateNotice();
+};
+window.wudictUpdateDownloaded=function(ok,version,message){
+  updateStarting=false;updateDownloadPending=false;updateDownloadProgress=-1;updateActionPhase="";
+  if(ok){
+    updateDownloaded=true;downloadedUpdateVersion=version;
+    try{localStorage.setItem(updateDownloadedKey(version),"1")}catch(_){}
+    if(updateAvailable&&updateAvailable.version===version)updateStatusMessage=tx("system.updateDownloaded");
+  }else{
+    updateDownloaded=false;downloadedUpdateVersion="";
+    try{localStorage.removeItem(updateDownloadedKey(version))}catch(_){}
+    updateStatusMessage=tx("system.updateStartFailed",{error:window.wudictI18n.errorText(message||"")});
+  }
+  updateManualResult=true;renderUpdateNotice();
+};
 window.wudictUpdateFinished=function(ok,message,willClose){
-  updateStarting=false;
+  updateStarting=false;updateActionPhase="";
   updateStatusMessage=ok?tx(willClose?"system.updatePortableStarted":"system.updateInstallerStarted"):
     tx("system.updateStartFailed",{error:window.wudictI18n.errorText(message||"")});
+  if(ok){updateInstalling=true;updateDownloaded=false}
   updateManualResult=true;renderUpdateNotice();
   if(willClose)setTimeout(()=>window.wudictWindowsExit?.(),400);
-  if(!ok){const button=$("installUpdate");button.disabled=false}
+  if(!ok){
+    updateInstalling=false;updateDownloaded=false;downloadedUpdateVersion="";
+    try{localStorage.removeItem(updateDownloadedKey(updateAvailable?.version||""))}catch(_){}
+    $("checkUpdates").disabled=false;
+  }
 };
+function applyAndroidUpdateState(state){
+  if(!state)return;
+  pendingAndroidUpdateState=state;
+  if(state.state==="ready"){window.wudictAndroidUpdateReady(state.version);return}
+  if(state.state==="failed"){window.wudictAndroidUpdateFailed();return}
+  if(state.state==="downloading"){
+    updateDownloadPending=true;
+    updateDownloadProgress=Number.isInteger(state.progress)&&state.progress>=0&&state.progress<=100?state.progress:-1;
+    updateStatusMessage=tx("system.updateAndroidDownloadStarted");updateManualResult=true;renderUpdateNotice();
+    clearTimeout(androidUpdatePollTimer);androidUpdatePollTimer=setTimeout(pollAndroidUpdateProgress,900);
+  }
+}
+function pollAndroidUpdateProgress(){
+  clearTimeout(androidUpdatePollTimer);androidUpdatePollTimer=null;
+  if(!window.wudictAndroidUpdaterAvailable)return;
+  try{
+    const raw=window.prompt("wudict:android-update",JSON.stringify({action:"status"}));
+    if(raw)applyAndroidUpdateState(JSON.parse(raw));
+  }catch(_){androidUpdatePollTimer=setTimeout(pollAndroidUpdateProgress,1500)}
+}
+function restoreAndroidUpdateState(){
+  if(!window.wudictAndroidUpdaterAvailable)return;
+  try{
+    const raw=window.prompt("wudict:android-update",JSON.stringify({action:"status"}));
+    if(!raw)return;
+    applyAndroidUpdateState(JSON.parse(raw));
+  }catch(_){ }
+}
+restoreAndroidUpdateState();
 $("sysInfo").addEventListener("change",e=>{
   quietMessages=!e.target.checked;
   if(window.wudictAndroidShell)sysSwitch("info",e.target.checked);
