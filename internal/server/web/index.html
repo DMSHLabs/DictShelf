@@ -853,7 +853,7 @@ window.wudictFontScale=(function(){
 </details>
 
 <details class="sect" id="updateSection" data-panel-section="update" open>
-  <summary class="sect-h">{{T:panel.updateSection}}</summary>
+  <summary class="sect-h">{{T:panel.updateSection}}<span id="updateSectionBadge" class="update-section-badge" aria-hidden="true" hidden>!</span></summary>
   <div class="facts update-notifications-row">
     <label class="rowlabel" for="updateNotifications"><input class="panel-checkbox" type="checkbox" id="updateNotifications"> {{T:system.notifyUpdates}}</label>
   </div>
@@ -1048,6 +1048,12 @@ window.wudictFontScale=(function(){
   <h2 id="systemLogSavedTitle">{{T:panel.systemLogSavedTitle}}</h2>
   <p id="systemLogSavedText"></p>
   <div class="system-log-saved-actions"><button type="button" class="btn" id="systemLogShowFolder">{{T:panel.showInFolder}}</button><button type="button" class="btn" id="systemLogSavedClose">{{T:panel.close}}</button></div>
+</dialog>
+
+<dialog id="updateInstallDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="updateInstallTitle" aria-describedby="updateInstallText">
+  <h2 id="updateInstallTitle">{{T:system.updateInstallConfirmTitle}}</h2>
+  <p id="updateInstallText"></p>
+  <div class="system-log-saved-actions"><button type="button" class="btn" id="updateInstallConfirm">{{T:system.installUpdate}}</button><button type="button" class="btn" id="updateInstallCancel" autofocus>{{T:panel.cancel}}</button></div>
 </dialog>
 
 <dialog id="clearSystemLogDialog" lang="{{T:locale}}" class="group-dialog panel-card system-log-confirmation" aria-labelledby="clearSystemLogTitle" aria-describedby="clearSystemLogHint">
@@ -4934,11 +4940,12 @@ function syncUpdateControls(){
   renderUpdateNotice();
 }
 function renderUpdateNotice(){
-  const badge=$("panelUpdateBadge"),button=$("panelBtn"),note=$("updateStatus"),action=$("checkUpdates");
-  if(!badge||!button||!note||!action)return;
+  const badge=$("panelUpdateBadge"),sectionBadge=$("updateSectionBadge"),button=$("panelBtn"),note=$("updateStatus"),action=$("checkUpdates");
+  if(!badge||!sectionBadge||!button||!note||!action)return;
   const marked=!!updateAvailable&&updateNotifications;
   const downloading=updateDownloadPending||updateStarting&&updateActionPhase==="download";
   badge.hidden=!marked||downloading;
+  sectionBadge.hidden=!marked||downloading;
   button.classList.toggle("update-downloading",downloading);
   button.classList.toggle("update-progress-indeterminate",downloading&&updateDownloadProgress<0);
   if(downloading)button.style.setProperty("--update-download-progress",(updateDownloadProgress<0?24:updateDownloadProgress)+"%");
@@ -4965,12 +4972,11 @@ function renderUpdateNotice(){
       progress.textContent=updateDownloadProgress>=0?tx("system.updateDownloadProgress",{percent:updateDownloadProgress}):tx("system.updateDownloading");
       note.append(document.createElement("br"),progress)}
   }else if(showMessage){note.textContent=updateStatusMessage}
-  const downloaded=updateDownloaded&&downloadedUpdateVersion===updateAvailable?.version;
   action.disabled=updateStarting||updateDownloadPending||updateInstalling||!!updateAvailable&&!canDownload;
   action.textContent=updateStarting?tx(updateActionPhase==="download"?"system.updateDownloading":"system.updatePreparing"):
     updateDownloadPending?tx("system.updateDownloading"):
     updateInstalling?tx("system.updateInstalling"):
-    updateAvailable&&canDownload?(downloaded?tx("system.installUpdate"):tx("system.downloadUpdate")):tx("system.checkUpdates");
+    updateAvailable&&canDownload?tx("system.installUpdate"):tx("system.checkUpdates");
 }
 function restoreCachedUpdate(){
   updateAvailable=null;updateStatusMessage="";updateManualResult=false;updateDownloaded=false;downloadedUpdateVersion="";updateInstalling=false;updateDownloadPending=false;updateDownloadProgress=-1;updateActionPhase="";
@@ -4980,13 +4986,37 @@ function restoreCachedUpdate(){
        /^https:\/\/github\.com\/DMSHLabs\/DictShelf\/releases\//.test(item.url)&&
        versionIsNewer(item.version,currentAppVersion())){
       updateAvailable=item;
-      updateDownloaded=localStorage.getItem(updateDownloadedKey(item.version))==="1";
+      updateDownloaded=!window.wudictWindowsShell&&localStorage.getItem(updateDownloadedKey(item.version))==="1";
       if(updateDownloaded)downloadedUpdateVersion=item.version;
     }
     else if(item)localStorage.removeItem(updateAvailableKey());
   }catch(_){}
   renderUpdateNotice();
+  refreshWindowsUpdateDownloadState();
 }
+function refreshWindowsUpdateDownloadState(){
+  if(!window.wudictWindowsShell||!updateAvailable||typeof window.wudictUpdateWindows!=="function")return;
+  const item=updateAvailable;
+  window.wudictUpdateWindows(JSON.stringify({action:"status",version:item.version,
+    installer:item.windowsInstaller||null,portable:item.windowsPortable||null})).catch(()=>{});
+}
+window.wudictWindowsUpdateStatus=function(version,ready){
+  if(!window.wudictWindowsShell||!updateAvailable||updateAvailable.version!==version)return;
+  if(updateStarting||updateDownloadPending||updateDownloaded)return;
+  updateDownloaded=!!ready;downloadedUpdateVersion=updateDownloaded?version:"";
+  renderUpdateNotice();
+};
+function showUpdateInstallConfirmation(){
+  if(!updateAvailable||!updateDownloaded||downloadedUpdateVersion!==updateAvailable.version)return;
+  $("updateInstallText").textContent=tx("system.updateInstallConfirmText",{version:updateAvailable.version});
+  const dialog=$("updateInstallDialog");
+  if(!dialog.open)dialog.showModal();
+}
+$("updateInstallConfirm").addEventListener("click",()=>{
+  $("updateInstallDialog").close();
+  installUpdate();
+});
+$("updateInstallCancel").addEventListener("click",()=>$("updateInstallDialog").close());
 function clearUpdateAvailable(){
   updateAvailable=null;
   updateDownloaded=false;downloadedUpdateVersion="";updateInstalling=false;updateDownloadPending=false;updateDownloadProgress=-1;updateActionPhase="";
@@ -5080,7 +5110,7 @@ async function checkForUpdates(silent=false){
       }
     }
     updateAvailable=found;updateStatusMessage=found?"":(!silent?tx("system.noUpdates"):"");
-    updateDownloaded=!!found&&localStorage.getItem(updateDownloadedKey(found.version))==="1";
+    updateDownloaded=!!found&&!window.wudictWindowsShell&&localStorage.getItem(updateDownloadedKey(found.version))==="1";
     downloadedUpdateVersion=updateDownloaded?found.version:"";updateInstalling=false;
     if(found&&pendingAndroidUpdateState?.state==="ready"&&pendingAndroidUpdateState.version===found.version){
       updateDownloaded=true;downloadedUpdateVersion=found.version;
@@ -5089,6 +5119,7 @@ async function checkForUpdates(silent=false){
     else if(!found){try{localStorage.removeItem(updateAvailableKey())}catch(_){}}
     if(!silent)updateManualResult=true;
     renderUpdateNotice();
+    refreshWindowsUpdateDownloadState();
   }catch(e){
     if(silent){try{localStorage.removeItem("dictshelf_update_check_"+updateChannel)}catch(_){}}
     else{updateStatusMessage=tx("system.updateCheckFailed",{error:checkTimedOut?tx("system.updateCheckTimeout"):window.wudictI18n.errorText(e.message)});updateManualResult=true;renderUpdateNotice()}
@@ -5099,7 +5130,7 @@ async function checkForUpdates(silent=false){
 }
 $("checkUpdates").addEventListener("click",async()=>{
   if(!updateAvailable){await checkForUpdates(false);return}
-  if(updateDownloaded&&downloadedUpdateVersion===updateAvailable.version){await installUpdate();return}
+  if(updateDownloaded&&downloadedUpdateVersion===updateAvailable.version){showUpdateInstallConfirmation();return}
   await downloadUpdate();
 });
 async function downloadUpdate(){
@@ -5148,11 +5179,13 @@ async function installUpdate(){
   }
 }
 window.wudictAndroidUpdateReady=function(version){
+  const promptAfterDownload=updateActionPhase==="download";
   pendingAndroidUpdateState={state:"ready",version};
   clearTimeout(androidUpdatePollTimer);androidUpdatePollTimer=null;updateDownloadPending=false;updateDownloadProgress=-1;
   if(!updateAvailable||version!==updateAvailable.version)return;
   updateDownloaded=true;updateDownloadPending=false;downloadedUpdateVersion=version;updateStarting=false;updateActionPhase="";
   updateStatusMessage=tx("system.updateDownloaded");updateManualResult=true;renderUpdateNotice();
+  if(promptAfterDownload)showUpdateInstallConfirmation();
 };
 window.wudictAndroidUpdateFailed=function(){
   pendingAndroidUpdateState={state:"failed"};
@@ -5164,11 +5197,12 @@ window.wudictUpdateProgress=function(percent){
   updateManualResult=true;renderUpdateNotice();
 };
 window.wudictUpdateDownloaded=function(ok,version,message){
+  const promptAfterDownload=updateActionPhase==="download";
   updateStarting=false;updateDownloadPending=false;updateDownloadProgress=-1;updateActionPhase="";
   if(ok){
     updateDownloaded=true;downloadedUpdateVersion=version;
-    try{localStorage.setItem(updateDownloadedKey(version),"1")}catch(_){}
-    if(updateAvailable&&updateAvailable.version===version)updateStatusMessage=tx("system.updateDownloaded");
+    if(!window.wudictWindowsShell)try{localStorage.setItem(updateDownloadedKey(version),"1")}catch(_){}
+    if(updateAvailable&&updateAvailable.version===version){updateStatusMessage=tx("system.updateDownloaded");if(promptAfterDownload)showUpdateInstallConfirmation()}
   }else{
     updateDownloaded=false;downloadedUpdateVersion="";
     try{localStorage.removeItem(updateDownloadedKey(version))}catch(_){}

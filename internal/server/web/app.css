@@ -1685,6 +1685,10 @@ html[data-dict-icons-off] .dict-icon{display:none}
   width:1.1em;height:1.1em;border:1.5px solid var(--accent);border-radius:50%;
   background:var(--bg);color:var(--accent);font-size:.68em;font-weight:800;line-height:1}
 .panel-update-badge[hidden]{display:none}
+.update-section-badge{display:inline-grid;place-items:center;margin-left:.45em;vertical-align:middle;
+  width:1.1em;height:1.1em;border:1.5px solid var(--accent);border-radius:50%;
+  background:var(--bg);color:var(--accent);font-size:.68em;font-weight:800;line-height:1}
+.update-section-badge[hidden]{display:none}
 #languageError{margin:calc(var(--ui-addition-gap) * 1em) 0 0;color:var(--danger);font-size:calc(var(--ui-hint-font-size) * 1rem)}
 #languageError[hidden]{display:none}
 #panel .language-setting{margin:0 var(--sp-2) var(--sp-1);padding:calc(var(--ui-section-space-before) * 1em) 0 var(--sp-1);border-bottom:1px solid color-mix(in srgb,var(--fg) 22%,transparent)}
