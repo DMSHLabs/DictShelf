@@ -1108,6 +1108,7 @@ window.wudictFontScale=(function(){
     <label class="sys-row"><input type="checkbox" id="sysLogBase"><span class="sys-label">{{T:system.logBase}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysLogWeb"><span class="sys-label">{{T:system.logWeb}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysSearchArticleDiagnostics"><span class="sys-label">{{T:system.searchArticleDiagnostics}}</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysArticlePageCacheDiagnostics"><span class="sys-label">{{T:system.articlePageCacheDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysBrowseArticleDiagnostics"><span class="sys-label">{{T:system.browseArticleDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysBrowseDiagnostics"><span class="sys-label">{{T:system.browseDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysDictionaryListDiagnostics"><span class="sys-label">{{T:system.dictionaryListDiagnostics}}</span></label>
@@ -1342,7 +1343,7 @@ function articleCacheURL(state,action,start=0,size=0){
   return "/api/search?"+new URLSearchParams({cacheAction:action,cacheID:state.id,dict:state.dict,
     cacheCount:String(state.count),cacheOrder:String(state.order),
     q:state.query,mode:state.mode,rung:state.rung,ignoreDiacritics:state.ignore?"1":"0",
-    hl:hlOn?"1":"0",start:String(start),size:String(size)});
+    hl:hlOn?"1":"0",start:String(start),size:String(size),pageCacheDiagnostics:articlePageCacheDiagnosticsEnabled()?"1":"0"});
 }
 function updateArticleCacheCard(state){
   const det=[...document.querySelectorAll("details.dict")].find(node=>
@@ -4767,7 +4768,8 @@ async function showDesktopSysSettings(){
     logEnabled:$("sysLogEnabled").parentElement,
     logBase:$("sysLogBase").parentElement,
     logWeb:$("sysLogWeb").parentElement,
-    searchArticleDiagnostics:$("sysSearchArticleDiagnostics").parentElement
+    searchArticleDiagnostics:$("sysSearchArticleDiagnostics").parentElement,
+    articlePageCacheDiagnostics:$("sysArticlePageCacheDiagnostics").parentElement
   };
   dialog.showModal();
   body.replaceChildren();
@@ -4822,7 +4824,7 @@ async function showDesktopSysSettings(){
   const logHint=document.createElement("p");logHint.className="sys-hint";
   logHint.textContent=tx("system.logHint");body.append(logHint);
   body.append(desktopSystemNodes.logEnabled,desktopSystemNodes.logBase,desktopSystemNodes.logWeb,
-    desktopSystemNodes.searchArticleDiagnostics);
+    desktopSystemNodes.searchArticleDiagnostics,desktopSystemNodes.articlePageCacheDiagnostics);
   const desktopLog=desktopSystemLogOptions();
   $("sysLogEnabled").checked=desktopLog.enabled;
   $("sysLogBase").checked=desktopLog.baseEvents;
@@ -4830,6 +4832,7 @@ async function showDesktopSysSettings(){
   $("sysLogBase").disabled=!desktopLog.enabled;
   $("sysLogWeb").disabled=!desktopLog.enabled;
   $("sysSearchArticleDiagnostics").checked=searchArticleDiagnosticsEnabled();
+  $("sysArticlePageCacheDiagnostics").checked=articlePageCacheDiagnosticsEnabled();
   const diagnosticsLabel=document.createElement("label");diagnosticsLabel.className="sys-row";
   const diagnostics=document.createElement("input");diagnostics.type="checkbox";diagnostics.checked=browseDiagnosticsEnabled();
   diagnostics.addEventListener("change",()=>setBrowseDiagnostics(diagnostics.checked));
@@ -5063,6 +5066,8 @@ function browseArticleDiagnosticsEnabled(){try{return localStorage.getItem("wudi
 function setBrowseArticleDiagnostics(on){try{if(on)localStorage.setItem("wudict_browse_article_diagnostics","1");else localStorage.removeItem("wudict_browse_article_diagnostics")}catch(_){}}
 function searchArticleDiagnosticsEnabled(){try{return localStorage.getItem("wudict_search_article_diagnostics")==="1"}catch(_){return false}}
 function setSearchArticleDiagnostics(on){try{if(on)localStorage.setItem("wudict_search_article_diagnostics","1");else localStorage.removeItem("wudict_search_article_diagnostics")}catch(_){}}
+function articlePageCacheDiagnosticsEnabled(){try{return localStorage.getItem("wudict_article_page_cache_diagnostics")==="1"}catch(_){return false}}
+function setArticlePageCacheDiagnostics(on){try{if(on)localStorage.setItem("wudict_article_page_cache_diagnostics","1");else localStorage.removeItem("wudict_article_page_cache_diagnostics")}catch(_){}}
 const browseReturnRouteContext=(()=>{
   if(!browseArticleDiagnosticsEnabled())return null;
   const params=new URLSearchParams(location.search),startedAt=Number(params.get("browseReturnDiag"));
@@ -5189,6 +5194,7 @@ $("sysMergedFTS").addEventListener("change",e=>setWildcardSearchIndexEnabled("ft
 $("sysMergedTrigram").addEventListener("change",e=>setWildcardSearchIndexEnabled("trigram",e.target.checked));
 $("sysBrowseArticleDiagnostics").addEventListener("change",e=>setBrowseArticleDiagnostics(e.target.checked));
 $("sysSearchArticleDiagnostics").addEventListener("change",e=>setSearchArticleDiagnostics(e.target.checked));
+$("sysArticlePageCacheDiagnostics").addEventListener("change",e=>setArticlePageCacheDiagnostics(e.target.checked));
 $("sysDictionaryListDiagnostics").addEventListener("change",e=>setDictionaryListDiagnostics(e.target.checked));
 $("sysDictionaryCacheDiagnostics").addEventListener("change",e=>setDictionaryCacheDiagnostics(e.target.checked));
 $("sysFolderDiagnostics").addEventListener("change",e=>setFolderDiagnostics(e.target.checked));
@@ -6588,7 +6594,7 @@ async function fetchStream(url,onMsg,signal,options){
        (options?.method||"GET").toUpperCase()==="GET"){
       const params=requestURL.searchParams,n=Number.parseInt(params.get("n"),10);
       const flag=(value)=>!!value&&!/^(0|false|no|off)$/i.test(value.trim());
-      const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",returnCacheID:params.get("returnCacheID")||"",returnCacheStorage:params.get("returnCacheStorage")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
+      const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),pageCacheDiagnostics:flag(params.get("pageCacheDiagnostics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",returnCacheID:params.get("returnCacheID")||"",returnCacheStorage:params.get("returnCacheStorage")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
       await androidGoStream(()=>window.wudictAndroidGo.startSearchStream(window.location.origin,JSON.stringify(request)),onMsg,signal);
       return;
     }
@@ -6600,7 +6606,7 @@ async function fetchStream(url,onMsg,signal,options){
       if(requestURL.pathname==="/api/search"&&method==="GET"){
         const params=requestURL.searchParams,n=Number.parseInt(params.get("n"),10);
         const flag=(value)=>!!value&&!/^(0|false|no|off)$/i.test(value.trim());
-        const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",returnCacheID:params.get("returnCacheID")||"",returnCacheStorage:params.get("returnCacheStorage")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
+        const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),pageCacheDiagnostics:flag(params.get("pageCacheDiagnostics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",returnCacheID:params.get("returnCacheID")||"",returnCacheStorage:params.get("returnCacheStorage")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
         await window.wudictNativeCall("search",JSON.stringify(request),onMsg,signal);
         return;
       }
@@ -8888,7 +8894,7 @@ async function doSearch(ev){
   let morphNote=null,morphAll=null;const morphSeen=new Set();
   const swap=()=>{if(stale){for(const n of stale)n.remove();stale=null}};
   try{
-    const searchParams=new URLSearchParams({q,mode,hl:hlOn?"1":"0",dict:dictParam,n:String(perDict),returnCacheID:articleCacheGroupID,returnCacheStorage:searchReturnCacheStorage,ignoreDiacritics:ignoreDiacritics?"1":"0"});
+    const searchParams=new URLSearchParams({q,mode,hl:hlOn?"1":"0",dict:dictParam,n:String(perDict),returnCacheID:articleCacheGroupID,returnCacheStorage:searchReturnCacheStorage,ignoreDiacritics:ignoreDiacritics?"1":"0",pageCacheDiagnostics:articlePageCacheDiagnosticsEnabled()?"1":"0"});
     if(replayReturnCacheID){searchParams.set("cacheAction","returnReplay");searchParams.set("cacheID",replayReturnCacheID)}
     await fetchStream("/api/search?"+searchParams.toString(),msg=>{
       if(seq!==searchSeq)return; // superseded by a newer search
@@ -9127,7 +9133,7 @@ async function fetchSearchPortion(det,start,options={}){
   const priority=det.querySelector(":scope>summary .priority-index"),actions=[...det.querySelectorAll(":scope>summary .result-page-action")];
   if(priority)priority.disabled=true;
   actions.forEach(button=>button.disabled=true);
-  const url="/api/search?q="+encodeURIComponent(query)+"&mode="+encodeURIComponent(mode)+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(id)+"&n="+requested+"&cacheID="+encodeURIComponent(articleCacheGroupID);
+  const url="/api/search?q="+encodeURIComponent(query)+"&mode="+encodeURIComponent(mode)+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(id)+"&n="+requested+"&cacheID="+encodeURIComponent(articleCacheGroupID)+"&pageCacheDiagnostics="+(articlePageCacheDiagnosticsEnabled()?"1":"0");
   let received=false,loaded=null;
   try{
     await fetchStream(url,msg=>{

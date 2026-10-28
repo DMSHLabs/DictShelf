@@ -17,7 +17,7 @@ func TestArticlePageCacheLRUAndSearchReset(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := &articlePageCache{maxBytes: int64(len(payload)*2 + 1)}
-	c.resetFor(id)
+	c.resetFor(id, false)
 	t.Cleanup(func() {
 		if c.db != nil {
 			_ = c.db.Close()
@@ -54,7 +54,7 @@ func TestArticlePageCacheLRUAndSearchReset(t *testing.T) {
 	if loads != 4 {
 		t.Fatalf("oldest page was not evicted: loads = %d", loads)
 	}
-	c.resetFor("article-page-test-0002")
+	c.resetFor("article-page-test-0002", false)
 	id = "article-page-test-0002"
 	read(0)
 	if loads != 5 {
@@ -64,7 +64,7 @@ func TestArticlePageCacheLRUAndSearchReset(t *testing.T) {
 
 func TestArticlePageCacheDoesNotFreezeGrowingResults(t *testing.T) {
 	c := &articlePageCache{}
-	c.resetFor("article-page-test-growing")
+	c.resetFor("article-page-test-growing", false)
 	defer func() {
 		if c.db != nil {
 			_ = c.db.Close()

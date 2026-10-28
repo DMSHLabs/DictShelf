@@ -26,23 +26,24 @@ import (
 // retains its caller's slot order. Origin is supplied by the host for clean
 // article resource links, never read from the desktop JSON payload.
 type SearchRequest struct {
-	Query              string `json:"q"`
-	Mode               string `json:"mode,omitempty"`
-	Format             string `json:"format,omitempty"`
-	Dictionary         string `json:"dict,omitempty"`
-	Limit              int    `json:"n,omitempty"`
-	Highlight          bool   `json:"hl,omitempty"`
-	IgnoreDiacritics   bool   `json:"ignoreDiacritics,omitempty"`
-	Origin             string `json:"-"`
-	CacheAction        string `json:"cacheAction,omitempty"`
-	CacheID            string `json:"cacheID,omitempty"`
-	ReturnCacheID      string `json:"returnCacheID,omitempty"`
-	ReturnCacheStorage string `json:"returnCacheStorage,omitempty"`
-	CacheCount         int    `json:"cacheCount,omitempty"`
-	CacheOrder         int    `json:"cacheOrder,omitempty"`
-	Start              int    `json:"start,omitempty"`
-	Size               int    `json:"size,omitempty"`
-	Rung               string `json:"rung,omitempty"`
+	Query                string `json:"q"`
+	Mode                 string `json:"mode,omitempty"`
+	Format               string `json:"format,omitempty"`
+	Dictionary           string `json:"dict,omitempty"`
+	Limit                int    `json:"n,omitempty"`
+	Highlight            bool   `json:"hl,omitempty"`
+	IgnoreDiacritics     bool   `json:"ignoreDiacritics,omitempty"`
+	Origin               string `json:"-"`
+	CacheAction          string `json:"cacheAction,omitempty"`
+	CacheID              string `json:"cacheID,omitempty"`
+	ReturnCacheID        string `json:"returnCacheID,omitempty"`
+	ReturnCacheStorage   string `json:"returnCacheStorage,omitempty"`
+	CacheCount           int    `json:"cacheCount,omitempty"`
+	CacheOrder           int    `json:"cacheOrder,omitempty"`
+	Start                int    `json:"start,omitempty"`
+	Size                 int    `json:"size,omitempty"`
+	Rung                 string `json:"rung,omitempty"`
+	PageCacheDiagnostics bool   `json:"pageCacheDiagnostics,omitempty"`
 
 	skipArticlePageCache bool
 }
@@ -136,7 +137,7 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 		return searchRequestError(SearchInvalidRequest, "search event callback is required")
 	}
 	if !request.skipArticlePageCache && request.ReturnCacheID != "" && request.CacheAction == "" {
-		s.articlePages.resetFor(request.ReturnCacheID)
+		s.articlePages.resetFor(request.ReturnCacheID, request.PageCacheDiagnostics)
 	}
 	if !request.skipArticlePageCache && s.articlePages.eligible(request) {
 		return s.articlePages.serve(parent, request, emit, func(capture func(SearchEvent) error) error {
