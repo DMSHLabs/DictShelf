@@ -193,7 +193,7 @@ html[data-webview2] .bar>.col{box-sizing:border-box;width:100%;max-width:none;pa
    bar (--sbarh, which already includes the inset it wears) or, when the bar is
    away, the host's inset by itself. Written as a fallback chain rather than a
    sum, so a bar standing on the gesture bar is not counted twice. */
-.container{padding-bottom:calc(var(--sp-5) + var(--sbarh,var(--wd-inset-bottom,0px)) + var(--workh,0px) + var(--article-find-height,0px))}
+.container{padding-bottom:calc(var(--sp-5) + var(--bottomdockh,var(--sbarh,var(--wd-inset-bottom,0px))) + var(--article-find-height,0px))}
 
 .bar{position:fixed;top:0;left:0;right:0;z-index:100;background:var(--bg-bar);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
@@ -255,18 +255,18 @@ html[data-webview2] #barBackWords:not([hidden]){display:inline-flex;align-items:
    reader switched it off) - stated as a rule because `display:flex` here would
    outvote the user-agent's [hidden]{display:none}, the trap #styler has a rule
    for too. */
-.sbar{position:fixed;left:0;right:0;bottom:calc(var(--workh,0px) + var(--wd-vv-bottom,0px));z-index:100;
+.sbar{position:static;left:auto;right:auto;bottom:auto;z-index:auto;
   display:flex;align-items:center;justify-content:flex-start;
   background:var(--bg-bar);backdrop-filter:blur(10px);
   -webkit-backdrop-filter:blur(10px);
   border-top:1px solid var(--line);padding:var(--sp-1) 0;
-  padding-bottom:calc(var(--sp-1) + var(--wd-inset-bottom,0px) + 3px)}
+  padding-bottom:var(--sp-1)}
 .sbar[hidden]{display:none}
 #sbarBackWords{display:inline-flex;align-items:center;justify-content:center;gap:.35em;flex:none;margin-right:.35em;white-space:nowrap;text-decoration:none;font-size:calc(var(--ui-font-addition) * 1rem);line-height:1}
 #sbarBackWords svg{display:block;flex:none;width:1.15em;height:1.15em}
 #sbarBackWords[hidden]{display:none}
 #sbarFind{flex:none;display:flex;align-items:center;justify-content:center}
-#articleFindStrip{position:fixed;left:0;right:0;bottom:calc(var(--sbarh,var(--wd-inset-bottom,0px)) + var(--workh,0px) + var(--wd-vv-bottom,0px));
+#articleFindStrip{position:fixed;left:0;right:0;bottom:calc(var(--bottomdockh,var(--sbarh,var(--wd-inset-bottom,0px))) + var(--wd-vv-bottom,0px));
   z-index:101;display:flex;align-items:center;gap:var(--sp-1);padding:var(--sp-1) var(--sp-2);
   background:var(--bg-bar);color:var(--fg);border-top:1px solid var(--line);backdrop-filter:blur(10px)}
 html:is([data-shell-sepia],[data-shell-image]) #articleFindStrip{background:var(--paper-bg,var(--bg))}
@@ -2126,7 +2126,7 @@ html[data-shell-image] #panel :is(.choice-btn,.panel-select-wrap>select){
      the phone's first section sits one --sp-2 below the bar, exactly like
      every other section, instead of two. */
   .col{width:auto;padding-left:var(--sp-1);padding-right:var(--sp-1)}
-  .container{padding-bottom:calc(var(--sp-4) + var(--sbarh,var(--wd-inset-bottom,0px)) + var(--workh,0px) + var(--article-find-height,0px))}
+  .container{padding-bottom:calc(var(--sp-4) + var(--bottomdockh,var(--sbarh,var(--wd-inset-bottom,0px))) + var(--article-find-height,0px))}
   /* Scoped to the top bar: the About wordmark inside the panel must survive
      on narrow screens — that is where the app says what it is. */
   .bar .brand{display:none}

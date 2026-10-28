@@ -18,7 +18,7 @@
   // Browse keeps progress above its footer in normal flow: only the word pane
   // shrinks when a task appears, while the input stays at the viewport bottom.
   style.textContent += `html.server-work-active body.workspace-browse .workspace-browser>#serverWorkNotice{position:static;inset:auto;flex:none;width:auto;margin:0 6px 6px}body.workspace-browse #serverWorkBacking{display:none!important}`;
-  style.textContent += `html.server-work-active body.mask-view-active #maskSearchControls>#serverWorkNotice{position:static;inset:auto;align-self:stretch;flex:none;width:100%;max-width:none;margin:0}body.mask-view-active #serverWorkBacking{display:none!important}html.server-work-active body.mask-view-active{padding-bottom:calc(var(--mask-dock-height,4.5rem) + .5rem + var(--workh,0px))}`;
+  style.textContent += `body.mask-view-active{padding-bottom:var(--bottomdockh,5rem)}body.workspace-browse main{padding-bottom:var(--bottomdockh,5rem)}html.server-work-active #serverWorkNotice{margin:0 6px 4px}`;
   style.textContent += `@media(min-width:601px){html.server-work-active dialog:is(#groupEditor,#dictSettings,#webDictionaryPicker):has(> #serverWorkNotice){box-sizing:border-box;padding-bottom:var(--workh,0px)}}`;
   style.textContent += `html.server-work-active #bulkIndexStatus,html.server-work-active #reindexLine,html.server-work-active #clearDatabaseStatus,html.server-work-active #clearDatabaseProgress{display:none!important}`;
   style.textContent += `[data-work-locked]{opacity:.45!important;pointer-events:none!important;cursor:default!important}`;
@@ -28,6 +28,7 @@
   style.textContent += `#serverWorkNotice .work-summary{display:grid;grid-template-columns:max-content max-content minmax(0,1fr);align-items:center;gap:8px;width:100%;box-sizing:border-box}#serverWorkNotice .work-toggle{grid-column:1;grid-row:1;box-sizing:border-box;width:max-content;max-width:100%;min-width:0;flex:none;white-space:normal;text-align:center;overflow-wrap:anywhere;padding-inline:8px!important}#serverWorkNotice .work-parallel-count{grid-column:2;grid-row:1;white-space:nowrap;font-variant-numeric:tabular-nums}#serverWorkNotice .work-summary-text{grid-column:3;grid-row:1}#serverWorkNotice .work-pulse-row{grid-column:1/-1;grid-row:2;display:flex;align-items:center;gap:8px;min-width:0;width:100%}#serverWorkNotice .work-pulse{flex:1 1 auto;width:auto;min-width:0;max-width:none;height:12px;box-sizing:border-box;margin:0}#serverWorkNotice .work-pulse::after{width:42%}#serverWorkNotice .work-stop-all{flex:none;white-space:nowrap;overflow-wrap:normal}#serverWorkNotice .work-task-list{display:block;flex:0 1 100%;align-self:stretch;width:100%;height:auto;min-height:1.5em;box-sizing:border-box}#serverWorkNotice .work-task-label{grid-column:1/-1;display:flex;justify-content:flex-start;align-items:baseline;gap:2px 6px;flex-wrap:wrap;min-width:0}#serverWorkNotice .work-task-name{flex:0 1 auto;min-width:0;white-space:normal;overflow-wrap:anywhere}#serverWorkNotice .work-task-count{flex:none;white-space:nowrap;font-variant-numeric:tabular-nums}#serverWorkNotice .work-task-progress{grid-column:1;grid-row:2;height:12px;width:100%;box-sizing:border-box}#serverWorkNotice .work-task-stop{grid-column:2;grid-row:2;flex:none;white-space:nowrap;overflow-wrap:normal;font-size:.9em;padding:1px 7px}#serverWorkNotice .work-task-progress>span[data-indeterminate]{width:42%!important}`;
   style.textContent += `#serverWorkNotice .work-summary[hidden],#serverWorkNotice .work-task-list[hidden]{display:none!important}`;
   style.textContent += `#serverBackgroundProgress{position:fixed;left:0;right:0;bottom:var(--wd-vv-bottom,0px);z-index:9999;height:3px;background:color-mix(in srgb,var(--accent,#865000) 18%,transparent);overflow:hidden;pointer-events:none}#serverBackgroundProgress[hidden]{display:none}#serverBackgroundProgress>span{display:block;height:100%;width:100%;background:var(--accent,#865000);transform-origin:left center;transition:transform .16s linear}#serverBackgroundProgress>span[data-indeterminate]{width:42%;background:linear-gradient(90deg,transparent,var(--accent,#865000),transparent);animation:work-pulse 1.8s ease-in-out infinite}html.server-work-background-only #serverWorkNotice,html.server-work-background-only #serverWorkBacking{display:none!important}@media(prefers-reduced-motion:reduce){#serverBackgroundProgress>span[data-indeterminate]{animation:none;width:100%;opacity:.45}}`;
+  style.textContent += `#bottomDock{position:fixed;left:0;right:0;bottom:var(--wd-vv-bottom,0px);z-index:100;display:flex;flex-direction:column;gap:0;padding-bottom:var(--wd-inset-bottom,0px);background:var(--bg-bar);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}#bottomDock[hidden]{display:none}#bottomDock .dock-progress{order:3;min-height:0}#bottomDock .dock-controls{order:1;min-height:0}#bottomDock .dock-status{order:2;min-height:0}#bottomDock .dock-background{order:4;flex:none;height:3px;min-height:3px}#bottomDock .dock-background #serverBackgroundProgress{position:static;height:3px}html.dock-reader .dock-progress{order:1}html.dock-reader .dock-controls{order:2}html.dock-reader .dock-status{display:none}html:not(.dock-reader) .dock-controls{display:none}#bottomDock .dock-progress:empty{display:none}#bottomDock #serverWorkNotice{position:static;inset:auto;width:auto;margin:0 6px 4px}#bottomDock #serverWorkBacking{display:none}#bottomDock .sbar{position:static;inset:auto;z-index:auto;padding-bottom:var(--sp-1);background:transparent;backdrop-filter:none;border-top:1px solid var(--line)}#bottomDock #maskSearchControls,#bottomDock #foot{position:static;inset:auto;z-index:auto;display:flex;width:auto;max-width:none;padding:.4rem .75rem;background:transparent;backdrop-filter:none;border:0}#bottomDock #maskSearchControls[hidden],#bottomDock #foot[hidden]{display:none}#bottomDock #maskDock,#bottomDock #findDock{max-width:54rem}html.dock-reader #bottomDock{background:var(--bar)}html[data-shell-sepia] #bottomDock,html[data-shell-image] #bottomDock{background:var(--paper-bg,var(--bg))}`;
   style.textContent += ``;
   document.head.append(style);
   const backing = document.createElement('div');
@@ -48,7 +49,13 @@
   singleProgress.className='work-single-progress';singleProgress.hidden=true;singleProgress.setAttribute('role','progressbar');singleProgress.setAttribute('aria-valuemin','0');singleProgressBar.style.width='0%';singleProgress.append(singleProgressBar);
   backgroundProgress.id='serverBackgroundProgress';backgroundProgress.hidden=true;backgroundProgress.setAttribute('role','progressbar');backgroundProgress.setAttribute('aria-label',t('work.backgroundProgress'));backgroundProgressBar.dataset.indeterminate='';backgroundProgress.append(backgroundProgressBar);
   taskList.className='work-task-list';taskList.hidden=true;
-  pulseRow.append(pulse,stopAll);summary.append(toggle,parallelCount,summaryText,pulseRow);box.append(spinner,text,button,singleProgress,summary,taskList);document.body.append(backing,box,backgroundProgress);
+  pulseRow.append(pulse,stopAll);summary.append(toggle,parallelCount,summaryText,pulseRow);box.append(spinner,text,button,singleProgress,summary,taskList);
+  const dock=document.createElement('div'),progressBand=document.createElement('div'),controlBand=document.createElement('div'),statusBand=document.createElement('div'),backgroundBand=document.createElement('div');
+  dock.id='bottomDock';progressBand.className='dock-progress';controlBand.className='dock-controls';statusBand.className='dock-status';backgroundBand.className='dock-background';backgroundBand.append(backgroundProgress);progressBand.append(backing,box);dock.append(progressBand,controlBand,statusBand,backgroundBand);document.body.append(dock);
+  const maskControls=document.getElementById('maskSearchControls'),statusBar=document.getElementById('sbar'),browseFooter=document.getElementById('foot');
+  if(maskControls)controlBand.append(maskControls);else if(browseFooter)controlBand.append(browseFooter);
+  if(statusBar)statusBand.append(statusBar);
+  const updateDock=()=>{const reader=document.body.classList.contains('mask-view-active')||document.body.classList.contains('workspace-browse');document.documentElement.classList.toggle('dock-reader',reader);};updateDock();
   let status = null, pending = false, starting = false, refreshSequence = 0, waiting = 0;
   const tasks=new Map(),renderedProgress=new Map();let nextTaskID=0,expanded=false,indexTaskID=0,renderQueued=false;
   // The main page may already have a startup loading task when this deferred
@@ -253,14 +260,11 @@
   // A modal dialog lives above ordinary z-index layers. Keep the footer inside
   // the most recently opened modal so it remains visible and its Stop is usable.
   function place() {
+    updateDock();
     const browse = document.body.classList.contains('workspace-browse') ? document.querySelector('.workspace-browser') : null;
-    const maskControls = document.body.classList.contains('mask-view-active') ? document.getElementById('maskSearchControls') : null;
-    const parent = dialogs.filter(d => d.open && d.isConnected).at(-1) || browse || maskControls || document.body;
+    const parent = dialogs.filter(d => d.open && d.isConnected).at(-1) || progressBand;
     if (backing.parentNode !== parent) parent.append(backing);
-    const footer = parent === browse ? browse.querySelector(':scope > footer') : parent === maskControls ? maskControls.querySelector(':scope > .mask-dock') : null;
-    if (footer) {
-      if (box.parentNode !== parent || box.nextElementSibling !== footer) parent.insertBefore(box, footer);
-    } else if (box.parentNode !== parent) parent.append(box);
+    if (box.parentNode !== parent) parent.append(box);
     const local = document.getElementById('workNotice');
     if (local && local.parentNode !== parent) parent.append(local);
   }
@@ -396,6 +400,8 @@
     const height=borderBox?(Array.isArray(borderBox)?borderBox[0]?.blockSize:borderBox.blockSize):box.getBoundingClientRect().height;
     if(Number.isFinite(height))document.documentElement.style.setProperty('--workh',`${height+8}px`);
   }).observe(box);
+  const measureDock=()=>document.documentElement.style.setProperty('--bottomdockh',`${dock.getBoundingClientRect().height}px`);
+  new ResizeObserver(measureDock).observe(dock);measureDock();
   // Record whether window-resize events are waiting behind work on the WebView
   // main thread. Collapse a drag into one diagnostic record after it settles.
   let resizeBurst=null,resizeTimer=0;
