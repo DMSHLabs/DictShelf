@@ -44,6 +44,7 @@ var (
 	windowDwmapi            = syscall.NewLazyDLL("dwmapi.dll")
 	windowUser32            = syscall.NewLazyDLL("user32.dll")
 	procShowWindow          = windowUser32.NewProc("ShowWindow")
+	procIsWindowVisible     = windowUser32.NewProc("IsWindowVisible")
 	procIsIconic            = windowUser32.NewProc("IsIconic")
 	windowDwmSetAttribute   = windowDwmapi.NewProc("DwmSetWindowAttribute")
 	windowShell32           = syscall.NewLazyDLL("shell32.dll")
@@ -157,12 +158,23 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 	desktopCloseToTray.Store(true)
 	desktopWindowRequest = desktopRequest
 	webview.SetCloseToTrayHook(func(hwnd uintptr) bool {
-		if desktopWindowHidden.Load() || !desktopCloseToTray.Load() {
-			return desktopWindowHidden.Load()
+		closeToTray := desktopCloseToTray.Load()
+		visible, _, _ := procIsWindowVisible.Call(hwnd)
+		windowVisible := visible != 0
+		logx.SystemDiagnostic("desktop windowclose hwnd=%#x visible=%t hidden_state=%t close_to_tray=%t", hwnd, windowVisible, desktopWindowHidden.Load(), closeToTray)
+		if !closeToTray {
+			desktopWindowHidden.Store(false)
+			return false
+		}
+		if !windowVisible {
+			desktopWindowHidden.Store(true)
+			return true
 		}
 		const swHide = 0
 		procShowWindow.Call(hwnd, swHide)
 		desktopWindowHidden.Store(true)
+		visibleAfter, _, _ := procIsWindowVisible.Call(hwnd)
+		logx.SystemDiagnostic("desktop close-to-tray hide hwnd=%#x visible_after=%t", hwnd, visibleAfter != 0)
 		return true
 	})
 	webview.SetWindowSizeHandler(func(hwnd uintptr, width, height int) {
@@ -257,20 +269,33 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	w.Init(`window.__wudictDocumentFirstScriptMs=performance.now()`)
 	_ = w.Bind("wudictGetCloseToTray", func() bool {
 		if desktopRequest == nil {
+			logx.SystemDiagnostic("desktop close-to-tray setting source=default enabled=true")
 			return true
 		}
 		value, err := desktopRequest(context.Background(), "storageRead", "")
 		if err != nil {
+			logx.SystemDiagnostic("desktop close-to-tray setting read failed; enabled=true error=%q", err.Error())
 			return true
 		}
 		values, ok := value.(map[string]string)
 		enabled := !ok || values["wudict_close_to_tray"] != "0"
 		desktopCloseToTray.Store(enabled)
+		logx.SystemDiagnostic("desktop close-to-tray setting enabled=%t value_present=%t", enabled, ok && values["wudict_close_to_tray"] != "")
 		return enabled
 	})
 	_ = w.Bind("wudictSetCloseToTray", func(enabled bool) error {
 		desktopCloseToTray.Store(enabled)
 		return nil
+	})
+	_ = w.Bind("wudictSetAppIcon", func(name string) bool {
+		index, ok := tray.WindowsIconIndex(name)
+		if !ok || !tray.SetWindowsIcon(name) {
+			return false
+		}
+		hwnd := uintptr(w.Window())
+		w.Dispatch(func() { desktopSetWindowIcon(hwnd, index) })
+		go desktopUpdateShortcutIcon(index)
+		return true
 	})
 	_ = w.Bind("wudictGetHotkeys", func() any {
 		if desktopRequest == nil {
@@ -290,14 +315,18 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	})
 	desktopApplySavedHotkeys(uintptr(w.Window()), desktopRequest)
 	_ = w.Bind("wudictHideWindow", func() error {
+		logx.SystemDiagnostic("desktop hide-window bridge requested")
 		w.Dispatch(func() {
 			const swHide = 0
-			procShowWindow.Call(uintptr(w.Window()), swHide)
+			hwnd := uintptr(w.Window())
+			procShowWindow.Call(hwnd, swHide)
 			desktopWindowHidden.Store(true)
+			visible, _, _ := procIsWindowVisible.Call(hwnd)
+			logx.SystemDiagnostic("desktop hide-window bridge completed hwnd=%#x visible_after=%t", hwnd, visible != 0)
 		})
 		return nil
 	})
-	w.Init(`(function(){function setup(){if(window.chrome&&window.chrome.webview){window.chrome.webview.addEventListener('windowclose',function(event){if(window.wudictGetCloseToTray&&window.wudictGetCloseToTray()){event.preventDefault();window.wudictHideWindow()}})}}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup,{once:true});else setup()})();`)
+	w.Init(`(function(){function setup(){if(window.chrome&&window.chrome.webview){window.chrome.webview.addEventListener('windowclose',function(event){if(window.wudictGetCloseToTray&&window.wudictGetCloseToTray()){event.preventDefault();window.wudictHideWindow()}})}if(window.wudictSetAppIcon){var icon='dictshelf2';try{icon=localStorage.getItem('wudict_windows_icon')||icon}catch(_){}window.wudictSetAppIcon(icon)}}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup,{once:true});else setup()})();`)
 	if err := w.Bind("wudictStartupReady", func() error {
 		log.Printf("WebView2 startup: application ready")
 		w.Dispatch(func() { webview.HideStartupSplash(w) })

@@ -27,10 +27,20 @@
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-brand="$root/packaging/brand/dictshelf.svg"
+brand="$root/packaging/brand/source/ico2/DictShelf2.svg"
+brand_ico="$root/packaging/brand/source/DictShelf2.ico"
+brand_ico_small="$root/packaging/brand/source/ico2/DictShelf2_small.svg"
+brand_transparent_small="$root/packaging/brand/source/ico2_transparent/DictShelf2_small_transparent.svg"
+brand_old_small="$root/packaging/brand/source/ico/DictShelf_small.svg"
+brand_old_transparent="$root/packaging/brand/source/ico_transparent/DictShelf_small_transparent.svg"
 out="$root/internal/tray/icons"
 
 [ -f "$brand" ] || { echo "make-icons: missing $brand" >&2; exit 1; }
+[ -f "$brand_ico" ] || { echo "make-icons: missing $brand_ico" >&2; exit 1; }
+[ -f "$brand_ico_small" ] || { echo "make-icons: missing $brand_ico_small" >&2; exit 1; }
+[ -f "$brand_transparent_small" ] || { echo "make-icons: missing $brand_transparent_small" >&2; exit 1; }
+[ -f "$brand_old_small" ] || { echo "make-icons: missing $brand_old_small" >&2; exit 1; }
+[ -f "$brand_old_transparent" ] || { echo "make-icons: missing $brand_old_transparent" >&2; exit 1; }
 
 mkdir -p "$out"
 tmp=$(mktemp -d)
@@ -62,9 +72,9 @@ render() { # width height source output
 				target=$1
 				[ "$2" -le "$target" ] || target=$2
 				density=$(( (72 * target + svg_width - 1) / svg_width ))
-				"$magick_bin" -background none -density "$density" "$source_path" -resize "${1}x${2}!" "PNG32:$output_path"
+				MSYS2_ARG_CONV_EXCL='*' "$magick_bin" -background none -density "$density" "$source_path" -resize "${1}x${2}!" "PNG32:$output_path"
 			else
-				"$magick_bin" -background none "$source_path" -resize "${1}x${2}!" "PNG32:$output_path"
+				MSYS2_ARG_CONV_EXCL='*' "$magick_bin" -background none "$source_path" -resize "${1}x${2}!" "PNG32:$output_path"
 			fi
 		else
 			if case "$3" in *.svg) true ;; *) false ;; esac; then
@@ -73,9 +83,9 @@ render() { # width height source output
 				target=$1
 				[ "$2" -le "$target" ] || target=$2
 				density=$(( (72 * target + svg_width - 1) / svg_width ))
-				"$magick_bin" -background none -density "$density" "$3" -resize "${1}x${2}!" "PNG32:$4"
+				MSYS2_ARG_CONV_EXCL='*' "$magick_bin" -background none -density "$density" "$3" -resize "${1}x${2}!" "PNG32:$4"
 			else
-				"$magick_bin" -background none "$3" -resize "${1}x${2}!" "PNG32:$4"
+				MSYS2_ARG_CONV_EXCL='*' "$magick_bin" -background none "$3" -resize "${1}x${2}!" "PNG32:$4"
 			fi
 		fi
 	fi
@@ -97,19 +107,16 @@ run_python3() {
 }
 
 # ---- DictShelf brand mark --------------------------------------------------
-# This source is the product mark for Android, Windows, macOS, Linux and the
-# Play listing. Keep the upstream browser favicon independent.
-tile=$(sed -n 's/.*<rect[^>]*fill="\(#[0-9a-fA-F]*\)".*/\1/p' "$brand")
-[ -n "$tile" ] || { echo "make-icons: no tile colour in $brand" >&2; exit 1; }
-fork="$brand"
-mark=$(sed -e '/<rect /d' "$brand")
-
-# Render the shared Linux mark and the platform-specific desktop variants.
-sed -e '/<rect /d' -e 's/#fff4df/#000000/g' -e 's/#f2a93b/#000000/g' "$fork" > "$tmp/template.svg"
-render 32 32 "$fork" "$out/tray.png"
-render 32 32 "$fork" "$out/tray-windows.png"
+# The checked-in artwork is the source for platform icons and store images.
+# Keep the upstream browser favicon independent.
+render 32 32 "$brand_ico_small" "$out/tray.png"
+render 32 32 "$brand_ico_small" "$out/tray-windows.png"
+render 32 32 "$brand_old_small" "$out/tray-windows-dictshelf.png"
+render 32 32 "$brand_old_transparent" "$out/tray-windows-dictshelf-transparent.png"
+render 32 32 "$brand_transparent_small" "$out/tray-windows-dictshelf2-transparent.png"
+sed -E 's/fill="#[[:xdigit:]]{6}"/fill="#000000"/g' "$brand_transparent_small" > "$tmp/template.svg"
 render 44 44 "$tmp/template.svg" "$out/tray-template.png"
-for f in tray.png tray-windows.png tray-template.png; do
+for f in tray.png tray-windows.png tray-windows-dictshelf.png tray-windows-dictshelf-transparent.png tray-windows-dictshelf2-transparent.png tray-template.png; do
 	[ -s "$out/$f" ] || { echo "make-icons: $f is empty" >&2; exit 1; }
 	printf '%s  ' "$f"
 	ls -l "$out/$f" | awk '{print $5 " bytes"}'
@@ -118,20 +125,28 @@ done
 play="$root/fastlane/metadata/android/en-US/images"
 mkdir -p "$play"
 
-render_mark() { # width height scale tx ty out
-	cat > "$tmp/play.svg" <<EOF
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $1 $2" width="$1" height="$2">
-  <rect width="$1" height="$2" fill="$tile"/>
-  <g transform="translate($4,$5) scale($3)">
-$mark
-  </g>
-</svg>
-EOF
-	render "$1" "$2" "$tmp/play.svg" "$6"
-}
+render 512 512 "$brand" "$play/icon.png"
 
-render_mark 512  512 10.66667 85.3333 85.3333 "$play/icon.png"
-render_mark 1024 500 9.375    362     100    "$play/featureGraphic.png"
+run_python3 - "$brand" "$tmp/feature.svg" <<'PY'
+import copy, sys
+import xml.etree.ElementTree as ET
+source, out = sys.argv[1:]
+ns = "http://www.w3.org/2000/svg"
+ET.register_namespace("", ns)
+original = ET.parse(source).getroot()
+feature = ET.Element("{%s}svg" % ns, {
+    "width": "1024", "height": "500", "viewBox": "0 0 1024 500"})
+ET.SubElement(feature, "{%s}rect" % ns, {
+    "width": "1024", "height": "500", "fill": "#FFF5E0"})
+icon = ET.SubElement(feature, "{%s}svg" % ns, {
+    "x": "312", "y": "50", "width": "400", "height": "400",
+    "viewBox": original.get("viewBox", "0 0 1024 1024")})
+for child in original:
+    if child.tag != "{%s}metadata" % ns:
+        icon.append(copy.deepcopy(child))
+ET.ElementTree(feature).write(out, encoding="utf-8", xml_declaration=True)
+PY
+render 1024 500 "$tmp/feature.svg" "$play/featureGraphic.png"
 
 for f in icon.png featureGraphic.png; do
 	[ -s "$play/$f" ] || { echo "make-icons: $f is empty" >&2; exit 1; }
@@ -154,7 +169,7 @@ set -- 16 icon_16x16 32 icon_16x16@2x 32 icon_32x32 64 icon_32x32@2x \
        512 icon_512x512 1024 icon_512x512@2x
 mkdir -p "$tmp/dictshelf.iconset" "$(dirname "$icns")"
 while [ $# -gt 0 ]; do
-	render "$1" "$1" "$fork" "$tmp/dictshelf.iconset/$2.png"
+	render "$1" "$1" "$brand" "$tmp/dictshelf.iconset/$2.png"
 	shift 2
 done
 
@@ -182,45 +197,11 @@ printf 'dictshelf.icns  '
 ls -l "$icns" | awk '{print $5 " bytes"}'
 
 # ---- the Windows app icon (P86) -----------------------------------------
-# Windows ICO uses separate small and large SVG marks so their geometry stays
-# crisp at native sizes. An .ico is a directory of images; since Vista each
-# entry may be a PNG verbatim, so the container is a 6-byte header plus one
-# 16-byte record per size and needs no image library to assemble — python3
-# (already required by nothing else here, but present on every dev machine
-# that has the Xcode tools) packs it in a dozen lines.
-#
-# The installer uses this for Setup, shortcuts and dictionary files. The same
-# ICO is embedded into the Windows/amd64 executable by packaging/windows/dictshelf.rc.
+# Use the supplied multi-size ICO to preserve its hand-tuned pixel edges. It is
+# used by the installer and embedded into the Windows executable by the resource file.
 ico="$root/packaging/windows/dictshelf.ico"
-ico_small="$root/packaging/brand/dictshelf-ico-16-47.svg"
-ico_large="$root/packaging/brand/dictshelf-ico-48-plus.svg"
-
-mkdir -p "$tmp/ico" "$(dirname "$ico")"
-# These two tailored source marks use different geometry for small and large
-# icon frames. Keep the ICO frames on their native-size SVG renderings.
-for s in 16 24 32; do
-	render "$s" "$s" "$ico_small" "$tmp/ico/$s.png"
-done
-for s in 48 96 128 256; do
-	render "$s" "$s" "$ico_large" "$tmp/ico/$s.png"
-done
-
-run_python3 - "$tmp/ico" "$ico" <<'PY'
-import struct, sys, os
-srcdir, out = sys.argv[1], sys.argv[2]
-sizes = [16, 24, 32, 48, 96, 128, 256]
-blobs = [open(os.path.join(srcdir, "%d.png" % s), "rb").read() for s in sizes]
-# ICONDIR: reserved, type=1 (icon), count. Then one 16-byte ICONDIRENTRY each.
-head = struct.pack("<HHH", 0, 1, len(sizes))
-offset = len(head) + 16 * len(sizes)
-entries = b""
-for s, b in zip(sizes, blobs):
-    # 256 is stored as 0: the field is one byte wide.
-    entries += struct.pack("<BBBBHHII", s % 256, s % 256, 0, 0, 1, 32, len(b), offset)
-    offset += len(b)
-with open(out, "wb") as f:
-    f.write(head + entries + b"".join(blobs))
-PY
+mkdir -p "$(dirname "$ico")"
+cp "$brand_ico" "$ico"
 [ -s "$ico" ] || { echo "make-icons: dictshelf.ico is empty" >&2; exit 1; }
 printf 'dictshelf.ico   '
 ls -l "$ico" | awk '{print $5 " bytes"}'
@@ -232,8 +213,15 @@ windres_bin=${WINDRES:-}
 if [ -z "$windres_bin" ] && command -v windres >/dev/null 2>&1; then
 	windres_bin=$(command -v windres)
 fi
-if [ -z "$windres_bin" ] && [ -n "${GCC_PATH:-}" ]; then
-	compiler_dir=$(dirname -- "$GCC_PATH")
+gcc_path=${GCC_PATH:-}
+if [ -z "$gcc_path" ] && [ -f "$root/build-windows.local.bat" ]; then
+	gcc_path=$(sed -n 's/^[[:space:]]*[Ss][Ee][Tt][[:space:]]*"GCC_PATH=\([^"]*\)".*/\1/p' "$root/build-windows.local.bat" | head -n 1)
+	if [ -n "$gcc_path" ] && command -v cygpath >/dev/null 2>&1; then
+		gcc_path=$(cygpath -u "$gcc_path")
+	fi
+fi
+if [ -z "$windres_bin" ] && [ -n "$gcc_path" ]; then
+	compiler_dir=$(dirname -- "$gcc_path")
 	for candidate in "$compiler_dir/windres.exe" "$compiler_dir/windres"; do
 		[ -x "$candidate" ] && { windres_bin=$candidate; break; }
 	done
