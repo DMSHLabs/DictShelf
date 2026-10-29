@@ -4491,7 +4491,7 @@ function syncSystemSettingSwitches(root){
     row.classList.add("sys-switch-ready");
   }
   const headings=[...root.querySelectorAll("h3.sys-head")],blocks=new Map();
-  for(const row of root.querySelectorAll(".sys-row.sys-switch-ready")){
+  for(const row of root.querySelectorAll(".sys-row.sys-switch-ready:not(.sys-num)")){
     let heading=null;
     for(const candidate of headings){
       if(candidate.compareDocumentPosition(row)&Node.DOCUMENT_POSITION_FOLLOWING)heading=candidate;
