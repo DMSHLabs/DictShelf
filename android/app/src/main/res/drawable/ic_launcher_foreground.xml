@@ -3,7 +3,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <!-- DictShelf's open-book-on-a-shelf mark. The icon tile is supplied by the
      adaptive-icon background; this foreground stays inside the launcher safe
-     zone. Keep its geometry and palette aligned with packaging/brand/dictshelf.svg. -->
+     zone. Keep its geometry and palette aligned with packaging/brand/source/ico2_transparent/DictShelf2_transparent.svg. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -15,8 +15,8 @@
             android:fillColor="#F2A93B" />
         <path
             android:pathData="M5,8.5 C9.1,7.2 12.8,8.2 16,10.9 L16,23.1 C12.9,20.8 9.2,20 5,20.8 Z M16,10.9 C19.2,8.2 22.9,7.2 27,8.5 L27,20.8 C22.8,20 19.1,20.8 16,23.1 Z"
-            android:fillColor="#071C33" />
-        <path android:pathData="M16,11 L16,22.5" android:strokeColor="#FFF4DF" android:strokeWidth="1.1" />
+            android:fillColor="#061D34" />
+        <path android:pathData="M16,11 L16,22.5" android:strokeColor="#FFF5E0" android:strokeWidth="1.1" />
         <path android:pathData="M4,24.7 L28,24.7 M7,25.2 L7,27.3 M25,25.2 L25,27.3"
             android:strokeColor="#F2A93B" android:strokeWidth="2.4"
             android:strokeLineCap="round" android:strokeLineJoin="round" />

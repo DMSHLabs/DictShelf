@@ -9,11 +9,12 @@ package tray
 import (
 	_ "embed"
 	"runtime"
+	"sync"
 
 	"github.com/gogpu/systray"
 )
 
-// The mark, generated from packaging/brand/dictshelf.svg by
+// The mark, generated from packaging/brand/source/ico2/DictShelf2_small.svg by
 // tools/make-icons.sh (`make icons`) and committed, so `make build` needs no
 // image toolchain. D70: the mark is never redrawn, only rendered.
 //
@@ -28,6 +29,22 @@ var (
 )
 
 type systrayPlatform struct{ t *systray.SystemTray }
+
+var activeSystemTrayMu sync.RWMutex
+var activeSystemTray *systray.SystemTray
+var selectedSystemTrayIcon []byte
+
+func setActiveSystemTrayIcon(png []byte) bool {
+	activeSystemTrayMu.Lock()
+	selectedSystemTrayIcon = append(selectedSystemTrayIcon[:0], png...)
+	t := activeSystemTray
+	activeSystemTrayMu.Unlock()
+	if t == nil || len(png) == 0 {
+		return false
+	}
+	t.SetIcon(png)
+	return true
+}
 
 func newPlatform() platform { return &systrayPlatform{} }
 
@@ -60,13 +77,27 @@ func (p *systrayPlatform) Start(cfg Config, items []Item) error {
 		// alone, so it follows the menu bar through light and dark mode.
 		t.SetTemplateIcon(iconTemplatePNG)
 	} else {
-		t.SetIcon(iconPNG)
+		activeSystemTrayMu.RLock()
+		selected := append([]byte(nil), selectedSystemTrayIcon...)
+		activeSystemTrayMu.RUnlock()
+		if len(selected) == 0 {
+			selected = iconPNG
+		}
+		t.SetIcon(selected)
 	}
 	t.SetTooltip(cfg.tooltip()).SetMenu(menu)
 	if cfg.WindowsWindow {
 		t.OnClick(cfg.Open)
 	}
 	t.Show()
+	activeSystemTrayMu.Lock()
+	activeSystemTray = t
+	if runtime.GOOS != "darwin" && len(selectedSystemTrayIcon) > 0 {
+		// Reapply the latest choice in case the WebView restored it while the
+		// tray was starting.
+		t.SetIcon(append([]byte(nil), selectedSystemTrayIcon...))
+	}
+	activeSystemTrayMu.Unlock()
 	p.t = t
 	return nil
 }
@@ -80,6 +111,11 @@ func (p *systrayPlatform) Run() error {
 
 func (p *systrayPlatform) Stop() {
 	if p.t != nil {
+		activeSystemTrayMu.Lock()
+		if activeSystemTray == p.t {
+			activeSystemTray = nil
+		}
+		activeSystemTrayMu.Unlock()
 		p.t.Remove()
 	}
 }
