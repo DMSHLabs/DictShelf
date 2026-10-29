@@ -6,7 +6,6 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"net/http/httptest"
 	"path"
 	"regexp"
 	"strings"

@@ -3,7 +3,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <!-- DictShelf's open-book-on-a-shelf mark. The icon tile is supplied by the
      adaptive-icon background; this foreground stays inside the launcher safe
-     zone. Keep its geometry and palette aligned with packaging/brand/source/ico2_transparent/DictShelf2_transparent.svg. -->
+     zone. Keep its geometry and palette aligned with packaging/brand/source/icon2_transparent/DictShelf2_transparent.svg. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"

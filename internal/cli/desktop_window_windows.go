@@ -319,7 +319,7 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	})
 	_ = w.Bind("wudictSetAppIcon", func(name string) bool {
 		index, ok := tray.WindowsIconIndex(name)
-		if !ok || !tray.SetWindowsIcon(name) {
+		if !ok {
 			return false
 		}
 		hwnd := uintptr(w.Window())
@@ -327,6 +327,7 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		go desktopUpdateShortcutIcon(index)
 		return true
 	})
+	_ = w.Bind("wudictSetTrayIcon", func(name string) bool { return tray.SetWindowsIcon(name) })
 	_ = w.Bind("wudictGetHotkeys", func() any {
 		if desktopRequest == nil {
 			return map[string]string{"show": "Ctrl+Shift+F11, Ctrl+Shift+F11", "translate": "Ctrl+Shift+B, Ctrl+Shift+B"}
@@ -356,7 +357,7 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		})
 		return nil
 	})
-	w.Init(`(function(){function setup(){if(window.chrome&&window.chrome.webview){window.chrome.webview.addEventListener('windowclose',function(event){if(window.wudictGetCloseToTray&&window.wudictGetCloseToTray()){event.preventDefault();window.wudictHideWindow()}})}if(window.wudictSetAppIcon){var icon='dictshelf2';try{icon=localStorage.getItem('wudict_windows_icon')||icon}catch(_){}window.wudictSetAppIcon(icon)}}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup,{once:true});else setup()})();`)
+	w.Init(`(function(){function setup(){if(window.chrome&&window.chrome.webview){window.chrome.webview.addEventListener('windowclose',function(event){if(window.wudictGetCloseToTray&&window.wudictGetCloseToTray()){event.preventDefault();window.wudictHideWindow()}})}var appIcon='icon2_transparent',trayIcon='icon2_transparent';try{appIcon=localStorage.getItem('wudict_windows_app_icon')||appIcon;trayIcon=localStorage.getItem('wudict_windows_tray_icon')||trayIcon}catch(_){}if(window.wudictSetAppIcon)window.wudictSetAppIcon(appIcon);if(window.wudictSetTrayIcon)window.wudictSetTrayIcon(trayIcon)}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup,{once:true});else setup()})();`)
 	if err := w.Bind("wudictStartupReady", func() error {
 		log.Printf("WebView2 startup: application ready")
 		w.Dispatch(func() { webview.HideStartupSplash(w) })

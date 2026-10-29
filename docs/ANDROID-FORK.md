@@ -17,7 +17,7 @@ upstream.
 
 The DictShelf launcher mark is an open book resting on an amber shelf, with a
 small centered star on an ivory tile. Its vector source is
-`packaging/brand/source/ico2/DictShelf2.svg`; the Android adaptive and monochrome foreground
+`packaging/brand/source/icon2_transparent/DictShelf2_transparent.svg`; the Android adaptive and monochrome foreground
 is `android/app/src/main/res/drawable/ic_launcher_foreground.xml`. Run
 `tools/make-icons.sh` to render the Play listing images, Linux/Windows/macOS
 tray icons, Windows `.ico`, and macOS `.icns`. The 32px tray mark comes from `DictShelf2_small.svg`; the Windows ICO is copied byte-for-byte from `packaging/brand/source/DictShelf2.ico` to preserve its pre-rendered edges. The executable also embeds the three alternate ICO variants as resources 102–104. The upstream favicon remains
@@ -192,7 +192,7 @@ merge merely to resume this work.
 | Android IDs, FOSS/Play flavors, debug suffix, artifact names | `android/app/build.gradle` |
 | Exported launcher/lookup activities and shortcut resource | `android/app/src/main/AndroidManifest.xml`; `src/main/res/xml/shortcuts.xml` and `src/debug/res/xml/shortcuts.xml` |
 | Distinct external-reader component | `android/app/src/main/java/com/dmshepeta/wudict2/LookupActivity.java`, extending the unchanged upstream-package implementation |
-| Launcher icon, Play listing images | `android/app/src/main/res/drawable/ic_launcher_foreground.xml` (the icon the phone shows); `tools/make-icons.sh` renders the Play images and desktop icons from `packaging/brand/source/ico2/DictShelf2.svg` |
+| Launcher icon, Play listing images | `android/app/src/main/res/drawable/ic_launcher_foreground.xml` (the icon the phone shows); `tools/make-icons.sh` renders the Play images and desktop icons from `packaging/brand/source/icon2_transparent/DictShelf2_transparent.svg` |
 | Legacy WebView origin for settings import | `android/app/src/main/java/com/legbehindneck/wudict/Shell.java`: `legacyOrigin`, `prepareOrigin`; `ShellPrefs.legacyOriginPort()` reads the former SERVER_PORT preference only while `settings.json` is absent |
 | In-process Go startup and readiness | `android/app/src/main/java/com/legbehindneck/wudict/GoRuntime.java`: `run`, `runtimeReady`; `AppDirs.java` provides the app-specific library directory |
 | In-process resource dispatch | `android/app/src/main/java/com/legbehindneck/wudict/GoAppResource.java`; both Android WebViews use Go/JNI and no server mode is supported |

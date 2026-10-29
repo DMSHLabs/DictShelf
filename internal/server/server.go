@@ -177,6 +177,9 @@ var examplesCSS string
 //go:embed web/favicon.svg
 var faviconSVG []byte // "Lookup" mark: magnifier over headword lines
 
+//go:embed web/icon-previews/*.png
+var appIconPreviews embed.FS
+
 // Server exposes the registry over HTTP.
 type Server struct {
 	reg *Registry

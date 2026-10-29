@@ -13,6 +13,8 @@ import (
 )
 
 func TestIndexLogFailureAndRotation(t *testing.T) {
+	wasEnabled := ingestParallelismDiagnostics.Swap(true)
+	defer ingestParallelismDiagnostics.Store(wasEnabled)
 	t.Setenv("WUDICT_DB_DIR", t.TempDir())
 	trace := newIndexTrace("broken.dsl", "text.db", Plan{Contains: true, FullText: true})
 	trace.phase("optimize contains index")
@@ -39,6 +41,8 @@ func TestIndexLogFailureAndRotation(t *testing.T) {
 }
 
 func TestIndexLogIngestRecordsStagesWithoutArticle(t *testing.T) {
+	wasEnabled := ingestParallelismDiagnostics.Swap(true)
+	defer ingestParallelismDiagnostics.Store(wasEnabled)
 	t.Setenv("WUDICT_DB_DIR", t.TempDir())
 	r := &fakeReader{meta: dict.Meta{Name: "Example", Format: "mdx", Path: "example.mdx"}, entries: []dict.Entry{h("alpha", "PRIVATE ARTICLE BODY")}}
 	_, err := IngestPlan(r, filepath.Join(t.TempDir(), "text.db"), Plan{Contains: true, FullText: true}, nil)
@@ -66,6 +70,8 @@ func (r *diagnosticBrokenReader) Next() (dict.Entry, error) {
 }
 
 func TestIndexLogRecordsReaderFailure(t *testing.T) {
+	wasEnabled := ingestParallelismDiagnostics.Swap(true)
+	defer ingestParallelismDiagnostics.Store(wasEnabled)
 	t.Setenv("WUDICT_DB_DIR", t.TempDir())
 	r := &diagnosticBrokenReader{fakeReader: fakeReader{meta: dict.Meta{Name: "Broken", Format: "mdx", Path: "broken.mdx"}}}
 	_, err := IngestPlan(r, filepath.Join(t.TempDir(), "text.db"), Plan{}, nil)
@@ -86,6 +92,8 @@ type diagnosticPanicReader struct{ fakeReader }
 func (r *diagnosticPanicReader) Next() (dict.Entry, error) { panic("broken decoder") }
 
 func TestIndexLogRecordsAndPropagatesPanic(t *testing.T) {
+	wasEnabled := ingestParallelismDiagnostics.Swap(true)
+	defer ingestParallelismDiagnostics.Store(wasEnabled)
 	t.Setenv("WUDICT_DB_DIR", t.TempDir())
 	r := &diagnosticPanicReader{}
 	func() {

@@ -1,0 +1,15 @@
+# systray — GoGPU Ecosystem
+
+> Pure Go system tray library for Windows, macOS, and Linux. Zero CGO.
+> v0.2.0: multi-tray support, dynamic menu updates (SetLabel/SetChecked/SetDisabled/SetIcon).
+
+## Docs
+
+- [API Reference](https://pkg.go.dev/github.com/gogpu/systray)
+- [AGENTS.md](https://github.com/gogpu/systray/blob/main/AGENTS.md): AI agent instructions
+- [CHANGELOG](https://github.com/gogpu/systray/blob/main/CHANGELOG.md): Release history
+
+## Ecosystem
+
+- [GoGPU Ecosystem](https://github.com/gogpu/gogpu/blob/main/AGENTS.md): Full ecosystem map
+- [Open Collective](https://opencollective.com/gogpu)

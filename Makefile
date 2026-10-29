@@ -86,7 +86,7 @@ serve: build ## Run the HTTP server (DICT_DIR/PORT/ARGS overridable), e.g. make 
 # reads that from the running process rather than from a second artifact.
 
 .PHONY: icons
-icons: ## Regenerate platform icons and Play listing images from packaging/brand/source/ico2/DictShelf2.svg (needs librsvg or ImageMagick)
+icons: ## Regenerate six platform icon variants and previews from SVGs using Inkscape
 	@sh tools/make-icons.sh
 
 # ---- macOS .app bundle (D75) --------------------------------------------

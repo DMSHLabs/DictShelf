@@ -5,9 +5,10 @@
 // GOOS/GOARCH pair; an unsuffixed .syso is linked into every target, where
 // the Android ELF linker rejects it ("unknown file type").
 // Regenerate with windres -F pe-x86-64 -i packaging/windows/dictshelf.rc -o dictshelf_windows_amd64.syso.
-// 101 is the active application icon; keep the other artwork available as
-// executable resources for platform-specific consumers.
-101 ICON "packaging/windows/dictshelf.ico"
-102 ICON "packaging/brand/source/DictShelf.ico"
-103 ICON "packaging/brand/source/DictShelf_transparent.ico"
-104 ICON "packaging/brand/source/DictShelf2_transparent.ico"
+// Resource IDs map to icon indices in System Settings; icon2_transparent is default.
+101 ICON "packaging/windows/icons/icon2_transparent.ico"
+102 ICON "packaging/windows/icons/icon1.ico"
+103 ICON "packaging/windows/icons/icon1_transparent.ico"
+104 ICON "packaging/windows/icons/icon1_transparent_light.ico"
+105 ICON "packaging/windows/icons/icon2.ico"
+106 ICON "packaging/windows/icons/icon2_transparent_light.ico"

@@ -8,6 +8,8 @@ require (
 	golang.org/x/text v0.40.0
 )
 
+replace github.com/gogpu/systray => ./third_party/systray
+
 require (
 	github.com/aaaton/golem/v4 v4.0.2
 	github.com/aaaton/golem/v4/dicts/en v1.0.1

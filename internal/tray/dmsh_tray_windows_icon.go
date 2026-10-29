@@ -7,50 +7,54 @@ package tray
 
 import _ "embed"
 
-//go:embed icons/tray-windows.png
-var windowsIconDictShelf2PNG []byte
+//go:embed icons/tray-windows-icon1.png
+var trayIcon1 []byte
 
-//go:embed icons/tray-windows-dictshelf.png
-var windowsIconDictShelfPNG []byte
+//go:embed icons/tray-windows-icon1_transparent.png
+var trayIcon1Transparent []byte
 
-//go:embed icons/tray-windows-dictshelf-transparent.png
-var windowsIconDictShelfTransparentPNG []byte
+//go:embed icons/tray-windows-icon1_transparent_light.png
+var trayIcon1TransparentLight []byte
 
-//go:embed icons/tray-windows-dictshelf2-transparent.png
-var windowsIconDictShelf2TransparentPNG []byte
+//go:embed icons/tray-windows-icon2.png
+var trayIcon2 []byte
 
-func init() {
-	// Windows uses the DictShelf book-on-shelf mark.
-	iconPNG = windowsIconDictShelf2PNG
+//go:embed icons/tray-windows-icon2_transparent.png
+var trayIcon2Transparent []byte
+
+//go:embed icons/tray-windows-icon2_transparent_light.png
+var trayIcon2TransparentLight []byte
+
+var windowsTrayIcons = map[string][]byte{
+	"icon1": trayIcon1, "icon1_transparent": trayIcon1Transparent,
+	"icon1_transparent_light": trayIcon1TransparentLight, "icon2": trayIcon2,
+	"icon2_transparent": trayIcon2Transparent, "icon2_transparent_light": trayIcon2TransparentLight,
 }
+
+func init() { iconPNG = trayIcon2Transparent }
 
 func WindowsIconIndex(name string) (int, bool) {
 	switch name {
-	case "dictshelf2":
+	case "icon2_transparent":
 		return 0, true
-	case "dictshelf":
+	case "icon1":
 		return 1, true
-	case "dictshelf-transparent":
+	case "icon1_transparent":
 		return 2, true
-	case "dictshelf2-transparent":
+	case "icon1_transparent_light":
 		return 3, true
+	case "icon2":
+		return 4, true
+	case "icon2_transparent_light":
+		return 5, true
 	default:
 		return 0, false
 	}
 }
 
 func SetWindowsIcon(name string) bool {
-	var icon []byte
-	switch name {
-	case "dictshelf2":
-		icon = windowsIconDictShelf2PNG
-	case "dictshelf":
-		icon = windowsIconDictShelfPNG
-	case "dictshelf-transparent":
-		icon = windowsIconDictShelfTransparentPNG
-	case "dictshelf2-transparent":
-		icon = windowsIconDictShelf2TransparentPNG
-	default:
+	icon, ok := windowsTrayIcons[name]
+	if !ok {
 		return false
 	}
 	setActiveSystemTrayIcon(icon)

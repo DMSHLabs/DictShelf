@@ -14,7 +14,7 @@ import (
 	"github.com/gogpu/systray"
 )
 
-// The mark, generated from packaging/brand/source/ico2/DictShelf2_small.svg by
+// The mark, generated from packaging/brand/source/icon2_transparent/DictShelf2_transparent_small.svg by
 // tools/make-icons.sh (`make icons`) and committed, so `make build` needs no
 // image toolchain. D70: the mark is never redrawn, only rendered.
 //
