@@ -1272,6 +1272,7 @@ window.wudictFontScale=(function(){
          addressable from CSS as /files/<name>. -->
     <div class="appearance-row"><span class="appearance-label">{{T:panel.image}}</span><div id="appearanceStripWrap"><div id="appearanceStrip" role="group" aria-label="{{T:panel.backgroundImage}}"></div><button type="button" class="stripArrow" id="appearanceStripL" aria-label="{{T:panel.scrollLeft}}" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.6 2L3 8l1.6 6"/></svg></button><button type="button" class="stripArrow" id="appearanceStripR" aria-label="{{T:panel.scrollRight}}" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11.4 2L13 8l-1.6 6"/></svg></button></div></div>
     <small>{{T:panel.imageHint}}</small>
+    <label class="sys-row" id="captionColorRow" hidden><input id="captionColorOn" type="checkbox" class="panel-checkbox"><span class="sys-label">{{T:panel.applyWindowColorToTitle}}</span></label>
     </div>
   <!-- Style layers are a SUBJECT of their own, not a tab among the
        stylesheets: they are layers the page attaches and detaches around
@@ -2131,6 +2132,19 @@ function themeIsDark(){
   if(t==="light")return false;
   return matchMedia("(prefers-color-scheme: dark)").matches;
 }
+function syncWindowsAppIcon(){
+  if(typeof window.wudictSetAppIcon!=="function")return;
+  let choice="icon2_transparent";
+  try{choice=localStorage.getItem("wudict_windows_app_icon")||choice}catch(_){}
+  const family=choice.startsWith("icon1_")?"icon1":"icon2";
+  if(choice===family+"_transparent"||choice===family+"_transparent_light"){
+    let dark=matchMedia("(prefers-color-scheme: dark)").matches;
+    const appDark=themeIsDark();
+    try{const state=JSON.parse(localStorage.getItem("wudict_desktop_appearance_"+(appDark?"dark":"light"))||"{}");if(!window.wudictCleanLook&&state.captionEnabled!==false&&(state.image||state.colorEnabled))dark=appDark}catch(_){}
+    choice=family+(dark?"_transparent_light":"_transparent");
+  }
+  window.wudictSetAppIcon(choice);
+}
 /* The resolved theme the page is currently showing, so syncAutoDark can tell a
    real change from a re-run. null until the first call - boot, which must not
    look like a switch to anything downstream. */
@@ -2138,6 +2152,12 @@ let skinDark=null;
 /* hosts get .autodark so the invert rule also applies in auto mode */
 function syncAutoDark(){
   const dark=themeIsDark();
+  syncWindowsAppIcon();
+  if(window.wudictWindowsShell===true&&typeof window.wudictSetTrayIcon==="function"){
+    let trayChoice="icon2_transparent";
+    try{trayChoice=localStorage.getItem("wudict_windows_tray_icon")||trayChoice}catch(_){}
+    window.wudictSetTrayIcon(trayChoice);
+  }
   /* The resolved answer, under one name. The page spells "dark" three ways
      internally (an explicit [data-theme], the OS preference through a media
      query, and .dark inside a frame); a stylesheet the user writes should not
@@ -4810,6 +4830,28 @@ window.wudictHotkeyLookup=function(text){
   $("q").focus();
   doSearch();
 };
+function desktopSysFoldSections(body){
+  const headings=[...body.querySelectorAll(":scope > h3.sys-head")];
+  for(let i=0;i<headings.length;i++){
+    const heading=headings[i],fold=document.createElement("button");
+    fold.type="button";fold.className="sys-fold";fold.textContent=heading.textContent;
+    fold.dataset.foldIndex=String(i);fold.setAttribute("aria-controls","desktopSysFoldBody"+i);
+    let expanded=true;
+    try{const saved=localStorage.getItem("wudict_desktop_sys_fold_"+i);if(saved!==null)expanded=saved==="1"}catch(_){}
+    fold.setAttribute("aria-expanded",String(expanded));heading.replaceWith(fold);
+  }
+  for(const fold of body.querySelectorAll(":scope > .sys-fold")){
+    const section=document.createElement("div");section.className="sys-fold-body";section.id=fold.getAttribute("aria-controls");
+    while(fold.nextSibling&&!(fold.nextSibling.nodeType===1&&fold.nextSibling.classList.contains("sys-fold")))section.append(fold.nextSibling);
+    section.hidden=fold.getAttribute("aria-expanded")!=="true";fold.after(section);
+    fold.addEventListener("click",()=>{
+      const open=fold.getAttribute("aria-expanded")!=="true";
+      fold.setAttribute("aria-expanded",String(open));section.hidden=!open;
+      try{localStorage.setItem("wudict_desktop_sys_fold_"+fold.dataset.foldIndex,open?"1":"0")}catch(_){}
+    });
+  }
+}
+
 async function showDesktopSysSettings(){
   const dialog=$("desktopSysSettings"),body=$("desktopSysBody");
   // Normalize the checkbox rows before caching their containers below. The
@@ -4868,7 +4910,7 @@ async function showDesktopSysSettings(){
       for(const [value,key] of iconChoices){
         const option=document.createElement("button");option.type="button";option.className="icon-choice";option.setAttribute("aria-pressed",String(value===selected));option.setAttribute("aria-label",tx(key));option.title=tx(key);
         const pair=document.createElement("span");pair.className="icon-choice-pair";
-        for(const size of [32,48]){const img=document.createElement("img");img.src="/assets/icon-previews/"+value+(size===48?"-48":"")+".png";img.alt="";img.width=size;img.height=size;pair.append(img)}
+        for(const size of [32,48]){const img=document.createElement("img");img.src="/assets/icon-previews/"+value+(size===48?"-48":"")+".svg";img.alt="";img.width=size;img.height=size;pair.append(img)}
         option.append(pair);option.onclick=()=>{selected=value;localStorage.setItem(storageKey,value);for(const item of picker.children)item.setAttribute("aria-pressed",String(item===option));if(window[bridge])window[bridge](value)};picker.append(option);
       }
       row.append(label,picker);body.append(row);
@@ -4954,6 +4996,7 @@ async function showDesktopSysSettings(){
   const folderText=document.createElement("span");folderText.className="sys-label";folderText.textContent=tx("system.folderDiagnostics");
   folderLabel.append(folderDiagnostics,folderText);body.append(folderLabel);
   const desktopNote=document.createElement("p");desktopNote.className="sys-note";desktopNote.id="desktopSysNote";desktopNote.setAttribute("aria-live","polite");body.append(desktopNote);
+  desktopSysFoldSections(body);
   syncSystemSettingSwitches(body);
 }
 $("editSysSettings").onclick=()=>window.wudictAndroidShell?showSysSettings():showDesktopSysSettings();
@@ -10869,18 +10912,7 @@ function stylerNote(msg){
     n.textContent=tx("panel.previewOff");
     return;
   }
-  if(!stylerDir){
-    n.textContent=tx("panel.noStyleFolder");
-    return;
-  }
-  n.appendChild(document.createTextNode(tx("panel.savedLocation")));
-  const p=document.createElement("span");
-  p.className="p";p.textContent=stylerDir;p.title=tx("panel.copyPath");
-  p.onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(stylerDir)
-    .then(()=>stylerNote(tx("panel.pathCopied")),()=>{}).then(()=>setTimeout(stylerNote,1400))};
-  n.appendChild(p);
-  n.appendChild(document.createTextNode(
-    tx("panel.styleFileHint")));
+  if(!stylerDir)n.textContent=tx("panel.noStyleFolder");
 }
 /* The textarea is the single source of truth for the tab on screen; this is
    the one point where it is folded back into the pair we hold. */
@@ -12061,21 +12093,19 @@ function desktopAppearanceRequest(request){
     if(request.field==="image"){
       if(request.value&&!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(request.value))return null;
       saved.image=request.value||"";
-      if(saved.image)saved.colorEnabled=true;
     }else if(request.field==="color"){
       if(!/^#?[0-9a-f]{6}$/i.test(request.value))return null;
       saved.color="#"+String(request.value).replace(/^#/,"");
-    }else if(request.field==="colorEnabled")saved.colorEnabled=saved.image?true:!!request.value;
-    try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}
-  }
-  // Older saved appearances may have an image with Color switched off. An
-  // image always needs its sampled paper color, so normalize that state too.
-  if(saved.image&&!saved.colorEnabled){
-    saved.colorEnabled=true;
+    }else if(request.field==="colorEnabled")saved.colorEnabled=!!request.value;
+    else if(request.field==="captionEnabled"){
+      if(saved.colorEnabled===undefined)saved.colorEnabled=window.wudictWindowsShell===true;
+      saved.captionEnabled=!!request.value;
+    }
     try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}
   }
   const defaultColor=night?"#1C1A17":"#F4ECD8";
   const state={colorEnabled:hasSavedAppearance?!!saved.colorEnabled:window.wudictWindowsShell===true,
+    captionEnabled:saved.captionEnabled===undefined?!window.wudictCleanLook:!!saved.captionEnabled,
     color:saved.color||defaultColor,
     image:saved.image||"",images:(stylerFileRows||[]).filter(f=>/^image\//.test(f.type||"")).map(f=>f.name),
     edgeMode:0,edgeColor:"#F4ECD8",bars:0};
@@ -12085,7 +12115,7 @@ function desktopAppearanceRequest(request){
     document.documentElement.toggleAttribute("data-desktop-image",!!state.image);
     // The Windows caption is native chrome; keep its solid color in step with
     // the same sampled/selected paper color used by the window background.
-    const captionColor=state.image||state.colorEnabled?state.color:"";
+    const captionColor=!window.wudictCleanLook&&state.captionEnabled&&(state.image||state.colorEnabled)?state.color:"";
     const root=document.documentElement;
     if(/^#[0-9a-f]{6}$/i.test(captionColor)){
       root.style.setProperty("--desktop-window-color",captionColor);
@@ -12096,6 +12126,7 @@ function desktopAppearanceRequest(request){
     }
     if(typeof window.wudictSetCaptionColor==="function")
       window.wudictSetCaptionColor(captionColor).catch(()=>{});
+    syncWindowsAppIcon();
   }
   return state;
 }
@@ -12114,7 +12145,9 @@ function appearanceRender(state){
   // every round trip and must leave the sheet showing what the reader chose.
   document.documentElement.setAttribute("data-native-appearance","");
   $("appearanceColorOn").checked=!!state.colorEnabled;
-  $("appearanceColorOn").disabled=!!state.image;
+  $("appearanceColorOn").disabled=false;
+  $("captionColorRow").hidden=window.wudictWindowsShell!==true;
+  $("captionColorOn").checked=!!state.captionEnabled;
   $("appearanceColor").value=String(state.color||"").replace(/^#/,"").toUpperCase();
   colorPickSync($("appearanceColor"),$("appearanceColorPick"));
   // Tiles, left to right: None, every image in the store, then "+". A
@@ -12451,6 +12484,7 @@ let r=await put("");
 for(const b of document.querySelectorAll("[data-styler]"))
   b.onclick=()=>stylerOpen(b.dataset.styler);
 $("appearanceColorOn").onchange=e=>appearanceSet("colorEnabled",e.target.checked);
+$("captionColorOn").onchange=e=>appearanceSet("captionEnabled",e.target.checked);
 /* The color field remembers what it has been given: the last ten accepted
    colors, most recent first, offered as swatches in a dropdown that opens
    with the field - the search-history window is the model, including its

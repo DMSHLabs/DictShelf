@@ -978,16 +978,17 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    chose the ratio is written there) - a `--line` rule was the thing that read
    as invisible on a phone in the two light looks, and this window wears the
    same paper. */
-#sysSettings .sys-fold{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);width:100%;
+#sysSettings .sys-fold,#desktopSysBody .sys-fold{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);width:100%;
   margin:calc(var(--ui-row-gap) * 1em) 0 .2em;padding:.8em 0 0;border:0;background:none;text-align:left;
   font:inherit;font-size:calc(var(--ui-font-section) * 1rem);font-weight:600;color:var(--fg);cursor:pointer;
   border-top:1px solid color-mix(in srgb,var(--fg) 22%,transparent)}
-#sysSettings .sys-fold[hidden]{display:none}
-#sysSettings .sys-fold::before{content:"▸";color:var(--label);font-size:1em;
+#sysSettings .sys-fold[hidden],#desktopSysBody .sys-fold[hidden]{display:none}
+#sysSettings .sys-fold::before,#desktopSysBody .sys-fold::before{content:"▸";color:var(--label);font-size:1em;
   line-height:1;display:inline-block;width:.9em;flex:none;text-align:center}
-#sysSettings .sys-fold[aria-expanded="true"]::before{content:"▾";color:var(--accent)}
-#sysSettings .sys-fold:hover::before{color:var(--fg)}
-#sysSettings .sys-fold:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+#sysSettings .sys-fold[aria-expanded="true"]::before,#desktopSysBody .sys-fold[aria-expanded="true"]::before{content:"▾";color:var(--accent)}
+#sysSettings .sys-fold:hover::before,#desktopSysBody .sys-fold:hover::before{color:var(--fg)}
+#sysSettings .sys-fold:focus-visible,#desktopSysBody .sys-fold:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.sys-fold-body[hidden]{display:none!important}
 /* The blank row the reader asked for, between the Advanced rows and the button
    that clears them - inside that group, where the break is read. A row of air
    rather than a margin on the button: the rows above it end in whatever the

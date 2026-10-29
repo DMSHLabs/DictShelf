@@ -1,5 +1,16 @@
 # Agent handoff — current state
 
+The Windows taskbar icon refresh removes the visible window's taskbar button
+after a theme-driven icon change and adds it again 150 ms later on the UI thread.
+Rapid changes cancel earlier additions. A Windows Go build passes; live Explorer
+behavior still needs user verification.
+
+Windows executable builds generate a version resource from `DICTSHELF_VERSION`
+or the local Git version, including DictShelf/DMSH Labs identity and the UTC
+build date. The Windows GitHub Action now passes its selected release tag through
+`DICTSHELF_VERSION`. A sample beta resource was compiled and verified through
+Windows `FileVersionInfo`; full build-script runtime verification remains.
+
 Windows close-to-tray diagnostics record WM_CLOSE, the effective setting and
 visibility after ShowWindow. The log showed taskbar restoration can leave the
 internal hidden flag stale, so WM_CLOSE now checks actual Windows visibility

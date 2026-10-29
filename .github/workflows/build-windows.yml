@@ -92,7 +92,7 @@ jobs:
           fi
           # Stamp the desktop executable with the tag that this release will
           # carry. The installer later reads its identity and version from it.
-          echo "WUDICT_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "DICTSHELF_VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "building $VERSION"
 
       - name: Build desktop executable

@@ -22,12 +22,12 @@ func desktopAsset(name string) (desktopAssetResponse, bool) {
 	const faviconCache = "public, max-age=604800"
 	if strings.HasPrefix(name, "/assets/icon-previews/") {
 		file := strings.TrimPrefix(name, "/assets/icon-previews/")
-		if strings.Contains(file, "/") || !strings.HasSuffix(file, ".png") {
+		if strings.Contains(file, "/") || !strings.HasSuffix(file, ".svg") {
 			return desktopAssetResponse{}, false
 		}
 		body, err := appIconPreviews.ReadFile("web/icon-previews/" + file)
 		if err == nil {
-			return desktopAssetResponse{body, "image/png", "no-cache"}, true
+			return desktopAssetResponse{body, "image/svg+xml", "no-cache"}, true
 		}
 		return desktopAssetResponse{}, false
 	}
