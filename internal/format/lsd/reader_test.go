@@ -6,6 +6,7 @@ package lsd
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -104,6 +105,121 @@ func TestReaderLingvo10Dictionary(t *testing.T) {
 	}
 	if count != 18370 {
 		t.Fatalf("read %d entries; want 18370", count)
+	}
+}
+
+func TestReaderLingvo7Dictionaries(t *testing.T) {
+	base := `D:\Dictionaries\Test3\Елистратов. Словарь русского арго (2002)\`
+	for _, tc := range []struct {
+		name  string
+		dsl   string
+		count int
+	}{
+		{name: "Словарь русского арго.lsd", dsl: "Словарь русского арго.dsl.dz", count: 15699},
+		{name: "Словарь русского арго_abrv.lsd", dsl: "Словарь русского арго_abrv.dsl.dz", count: 131},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := NewReader(filepath.Join(base, tc.name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer r.Close()
+			if r.Meta().EntryCount != tc.count {
+				t.Fatalf("header count = %d; want %d", r.Meta().EntryCount, tc.count)
+			}
+			count := 0
+			for {
+				_, err := r.Next()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					t.Fatalf("entry %d: %v", count, err)
+				}
+				count++
+			}
+			if count == 0 || count > tc.count {
+				t.Fatalf("decoded %d article groups from %d headings", count, tc.count)
+			}
+			if err := compareLegacyHeadwords(filepath.Join(base, tc.name), filepath.Join(base, tc.dsl)); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func compareLegacyHeadwords(lsdPath, dslPath string) error {
+	lsdReader, err := NewReader(lsdPath)
+	if err != nil {
+		return err
+	}
+	defer lsdReader.Close()
+	lsdKeys := make(map[string]struct{})
+	for {
+		entry, err := lsdReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		for _, word := range entry.Headwords {
+			lsdKeys[strings.ToLower(word)] = struct{}{}
+		}
+	}
+	dslReader, err := dsl.NewReader(dslPath)
+	if err != nil {
+		return err
+	}
+	defer dslReader.Close()
+	dslKeys := make(map[string]struct{})
+	for {
+		entry, err := dslReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		for _, word := range entry.Headwords {
+			dslKeys[strings.ToLower(word)] = struct{}{}
+		}
+	}
+	for word := range lsdKeys {
+		if _, ok := dslKeys[word]; !ok {
+			return fmt.Errorf("LSD headword %q is missing from %s", word, filepath.Base(dslPath))
+		}
+	}
+	for word := range dslKeys {
+		if _, ok := lsdKeys[word]; !ok {
+			return fmt.Errorf("DSL headword %q is missing from %s", word, filepath.Base(lsdPath))
+		}
+	}
+	return nil
+}
+func TestReaderLingvo9Dictionary(t *testing.T) {
+	path := `D:\Dictionaries\Test3\Грицанов. Энциклопедия история философии (2002)\hist_of_philosophyl_gricanov.lsd`
+	r, err := NewReader(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if r.Meta().EntryCount != 654 {
+		t.Fatalf("header count = %d; want 654", r.Meta().EntryCount)
+	}
+	count := 0
+	for {
+		_, err := r.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("entry %d: %v", count, err)
+		}
+		count++
+	}
+	if count == 0 {
+		t.Fatal("decoded no article groups")
 	}
 }
 

@@ -94,6 +94,7 @@ const (
 	WMMove          = 0x0003
 	WMSize          = 0x0005
 	WMActivate      = 0x0006
+	WMSysCommand    = 0x0112
 	WMClose         = 0x0010
 	WMQuit          = 0x0012
 	WMGetMinMaxInfo = 0x0024
@@ -101,6 +102,10 @@ const (
 	WMMoving        = 0x0216
 	WMApp           = 0x8000
 	WMHotkey        = 0x0312
+)
+
+const (
+	SCMinimize = 0xF020
 )
 
 const (

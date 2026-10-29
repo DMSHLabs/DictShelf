@@ -4852,6 +4852,12 @@ async function showDesktopSysSettings(){
     if(window.wudictGetCloseToTray)trayCheck.checked=window.wudictGetCloseToTray();
     const trayLabel=document.createElement("span");trayLabel.className="sys-label";trayLabel.textContent=tx("system.closeToTray");
     trayRow.append(trayCheck,trayLabel);body.append(trayRow);
+    const minimizeTrayRow=document.createElement("label");minimizeTrayRow.className="sys-row";
+    const minimizeTrayCheck=document.createElement("input");minimizeTrayCheck.type="checkbox";minimizeTrayCheck.className="panel-checkbox";minimizeTrayCheck.checked=localStorage.getItem("wudict_minimize_to_tray")==="1";
+    if(window.wudictGetMinimizeToTray)minimizeTrayCheck.checked=window.wudictGetMinimizeToTray();
+    minimizeTrayCheck.addEventListener("change",()=>{localStorage.setItem("wudict_minimize_to_tray",minimizeTrayCheck.checked?"1":"0");if(window.wudictSetMinimizeToTray)window.wudictSetMinimizeToTray(minimizeTrayCheck.checked)});
+    const minimizeTrayLabel=document.createElement("span");minimizeTrayLabel.className="sys-label";minimizeTrayLabel.textContent=tx("system.minimizeToTray");
+    minimizeTrayRow.append(minimizeTrayCheck,minimizeTrayLabel);body.append(minimizeTrayRow);
     const iconRow=document.createElement("label");iconRow.className="sys-row sys-num";
     const iconLabel=document.createElement("span");iconLabel.className="sys-label";iconLabel.textContent=tx("system.appIcon");
     const iconWrap=document.createElement("span");iconWrap.className="panel-select-wrap panel-dropdown";

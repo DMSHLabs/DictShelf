@@ -72,6 +72,7 @@ var (
 )
 
 var desktopCloseToTray atomic.Bool
+var desktopMinimizeToTray atomic.Bool
 var desktopHotkeyMu sync.Mutex
 var desktopHotkeySeq uint32 = 1
 var desktopHotkeyActions = map[int]desktopHotkeyAction{}
@@ -175,6 +176,16 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 		desktopWindowHidden.Store(true)
 		visibleAfter, _, _ := procIsWindowVisible.Call(hwnd)
 		logx.SystemDiagnostic("desktop close-to-tray hide hwnd=%#x visible_after=%t", hwnd, visibleAfter != 0)
+		return true
+	})
+	webview.SetMinimizeToTrayHook(func(hwnd uintptr) bool {
+		if !desktopMinimizeToTray.Load() {
+			return false
+		}
+		const swHide = 0
+		procShowWindow.Call(hwnd, swHide)
+		desktopWindowHidden.Store(true)
+		logx.SystemDiagnostic("desktop minimize-to-tray hide hwnd=%#x", hwnd)
 		return true
 	})
 	webview.SetWindowSizeHandler(func(hwnd uintptr, width, height int) {
@@ -285,6 +296,25 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	})
 	_ = w.Bind("wudictSetCloseToTray", func(enabled bool) error {
 		desktopCloseToTray.Store(enabled)
+		return nil
+	})
+	_ = w.Bind("wudictGetMinimizeToTray", func() bool {
+		if desktopRequest == nil {
+			desktopMinimizeToTray.Store(false)
+			return false
+		}
+		value, err := desktopRequest(context.Background(), "storageRead", "")
+		if err != nil {
+			logx.SystemDiagnostic("desktop minimize-to-tray setting read failed; enabled=false error=%q", err.Error())
+			return false
+		}
+		values, ok := value.(map[string]string)
+		enabled := ok && values["wudict_minimize_to_tray"] == "1"
+		desktopMinimizeToTray.Store(enabled)
+		return enabled
+	})
+	_ = w.Bind("wudictSetMinimizeToTray", func(enabled bool) error {
+		desktopMinimizeToTray.Store(enabled)
 		return nil
 	})
 	_ = w.Bind("wudictSetAppIcon", func(name string) bool {
