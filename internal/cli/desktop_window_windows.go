@@ -69,7 +69,52 @@ var (
 	windowSendInput         = windowUser32.NewProc("SendInput")
 	windowGetAsyncKeyState  = windowUser32.NewProc("GetAsyncKeyState")
 	windowGetModuleHandle   = syscall.NewLazyDLL("kernel32.dll").NewProc("GetModuleHandleW")
+	windowGetUserUILanguage = syscall.NewLazyDLL("kernel32.dll").NewProc("GetUserDefaultUILanguage")
 )
+
+const (
+	wmSettingChange   = 0x001a
+	wmInputLangChange = 0x0051
+)
+
+func windowsUILanguageTag(langID uint16) string {
+	switch langID & 0x03ff {
+	case 0x0019: // Russian
+		return "ru"
+	default:
+		return "en"
+	}
+}
+
+func refreshDesktopSystemLanguage(language string) {
+	desktopWindowMu.Lock()
+	w := desktopWindow
+	request := desktopWindowRequest
+	desktopWindowMu.Unlock()
+	if w == nil || request == nil {
+		return
+	}
+	result, err := request(context.Background(), "uiLanguageChoice", "")
+	if err != nil {
+		logx.Warn("could not check interface language after Windows language change: %v", err)
+		return
+	}
+	choice, _ := result.(string)
+	if choice != "system" {
+		return
+	}
+	// Current page HTML embeds the resolved catalog. Navigate to the same app
+	// origin so its request picks up the new Windows UI language immediately.
+	desktopWindowMu.Lock()
+	if desktopWindow == w {
+		address := desktopWindowAddress
+		if parsed, err := url.Parse(address); err == nil && parsed.Scheme == "https" && strings.EqualFold(parsed.Host, "dictshelf.localhost") {
+			w.Dispatch(func() { w.Navigate(address) })
+		}
+	}
+	desktopWindowMu.Unlock()
+	_ = language // the WebView request adapter resolves the current Windows locale.
+}
 
 var desktopCloseToTray atomic.Bool
 var desktopMinimizeToTray atomic.Bool
@@ -188,6 +233,10 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 		logx.SystemDiagnostic("desktop minimize-to-tray hide hwnd=%#x", hwnd)
 		return true
 	})
+	var lastUILanguage atomic.Uint32
+	if lang, _, _ := windowGetUserUILanguage.Call(); lang != 0 {
+		lastUILanguage.Store(uint32(lang))
+	}
 	webview.SetWindowSizeHandler(func(hwnd uintptr, width, height int) {
 		if width < 480 || height < 320 {
 			return
@@ -212,6 +261,15 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 			}
 		})
 		desktopWindowSaveMu.Unlock()
+	})
+	webview.SetWindowMessageHandler(func(hwnd, msg, wp, lp uintptr) bool {
+		if msg == wmSettingChange || msg == wmInputLangChange {
+			if lang, _, _ := windowGetUserUILanguage.Call(); lang != 0 && lastUILanguage.Swap(uint32(lang)) != uint32(lang) {
+				wlang := windowsUILanguageTag(uint16(lang))
+				go refreshDesktopSystemLanguage(wlang)
+			}
+		}
+		return false
 	})
 	desktopWindowStarting = true
 	desktopWindowMu.Unlock()
