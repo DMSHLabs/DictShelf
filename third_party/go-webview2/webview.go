@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"unsafe"
 
 	"github.com/jchv/go-webview2/internal/w32"
@@ -23,12 +24,13 @@ import (
 )
 
 var (
-	windowContext      = map[uintptr]interface{}{}
-	windowContextSync  sync.RWMutex
-	closeToTrayHook    func(uintptr) bool
-	minimizeToTrayHook func(uintptr) bool
-	hotkeyHandler      func(uintptr, uintptr, uintptr) bool
-	windowSizeHandler  func(uintptr, int, int)
+	windowContext        = map[uintptr]interface{}{}
+	windowContextSync    sync.RWMutex
+	closeToTrayHook      func(uintptr) bool
+	minimizeToTrayHook   func(uintptr) bool
+	hotkeyHandler        func(uintptr, uintptr, uintptr) bool
+	windowSizeHandler    func(uintptr, int, int)
+	windowMessageHandler func(uintptr, uintptr, uintptr, uintptr) bool
 )
 
 // SetCloseToTrayHook lets a Windows host consume WM_CLOSE without destroying
@@ -44,6 +46,12 @@ func SetHotkeyHandler(handler func(uintptr, uintptr, uintptr) bool) { hotkeyHand
 
 // SetWindowSizeHandler observes the native client size as it changes.
 func SetWindowSizeHandler(handler func(uintptr, int, int)) { windowSizeHandler = handler }
+
+// SetWindowMessageHandler observes native window messages before the default
+// handler processes them. Return true to consume a message.
+func SetWindowMessageHandler(handler func(uintptr, uintptr, uintptr, uintptr) bool) {
+	windowMessageHandler = handler
+}
 
 func getWindowContext(wnd uintptr) interface{} {
 	windowContextSync.RLock()
@@ -265,12 +273,25 @@ func (w *webview) SetWebResourceRequestedHandler(filter string, handler WebResou
 			log.Printf("WebView2 resource method failed: %v", err)
 			return
 		}
-		requestHeaders := make(map[string]string, 6)
+		requestHeaders := make(map[string]string, 7)
 		if requestHeadersCOM, err := request.GetHeaders(); err == nil {
 			defer requestHeadersCOM.Release()
 			for _, name := range []string{"Range", "If-Range", "If-Modified-Since", "If-None-Match", "If-Unmodified-Since", "If-Match", "Accept-Language"} {
 				if value, err := requestHeadersCOM.GetHeader(name); err == nil && value != "" {
 					requestHeaders[name] = value
+				}
+			}
+		}
+		// Intercepted WebView2 requests can omit Accept-Language. Resolve the
+		// desktop app's System language from the Windows user UI language instead
+		// of letting the interface silently fall back to English.
+		if proc := syscall.NewLazyDLL("kernel32.dll").NewProc("GetUserDefaultUILanguage"); proc != nil {
+			if lang, _, _ := proc.Call(); lang != 0 {
+				switch uint16(lang) & 0x03ff {
+				case 0x0019: // Russian
+					requestHeaders["Accept-Language"] = "ru"
+				default:
+					requestHeaders["Accept-Language"] = "en"
 				}
 			}
 		}
@@ -443,6 +464,9 @@ func (w *webview) callbinding(d rpcMessage) (interface{}, error) {
 
 func wndproc(hwnd, msg, wp, lp uintptr) uintptr {
 	if w, ok := getWindowContext(hwnd).(*webview); ok {
+		if windowMessageHandler != nil && windowMessageHandler(hwnd, msg, wp, lp) {
+			return 0
+		}
 		switch msg {
 		case w32.WMMove, w32.WMMoving:
 			_ = w.browser.NotifyParentWindowPositionChanged()

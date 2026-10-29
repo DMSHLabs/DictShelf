@@ -155,6 +155,22 @@ func TestI18nPagesAndCache(t *testing.T) {
 	}
 }
 
+func TestResolveUILanguageFromAcceptLanguage(t *testing.T) {
+	for _, tc := range []struct{ accept, want string }{
+		{"ru", "ru"},
+		{"ru-RU, en-US;q=0.8", "ru"},
+		{"en-US, ru;q=0.8", "en"},
+		{"", "en"},
+	} {
+		if got := resolveUILanguage("system", tc.accept); got != tc.want {
+			t.Errorf("resolveUILanguage(system, %q) = %q, want %q", tc.accept, got, tc.want)
+		}
+	}
+	if got := resolveUILanguage("en", "ru"); got != "en" {
+		t.Errorf("explicit English choice overridden by system language: %q", got)
+	}
+}
+
 func TestI18nFolderIntro(t *testing.T) {
 	dir := t.TempDir()
 	for _, tc := range []struct {
