@@ -269,6 +269,11 @@ if not defined UPDATE_ICON if not exist "dictshelf_windows_amd64.syso" (
     exit /b 1
 )
 
+rem Version information is generated for every executable build from the same
+rem version that is stamped into the Go binary.
+call :update_version_info
+if errorlevel 1 exit /b 1
+
 rem taskkill may return before Windows releases the image file. Wait for the
 rem process to disappear before deleting the old executable or invoking Go.
 call :stop_running_output_executable
@@ -437,6 +442,23 @@ echo Updating the embedded Windows icon...
 "%WINDRES_PATH%" -F pe-x86-64 -i packaging\windows\dictshelf.rc -o dictshelf_windows_amd64.syso
 if errorlevel 1 (
     echo ERROR: Could not compile packaging\windows\dictshelf.ico into the Windows executable resource.
+    exit /b 1
+)
+exit /b 0
+
+:update_version_info
+set "WINDRES_PATH="
+for /f "delims=" %%W in ('where windres 2^>nul') do if not defined WINDRES_PATH set "WINDRES_PATH=%%W"
+if not defined WINDRES_PATH if defined GCC_PATH for %%D in ("%GCC_PATH%") do if exist "%%~dpDwindres.exe" set "WINDRES_PATH=%%~dpDwindres.exe"
+if not defined WINDRES_PATH if defined CC_PATH for %%D in ("%CC_PATH%") do if exist "%%~dpDwindres.exe" set "WINDRES_PATH=%%~dpDwindres.exe"
+if not defined WINDRES_PATH (
+    echo ERROR: windres.exe was not found. It is needed to embed Windows version information.
+    exit /b 1
+)
+echo Embedding Windows version information for %VERSION%...
+powershell -NoProfile -ExecutionPolicy Bypass -File "tools\make-windows-version-info.ps1" -Windres "%WINDRES_PATH%" -Version "%VERSION%" -OriginalFilename "%OUTPUT_EXE%"
+if errorlevel 1 (
+    echo ERROR: Could not generate Windows version information.
     exit /b 1
 )
 exit /b 0

@@ -62,6 +62,7 @@ const (
 	wmCommand       = 0x0111
 	wmDestroy       = 0x0002
 	wmSettingChange = 0x001A
+	wmThemeChanged  = 0x031A
 )
 
 // TrackPopupMenu flags.
@@ -916,12 +917,15 @@ func trayWndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 		return 0
 
 	case wmSettingChange:
-		// Windows broadcasts WM_SETTINGCHANGE with lParam pointing to the
-		// UTF-16 string "ImmersiveColorSet" when the system theme changes
-		// (dark/light mode toggle in Settings > Personalization > Colors).
-		if isImmersiveColorSet(lParam) {
-			t.updateIconForTheme()
-		}
+		// Re-read SystemUsesLightTheme for all setting changes. Windows does
+		// not consistently use the same lParam string for personalization
+		// changes across supported versions.
+		t.updateIconForTheme()
+		ret, _, _ := procDefWindowProcW.Call(hwnd, uintptr(msg), wParam, lParam)
+		return ret
+
+	case wmThemeChanged:
+		t.updateIconForTheme()
 		ret, _, _ := procDefWindowProcW.Call(hwnd, uintptr(msg), wParam, lParam)
 		return ret
 

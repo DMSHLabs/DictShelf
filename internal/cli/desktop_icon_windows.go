@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -20,6 +22,7 @@ var (
 	iconUser32              = syscall.NewLazyDLL("user32.dll")
 	iconLoadImage           = iconUser32.NewProc("LoadImageW")
 	iconSendMessage         = iconUser32.NewProc("SendMessageW")
+	iconRedrawWindow        = iconUser32.NewProc("RedrawWindow")
 	iconGetSystemMetrics    = iconUser32.NewProc("GetSystemMetrics")
 	iconGetSystemMetricsDPI = iconUser32.NewProc("GetSystemMetricsForDpi")
 	iconGetDPIForWindow     = iconUser32.NewProc("GetDpiForWindow")
@@ -40,22 +43,72 @@ type desktopKnownFolderID struct {
 	Data4 [8]byte
 }
 
+var desktopTaskbarIconChange atomic.Uint64
+
 func desktopSetWindowIcon(hwnd uintptr, iconIndex int) {
 	if hwnd == 0 || iconIndex < 0 || iconIndex > 5 {
 		return
 	}
 	hinstance, _, _ := windowGetModuleHandle.Call(0)
-	for _, size := range []struct {
-		metricW  int
-		metricH  int
-		fallback int
-		kind     uintptr
-	}{{49, 50, 16, 0}, {11, 12, 32, 1}} { // SM_CXSMICON/CYSMICON, SM_CXICON/CYICON
-		width, height := desktopWindowIconSize(hwnd, size.metricW, size.metricH, size.fallback)
-		icon, _, _ := iconLoadImage.Call(hinstance, uintptr(101+iconIndex), 1, width, height, 0x8000)
-		if icon != 0 {
-			iconSendMessage.Call(hwnd, 0x80, size.kind, icon) // WM_SETICON
-		}
+	width, height := desktopWindowIconSize(hwnd, 49, 50, 16) // SM_CXSMICON/CYSMICON
+	icon, _, _ := iconLoadImage.Call(hinstance, uintptr(101+iconIndex), 1, width, height, 0x8000)
+	if icon != 0 {
+		iconSendMessage.Call(hwnd, 0x80, 0, icon) // WM_SETICON, ICON_SMALL
+	}
+}
+
+func desktopSetTaskbarIcon(hwnd uintptr, iconIndex int, dispatch func(func())) {
+	if hwnd == 0 || iconIndex < 0 || iconIndex > 5 {
+		return
+	}
+	hinstance, _, _ := windowGetModuleHandle.Call(0)
+	width, height := desktopWindowIconSize(hwnd, 11, 12, 32) // SM_CXICON/CYICON
+	icon, _, _ := iconLoadImage.Call(hinstance, uintptr(101+iconIndex), 1, width, height, 0x8000)
+	if icon != 0 {
+		// Clear first so Explorer does not keep displaying the previous cached
+		// taskbar image when the window remains visible during a theme change.
+		iconSendMessage.Call(hwnd, 0x80, 1, 0) // WM_SETICON, ICON_BIG
+		iconSendMessage.Call(hwnd, 0x80, 1, icon)
+		iconRedrawWindow.Call(hwnd, 0, 0, 0x0400|0x0100|0x0080) // RDW_FRAME | RDW_UPDATENOW | RDW_INVALIDATE
+		change := desktopTaskbarIconChange.Add(1)
+		desktopRefreshTaskbarButton(hwnd, false)
+		// Explorer processes taskbar changes asynchronously. Add the button on a
+		// later UI turn so it cannot reuse the entry that was just removed.
+		time.AfterFunc(150*time.Millisecond, func() {
+			dispatch(func() {
+				if desktopTaskbarIconChange.Load() == change {
+					desktopRefreshTaskbarButton(hwnd, true)
+				}
+			})
+		})
+	}
+}
+
+func desktopRefreshTaskbarButton(hwnd uintptr, add bool) {
+	// Re-register the visible window's taskbar button so Explorer reads its
+	// new ICON_BIG without hiding or minimizing the application window.
+	initResult, _, _ := iconCoInitializeEx.Call(0, 2) // COINIT_APARTMENTTHREADED
+	if int32(initResult) >= 0 {
+		defer iconCoUninitialize.Call()
+	} else if uint32(initResult) != 0x80010106 { // RPC_E_CHANGED_MODE
+		return
+	}
+	clsid := desktopKnownFolderID{Data1: 0x56FDF344, Data2: 0xFD6D, Data3: 0x11D0, Data4: [8]byte{0x95, 0x8A, 0, 0x60, 0x97, 0xC9, 0xA0, 0x90}}
+	iid := desktopKnownFolderID{Data1: 0x56FDF342, Data2: 0xFD6D, Data3: 0x11D0, Data4: [8]byte{0x95, 0x8A, 0, 0x60, 0x97, 0xC9, 0xA0, 0x90}}
+	var taskbar uintptr
+	hr, _, _ := iconCoCreateInstance.Call(uintptr(unsafe.Pointer(&clsid)), 0, 1,
+		uintptr(unsafe.Pointer(&iid)), uintptr(unsafe.Pointer(&taskbar)))
+	if int32(hr) < 0 || taskbar == 0 {
+		return
+	}
+	defer desktopCOMCall(taskbar, 2) // Release
+	if int32(desktopCOMCall(taskbar, 3)) < 0 { // ITaskbarList.HrInit
+		return
+	}
+	if add {
+		desktopCOMCall(taskbar, 4, hwnd) // AddTab
+	} else {
+		desktopCOMCall(taskbar, 5, hwnd) // DeleteTab
 	}
 }
 

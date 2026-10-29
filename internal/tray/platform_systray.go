@@ -33,6 +33,7 @@ type systrayPlatform struct{ t *systray.SystemTray }
 var activeSystemTrayMu sync.RWMutex
 var activeSystemTray *systray.SystemTray
 var selectedSystemTrayIcon []byte
+var selectedSystemTrayDarkIcon []byte
 
 func setActiveSystemTrayIcon(png []byte) bool {
 	activeSystemTrayMu.Lock()
@@ -43,6 +44,22 @@ func setActiveSystemTrayIcon(png []byte) bool {
 		return false
 	}
 	t.SetIcon(png)
+	return true
+}
+
+func setActiveSystemTrayIcons(light, dark []byte) bool {
+	activeSystemTrayMu.Lock()
+	selectedSystemTrayIcon = append(selectedSystemTrayIcon[:0], light...)
+	selectedSystemTrayDarkIcon = append(selectedSystemTrayDarkIcon[:0], dark...)
+	t := activeSystemTray
+	activeSystemTrayMu.Unlock()
+	if t == nil || len(light) == 0 {
+		return false
+	}
+	t.SetIcon(light)
+	if len(dark) > 0 {
+		t.SetDarkModeIcon(dark)
+	}
 	return true
 }
 
@@ -84,6 +101,12 @@ func (p *systrayPlatform) Start(cfg Config, items []Item) error {
 			selected = iconPNG
 		}
 		t.SetIcon(selected)
+		activeSystemTrayMu.RLock()
+		dark := append([]byte(nil), selectedSystemTrayDarkIcon...)
+		activeSystemTrayMu.RUnlock()
+		if len(dark) > 0 {
+			t.SetDarkModeIcon(dark)
+		}
 	}
 	t.SetTooltip(cfg.tooltip()).SetMenu(menu)
 	if cfg.WindowsWindow {

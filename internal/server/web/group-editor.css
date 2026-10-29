@@ -32,7 +32,9 @@ html[data-shell-image] .workspace-dialog{background-image:var(--paper-bk-image);
 #dictSettingsOrderHint{margin:.35em 0 .8em;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.35;color:var(--label)}
 #dictSettingsGroupsLink{color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 #dictSettingsGroupsLink:hover{color:var(--link-hover)}
-#desktopSysSettings{height:min(520px,85dvh)}
+#sysSettings,#desktopSysSettings{height:calc(100dvh - var(--wd-inset-top,0px) - var(--wd-inset-bottom,0px));max-height:none;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+dialog#sysSettings:not([open]),dialog#desktopSysSettings:not([open]){display:none}
+#sysScroll,#desktopSysBody{flex:1 1 auto;min-height:0;overflow:auto}
 #desktopSysSettings .panel-scroll{overflow-wrap:anywhere}
 #desktopSysSettings h3{font-size:calc(var(--ui-font-section) * 1rem);color:var(--label)}
 #desktopSysSettings .sys-hint{margin:0;font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label)}

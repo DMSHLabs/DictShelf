@@ -327,6 +327,13 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		go desktopUpdateShortcutIcon(index)
 		return true
 	})
+	hwnd := uintptr(w.Window())
+	tray.SetWindowsTaskbarIconCallback(func(name string) {
+		index, ok := tray.WindowsIconIndex(name)
+		if ok {
+			w.Dispatch(func() { desktopSetTaskbarIcon(hwnd, index, w.Dispatch) })
+		}
+	})
 	_ = w.Bind("wudictSetTrayIcon", func(name string) bool { return tray.SetWindowsIcon(name) })
 	_ = w.Bind("wudictGetHotkeys", func() any {
 		if desktopRequest == nil {
@@ -799,6 +806,16 @@ func setDesktopCaptionColor(hwnd uintptr, color string) {
 		return
 	}
 	caption, text := uint32(0xFFFFFFFF), uint32(0xFFFFFFFF) // DWMWA_COLOR_DEFAULT
+	if color == "" {
+		// Resetting the custom caption colour alone does not opt the HWND into
+		// Windows' dark title-bar treatment. Keep the native caption in step
+		// with the system app theme while Clean leaves its colour to Windows.
+		immersiveDarkMode := uint32(0)
+		if windowsPrefersDark() {
+			immersiveDarkMode = 1
+		}
+		_, _, _ = windowDwmSetAttribute.Call(hwnd, 20, uintptr(unsafe.Pointer(&immersiveDarkMode)), unsafe.Sizeof(immersiveDarkMode)) // DWMWA_USE_IMMERSIVE_DARK_MODE
+	}
 	if len(color) == 7 && color[0] == '#' {
 		var r, g, b uint32
 		if _, err := fmt.Sscanf(color[1:], "%02x%02x%02x", &r, &g, &b); err == nil {

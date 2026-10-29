@@ -39,7 +39,7 @@ type route struct {
 
 func serveAppIconPreview(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(r.URL.Path, "/assets/icon-previews/")
-	if strings.Contains(name, "/") || !strings.HasSuffix(name, ".png") {
+	if strings.Contains(name, "/") || !strings.HasSuffix(name, ".svg") {
 		http.NotFound(w, r)
 		return
 	}
@@ -48,7 +48,7 @@ func serveAppIconPreview(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Content-Type", "image/svg+xml")
 	w.Header().Set("Cache-Control", "no-cache")
 	_, _ = w.Write(data)
 }

@@ -104,6 +104,16 @@ function looksPushShell(half) {
   appearanceRead();
 }
 
+function looksSyncCleanWindowBackground(isClean) {
+  if (!window.wudictWindowsShell || !isClean) return;
+  for (const night of [false, true]) {
+    appearanceRequest({ action: "set", night, field: "image", value: "" });
+    appearanceRequest({ action: "set", night, field: "colorEnabled", value: false });
+    appearanceRequest({ action: "set", night, field: "captionEnabled", value: false });
+  }
+  appearanceRead();
+}
+
 // ── the row ──────────────────────────────────────────────────────────────
 
 /* The row, drawn from two facts: which look is in force, and whether the
@@ -166,6 +176,8 @@ async function looksLoad() {
     console.warn("could not load looks:", e);
     return;
   }
+  window.wudictCleanLook = LOOKS.current === "clean";
+  looksSyncCleanWindowBackground(window.wudictCleanLook);
   looksRender();
   await looksCheckDrift();
 }
@@ -203,7 +215,15 @@ async function looksApply(id) {
 
 async function looksApplied(answer) {
   LOOKS = answer.payload;
+  window.wudictCleanLook = answer.applied === "clean";
   const appliedLook = LOOKS && LOOKS.looks.find((l) => l.id === answer.applied);
+  if (appliedLook && appliedLook.builtin && typeof desktopAppearanceRequest === "function") {
+    const enabled = answer.applied !== "clean";
+    desktopAppearanceRequest({action: "set", field: "captionEnabled", value: enabled, night: false});
+    desktopAppearanceRequest({action: "set", field: "captionEnabled", value: enabled, night: true});
+  }
+  if (typeof desktopAppearanceRequest === "function")
+    desktopAppearanceRequest({action: "get"});
   if (appliedLook && appliedLook.builtin) {
     applyArticleFont("charis", true);
     applyHideUnmarkedExamples(true, true);
@@ -215,6 +235,7 @@ async function looksApplied(answer) {
   // what the look says, and run before these it compared the OLD screen and
   // left the buttons enabled for a state that already matched.
   looksPushShell(answer.shell);
+  looksSyncCleanWindowBackground(answer.applied === "clean");
   if (answer.fontSize !== undefined) applyFS(answer.fontSize, false);
   if (answer.fontWeight !== undefined) applyFW(answer.fontWeight, false);
   await looksReloadSheets();
