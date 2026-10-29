@@ -6,6 +6,7 @@ package lsd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -103,8 +104,8 @@ func TestReaderLingvo10Dictionary(t *testing.T) {
 		}
 		count++
 	}
-	if count != 18370 {
-		t.Fatalf("read %d entries; want 18370", count)
+	if count != 19625 {
+		t.Fatalf("read %d visible headings; want 19625", count)
 	}
 }
 
@@ -221,6 +222,38 @@ func TestReaderLingvo9Dictionary(t *testing.T) {
 	if count == 0 {
 		t.Fatal("decoded no article groups")
 	}
+}
+
+func TestLingvo9AlternateHeadwordVisible(t *testing.T) {
+	path := `D:\Dictionaries\Test3\1\hist_of_philosophyl_gricanov.lsd`
+	r, err := NewReader(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dbPath := filepath.Join(t.TempDir(), "philosophy.db")
+	if _, err := store.IngestPlan(r, dbPath, store.Plan{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	s, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	const key = "АПОЛЛОНОВСКОЕ И ДИОНИСИЙСКОЕ"
+	words, _, _, err := s.FindHeadwordsMode(context.Background(), key, "exact", 0, 10)
+	if err != nil || len(words) != 1 || words[0] != key {
+		t.Fatalf("browse search = %q, %v; want %q", words, err, key)
+	}
+	page, err := s.Page(0, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, word := range page {
+		if word == key {
+			return
+		}
+	}
+	t.Fatalf("%q is missing from the browse list", key)
 }
 
 func TestFormatRegistration(t *testing.T) {
@@ -451,8 +484,8 @@ func TestReaderVariantFixtures(t *testing.T) {
 		file  string
 		count int
 	}{
-		{"variants_testdict.lsd", 6},
-		{"variants_testdict2.lsd", 4},
+		{"variants_testdict.lsd", 12},
+		{"variants_testdict2.lsd", 6},
 		{"unsorted_testdict.lsd", 10},
 	} {
 		t.Run(tc.file, func(t *testing.T) {
