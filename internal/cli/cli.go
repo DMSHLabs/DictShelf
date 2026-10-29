@@ -436,7 +436,7 @@ MANUAL
 ABOUT
   %s %s
   %s
-`, ProductName, Version, RepoURL)
+`, Version, ProductName, Version, RepoURL)
 	help = strings.ReplaceAll(help, "~/.wudict/", "~/.dmshlabs/dictshelf/")
 	return strings.ReplaceAll(help, "wudict.toml", config.Name)
 }

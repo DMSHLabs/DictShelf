@@ -1144,6 +1144,15 @@ html[data-shell-image] .menu-card{
 .choice-menu .choice-item::before{content:"";flex:none;width:1em;
   color:var(--accent);font-weight:400}
 .choice-menu .choice-item[aria-selected="true"]::before{content:"✓"}
+.sys-icon-setting{margin:.75em 0 1em}
+.sys-icon-setting>.sys-label{display:block;margin-bottom:.4em}
+.icon-choice-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;max-width:400px}
+.icon-choice{box-sizing:border-box;display:flex;align-items:center;justify-content:center;min-width:0;min-height:62px;padding:5px;border:2px solid var(--line);border-radius:7px;background:var(--bg-card);color:var(--fg);cursor:pointer}
+.icon-choice:hover{border-color:var(--accent)}
+.icon-choice[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.icon-choice:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.icon-choice-pair{display:flex;align-items:center;justify-content:center;gap:3px}
+.icon-choice-pair img{display:block;flex:none;object-fit:contain}
 .themed-select-btn{display:none}
 .themed-select-btn[hidden]{display:none!important}
 html[data-styled-selects] .themed-select-native{display:none}

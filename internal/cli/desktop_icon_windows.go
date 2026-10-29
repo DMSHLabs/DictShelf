@@ -17,17 +17,20 @@ import (
 )
 
 var (
-	iconUser32             = syscall.NewLazyDLL("user32.dll")
-	iconLoadImage          = iconUser32.NewProc("LoadImageW")
-	iconSendMessage        = iconUser32.NewProc("SendMessageW")
-	iconShell32            = syscall.NewLazyDLL("shell32.dll")
-	iconGetKnownFolderPath = iconShell32.NewProc("SHGetKnownFolderPath")
-	iconShellChangeNotify  = iconShell32.NewProc("SHChangeNotify")
-	iconOle32              = syscall.NewLazyDLL("ole32.dll")
-	iconCoInitializeEx     = iconOle32.NewProc("CoInitializeEx")
-	iconCoUninitialize     = iconOle32.NewProc("CoUninitialize")
-	iconCoCreateInstance   = iconOle32.NewProc("CoCreateInstance")
-	iconCoTaskMemFree      = iconOle32.NewProc("CoTaskMemFree")
+	iconUser32              = syscall.NewLazyDLL("user32.dll")
+	iconLoadImage           = iconUser32.NewProc("LoadImageW")
+	iconSendMessage         = iconUser32.NewProc("SendMessageW")
+	iconGetSystemMetrics    = iconUser32.NewProc("GetSystemMetrics")
+	iconGetSystemMetricsDPI = iconUser32.NewProc("GetSystemMetricsForDpi")
+	iconGetDPIForWindow     = iconUser32.NewProc("GetDpiForWindow")
+	iconShell32             = syscall.NewLazyDLL("shell32.dll")
+	iconGetKnownFolderPath  = iconShell32.NewProc("SHGetKnownFolderPath")
+	iconShellChangeNotify   = iconShell32.NewProc("SHChangeNotify")
+	iconOle32               = syscall.NewLazyDLL("ole32.dll")
+	iconCoInitializeEx      = iconOle32.NewProc("CoInitializeEx")
+	iconCoUninitialize      = iconOle32.NewProc("CoUninitialize")
+	iconCoCreateInstance    = iconOle32.NewProc("CoCreateInstance")
+	iconCoTaskMemFree       = iconOle32.NewProc("CoTaskMemFree")
 )
 
 type desktopKnownFolderID struct {
@@ -38,25 +41,53 @@ type desktopKnownFolderID struct {
 }
 
 func desktopSetWindowIcon(hwnd uintptr, iconIndex int) {
-	if hwnd == 0 || iconIndex < 0 || iconIndex > 3 {
+	if hwnd == 0 || iconIndex < 0 || iconIndex > 5 {
 		return
 	}
 	hinstance, _, _ := windowGetModuleHandle.Call(0)
 	for _, size := range []struct {
-		width int
-		kind  uintptr
-	}{{16, 0}, {32, 1}} {
-		icon, _, _ := iconLoadImage.Call(hinstance, uintptr(101+iconIndex), 1, uintptr(size.width), uintptr(size.width), 0x8000)
+		metricW  int
+		metricH  int
+		fallback int
+		kind     uintptr
+	}{{49, 50, 16, 0}, {11, 12, 32, 1}} { // SM_CXSMICON/CYSMICON, SM_CXICON/CYICON
+		width, height := desktopWindowIconSize(hwnd, size.metricW, size.metricH, size.fallback)
+		icon, _, _ := iconLoadImage.Call(hinstance, uintptr(101+iconIndex), 1, width, height, 0x8000)
 		if icon != 0 {
 			iconSendMessage.Call(hwnd, 0x80, size.kind, icon) // WM_SETICON
 		}
 	}
 }
 
+func desktopWindowIconSize(hwnd uintptr, metricW, metricH, fallback int) (uintptr, uintptr) {
+	width, height := uintptr(0), uintptr(0)
+	var dpi uintptr
+	if iconGetDPIForWindow.Find() == nil {
+		dpi, _, _ = iconGetDPIForWindow.Call(hwnd)
+	}
+	if dpi != 0 && iconGetSystemMetricsDPI.Find() == nil {
+		width, _, _ = iconGetSystemMetricsDPI.Call(uintptr(metricW), dpi)
+		height, _, _ = iconGetSystemMetricsDPI.Call(uintptr(metricH), dpi)
+	}
+	if width == 0 {
+		width, _, _ = iconGetSystemMetrics.Call(uintptr(metricW))
+	}
+	if height == 0 {
+		height, _, _ = iconGetSystemMetrics.Call(uintptr(metricH))
+	}
+	if width == 0 {
+		width = uintptr(fallback)
+	}
+	if height == 0 {
+		height = uintptr(fallback)
+	}
+	return width, height
+}
+
 // desktopUpdateShortcutIcon updates the DictShelf shortcut when Setup created
-// one. The icon index is the resource order in DictShelf.exe (101 through 104).
+// one. The icon index is the resource order in DictShelf.exe (101 through 106).
 func desktopUpdateShortcutIcon(iconIndex int) {
-	if iconIndex < 0 || iconIndex > 3 {
+	if iconIndex < 0 || iconIndex > 5 {
 		return
 	}
 	var candidates []string
@@ -120,7 +151,7 @@ func desktopUpdateShortcutIcon(iconIndex int) {
 				var shortcutTarget [32768]uint16
 				pathHR := desktopCOMCall(shellLink, 3, uintptr(unsafe.Pointer(&shortcutTarget[0])), uintptr(len(shortcutTarget)), 0, 4) // GetPath, SLGP_RAWPATH
 				if int32(pathHR) >= 0 && strings.EqualFold(filepath.Clean(windows.UTF16ToString(shortcutTarget[:])), filepath.Clean(exePath)) {
-					setHR := desktopCOMCall(shellLink, 17, uintptr(unsafe.Pointer(exe)), uintptr(-101-iconIndex)) // explicit resource IDs 101–104
+					setHR := desktopCOMCall(shellLink, 17, uintptr(unsafe.Pointer(exe)), uintptr(-101-iconIndex)) // explicit resource IDs 101–106
 					if int32(setHR) >= 0 {
 						saveHR := desktopCOMCall(persist, 6, uintptr(unsafe.Pointer(wideLink)), 1) // IPersistFile.Save
 						if int32(saveHR) >= 0 {

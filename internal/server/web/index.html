@@ -4858,16 +4858,23 @@ async function showDesktopSysSettings(){
     minimizeTrayCheck.addEventListener("change",()=>{localStorage.setItem("wudict_minimize_to_tray",minimizeTrayCheck.checked?"1":"0");if(window.wudictSetMinimizeToTray)window.wudictSetMinimizeToTray(minimizeTrayCheck.checked)});
     const minimizeTrayLabel=document.createElement("span");minimizeTrayLabel.className="sys-label";minimizeTrayLabel.textContent=tx("system.minimizeToTray");
     minimizeTrayRow.append(minimizeTrayCheck,minimizeTrayLabel);body.append(minimizeTrayRow);
-    const iconRow=document.createElement("label");iconRow.className="sys-row sys-num";
-    const iconLabel=document.createElement("span");iconLabel.className="sys-label";iconLabel.textContent=tx("system.appIcon");
-    const iconWrap=document.createElement("span");iconWrap.className="panel-select-wrap panel-dropdown";
-    const iconSelect=document.createElement("select");iconSelect.setAttribute("aria-label",tx("system.appIcon"));
-    for(const [value,key] of [["dictshelf2","system.appIconDictShelf2"],["dictshelf","system.appIconDictShelf"],["dictshelf-transparent","system.appIconDictShelfTransparent"],["dictshelf2-transparent","system.appIconDictShelf2Transparent"]]){
-      const option=document.createElement("option");option.value=value;option.textContent=tx(key);iconSelect.append(option);
-    }
-    try{const saved=localStorage.getItem("wudict_windows_icon");if(["dictshelf2","dictshelf","dictshelf-transparent","dictshelf2-transparent"].includes(saved))iconSelect.value=saved}catch(_){}
-    iconSelect.addEventListener("change",()=>{localStorage.setItem("wudict_windows_icon",iconSelect.value);if(window.wudictSetAppIcon)window.wudictSetAppIcon(iconSelect.value)});
-    iconWrap.append(iconSelect);iconRow.append(iconLabel,iconWrap);body.append(iconRow);
+    const iconChoices=[["icon1","system.icon1"],["icon1_transparent","system.icon1Transparent"],["icon1_transparent_light","system.icon1Light"],["icon2","system.icon2"],["icon2_transparent","system.icon2Transparent"],["icon2_transparent_light","system.icon2Light"]];
+    const addIconChoice=(labelKey,storageKey,bridge)=>{
+      const row=document.createElement("div");row.className="sys-icon-setting";
+      const label=document.createElement("span");label.className="sys-label";label.textContent=tx(labelKey);
+      const picker=document.createElement("div");picker.className="icon-choice-grid";picker.setAttribute("role","group");picker.setAttribute("aria-label",tx(labelKey));
+      let selected="icon2_transparent";
+      try{const saved=localStorage.getItem(storageKey);if(iconChoices.some(([value])=>value===saved))selected=saved}catch(_){}
+      for(const [value,key] of iconChoices){
+        const option=document.createElement("button");option.type="button";option.className="icon-choice";option.setAttribute("aria-pressed",String(value===selected));option.setAttribute("aria-label",tx(key));option.title=tx(key);
+        const pair=document.createElement("span");pair.className="icon-choice-pair";
+        for(const size of [32,48]){const img=document.createElement("img");img.src="/assets/icon-previews/"+value+(size===48?"-48":"")+".png";img.alt="";img.width=size;img.height=size;pair.append(img)}
+        option.append(pair);option.onclick=()=>{selected=value;localStorage.setItem(storageKey,value);for(const item of picker.children)item.setAttribute("aria-pressed",String(item===option));if(window[bridge])window[bridge](value)};picker.append(option);
+      }
+      row.append(label,picker);body.append(row);
+    };
+    addIconChoice("system.appIcon","wudict_windows_app_icon","wudictSetAppIcon");
+    addIconChoice("system.trayIcon","wudict_windows_tray_icon","wudictSetTrayIcon");
     const iconHint=document.createElement("p");iconHint.className="sys-hint";iconHint.textContent=tx("system.appIconHint");body.append(iconHint);
   }
   const messagesHeading=document.createElement("h3");messagesHeading.className="sys-head";

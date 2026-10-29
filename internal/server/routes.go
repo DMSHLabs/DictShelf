@@ -4,7 +4,10 @@
 
 package server
 
-import "net/http"
+import (
+	"net/http"
+	"strings"
+)
 
 // route is one entry of the HTTP surface, as data rather than as twenty
 // imperative registration calls. Two properties are worth asserting about that
@@ -32,6 +35,22 @@ type route struct {
 	// CORS wraps the handler in the extension grant (cors.go). Read-only
 	// routes only, and never one that touches settings or the library.
 	CORS bool
+}
+
+func serveAppIconPreview(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimPrefix(r.URL.Path, "/assets/icon-previews/")
+	if strings.Contains(name, "/") || !strings.HasSuffix(name, ".png") {
+		http.NotFound(w, r)
+		return
+	}
+	data, err := appIconPreviews.ReadFile("web/icon-previews/" + name)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-cache")
+	_, _ = w.Write(data)
 }
 
 // corsAllowed is the D69 allowlist, stated once. openapi_test.go asserts that
@@ -256,6 +275,7 @@ func (s *Server) routes() []route {
 		{"GET", "/assets/setup.css", serveAsset("text/css; charset=utf-8", setupCSS), "", false},
 		{"GET", "/assets/workspace.css", serveAsset("text/css; charset=utf-8", workspaceCSS), "", false},
 		{"GET", "/assets/favicon.svg", serveFavicon, "", false},
+		{"GET", "/assets/icon-previews/", serveAppIconPreview, "", false},
 		{"GET", "/favicon.ico", serveFavicon, "", false},
 	}
 }

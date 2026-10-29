@@ -81,6 +81,7 @@ var authFree = map[string]bool{
 	"GET /assets/work-progress.js": true,
 	"GET /assets/i18n.css":         true,
 	"GET /assets/favicon.svg":      true,
+	"GET /assets/icon-previews/":   true,
 	"GET /favicon.ico":             true,
 }
 

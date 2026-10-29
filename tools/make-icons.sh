@@ -27,67 +27,29 @@
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-brand="$root/packaging/brand/source/ico2/DictShelf2.svg"
-brand_ico="$root/packaging/brand/source/DictShelf2.ico"
-brand_ico_small="$root/packaging/brand/source/ico2/DictShelf2_small.svg"
-brand_transparent_small="$root/packaging/brand/source/ico2_transparent/DictShelf2_small_transparent.svg"
-brand_old_small="$root/packaging/brand/source/ico/DictShelf_small.svg"
-brand_old_transparent="$root/packaging/brand/source/ico_transparent/DictShelf_small_transparent.svg"
+brand="$root/packaging/brand/source/icon2_transparent/DictShelf2_transparent.svg"
 out="$root/internal/tray/icons"
 
 [ -f "$brand" ] || { echo "make-icons: missing $brand" >&2; exit 1; }
-[ -f "$brand_ico" ] || { echo "make-icons: missing $brand_ico" >&2; exit 1; }
-[ -f "$brand_ico_small" ] || { echo "make-icons: missing $brand_ico_small" >&2; exit 1; }
-[ -f "$brand_transparent_small" ] || { echo "make-icons: missing $brand_transparent_small" >&2; exit 1; }
-[ -f "$brand_old_small" ] || { echo "make-icons: missing $brand_old_small" >&2; exit 1; }
-[ -f "$brand_old_transparent" ] || { echo "make-icons: missing $brand_old_transparent" >&2; exit 1; }
+
+inkscape_bin=${INKSCAPE:-}
+if [ -z "$inkscape_bin" ]; then
+	if command -v inkscape >/dev/null 2>&1; then inkscape_bin=$(command -v inkscape)
+	elif [ -x /c/Tools/inkscape/bin/inkscape.exe ]; then inkscape_bin=/c/Tools/inkscape/bin/inkscape.exe
+	else echo "make-icons: set INKSCAPE to Inkscape executable" >&2; exit 1; fi
+fi
 
 mkdir -p "$out"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-magick_bin=${MAGICK:-}
-if [ -z "$magick_bin" ]; then
-	if command -v magick >/dev/null 2>&1; then
-		magick_bin=$(command -v magick)
-	elif command -v magick.exe >/dev/null 2>&1; then
-		magick_bin=$(command -v magick.exe)
-	fi
-fi
-
 render() { # width height source output
-	if command -v rsvg-convert >/dev/null 2>&1; then
-		rsvg-convert -w "$1" -h "$2" -o "$4" "$3"
+	if case "$inkscape_bin" in *.exe) true ;; *) false ;; esac; then
+		source_path=$(cygpath -w "$3")
+		output_path=$(cygpath -w "$4")
+		"$inkscape_bin" "$source_path" --export-type=png --export-filename="$output_path" --export-width="$1" --export-height="$2" >/dev/null
 	else
-		[ -n "$magick_bin" ] || {
-			echo "make-icons: install librsvg (rsvg-convert) or ImageMagick (magick)" >&2
-			exit 1
-		}
-		if case "$magick_bin" in *.exe) true ;; *) false ;; esac && command -v cygpath >/dev/null 2>&1; then
-			source_path=$(cygpath -w "$3")
-			output_path=$(cygpath -w "$4")
-			if case "$3" in *.svg) true ;; *) false ;; esac; then
-				svg_width=$(sed -n 's/.*<svg[^>]*width="\([0-9][0-9]*\)".*/\1/p' "$3" | head -n 1)
-				[ -n "$svg_width" ] || { echo "make-icons: cannot read SVG width from $3" >&2; exit 1; }
-				target=$1
-				[ "$2" -le "$target" ] || target=$2
-				density=$(( (72 * target + svg_width - 1) / svg_width ))
-				MSYS2_ARG_CONV_EXCL='*' "$magick_bin" -background none -density "$density" "$source_path" -resize "${1}x${2}!" "PNG32:$output_path"
-			else
-				MSYS2_ARG_CONV_EXCL='*' "$magick_bin" -background none "$source_path" -resize "${1}x${2}!" "PNG32:$output_path"
-			fi
-		else
-			if case "$3" in *.svg) true ;; *) false ;; esac; then
-				svg_width=$(sed -n 's/.*<svg[^>]*width="\([0-9][0-9]*\)".*/\1/p' "$3" | head -n 1)
-				[ -n "$svg_width" ] || { echo "make-icons: cannot read SVG width from $3" >&2; exit 1; }
-				target=$1
-				[ "$2" -le "$target" ] || target=$2
-				density=$(( (72 * target + svg_width - 1) / svg_width ))
-				MSYS2_ARG_CONV_EXCL='*' "$magick_bin" -background none -density "$density" "$3" -resize "${1}x${2}!" "PNG32:$4"
-			else
-				MSYS2_ARG_CONV_EXCL='*' "$magick_bin" -background none "$3" -resize "${1}x${2}!" "PNG32:$4"
-			fi
-		fi
+		"$inkscape_bin" "$3" --export-type=png --export-filename="$4" --export-width="$1" --export-height="$2" >/dev/null
 	fi
 }
 
@@ -106,17 +68,45 @@ run_python3() {
 	fi
 }
 
-# ---- DictShelf brand mark --------------------------------------------------
-# The checked-in artwork is the source for platform icons and store images.
-# Keep the upstream browser favicon independent.
-render 32 32 "$brand_ico_small" "$out/tray.png"
-render 32 32 "$brand_ico_small" "$out/tray-windows.png"
-render 32 32 "$brand_old_small" "$out/tray-windows-dictshelf.png"
-render 32 32 "$brand_old_transparent" "$out/tray-windows-dictshelf-transparent.png"
-render 32 32 "$brand_transparent_small" "$out/tray-windows-dictshelf2-transparent.png"
-sed -E 's/fill="#[[:xdigit:]]{6}"/fill="#000000"/g' "$brand_transparent_small" > "$tmp/template.svg"
+# ---- DictShelf icon family -------------------------------------------------
+icon_sources() {
+	case "$1" in
+		icon1) echo 'icon1/DictShelf_small.svg|icon1/DictShelf.svg' ;;
+		icon1_transparent) echo 'icon1_transparent/DictShelf-transparent_small.svg|icon1_transparent/DictShelf-transparent.svg' ;;
+		icon1_transparent_light) echo 'icon1_transparent_light/DictShelf-transparent_light_small.svg|icon1_transparent_light/DictShelf-transparent_light.svg' ;;
+		icon2) echo 'icon2/DictShelf2_small.svg|icon2/DictShelf2.svg' ;;
+		icon2_transparent) echo 'icon2_transparent/DictShelf2_transparent_small.svg|icon2_transparent/DictShelf2_transparent.svg' ;;
+		icon2_transparent_light) echo 'icon2_transparent_light/DictShelf-transparent_light_small.svg|icon2_transparent_light/DictShelf_transparent_light.svg' ;;
+	esac
+}
+mkdir -p "$root/packaging/windows/icons" "$root/internal/server/web/icon-previews"
+for variant in icon1 icon1_transparent icon1_transparent_light icon2 icon2_transparent icon2_transparent_light; do
+	pair=$(icon_sources "$variant"); small=${pair%%|*}; large=${pair#*|}
+	[ -f "$root/packaging/brand/source/$small" ] && [ -f "$root/packaging/brand/source/$large" ] || { echo "make-icons: missing SVG pair for $variant" >&2; exit 1; }
+	render 32 32 "$root/packaging/brand/source/$small" "$out/tray-windows-$variant.png"
+	cp "$out/tray-windows-$variant.png" "$root/internal/server/web/icon-previews/$variant.png"
+	mkdir -p "$tmp/$variant"
+	for size in 16 24 32; do render "$size" "$size" "$root/packaging/brand/source/$small" "$tmp/$variant/$size.png"; done
+	for size in 48 96 128 256; do render "$size" "$size" "$root/packaging/brand/source/$large" "$tmp/$variant/$size.png"; done
+	cp "$tmp/$variant/48.png" "$root/internal/server/web/icon-previews/$variant-48.png"
+	python3 - "$tmp/$variant" "$root/packaging/windows/icons/$variant.ico" <<'PY'
+import os, struct, sys
+src, out = sys.argv[1:]
+sizes = [16, 24, 32, 48, 96, 128, 256]
+blobs = [open(os.path.join(src, f"{s}.png"), "rb").read() for s in sizes]
+head = struct.pack("<HHH", 0, 1, len(sizes)); offset = len(head) + 16 * len(sizes); entries = b""
+for s, blob in zip(sizes, blobs):
+    entries += struct.pack("<BBBBHHII", s % 256, s % 256, 0, 0, 1, 32, len(blob), offset)
+    offset += len(blob)
+with open(out, "wb") as f: f.write(head + entries + b"".join(blobs))
+PY
+done
+cp "$root/packaging/windows/icons/icon2_transparent.ico" "$root/packaging/windows/dictshelf.ico"
+cp "$root/internal/server/web/icon-previews/icon2_transparent.png" "$out/tray.png"
+cp "$root/internal/server/web/icon-previews/icon2_transparent.png" "$out/tray-windows.png"
+sed -E 's/fill="#[[:xdigit:]]{6}"/fill="#000000"/g' "$root/packaging/brand/source/icon2_transparent/DictShelf2_transparent_small.svg" > "$tmp/template.svg"
 render 44 44 "$tmp/template.svg" "$out/tray-template.png"
-for f in tray.png tray-windows.png tray-windows-dictshelf.png tray-windows-dictshelf-transparent.png tray-windows-dictshelf2-transparent.png tray-template.png; do
+for f in tray.png tray-windows.png tray-windows-icon1.png tray-windows-icon1_transparent.png tray-windows-icon1_transparent_light.png tray-windows-icon2.png tray-windows-icon2_transparent.png tray-windows-icon2_transparent_light.png tray-template.png; do
 	[ -s "$out/$f" ] || { echo "make-icons: $f is empty" >&2; exit 1; }
 	printf '%s  ' "$f"
 	ls -l "$out/$f" | awk '{print $5 " bytes"}'
@@ -201,7 +191,7 @@ ls -l "$icns" | awk '{print $5 " bytes"}'
 # used by the installer and embedded into the Windows executable by the resource file.
 ico="$root/packaging/windows/dictshelf.ico"
 mkdir -p "$(dirname "$ico")"
-cp "$brand_ico" "$ico"
+cp "$root/packaging/windows/icons/icon2_transparent.ico" "$ico"
 [ -s "$ico" ] || { echo "make-icons: dictshelf.ico is empty" >&2; exit 1; }
 printf 'dictshelf.ico   '
 ls -l "$ico" | awk '{print $5 " bytes"}'

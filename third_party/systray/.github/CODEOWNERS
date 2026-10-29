@@ -1,0 +1,21 @@
+# CODEOWNERS for gogpu/systray
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything
+* @kolkov
+
+# Platform backends
+internal/platform_windows.go @kolkov
+internal/platform_darwin.go  @kolkov
+internal/platform_linux.go   @kolkov
+internal/darwin/             @kolkov
+
+# Public API
+systray.go @kolkov
+menu.go    @kolkov
+
+# CI/CD
+.github/ @kolkov
+
+# Documentation
+*.md @kolkov

@@ -20,6 +20,17 @@ type desktopAssetResponse struct {
 func desktopAsset(name string) (desktopAssetResponse, bool) {
 	const immutable = "public, max-age=604800, immutable"
 	const faviconCache = "public, max-age=604800"
+	if strings.HasPrefix(name, "/assets/icon-previews/") {
+		file := strings.TrimPrefix(name, "/assets/icon-previews/")
+		if strings.Contains(file, "/") || !strings.HasSuffix(file, ".png") {
+			return desktopAssetResponse{}, false
+		}
+		body, err := appIconPreviews.ReadFile("web/icon-previews/" + file)
+		if err == nil {
+			return desktopAssetResponse{body, "image/png", "no-cache"}, true
+		}
+		return desktopAssetResponse{}, false
+	}
 	switch name {
 	case "/assets/i18n.js":
 		return desktopAssetResponse{i18nJS, "application/javascript; charset=utf-8", immutable}, true

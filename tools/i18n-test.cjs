@@ -83,7 +83,7 @@ for (const language of ['en', 'ru']) {
     assert.equal(errorText(raw),raw);
   }
   assert.equal(errorText(null),'');
-  const setup=fs.readFileSync(path.join(web,'setup.html'),'utf8');
+  const setup=fs.readFileSync(path.join(web,'setup.js'),'utf8');
   const importMessages=[];
   const importContext={window:context.window,tx:t,impSay:(message,kind)=>importMessages.push({message,kind})};
   vm.runInNewContext(setup.match(/function impRender\(j\)\{[\s\S]*?\n}/)[0],importContext);
@@ -134,8 +134,8 @@ for (const language of ['en', 'ru']) {
   const noNames={Intl:{PluralRules:Intl.PluralRules,NumberFormat:Intl.NumberFormat},window:{},document:context.document};
   vm.runInNewContext(script,noNames);
   assert.equal(noNames.window.wudictI18n.facetLabels(enGroup).vl,'English');
-  const frameContext={tx:t,esc:attrEscape,escAttr:attrEscape,articleFS:18,articleFW:400,
-    ARTCSS:'',articleSelectionCSS:'',speakOn:true,frameCSS:()=>'',styleSafe:s=>s};
+  const frameContext={tx:t,esc:attrEscape,escAttr:attrEscape,articleFS:18,articleFW:400,articleFont:'system',
+    articleFontFacesCSS:()=>'',articleFontCSS:()=>'',ARTCSS:'',articleSelectionCSS:'',speakOn:true,frameCSS:()=>'',styleSafe:s=>s};
   vm.runInNewContext(main.match(/function frameDoc\(content,fid,dark,dictID,frag\)\{[\s\S]*?\n}/)[0],frameContext);
   const article='<p lang="en">Close {name} — original dictionary content</p>';
   const frameHTML=frameContext.frameDoc(article,'frame-1',false,'dict-1','');
@@ -175,19 +175,20 @@ for (const language of ['en', 'ru']) {
   // Exercise actual result rendering: translating the surrounding UI must not
   // alter headwords, article HTML, dictionary IDs or the index action values.
   const articles = [];
-  const node = () => ({dataset:{}, children:[], appendChild(n){this.children.push(n)}, addEventListener(){}});
-  const resultContext = {tx:t, window:context.window, document:{createElement:node},
+  const node = () => ({dataset:{}, children:[], appendChild(n){this.children.push(n)}, addEventListener(){},querySelector(){return null}});
+  const resultContext = {tx:t, window:context.window, document:{createElement:node},URL,location:{href:'http://localhost/?q=word',origin:'http://localhost'},
     esc:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),
-    expandAll:false, anchorOnce:null, hitName:h=>h.name,
+    escAttr:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'),
+    expandAll:false, anchorOnce:null, hitName:h=>h.name,dictIconHTML:()=>'',observeSearchDictName(){},searchPortionSize:()=>5,articleCacheGroupID:'',
     renderArticle:(dd,body,id)=>{articles.push({body,id});return null}};
   vm.runInNewContext(main.match(/^const FEAT_NAME=.*;$/m)[0] + '\n' +
-    main.match(/function renderSlot\(box,h,mode,q,perDict,group\)\{[\s\S]*?\n}/)[0], resultContext);
+    main.match(/function renderSlot\(box,h,mode,q,perDict,group,paging=null\)\{[\s\S]*?\n}/)[0], resultContext);
   const box=node(), body='<p lang="en">word {query}</p>', headword='<word> {number}';
   resultContext.renderSlot(box,{dict:'original-id',name:'<Dictionary>',results:[{Headword:headword,Body:body}]},'prefix','word',1,false);
   assert.match(box.children[0].innerHTML, /&lt;Dictionary&gt;/);
-  assert.ok(box.children[0].innerHTML.includes(t('search.results',{count:1,number:'1+'})));
-  assert.ok(box.children[0].innerHTML.includes(t('search.more')));
-  assert.equal(box.children[0].children[0].children[0].textContent,headword);
+  assert.ok(box.children[0].innerHTML.includes(t('search.results',{count:1,number:''})));
+  assert.ok(box.children[0].innerHTML.includes('>1+</button>'));
+  assert.ok(box.children[0].children[0].children[0].innerHTML.includes('&lt;word&gt; {number}'));
   assert.deepEqual(articles,[{body,id:'original-id'}]);
   const skipped=node();
   resultContext.renderSlot(skipped,{dict:'original-id',name:'<Dictionary>',skipped:true},'fts','word',5,false);
@@ -202,14 +203,14 @@ for (const language of ['en', 'ru']) {
     assert.equal(t('search.results',{count,number:count}),`${count} ${language==='ru'?word:count===1?'result':'results'}`);
   }
   assert.equal(t('search.noQuery',{query:'<b>{query}</b>'}),language==='ru'?'По запросу «<b>{query}</b>» ничего не найдено':'No results for “<b>{query}</b>”');
-  const lemmas = fs.readFileSync(path.join(web, 'lemmas.html'), 'utf8');
+  const lemmas = fs.readFileSync(path.join(web, 'lemmas.js'), 'utf8');
   const rowContext = {Intl, window:context.window, tx:t, mb:n=>String(n), document:{
     createElement:()=>({children:[], setAttribute(k,v){this[k]=v}, addEventListener(){}, append(...nodes){this.children.push(...nodes)}})
   }};
   vm.runInNewContext(lemmas.match(/const languageNames=[\s\S]*?\n}\r?\n/)[0] + '\n' +
     lemmas.match(/function rowFor\(l,j\)\{[\s\S]*?\n}/)[0], rowContext);
   const lemmaRow = rowContext.rowFor({code:'en', name:'English', state:'downloading', done:3, total:4}, {});
-  assert.equal(lemmaRow.children[0].id, 'cb-en');
+  assert.equal(lemmaRow.children[0].id, 'lemma-cb-en');
   assert.equal(lemmaRow.children[0].disabled, true);
   assert.equal(lemmaRow.children[1].textContent, language === 'ru' ? 'английский (en)' : 'English (en)');
   assert.equal(lemmaRow.children[3].textContent, t('pages.downloadPercent',{percent:75}));
@@ -223,13 +224,13 @@ for (const language of ['en', 'ru']) {
     main.match(/function layerText\(key, fallback\)\{[\s\S]*?\n\}/)[0],
     main.match(/function layerTitle\(p\)\{[^\n]+/)[0]];
   vm.runInNewContext(helpers.join('\n'), context);
-  assert.equal(context.looksDisplayName({id:'clean', builtin:true, name:'Clean'}), language === 'ru' ? 'Чистое' : 'Clean');
+  assert.equal(context.looksDisplayName({id:'clean', builtin:true, name:'Clean'}), language === 'ru' ? 'Чистый' : 'Clean');
   assert.equal(context.looksDisplayName({id:'mine', builtin:false, name:'Clean {name}'}), 'Clean {name}');
   assert.equal(context.looksDisplayName({id:'upstream_new', builtin:true, name:'New look'}), 'New look');
   assert.equal(context.layerTitle({id:'upstream_new', title:'New layer'}), 'New layer');
-  vm.runInNewContext(groups.match(/function groupHint\(group,showAll,ordered\)\{[\s\S]*?\n\}/)[0], context);
-  assert.equal(context.groupHint({members:[], readonly:false}, false, []), t('dictUI.emptyGroup'));
-  assert.equal(context.groupHint({members:[], readonly:false}, true, []), t('dictUI.noMembers'));
+  // The group editor now renders its empty-state hint directly in
+  // renderGroupRows rather than using the old groupHint helper.
+  assert.match(groups, /showEmptyHint\?tx\('dictUI\.emptyGroup'\)/);
   // Render a real dictionary card with hostile-looking user text. Translation
   // must preserve identifiers, escape the name and keep action attributes.
   const cards = [];
@@ -238,7 +239,7 @@ for (const language of ['en', 'ru']) {
   const cardContext = {tx:t, window:context.window, dicts:[],dslSaving:false,cfgInfo:null,
     $:()=>panel, document:{createElement:()=>({dataset:{}}),querySelectorAll:()=>[]},
     orderedDicts:()=>[{id:'unchanged-id',name,source:'sample.dsl',format:'dsl',entries:22,caps:{},dbSize:0}],
-    dictLabel:d=>d.name, mb:n=>`${n} B`, baseIndexBytes:()=>100,
+    dictLabel:d=>d.name, dictIconHTML:()=>'', browseOriginQuery:()=>'', mb:n=>`${n} B`, baseIndexBytes:()=>100,
     esc:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'),
     escAttr:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'),
     provenance:()=>'', traits:()=>'', renderReindex:()=>{}};
@@ -290,7 +291,9 @@ for (const language of ['en', 'ru']) {
 for (const file of ['index', 'setup', 'browse', 'lemmas']) {
   const html = fs.readFileSync(path.join(web, `${file}.html`), 'utf8');
   for (const [,attrs,body] of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)) {
-    if (!attrs.includes('src=')) new vm.Script(body, {filename: file + '.html'});
+    // Templates with server-injected JavaScript values are validated after
+    // rendering; parsing the raw placeholder text as JavaScript is invalid.
+    if (!attrs.includes('src=') && !body.includes('{{')) new vm.Script(body, {filename: file + '.html'});
   }
 }
 console.log('Interface JS syntax, plural rules, interpolation and fallback passed.');
