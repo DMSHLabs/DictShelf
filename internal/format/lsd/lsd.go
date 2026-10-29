@@ -98,23 +98,24 @@ func openSource(path string) (*source, error) {
 		return fail(err)
 	}
 	decoderVersion := h.version
-	if decoderVersion == 0x100000 {
-		// Early Lingvo 10 dictionaries use the decoder and article bitstream
-		// layout shared with the 11/12 user dictionary format. Their variable
-		// header predates embedded icons and resource offsets.
+	if decoderVersion == 0x70000 || decoderVersion == 0x90000 || decoderVersion == 0x100000 {
+		// Lingvo 7, 9 and early 10 use the user dictionary decoder layout
+		// shared with Lingvo 11/12, while retaining a legacy variable header.
 		decoderVersion = 0x110001
 	}
 	if !supportedVersion(decoderVersion) {
 		return fail(fmt.Errorf("lsd: unsupported dictionary version %#x", h.version))
 	}
-	name, pagesEnd, overlayEnd, icon, err := readVariableHeader(f, h, st.Size())
+	var name string
+	var pagesEnd, overlayEnd uint32
+	var icon []byte
+	name, pagesEnd, overlayEnd, icon, err = readVariableHeader(f, h, st.Size())
 	if err != nil {
 		return fail(err)
 	}
-	if h.version == 0x100000 {
-		// Lingvo 10 stores no pagesEnd/resource offsets in its variable
-		// header. Its fixed-header lastPage field gives the final 512-byte
-		// index page, followed by the resource block.
+	if h.version == 0x70000 || h.version == 0x90000 || h.version == 0x100000 {
+		// These legacy versions store no pagesEnd/resource offsets in their
+		// variable header. The fixed-header lastPage gives the final page.
 		pagesEnd = h.pagesOffset + (uint32(h.lastPage)+1)*pageSize
 		overlayEnd = uint32(st.Size())
 	}
@@ -138,6 +139,11 @@ func openSource(path string) (*source, error) {
 	}
 	indexLang := strings.SplitN(lang.FromLCID(int(h.sourceLanguageID)), "-", 2)[0]
 	contentsLang := strings.SplitN(lang.FromLCID(int(h.contentsLanguageID)), "-", 2)[0]
+	if h.version == 0x70000 && h.sourceLanguageID == 2 && h.contentsLanguageID == 2 {
+		// Early Lingvo 7 files use LCID 0x0002 for Russian; modern LCID tables
+		// assign that value to Bulgarian.
+		indexLang, contentsLang = "ru", "ru"
+	}
 	overlayData := overlayEnd
 	if h.version < 0x140000 {
 		// In Lingvo 12 and X3, resource offsets are absolute file offsets.
@@ -151,7 +157,7 @@ func openSource(path string) (*source, error) {
 
 func supportedVersion(version uint32) bool {
 	switch version {
-	case 0x100000, 0x110001, 0x120001, 0x131001, 0x132001, 0x141004, 0x142001, 0x145001, 0x151005, 0x152001, 0x155001:
+	case 0x70000, 0x90000, 0x100000, 0x110001, 0x120001, 0x131001, 0x132001, 0x141004, 0x142001, 0x145001, 0x151005, 0x152001, 0x155001:
 		return true
 	default:
 		return false
@@ -210,9 +216,20 @@ func readVariableHeader(f io.ReaderAt, h fileHeader, fileSize int64) (string, ui
 			return "", 0, 0, nil, fmt.Errorf("lsd: read %s: %w", label, err)
 		}
 	}
-	capitalsLen, err := readU32LE()
-	if err != nil {
-		return "", 0, 0, nil, fmt.Errorf("lsd: read capitals length: %w", err)
+	var capitalsLen uint32
+	if h.version == 0x90000 {
+		// Lingvo 9 abbreviation dictionaries use the same one-byte length
+		// encoding as the heading strings for their capitals table.
+		n, err := readByte()
+		if err != nil {
+			return "", 0, 0, nil, fmt.Errorf("lsd: read capitals length: %w", err)
+		}
+		capitalsLen = uint32(n)
+	} else {
+		capitalsLen, err = readU32LE()
+		if err != nil {
+			return "", 0, 0, nil, fmt.Errorf("lsd: read capitals length: %w", err)
+		}
 	}
 	if _, err := readText(capitalsLen); err != nil {
 		return "", 0, 0, nil, fmt.Errorf("lsd: read capitals: %w", err)

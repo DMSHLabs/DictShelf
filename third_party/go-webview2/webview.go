@@ -23,16 +23,21 @@ import (
 )
 
 var (
-	windowContext     = map[uintptr]interface{}{}
-	windowContextSync sync.RWMutex
-	closeToTrayHook   func(uintptr) bool
-	hotkeyHandler     func(uintptr, uintptr, uintptr) bool
-	windowSizeHandler func(uintptr, int, int)
+	windowContext      = map[uintptr]interface{}{}
+	windowContextSync  sync.RWMutex
+	closeToTrayHook    func(uintptr) bool
+	minimizeToTrayHook func(uintptr) bool
+	hotkeyHandler      func(uintptr, uintptr, uintptr) bool
+	windowSizeHandler  func(uintptr, int, int)
 )
 
 // SetCloseToTrayHook lets a Windows host consume WM_CLOSE without destroying
 // the WebView window. Returning true means the hook handled the close.
 func SetCloseToTrayHook(hook func(uintptr) bool) { closeToTrayHook = hook }
+
+// SetMinimizeToTrayHook lets a Windows host consume the minimize command and
+// hide the WebView window instead. Returning true means the hook handled it.
+func SetMinimizeToTrayHook(hook func(uintptr) bool) { minimizeToTrayHook = hook }
 
 // SetHotkeyHandler handles WM_HOTKEY messages for the native host.
 func SetHotkeyHandler(handler func(uintptr, uintptr, uintptr) bool) { hotkeyHandler = handler }
@@ -469,6 +474,12 @@ func wndproc(hwnd, msg, wp, lp uintptr) uintptr {
 			if hotkeyHandler != nil && hotkeyHandler(hwnd, wp, lp) {
 				return 0
 			}
+		case w32.WMSysCommand:
+			if wp&0xFFF0 == w32.SCMinimize && minimizeToTrayHook != nil && minimizeToTrayHook(hwnd) {
+				return 0
+			}
+			r, _, _ := w32.User32DefWindowProcW.Call(hwnd, msg, wp, lp)
+			return r
 		case w32.WMClose:
 			if closeToTrayHook != nil && closeToTrayHook(hwnd) {
 				return 0

@@ -120,7 +120,7 @@ func (r *Reader) ExtraMeta() map[string]string {
 
 func (r *Reader) nextHeading() (*heading, error) {
 	for uint64(r.page.page)*pageSize < uint64(r.source.pagesEnd-r.source.header.pagesOffset) ||
-		(r.source.header.version == 0x100000 && r.seen < r.source.header.entryCount) {
+		((r.source.header.version == 0x70000 || r.source.header.version == 0x90000 || r.source.header.version == 0x100000) && r.seen < r.source.header.entryCount) {
 		if !r.page.initialized {
 			if err := r.loadPage(); err != nil {
 				return nil, err
@@ -155,9 +155,9 @@ func (r *Reader) nextHeading() (*heading, error) {
 func (r *Reader) loadPage() error {
 	base := int64(r.source.header.pagesOffset) + int64(r.page.page)*pageSize
 	var buf [pageSize]byte
-	if r.source.header.version == 0x100000 {
-		// Lingvo 10's last index page is truncated at EOF. Zero padding lets
-		// its declared entries decode without changing the page bitstream.
+	if r.source.header.version == 0x70000 || r.source.header.version == 0x90000 || r.source.header.version == 0x100000 {
+		// Legacy last pages may be truncated at EOF. Zero padding lets the
+		// declared entries decode without changing the page bitstream.
 		if base >= r.source.fileSize {
 			return fmt.Errorf("lsd: read index page %d: EOF", r.page.page)
 		}

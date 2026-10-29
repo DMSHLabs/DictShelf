@@ -1050,6 +1050,7 @@
   "system.desktopHint": "Settings are saved automatically. Logging options apply immediately; cache options apply to new cache operations.",
   "system.closeToTrayHeading": "Window",
   "system.closeToTray": "Close to system tray",
+  "system.minimizeToTray": "Minimize to system tray",
   "system.appIcon": "Application icon",
   "system.appIconHint": "Changes the window, taskbar and system tray icons. A desktop shortcut updates when Windows allows it.",
   "system.appIconDictShelf2": "DictShelf 2",
