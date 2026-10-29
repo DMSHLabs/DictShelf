@@ -1,0 +1,80 @@
+name: A dictionary does not work
+description: One dictionary is not found, does not open, or shows an article, image or sound incorrectly.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Most dictionary problems are specific to one file. To find the cause, we need the same file you have, or one link to it.
+
+  - type: input
+    id: dictionary
+    attributes:
+      label: Dictionary
+      description: The name as wudict lists it, or the file name.
+      placeholder: Oxford.mdx
+    validations:
+      required: true
+
+  - type: dropdown
+    id: format
+    attributes:
+      label: Format
+      options:
+        - MDict (.mdx, .mdd)
+        - StarDict (.ifo, .idx, .dict)
+        - Aard 2 (.slob)
+        - Lingvo DSL (.dsl, .dsl.dz)
+        - Babylon (.bgl)
+        - ZIM (.zim)
+        - wudict markdown (.wudict.md)
+        - I do not know
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What is wrong?
+      description: "The headword, what you saw, and what you expected. A screenshot helps most: drag it into this box."
+      placeholder: |
+        Headword "run": the article shows no pronunciation icon. In GoldenDict the same article plays the sound.
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: Where can we get this dictionary?
+      description: A download link or the publisher's name. Do not attach a dictionary that you may not share.
+      placeholder: <URL>
+
+  - type: input
+    id: version
+    attributes:
+      label: wudict version
+      description: "Shown at the bottom of the dictionary panel (☰ → folder summary), or printed by `wudict --version`."
+      placeholder: v3.7.9
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Where do you use wudict?
+      multiple: true
+      options:
+        - Android
+        - Windows
+        - macOS
+        - Linux
+        - Browser extension
+        - Command line only
+        - Other
+
+  - type: textarea
+    id: info
+    attributes:
+      label: Output of wudict info
+      description: "Optional, desktop only. Run `wudict info <dictionary file>` and paste the output."
+      render: text

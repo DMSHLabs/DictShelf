@@ -1,0 +1,26 @@
+name: Text is wrong or unclear
+description: The User Guide, the wudict howto, a message or a label is wrong, unclear or missing.
+labels: [documentation]
+body:
+  - type: input
+    id: where
+    attributes:
+      label: Where?
+      description: A link to the page, the howto headword, or the text as it appears in wudict.
+      placeholder: https://wudict.legbehindneck.com/start/search/
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What is wrong or missing?
+      placeholder: The page says the default port is 6889. wudict starts on 6888.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Better text
+      description: Optional.

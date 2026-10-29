@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Troubleshooting and FAQ
+    url: https://wudict.legbehindneck.com/help/troubleshooting/
+    about: Answers to common problems. Many issues are solved here in a minute.
+  - name: User Guide
+    url: https://wudict.legbehindneck.com/
+    about: Install, search, add dictionaries, settings, command line, HTTP API.
+  - name: Security vulnerability
+    url: https://github.com/wuweidict/wudict/security/advisories/new
+    about: Report it privately here, not in a public issue.
