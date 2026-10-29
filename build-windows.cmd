@@ -280,7 +280,11 @@ call :stop_running_output_executable
 if errorlevel 1 exit /b 1
 
 rem Only replace the current executable after the old process has exited.
-del /F /Q "%OUTPUT_EXE%"
+if exist "%OUTPUT_EXE%" (
+    set "FILE_WAIT=0"
+    call :wait_for_output_file_unlock
+    if errorlevel 1 exit /b 1
+)
 if exist "%OUTPUT_EXE%~" del /F /Q "%OUTPUT_EXE%~"
 
 rem A compiler found by path is passed as an absolute CC because it is not on
@@ -482,8 +486,20 @@ if %STOP_WAIT% GEQ 60 (
     echo   Close it manually, then run the build again.
     exit /b 1
 )
-timeout /t 1 /nobreak >nul
+ping -n 2 -w 1000 127.0.0.1 >nul
 goto :wait_for_output_executable
+
+:wait_for_output_file_unlock
+del /F /Q "%OUTPUT_EXE%" >nul 2>&1
+if not exist "%OUTPUT_EXE%" exit /b 0
+set /a FILE_WAIT+=1
+if %FILE_WAIT% GEQ 60 (
+    echo ERROR: Windows still holds %OUTPUT_EXE% after 60 seconds.
+    echo   Close any process using the file, then run the build again.
+    exit /b 1
+)
+ping -n 2 -w 1000 127.0.0.1 >nul
+goto :wait_for_output_file_unlock
 
 :print_version
 set "DISPLAY_VERSION=dictshelf-%VERSION%"
