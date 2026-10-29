@@ -44,7 +44,6 @@ type Reader struct {
 	page       pageCursor
 	seen       uint32
 	look       *heading
-	refs       map[uint32]string
 	pending    []dict.Entry
 	done       bool
 	abbrevOnce sync.Once
@@ -56,7 +55,7 @@ func NewReader(path string) (*Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Reader{source: s, refs: make(map[uint32]string)}, nil
+	return &Reader{source: s}, nil
 }
 
 func (r *Reader) Meta() dict.Meta { return r.source.meta }
@@ -244,24 +243,6 @@ func (r *Reader) Next() (dict.Entry, error) {
 				}
 			}
 		}
-		if primary, ok := r.refs[first.ref]; ok {
-			aliases := make([]string, 0, len(group))
-			for _, word := range group {
-				if word != primary {
-					aliases = append(aliases, word)
-				}
-			}
-			if len(aliases) == 0 {
-				continue
-			}
-			for _, alias := range aliases {
-				r.pending = append(r.pending, dict.Entry{Headwords: []string{alias}, LinkTo: primary})
-			}
-			entry := r.pending[0]
-			r.pending = r.pending[1:]
-			return entry, nil
-		}
-		r.refs[first.ref] = group[0]
 		articleRegionEnd := uint64(r.source.header.pagesOffset)
 		start := uint64(r.source.header.articlesOffset) + uint64(first.ref)
 		if start+2 > articleRegionEnd {
@@ -303,7 +284,10 @@ func (r *Reader) Next() (dict.Entry, error) {
 			}
 			readSize = min(readSize*2, available)
 		}
-		return dict.Entry{Headwords: group, Body: body, Kind: dict.BodyHTML}, nil
+		for _, word := range group[1:] {
+			r.pending = append(r.pending, dict.Entry{Headwords: []string{word}, Body: body, Kind: dict.BodyHTML})
+		}
+		return dict.Entry{Headwords: group[:1], Body: body, Kind: dict.BodyHTML}, nil
 	}
 }
 

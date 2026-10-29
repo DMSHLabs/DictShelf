@@ -23,7 +23,7 @@ import (
 const pageSize = 512
 
 // ReaderVersion tracks the behavior of the sequential ingest reader.
-const ReaderVersion = 6
+const ReaderVersion = 7
 
 func init() {
 	dict.RegisterFormat(".lsd", func(path string) (dict.Dictionary, error) { return Open(path) })
