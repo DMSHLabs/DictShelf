@@ -564,6 +564,30 @@ window.wudictFontScale=(function(){
     </div>
   </div>
   <p class="font-scale-hint">{{T:panel.resultPageSizeHint}}</p>
+  <div class="facts">
+    <div class="history-setting">
+      <label for="suggestionPerDictionary">{{T:panel.suggestionPerDictionary}}</label>
+      <span class="number-stepper" role="group" aria-label="{{T:panel.suggestionPerDictionary}}">
+        <input id="suggestionPerDictionary" class="number-stepper-input" type="number" min="1" max="500" step="1" inputmode="numeric" value="40" aria-label="{{T:panel.suggestionPerDictionary}}">
+        <span class="number-stepper-buttons">
+          <button type="button" class="number-step-button" data-suggestion-step="per-dictionary:1" aria-label="{{T:panel.increase}} {{T:panel.suggestionPerDictionary}}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 7.5 6 3l4 4.5z"/></svg></button>
+          <button type="button" class="number-step-button" data-suggestion-step="per-dictionary:-1" aria-label="{{T:panel.decrease}} {{T:panel.suggestionPerDictionary}}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2 4.5 4 4 4-4z"/></svg></button>
+        </span>
+      </span>
+    </div>
+  </div>
+  <div class="facts">
+    <div class="history-setting">
+      <label for="suggestionListLimit">{{T:panel.suggestionListLimit}}</label>
+      <span class="number-stepper" role="group" aria-label="{{T:panel.suggestionListLimit}}">
+        <input id="suggestionListLimit" class="number-stepper-input" type="number" min="1" max="500" step="1" inputmode="numeric" value="500" aria-label="{{T:panel.suggestionListLimit}}">
+        <span class="number-stepper-buttons">
+          <button type="button" class="number-step-button" data-suggestion-step="list:1" aria-label="{{T:panel.increase}} {{T:panel.suggestionListLimit}}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 7.5 6 3l4 4.5z"/></svg></button>
+          <button type="button" class="number-step-button" data-suggestion-step="list:-1" aria-label="{{T:panel.decrease}} {{T:panel.suggestionListLimit}}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2 4.5 4 4 4-4z"/></svg></button>
+        </span>
+      </span>
+    </div>
+  </div>
 </details>
 
 <details class="sect" data-panel-section="appearance" open>
@@ -1353,6 +1377,9 @@ let articleCacheQueue=[],articleCacheActive=0,articleCacheAbort=null,articleCach
 let articleCacheGroupID="",articleCacheGroupCount=1;
 let articleCacheSearchSettled=false;
 let countAllResultsInBackground=false,activeSearchCountsInBackground=false;
+let suggestionPerDictionary=40,suggestionListLimit=500;
+window.wudictSuggestionPerDictionary=suggestionPerDictionary;
+window.wudictSuggestionListLimit=suggestionListLimit;
 function newArticleResultCacheID(){
   const bytes=new Uint8Array(16);
   try{crypto.getRandomValues(bytes)}catch(_){for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256)}
@@ -1515,6 +1542,28 @@ if(countAllResultsCheckbox){
     savePrefs(true);
   });
 }
+function syncSuggestionLimits(){
+  $("suggestionPerDictionary").value=String(suggestionPerDictionary);
+  $("suggestionListLimit").value=String(suggestionListLimit);
+  window.wudictSuggestionPerDictionary=suggestionPerDictionary;
+  window.wudictSuggestionListLimit=suggestionListLimit;
+}
+function setSuggestionLimit(kind,value){
+  const n=Math.floor(Number(value));
+  if(!Number.isFinite(n)||n<1)return;
+  if(kind==="per-dictionary")suggestionPerDictionary=Math.max(1,Math.min(500,n));
+  else suggestionListLimit=Math.max(1,Math.min(500,n));
+  syncSuggestionLimits();savePrefs(true);
+  if(window.wuSearchHistory?.isOpen())window.wuSearchHistory.refreshSuggestions();
+}
+syncSuggestionLimits();
+$("suggestionPerDictionary").addEventListener("change",e=>setSuggestionLimit("per-dictionary",e.target.value));
+$("suggestionListLimit").addEventListener("change",e=>setSuggestionLimit("list",e.target.value));
+for(const button of document.querySelectorAll("[data-suggestion-step]"))button.addEventListener("click",()=>{
+  const [kind,step]=button.dataset.suggestionStep.split(":");
+  const current=kind==="per-dictionary"?suggestionPerDictionary:suggestionListLimit;
+  setSuggestionLimit(kind,current+(Number(step)||0));
+});
 const searchPortionInput=$("searchPageSize");
 if(searchPortionInput){
   searchPortionInput.value=String(searchPortionSize());
@@ -1627,15 +1676,15 @@ $("clearSystemLogConfirm").addEventListener("click",async event=>{
   }
 });
 window.wuSearchHistory.setSearch(word=>{ if($("mode").value==="wildcards"){ $("q").value=word;window.wuSearchHistory.hide();maskSubmitRequested=true;commitOnce=true;doSearch(); } else searchFor(word,{preserveMode:true}); });
-window.wuSearchHistory.setSuggest((q,onHit,signal)=>{
-  const mode=$("mode").value,sel=$("dict").value||"all";
-  if(mode==="fts"||mode==="wildcards")return;
+window.wuSearchHistory.setSuggest((q,onHit,signal,mode)=>{
+  const sel=$("dict").value||"all";
+  if(mode==="fts")return;
   const ids=sel==="all"?activeUserGroupIds():sel.startsWith("g:")?groupIds(sel):null;
   if(ids&&!ids.length)return;
-  const dict=ids?ids.join(","):sel,n=ids?(ids.length===1?25:5):25;
+  const dict=ids?ids.join(","):sel,n=window.wudictSuggestionPerDictionary||40;
   return fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+
     "&hl=0"+diacriticsSearchParam()+"&dict="+encodeURIComponent(dict)+"&n="+n,msg=>{
-      if(msg.t==="hit")onHit(msg.results,mode);
+      if(msg.t==="hit")onHit(msg.results,mode,msg.dict);
     },signal);
 });
 const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
@@ -1935,6 +1984,9 @@ async function loadPrefs(){
       countAllResultsInBackground=typeof st.ui.countAllResultsInBackground==="boolean"
         ?st.ui.countAllResultsInBackground:typeof st.ui.skipBackgroundResultCount==="boolean"
           ?!st.ui.skipBackgroundResultCount:true;
+      suggestionPerDictionary=Math.max(1,Math.min(500,Number(st.ui.suggestionPerDictionary)||40));
+      suggestionListLimit=Math.max(1,Math.min(500,Number(st.ui.suggestionListLimit)||500));
+      syncSuggestionLimits();
       $("countAllResultsInBackground").checked=countAllResultsInBackground;
       combinedDictionaryLimit=Math.max(1,Math.min(Number(st.ui.combinedDictionaryLimit)||defaultCombinedDictionaryLimit,maxCombinedDictionaryLimit));syncCombinedDictionaryLimitUI()}
     syncUpdateControls();restoreCachedUpdate();
@@ -1997,6 +2049,7 @@ function savePrefs(now){
   const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:d.name||d.path.split("/").pop(),title:dictTitles.get(d.id)||"",pinned:prefPinned.includes(d.id)})),
     ui:{fontSize:articleFS,fontWeight:articleFW,fontFamily:articleFont,hlOff:!hlOn,speakOff:!speakOn,dictIconsOff:!dictIconsOn,fastFirst:!orderFirst,hideUnmarkedExamples,exampleBackgroundOff:!dimExampleBackground,fadeExampleText,customOrder:prefCustomOrder,
       countAllResultsInBackground,
+      suggestionPerDictionary,suggestionListLimit,
       resultCacheLimitGB,resultCacheNoLimit,combinedDictionaryLimit,searchReturnCache:searchReturnCacheStorage,updateChannel,
       updateNotificationsOff:!updateNotifications}});
   if(body===prefsSent)return;
@@ -3678,15 +3731,16 @@ function syncChips(){
 /* Picking a dictionary only changes search scope. Indexing starts when the
    dictionary is added or when the user requests it in Dictionary Settings. */
 $("dict").onchange=e=>{const v=e.target.value;localStorage.setItem("wudict_dict",v);syncChips();updateMergedAZ();
-  if($("q").value.trim())doSearch()};
+  if($("q").value.trim()){window.wuSearchHistory?.refreshSuggestions();doSearch()}};
 /* Mode re-runs the search on change, symmetric with #dict: the narrow bar has
    no submit button, so a mode that waited for the next submit would appear to
    do nothing at all. */
 $("mode").onchange=()=>{
   setSearchMode($("mode").value);syncChips();
+  window.wuSearchHistory?.refreshSuggestions();
   if($("mode").value==="wildcards"){
     maskMergeAZ=false;updateMergedAZ();
-    window.wuSearchHistory.hide();maskInvalidate();return;
+    maskInvalidate();return;
   }
   if($("q").value.trim())doSearch();
 };

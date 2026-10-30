@@ -432,6 +432,8 @@
   "panel.searchAllResultsInBackground": "Искать все совпадения в фоне",
   "panel.resultPageSize": "Результатов в порции:",
   "panel.resultPageSizeHint": "Выберите, сколько статей загружать за один раз после первых результатов.",
+  "panel.suggestionPerDictionary": "Подсказок с каждого словаря:",
+  "panel.suggestionListLimit": "Максимальная длина списка подсказок:",
   "panel.clear": "Очистить",
   "panel.system": "Система",
   "panel.systemDoor": "Системные настройки…",

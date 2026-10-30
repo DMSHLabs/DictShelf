@@ -48,6 +48,16 @@ func (s *Server) uiPrefsSnapshot() *UIPrefs {
 	} else {
 		ui.CombinedDictionaryLimit = min(ui.CombinedDictionaryLimit, indexconst.CombinedDictionaryLimitMax)
 	}
+	if ui.SuggestionPerDictionary < 1 {
+		ui.SuggestionPerDictionary = 40
+	} else {
+		ui.SuggestionPerDictionary = min(ui.SuggestionPerDictionary, 500)
+	}
+	if ui.SuggestionListLimit < 1 {
+		ui.SuggestionListLimit = 500
+	} else {
+		ui.SuggestionListLimit = min(ui.SuggestionListLimit, 500)
+	}
 	return ui
 }
 

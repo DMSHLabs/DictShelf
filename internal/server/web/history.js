@@ -50,10 +50,9 @@
     if ($("mode").value === "wildcards") wildcardsSaved = rows;
     else saved = rows;
   };
-  let draft = false, open = false, heads = [], picking = false, search = () => {}, suggest = () => {};
-  let suggestTimer = null, suggestAC = null, suggestSeq = 0;
+  let draft = false, open = false, heads = [], headsByDict = new Map(), picking = false, search = () => {}, suggest = () => {};
+  let suggestAC = null, suggestSeq = 0;
   function stopSuggest() {
-    clearTimeout(suggestTimer);
     if (suggestAC) suggestAC.abort();
     suggestAC = null;
     suggestSeq++;
@@ -92,12 +91,13 @@
     size();
     box.replaceChildren();
     const needle = key(filter.trim()), seen = new Set();
-    const maxRows = Math.max(20, limit());
+    const typed = !!needle;
+    const maxRows = typed ? suggestionListLimit() : Math.max(20, limit());
     const history = activeHistory().slice(0, limit());
-    const words = needle ? [...heads, ...history] : history;
+    const words = typed ? heads : history;
     for (const word of words) {
       const id = key(word);
-      if ((needle && !id.includes(needle)) || seen.has(id)) continue;
+      if (seen.has(id)) continue;
       seen.add(id);
       const button = document.createElement("button");
       button.type = "button";
@@ -114,6 +114,7 @@
   function modeChanged() {
     stopSuggest();
     heads = [];
+    headsByDict = new Map();
     $("clearHistory").disabled = !activeHistory().length;
     if (open) render($("q").value);
   }
@@ -124,29 +125,36 @@
   function refreshSuggestions(value = $("q").value) {
     stopSuggest();
     heads = [];
+    headsByDict = new Map();
     show(value);
     const q = value.trim();
-    if (q.length < 2 || $("mode").value === "fts" || $("mode").value === "wildcards") return;
+    const mode = $("mode").value;
+    if ((q.length < 2 && !(mode === "wildcards" && /[*?]/.test(q))) || mode === "fts") return;
     const seq = suggestSeq;
-    suggestTimer = setTimeout(() => {
-      suggestAC = new AbortController();
-      Promise.resolve(suggest(q, (results, mode) => {
-        if (seq === suggestSeq) addResults(q, results, mode);
-      }, suggestAC.signal)).catch(err => {
-        if (err?.name !== "AbortError") console.warn("Suggestions:", err);
-      });
-    }, 300);
+    suggestAC = new AbortController();
+    Promise.resolve(suggest(q, (results, resultMode, dict) => {
+      if (seq === suggestSeq && mode === $("mode").value && $("q").value.trim() === q)
+        addResults(q, results, resultMode, dict);
+    }, suggestAC.signal, mode)).catch(err => {
+      if (err?.name !== "AbortError") console.warn("Suggestions:", err);
+    });
   }
-  function addResults(q, results, mode) {
+  function suggestionListLimit() {
+    return Math.max(1, Math.min(500, Number(window.wudictSuggestionListLimit) || 500));
+  }
+  function addResults(q, results, mode, dict) {
     if (mode === "fts" || !open || $("q").value.trim() !== q || !results?.length) return;
-    const seen = new Set(heads.map(key));
-    for (const result of results) {
-      const word = String(result.Headword || "").trim(), id = key(word);
-      if (!word || seen.has(id)) continue;
-      seen.add(id);
-      heads.push(word);
-      if (heads.length >= MAX) break;
+    const id = String(dict || "");
+    if (!id) return;
+    headsByDict.set(id, results.map(result => String(result.Headword || "").trim()).filter(Boolean));
+    const collator = new Intl.Collator(undefined, {sensitivity: "base", numeric: false});
+    const all = [], seen = new Set();
+    for (const words of headsByDict.values()) for (const word of words) {
+      const folded = key(word);
+      if (!seen.has(folded)) { seen.add(folded); all.push(word); }
     }
+    all.sort((a, b) => collator.compare(a, b) || a.localeCompare(b));
+    heads = all.slice(0, suggestionListLimit());
     render(q);
   }
 
@@ -167,8 +175,8 @@
     persist();
     if (!n) hide();
   });
-  $("q").addEventListener("focus", () => show());
-  $("q").addEventListener("pointerdown", () => show());
+  $("q").addEventListener("focus", () => { if (!open) refreshSuggestions(); });
+  $("q").addEventListener("pointerdown", () => { if (!open) refreshSuggestions(); });
   $("searchHistory").addEventListener("pointerdown", () => { draft = false; picking = true; });
   $("searchHistory").addEventListener("pointercancel", () => { picking = false; });
   document.addEventListener("pointerdown", e => {
@@ -193,5 +201,5 @@
 
   window.wuSearchHistory = { setSearch(fn) { search = fn; }, setSuggest(fn) { suggest = fn; }, record, recordFor,
     getFor(kind) { return [...(kind === "wildcards" ? wildcardsSaved : saved)]; },
-    hide, onInput, refreshSuggestions, modeChanged, isPicking() { return picking; } };
+    hide, onInput, refreshSuggestions, modeChanged, isOpen() { return open; }, isPicking() { return picking; } };
 })();
