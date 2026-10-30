@@ -28,7 +28,7 @@ func waitNewDictionaryIndexing(t *testing.T, r *Registry) {
 	t.Fatal("new dictionary indexing did not finish")
 }
 
-func TestNewDictionariesGetBaseIndexWithoutSavedDefaults(t *testing.T) {
+func TestNewDictionariesGetContainsIndexWithoutSavedDefaults(t *testing.T) {
 	isolatedDBDir(t)
 	dir := t.TempDir()
 	state := filepath.Join(t.TempDir(), StateFile)
@@ -57,11 +57,11 @@ func TestNewDictionariesGetBaseIndexWithoutSavedDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer index.Close()
-	if !index.Caps().Exact || !index.Caps().Prefix || index.Caps().Contains || index.Caps().FTS {
+	if !index.Caps().Exact || !index.Caps().Prefix || !index.Caps().Contains || index.Caps().FTS {
 		t.Fatalf("unexpected first-run index features: %+v", index.Caps())
 	}
-	if defaults := reg.prefs.newIndexDefaults(); !defaults.Index || defaults.Contains || defaults.FullText {
-		t.Fatalf("unsaved optional defaults were not left disabled: %+v", defaults)
+	if defaults := reg.prefs.newIndexDefaults(); !defaults.Index || !defaults.Contains || defaults.FullText {
+		t.Fatalf("unsaved defaults do not select the contains index: %+v", defaults)
 	}
 }
 

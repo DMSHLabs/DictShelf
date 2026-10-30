@@ -245,7 +245,7 @@ func (p *Prefs) newIndexDefaults() indexOptions {
 		v.Index = true
 		return v
 	}
-	return indexOptions{Index: true}
+	return indexOptions{Index: true, Contains: true}
 }
 
 func (s *Server) handleIndexDefaults(w http.ResponseWriter, req *http.Request) {

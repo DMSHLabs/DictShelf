@@ -9,20 +9,21 @@
       <button type="button" class="btn" id="closePage" aria-label="{{T:pages.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
     </div>
     <div class="folders-dialog-scroll">
+      <section id="indexDefaults">
+        <p>{{T:pages.indexDefaultsHint}}</p>
+        <div class="dsl-default-row"><div>
+          <label><input type="checkbox" id="newIndexIndex" checked disabled>{{T:dictUI.indexPlain}}</label>
+          <label><input type="checkbox" id="newIndexContains" checked>{{T:dictUI.contains}}</label>
+          <label><input type="checkbox" id="newIndexFullText">{{T:dictUI.fts}}</label>
+        </div></div>
+        <p id="indexDefaultsError" class="err" role="alert" hidden></p>
+      </section>
+      <p class="formats">{{T:pages.supported}}</p>
       <div class="setup-tabs" role="tablist" aria-label="{{T:pages.setupTabs}}">
         <button type="button" id="foldersTab" class="setup-tab" role="tab" aria-controls="foldersPanel" aria-selected="true">{{T:pages.point}}</button>
         <button type="button" id="downloadTab" class="setup-tab" role="tab" aria-controls="downloadPanel" aria-selected="false" tabindex="-1" disabled>{{T:pages.downloadDictionary}}</button>
       </div>
       <section id="foldersPanel" class="setup-panel" role="tabpanel" aria-labelledby="foldersTab">
-      <section id="indexDefaults">
-        <p>{{T:pages.indexDefaultsHint}}</p>
-        <div class="dsl-default-row"><div>
-          <label><input type="checkbox" id="newIndexIndex" checked disabled>{{T:dictUI.indexPlain}}</label>
-          <label><input type="checkbox" id="newIndexContains">{{T:dictUI.contains}}</label>
-          <label><input type="checkbox" id="newIndexFullText">{{T:dictUI.fts}}</label>
-        </div></div>
-        <p id="indexDefaultsError" class="err" role="alert" hidden></p>
-      </section>
       <p>{{T:pages.folderHint}}</p>
       <div id="rows"></div>
       <button type="button" id="addRow" class="link">{{T:pages.addFolder}}</button>
@@ -31,14 +32,18 @@
       <hr class="sep">
       <div id="msg"></div>
       <button type="button" class="btn" id="save" disabled>{{T:pages.useFolder}}</button>
-      <p class="formats">{{T:pages.supported}}</p>
       </section>
 
       <section id="downloadPanel" class="setup-panel hidden" role="tabpanel" aria-labelledby="downloadTab" hidden>
+      <div id="importTargetRow" class="frow">
+        <input id="importTarget" placeholder="{{T:pages.chooseImportFolder}}" spellcheck="false">
+        <button type="button" id="importTargetPick" class="pick" title="{{T:pages.chooseFolder}}">📁</button>
+      </div>
+      <p id="importTargetWarning" class="warn hidden" role="alert">{{T:pages.importFolderRequired}}</p>
       <div id="addSection" class="hidden">
         <hr class="sep">
         <h2>{{T:pages.addDictionaries}}</h2>
-        <p>{{T:pages.addHint}} <code id="addDir"></code>. {{T:pages.assetsHint}}</p>
+        <p>{{T:pages.addHint}} {{T:pages.assetsHint}}</p>
         <div id="drop">
           <input type="file" id="file" accept=".zip,.7z,.mdx,.mdd,.ifo,.idx,.dict,.dz,.syn,.dsl,.slob,.bgl,.zim,.md,.gz" hidden>
           <button type="button" id="choose" class="link">{{T:pages.chooseFile}}</button>

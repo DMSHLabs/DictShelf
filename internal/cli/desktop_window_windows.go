@@ -27,10 +27,10 @@ import (
 	"time"
 	"unsafe"
 
-	webview "github.com/jchv/go-webview2"
-	"github.com/jchv/go-webview2/webviewloader"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
 	"github.com/DMSHLabs/DictShelf/internal/tray"
+	webview "github.com/jchv/go-webview2"
+	"github.com/jchv/go-webview2/webviewloader"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -163,6 +163,7 @@ type desktopInput struct {
 // openDesktopWindow opens the local reader on a dedicated Windows UI thread.
 // The tray keeps the main thread; WebView2 owns the locked thread below.
 func openDesktopWindow(address, appAddress string, onClose func(), desktopRequest func(context.Context, string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error, desktopResource desktopResourceHandler, desktopOnly bool) bool {
+	desktopSetTaskbarAppID()
 	version, err := webviewloader.GetInstalledVersion()
 	if err != nil || version == "" {
 		if desktopOnly {

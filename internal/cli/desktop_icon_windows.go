@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -29,6 +30,8 @@ var (
 	iconShell32             = syscall.NewLazyDLL("shell32.dll")
 	iconGetKnownFolderPath  = iconShell32.NewProc("SHGetKnownFolderPath")
 	iconShellChangeNotify   = iconShell32.NewProc("SHChangeNotify")
+	iconSetProcessAppID     = iconShell32.NewProc("SetCurrentProcessExplicitAppUserModelID")
+	iconGetWindowStore      = iconShell32.NewProc("SHGetPropertyStoreForWindow")
 	iconOle32               = syscall.NewLazyDLL("ole32.dll")
 	iconCoInitializeEx      = iconOle32.NewProc("CoInitializeEx")
 	iconCoUninitialize      = iconOle32.NewProc("CoUninitialize")
@@ -41,6 +44,17 @@ type desktopKnownFolderID struct {
 	Data2 uint16
 	Data3 uint16
 	Data4 [8]byte
+}
+
+type desktopPropertyKey struct {
+	FormatID   desktopKnownFolderID
+	PropertyID uint32
+}
+
+type desktopPropVariant struct {
+	Type     uint16
+	Reserved [3]uint16
+	Value    uintptr
 }
 
 var desktopTaskbarIconChange atomic.Uint64
@@ -65,6 +79,7 @@ func desktopSetTaskbarIcon(hwnd uintptr, iconIndex int, dispatch func(func())) {
 	width, height := desktopWindowIconSize(hwnd, 11, 12, 32) // SM_CXICON/CYICON
 	icon, _, _ := iconLoadImage.Call(hinstance, uintptr(101+iconIndex), 1, width, height, 0x8000)
 	if icon != 0 {
+		desktopSetTaskbarRelaunchIcon(hwnd, iconIndex)
 		// Clear first so Explorer does not keep displaying the previous cached
 		// taskbar image when the window remains visible during a theme change.
 		iconSendMessage.Call(hwnd, 0x80, 1, 0) // WM_SETICON, ICON_BIG
@@ -81,6 +96,46 @@ func desktopSetTaskbarIcon(hwnd uintptr, iconIndex int, dispatch func(func())) {
 				}
 			})
 		})
+	}
+}
+
+func desktopSetTaskbarAppID() {
+	appID, _ := syscall.UTF16PtrFromString("DMSHLabs.DictShelf")
+	if appID != nil {
+		iconSetProcessAppID.Call(uintptr(unsafe.Pointer(appID)))
+		runtime.KeepAlive(appID)
+	}
+}
+
+func desktopSetTaskbarRelaunchIcon(hwnd uintptr, iconIndex int) {
+	if hwnd == 0 || iconIndex < 0 || iconIndex > 5 {
+		return
+	}
+	exePath, err := os.Executable()
+	if err != nil {
+		return
+	}
+	resource, err := syscall.UTF16PtrFromString(fmt.Sprintf("%s,-%d", exePath, 101+iconIndex))
+	if err != nil {
+		return
+	}
+	iid := desktopKnownFolderID{Data1: 0x886D8EEB, Data2: 0x8CF2, Data3: 0x4446, Data4: [8]byte{0x8D, 0x02, 0xCD, 0xBA, 0x1D, 0xBD, 0xCF, 0x99}}
+	var store uintptr
+	hr, _, _ := iconGetWindowStore.Call(hwnd, uintptr(unsafe.Pointer(&iid)), uintptr(unsafe.Pointer(&store)))
+	if int32(hr) < 0 || store == 0 {
+		return
+	}
+	defer desktopCOMCall(store, 2) // IUnknown.Release
+	key := desktopPropertyKey{
+		FormatID:   desktopKnownFolderID{Data1: 0x9F4C2855, Data2: 0x9F79, Data3: 0x4B39, Data4: [8]byte{0xA8, 0xD0, 0xE1, 0xD4, 0x2D, 0xE1, 0xD5, 0xF3}},
+		PropertyID: 3, // PKEY_AppUserModel_RelaunchIconResource
+	}
+	value := desktopPropVariant{Type: 31, Value: uintptr(unsafe.Pointer(resource))}               // VT_LPWSTR
+	hr = desktopCOMCall(store, 6, uintptr(unsafe.Pointer(&key)), uintptr(unsafe.Pointer(&value))) // IPropertyStore.SetValue
+	if int32(hr) >= 0 {
+		runtime.KeepAlive(resource)
+		runtime.KeepAlive(&value)
+		runtime.KeepAlive(&key)
 	}
 }
 
@@ -101,7 +156,7 @@ func desktopRefreshTaskbarButton(hwnd uintptr, add bool) {
 	if int32(hr) < 0 || taskbar == 0 {
 		return
 	}
-	defer desktopCOMCall(taskbar, 2) // Release
+	defer desktopCOMCall(taskbar, 2)           // Release
 	if int32(desktopCOMCall(taskbar, 3)) < 0 { // ITaskbarList.HrInit
 		return
 	}
