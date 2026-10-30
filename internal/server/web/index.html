@@ -1420,7 +1420,7 @@ function finishArticleCacheInitialPage(state){
   const portion=searchPortionSize();
   if(state.total<=state.initial)return;
   state.initialPageRequested=true;
-  fetchSearchPortion(det,0,{openAfter:state.mode!=="fts",size:state.initial,
+  fetchSearchPortion(det,0,{openAfter:()=>det.open,size:state.initial,
     pageSize:portion,firstPageSize:state.initial});
 }
 function settleArticleCacheSearch(seq){
@@ -9515,6 +9515,7 @@ $("frm").addEventListener("submit",doSearch);
 async function fetchSearchPortion(det,start,options={}){
   if(!det?.isConnected)return;
   const openAfter=options.openAfter??true;
+  const shouldOpen=()=>typeof openAfter==="function"?!!openAfter():!!openAfter;
   const box=det.parentElement,mode=det.dataset.searchMode||"prefix",query=det.dataset.searchQuery||"",id=det.dataset.searchDict||"";
   const initial=Number(det.dataset.searchInitial)||5;
   const configuredSize=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
@@ -9550,7 +9551,7 @@ async function fetchSearchPortion(det,start,options={}){
         renderSlot(box,{...msg,name:cached.name,results:visible},
           mode,query,initial,det.dataset.searchGroup==="true",page);
         loaded=box.querySelector(":scope>details.dict");
-        if(loaded)loaded.open=openAfter;
+        if(loaded)loaded.open=shouldOpen();
         window.wudictArticleFind?.refresh();
       },articleCacheAbort?.signal);
     }catch(error){
@@ -9580,13 +9581,13 @@ async function fetchSearchPortion(det,start,options={}){
         if(all.length<=start){
           const fallbackStart=Math.max(0,all.length-size),fallback=all.slice(fallbackStart);
           renderSlot(box,{...msg,results:fallback},mode,query,initial,det.dataset.searchGroup==="true",{...page,start:fallbackStart});
-          loaded=box.querySelector(":scope>details.dict");if(loaded)loaded.open=openAfter;
+          loaded=box.querySelector(":scope>details.dict");if(loaded)loaded.open=shouldOpen();
           window.wudictArticleFind?.refresh();
         }
         return;
       }
       renderSlot(box,{...msg,results:visible},mode,query,initial,det.dataset.searchGroup==="true",page);
-      loaded=box.querySelector(":scope>details.dict");if(loaded)loaded.open=openAfter;
+      loaded=box.querySelector(":scope>details.dict");if(loaded)loaded.open=shouldOpen();
       window.wudictArticleFind?.refresh();
     });
     if(!received&&det.isConnected){if(priority)priority.disabled=false;actions.forEach(button=>button.disabled=false)}
