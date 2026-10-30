@@ -391,6 +391,7 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		index, ok := tray.WindowsIconIndex(name)
 		if ok {
 			w.Dispatch(func() { desktopSetTaskbarIcon(hwnd, index, w.Dispatch) })
+			go desktopUpdateTaskbarShortcutIcon(index)
 		}
 	})
 	_ = w.Bind("wudictSetTrayIcon", func(name string) bool { return tray.SetWindowsIcon(name) })

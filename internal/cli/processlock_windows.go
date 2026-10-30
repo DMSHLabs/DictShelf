@@ -107,6 +107,7 @@ func restoreAndFocusWindow(hwnd uintptr) {
 		swpNoActivate         = 0x0010
 	)
 	showWindow.Call(hwnd, swRestore)
+	desktopReapplyTaskbarIcon(hwnd)
 
 	var bounds windowRect
 	if ok, _, _ := getWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&bounds))); ok != 0 {

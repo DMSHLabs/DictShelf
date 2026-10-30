@@ -2,28 +2,28 @@
 
 Canonical checkout: `D:\Projects\Android\DictShelf\`, branch `codex/android-folder-tabs` from `dev` at `4ef13d84`. Edit Folders now has **Dictionary folders** and **Download Dictionary** tabs in the same window; import is available when an install folder exists. Runtime verification is pending.
 
-Android Settings → Update now keeps the DownloadManager percentage visible
-even when update notifications are disabled, and shows a determinate or
-indeterminate progress bar under the status. The ☰ progress ring remains in
-place on Android and Windows. If Android install permission is missing, a
-localized dialog links to DictShelf's system permission page and offers manual
-installation from Downloads; returning with permission starts the package
-installer automatically. Based on `dev` at `f962f9e0`; Android and Windows UI
-runtime verification is pending. Device `Power_Armor_18T` reports installed
-versionCode 1116; the downloaded `1.02.15` APK has versionCode 1113. The APK's
-ZIP alignment and v2 signature verify, and its signing certificate matches the
-installed app, so the visible generic “invalid or damaged package” error is a
-version-code downgrade rejection. `build-android.cmd` now accepts
-`DICTSHELF_VERSION_CODE` for a lower-code updater test build; normal builds
-remain Git-derived. The exact `1112` / `1113` test recipe is in
-`docs/ANDROID-FORK.md`. DictShelf-owned update dialogs follow the
-selected paper colour and image; Android's package-installer and permission
-screens use the system appearance and cannot be themed by the app.
+Android Settings → Update shows byte progress and a determinate/indeterminate
+bar on Android and Windows, including when notifications are off. Missing
+install permission opens DictShelf's localized settings dialog and starts the
+installer on return; DictShelf dialogs use the selected paper/image, while OS
+installer/settings screens retain Android's appearance. On `Power_Armor_18T`,
+the installed APK is versionCode 1116 and downloaded `1.02.15` is 1113; its ZIP
+and signature are valid and the signer matches, so Android rejects the
+downgrade. `DICTSHELF_VERSION_CODE` lets `build-android.cmd` make an older test
+APK; see `docs/ANDROID-FORK.md` for 1112 → 1113. The updater now checks that a
+saved DownloadManager APK still opens, clears stale records, and re-downloads
+if the file disappears during install confirmation. Runtime verification is
+pending.
 
 The Windows taskbar icon refresh removes the visible window's taskbar button
 after a theme-driven icon change and adds it again 150 ms later on the UI thread.
 Rapid changes cancel earlier additions. A Windows Go build passes; live Explorer
 behavior still needs user verification.
+The pinned DictShelf taskbar shortcut on this machine had IconLocation `,0`, so
+Explorer fell back to the EXE's first icon when the window hid. Its icon was set
+to the selected light resource (`DictShelf.exe,-106`), and shortcut updates now
+commit AppUserModel properties before saving the ShellLink icon location. A
+Windows Go build passes; verify the pinned icon after hiding or closing the app.
 
 Windows executable builds generate a version resource from `DICTSHELF_VERSION`
 or the local Git version, including DictShelf/DMSH Labs identity and the UTC

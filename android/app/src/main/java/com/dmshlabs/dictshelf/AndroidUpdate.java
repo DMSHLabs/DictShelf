@@ -17,6 +17,7 @@ import android.provider.Settings;
 import org.json.JSONObject;
 
 import java.io.InputStream;
+import java.io.IOException;
 import java.security.MessageDigest;
 import java.util.Locale;
 
@@ -107,10 +108,16 @@ final class AndroidUpdate {
             }
         }
         try (android.database.Cursor cursor = manager.query(new DownloadManager.Query().setFilterById(id))) {
-            if (cursor == null || !cursor.moveToFirst()) return new JSONObject().put("state", "none");
+            if (cursor == null || !cursor.moveToFirst()) {
+                clearDownload(manager, prefs, id);
+                return new JSONObject().put("state", "none");
+            }
             int state = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
             if (state == DownloadManager.STATUS_FAILED) {
-                return new JSONObject().put("state", "failed").put("version", version).put("sha256", sha);
+                JSONObject failed = new JSONObject().put("state", "failed")
+                        .put("version", version).put("sha256", sha);
+                clearDownload(manager, prefs, id);
+                return failed;
             }
             if (state != DownloadManager.STATUS_SUCCESSFUL) {
                 long downloaded = cursor.getLong(cursor.getColumnIndexOrThrow(
@@ -122,13 +129,31 @@ final class AndroidUpdate {
                         .put("progress", progress);
             }
             Uri apk = manager.getUriForDownloadedFile(id);
-            if (apk == null) return new JSONObject().put("state", "failed").put("version", version).put("sha256", sha);
+            if (apk == null) {
+                clearDownload(manager, prefs, id);
+                return new JSONObject().put("state", "none");
+            }
+            // DownloadManager can retain a SUCCESSFUL row after the user
+            // deletes its file from Downloads. The saved verified flag is not
+            // proof that this URI still resolves to an APK.
+            try (android.os.ParcelFileDescriptor descriptor =
+                    activity.getContentResolver().openFileDescriptor(apk, "r")) {
+                if (descriptor == null) throw new java.io.FileNotFoundException("Downloaded APK is missing");
+            } catch (IOException | SecurityException missing) {
+                clearDownload(manager, prefs, id);
+                return new JSONObject().put("state", "none");
+            }
             if (!prefs.getBoolean(KEY_VERIFIED, false)) {
-                String actual = sha256(activity, apk);
+                String actual;
+                try {
+                    actual = sha256(activity, apk);
+                } catch (IOException | SecurityException missing) {
+                    clearDownload(manager, prefs, id);
+                    return new JSONObject().put("state", "none");
+                }
                 if (!actual.equalsIgnoreCase(prefs.getString(KEY_SHA, ""))) {
-                    manager.remove(id);
-                    prefs.edit().putBoolean(KEY_VERIFIED, false).apply();
-                    return new JSONObject().put("state", "failed").put("version", version).put("sha256", sha);
+                    clearDownload(manager, prefs, id);
+                    return new JSONObject().put("state", "none");
                 }
                 prefs.edit().putBoolean(KEY_VERIFIED, true).apply();
             }
@@ -141,7 +166,7 @@ final class AndroidUpdate {
                 .putBoolean(KEY_VERIFIED, false).apply();
         JSONObject current = status(activity, request);
         if (!"ready".equals(current.optString("state")))
-            return new JSONObject().put("error", "The downloaded APK is not ready to install");
+            return current;
         if (Build.VERSION.SDK_INT >= 26
                 && !activity.getPackageManager().canRequestPackageInstalls()) {
             return new JSONObject().put("permission", true).put("version", current.optString("version"));
@@ -186,8 +211,8 @@ final class AndroidUpdate {
         }
         try {
             JSONObject result = install(activity, new JSONObject().put("action", "install"));
-            if (result.has("error")) activity.notifyAndroidUpdateFailed();
-            else activity.notifyAndroidInstallStarted();
+            if (result.optBoolean("ok")) activity.notifyAndroidInstallStarted();
+            else activity.notifyAndroidUpdateFailed();
         } catch (Exception error) {
             SystemLog.warn("update", "could not install Android update after permission", error);
             activity.notifyAndroidUpdateFailed();
@@ -263,7 +288,7 @@ final class AndroidUpdate {
     private static String sha256(Context context, Uri uri) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         try (InputStream input = context.getContentResolver().openInputStream(uri)) {
-            if (input == null) throw new IllegalStateException("Downloaded APK is unavailable");
+            if (input == null) throw new java.io.FileNotFoundException("Downloaded APK is unavailable");
             byte[] buffer = new byte[32 * 1024];
             int count;
             while ((count = input.read(buffer)) >= 0) digest.update(buffer, 0, count);
