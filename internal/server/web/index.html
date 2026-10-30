@@ -5298,6 +5298,17 @@ async function installUpdate(){
       const result=JSON.parse(answer);
       if(result.permission){updateStarting=false;updateActionPhase="";showAndroidUpdatePermissionDialog();return}
       if(result.error)throw new Error(result.error);
+      if(result.state==="none"||result.state==="failed"){
+        clearPendingUpdateInstall();updateStarting=false;updateActionPhase="";updateDownloaded=false;
+        downloadedUpdateVersion="";pendingAndroidUpdateState=null;
+        await downloadUpdate();return;
+      }
+      if(result.state==="downloading"){
+        clearPendingUpdateInstall();updateStarting=false;updateActionPhase="download";updateDownloadPending=true;
+        updateDownloadProgress=Number.isInteger(result.progress)&&result.progress>=0&&result.progress<=100?result.progress:-1;
+        updateStatusMessage=tx("system.updateAndroidDownloadStarted");updateManualResult=true;renderUpdateNotice();
+        pollAndroidUpdateProgress();return;
+      }
       updateStarting=false;updateInstalling=false;updateDownloaded=true;updateStatusMessage=tx("system.updateAndroidInstallStarted");updateManualResult=true;renderUpdateNotice();
     }else if(window.wudictUpdateWindows){
       rememberPendingUpdateInstall(updateAvailable.version);
@@ -5379,7 +5390,7 @@ function applyAndroidUpdateState(state){
   if(state.state==="ready"){window.wudictAndroidUpdateReady(state.version,state.sha256);return}
   if(state.state==="failed"){window.wudictAndroidUpdateFailed();return}
   if(state.state==="none"){
-    updateDownloaded=false;downloadedUpdateVersion="";updateDownloadPending=false;updateDownloadProgress=-1;
+    updateDownloaded=false;downloadedUpdateVersion="";pendingAndroidUpdateState=null;updateDownloadPending=false;updateDownloadProgress=-1;
     if(updateAvailable)renderUpdateNotice();
     return;
   }

@@ -584,6 +584,7 @@ function wireIntake(dir){
     }).catch(()=>{});
   });
   $("choose").addEventListener("click",()=>{
+    if(!importDestination())return;
     if(typeof nativeSetupCall==="function"&&typeof window.wudictPickArchive==="function"){
       window.wudictPickArchive(impSendPath);
       return;
