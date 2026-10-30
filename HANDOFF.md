@@ -19,11 +19,7 @@ The Windows taskbar icon refresh removes the visible window's taskbar button
 after a theme-driven icon change and adds it again 150 ms later on the UI thread.
 Rapid changes cancel earlier additions. A Windows Go build passes; live Explorer
 behavior still needs user verification.
-The pinned DictShelf taskbar shortcut on this machine had IconLocation `,0`, so
-Explorer fell back to the EXE's first icon when the window hid. Its icon was set
-to the selected light resource (`DictShelf.exe,-106`), and shortcut updates now
-commit AppUserModel properties before saving the ShellLink icon location. A
-Windows Go build passes; verify the pinned icon after hiding or closing the app.
+Taskbar icons now use only `taskbar-dark.ico` and `taskbar-light.ico` in the active user data root (`Data/icons/` for portable mode); changing the tray icon rewrites this pair and cleans legacy generated files. Startup reads saved app/tray icon choices and system tray theme before creating the window, so its initial big icon matches the taskbar theme and the small titlebar icon matches the app choice. Window relaunch-icon properties are committed explicitly. Close, minimize-to-tray and hide-to-tray recalculate the variant from current tray choice and Windows system theme; a hidden helper repeats the pinned-shortcut refresh 900 ms later with shell notifications. Windows Go build passes; live Explorer startup flicker verification remains pending.
 
 Windows executable builds generate a version resource from `DICTSHELF_VERSION`
 or the local Git version, including DictShelf/DMSH Labs identity and the UTC

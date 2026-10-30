@@ -8,8 +8,10 @@ package cli
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -17,6 +19,9 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/DMSHLabs/DictShelf/internal/config"
+	"github.com/DMSHLabs/DictShelf/internal/tray"
 )
 
 var (
@@ -61,6 +66,41 @@ var (
 	desktopTaskbarIconChange  atomic.Uint64
 	desktopCurrentTaskbarIcon atomic.Int32
 )
+
+const windowsTaskbarRefreshHelperArg = "--dictshelf-taskbar-refresh-helper"
+
+func runWindowsTaskbarRefreshHelper(args []string) bool {
+	if len(args) == 0 || args[0] != windowsTaskbarRefreshHelperArg {
+		return false
+	}
+	if len(args) != 2 {
+		return true
+	}
+	iconIndex, err := strconv.Atoi(args[1])
+	if err != nil || iconIndex < 0 || iconIndex > 5 {
+		return true
+	}
+	// Explorer can restore the pinned icon from its cached app identity after
+	// the window disappears. Refresh after that transition has settled.
+	time.Sleep(900 * time.Millisecond)
+	desktopUpdateTaskbarShortcutIcon(iconIndex)
+	return true
+}
+
+func desktopScheduleTaskbarShortcutRefresh(iconIndex int) {
+	if iconIndex < 0 || iconIndex > 5 {
+		return
+	}
+	exePath, err := os.Executable()
+	if err != nil {
+		return
+	}
+	cmd := exec.Command(exePath, windowsTaskbarRefreshHelperArg, strconv.Itoa(iconIndex))
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	if err := cmd.Start(); err == nil {
+		_ = cmd.Process.Release()
+	}
+}
 
 func desktopSetWindowIcon(hwnd uintptr, iconIndex int) {
 	if hwnd == 0 || iconIndex < 0 || iconIndex > 5 {
@@ -132,11 +172,11 @@ func desktopSetTaskbarRelaunchIcon(hwnd uintptr, iconIndex int) {
 	if hwnd == 0 || iconIndex < 0 || iconIndex > 5 {
 		return
 	}
-	exePath, err := os.Executable()
+	iconPath, err := desktopTaskbarICOPath(iconIndex)
 	if err != nil {
 		return
 	}
-	resource, err := syscall.UTF16PtrFromString(fmt.Sprintf("%s,-%d", exePath, 101+iconIndex))
+	resource, err := syscall.UTF16PtrFromString(iconPath + ",0")
 	if err != nil {
 		return
 	}
@@ -167,7 +207,10 @@ func desktopSetTaskbarRelaunchIcon(hwnd uintptr, iconIndex int) {
 	}
 	appIDKey := desktopPropertyKey{FormatID: key.FormatID, PropertyID: 5} // PKEY_AppUserModel_ID
 	appIDValue := desktopPropVariant{Type: 31, Value: uintptr(unsafe.Pointer(appID))}
-	desktopCOMCall(store, 6, uintptr(unsafe.Pointer(&appIDKey)), uintptr(unsafe.Pointer(&appIDValue)))
+	hr = desktopCOMCall(store, 6, uintptr(unsafe.Pointer(&appIDKey)), uintptr(unsafe.Pointer(&appIDValue)))
+	if int32(hr) >= 0 {
+		desktopCOMCall(store, 7) // IPropertyStore.Commit
+	}
 	runtime.KeepAlive(appID)
 	runtime.KeepAlive(&appIDValue)
 	runtime.KeepAlive(&appIDKey)
@@ -236,6 +279,78 @@ func desktopUpdateTaskbarShortcutIcon(iconIndex int) {
 	desktopUpdateShortcuts(-1, iconIndex)
 }
 
+func desktopRefreshTaskbarShortcutIcon(hwnd uintptr) {
+	iconIndex := int(desktopCurrentTaskbarIcon.Load())
+	if name, ok := tray.WindowsTaskbarIconName(); ok {
+		if current, found := tray.WindowsIconIndex(name); found {
+			iconIndex = current
+		}
+	}
+	if iconIndex >= 0 && iconIndex <= 5 {
+		desktopSetTaskbarRelaunchIcon(hwnd, iconIndex)
+		desktopUpdateTaskbarShortcutIcon(iconIndex)
+		desktopScheduleTaskbarShortcutRefresh(iconIndex)
+	}
+}
+
+func desktopTaskbarICOPath(iconIndex int) (string, error) {
+	name, ok := tray.WindowsIconName(iconIndex)
+	if !ok {
+		return "", fmt.Errorf("unknown taskbar icon index %d", iconIndex)
+	}
+	darkData, lightData, _, ok := tray.WindowsTaskbarICOPair(name)
+	if !ok {
+		return "", fmt.Errorf("taskbar icon %q is unavailable", name)
+	}
+	configPath := config.HomeConfig()
+	if configPath == "" {
+		return "", fmt.Errorf("cannot locate DictShelf data folder")
+	}
+	iconsDir := filepath.Join(filepath.Dir(configPath), "icons")
+	if err := os.MkdirAll(iconsDir, 0o755); err != nil {
+		return "", err
+	}
+	darkPath := filepath.Join(iconsDir, "taskbar-dark.ico")
+	lightPath := filepath.Join(iconsDir, "taskbar-light.ico")
+	if err := desktopWriteTaskbarICO(darkPath, darkData); err != nil {
+		return "", err
+	}
+	if err := desktopWriteTaskbarICO(lightPath, lightData); err != nil {
+		return "", err
+	}
+	if strings.HasSuffix(name, "_transparent_light") {
+		return lightPath, nil
+	}
+	return darkPath, nil
+}
+
+func desktopWriteTaskbarICO(path string, data []byte) error {
+	temp := fmt.Sprintf("%s.%d.%d.tmp", path, os.Getpid(), time.Now().UnixNano())
+	if err := os.WriteFile(temp, data, 0o644); err != nil {
+		return err
+	}
+	if err := os.Rename(temp, path); err != nil {
+		_ = os.Remove(temp)
+		return err
+	}
+	return nil
+}
+
+func desktopPruneTaskbarICOFiles(iconsDir string) {
+	entries, err := os.ReadDir(iconsDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasPrefix(strings.ToLower(entry.Name()), "taskbar-") || !strings.EqualFold(filepath.Ext(entry.Name()), ".ico") {
+			continue
+		}
+		if !strings.EqualFold(entry.Name(), "taskbar-dark.ico") && !strings.EqualFold(entry.Name(), "taskbar-light.ico") {
+			_ = os.Remove(filepath.Join(iconsDir, entry.Name()))
+		}
+	}
+}
+
 func desktopUpdateShortcuts(appIconIndex, taskbarIconIndex int) {
 	if appIconIndex < -1 || appIconIndex > 5 || taskbarIconIndex < -1 || taskbarIconIndex > 5 {
 		return
@@ -266,6 +381,15 @@ func desktopUpdateShortcuts(appIconIndex, taskbarIconIndex int) {
 	if len(candidates) == 0 {
 		return
 	}
+	taskbarIconPath := ""
+	if taskbarIconIndex >= 0 {
+		var err error
+		taskbarIconPath, err = desktopTaskbarICOPath(taskbarIconIndex)
+		if err != nil {
+			return
+		}
+	}
+	updatedAny := false
 
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -314,13 +438,17 @@ func desktopUpdateShortcuts(appIconIndex, taskbarIconIndex int) {
 					isPinned := strings.Contains(strings.ToLower(linkPath), `\user pinned\taskbar\`)
 					if isPinned {
 						if taskbarIconIndex >= 0 {
-							desktopSetShellLinkRelaunchIcon(shellLink, exePath, taskbarIconIndex)
+							desktopSetShellLinkRelaunchIcon(shellLink, taskbarIconPath)
 						}
 						desktopSetShellLinkAppID(shellLink)
 						if taskbarIconIndex >= 0 {
-							// Commit the property store first: its save can otherwise
-							// discard an uncommitted IShellLink icon location.
-							desktopCOMCall(shellLink, 17, uintptr(unsafe.Pointer(exe)), uintptr(-101-taskbarIconIndex))
+							// Point Explorer at the standalone ICO so it does not fall back
+							// to the first icon resource in DictShelf.exe after exit.
+							wideIcon, iconErr := syscall.UTF16PtrFromString(taskbarIconPath)
+							if iconErr == nil {
+								desktopCOMCall(shellLink, 17, uintptr(unsafe.Pointer(wideIcon)), 0)
+								runtime.KeepAlive(wideIcon)
+							}
 						}
 					} else if appIconIndex >= 0 {
 						setHR := desktopCOMCall(shellLink, 17, uintptr(unsafe.Pointer(exe)), uintptr(-101-appIconIndex)) // desktop shortcut keeps app icon
@@ -331,6 +459,7 @@ func desktopUpdateShortcuts(appIconIndex, taskbarIconIndex int) {
 					saveHR := desktopCOMCall(persist, 6, uintptr(unsafe.Pointer(wideLink)), 1) // IPersistFile.Save
 					if int32(saveHR) >= 0 {
 						iconShellChangeNotify.Call(0x00002000, 0x1005, uintptr(unsafe.Pointer(wideLink)), 0) // SHCNE_UPDATEITEM, SHCNF_PATHW|SHCNF_FLUSH
+						updatedAny = true
 					}
 				}
 			}
@@ -343,6 +472,13 @@ func desktopUpdateShortcuts(appIconIndex, taskbarIconIndex int) {
 		runtime.KeepAlive(wideLink)
 		runtime.KeepAlive(exe)
 	}
+	if updatedAny && taskbarIconIndex >= 0 {
+		// The pinned taskbar can retain the previous relaunch image after an
+		// app window disappears. Match the full shell refresh used by the
+		// standalone taskbar-icon repair script.
+		iconShellChangeNotify.Call(0x08000000, 0, 0, 0) // SHCNE_ASSOCCHANGED
+		desktopPruneTaskbarICOFiles(filepath.Dir(taskbarIconPath))
+	}
 }
 
 func desktopSetShellLinkAppID(shellLink uintptr) {
@@ -350,9 +486,9 @@ func desktopSetShellLinkAppID(shellLink uintptr) {
 	setShellLinkStringProperty(shellLink, key, "DMSHLabs.DictShelf")
 }
 
-func desktopSetShellLinkRelaunchIcon(shellLink uintptr, exePath string, iconIndex int) {
+func desktopSetShellLinkRelaunchIcon(shellLink uintptr, iconPath string) {
 	key := desktopPropertyKey{FormatID: desktopKnownFolderID{Data1: 0x9F4C2855, Data2: 0x9F79, Data3: 0x4B39, Data4: [8]byte{0xA8, 0xD0, 0xE1, 0xD4, 0x2D, 0xE1, 0xD5, 0xF3}}, PropertyID: 3}
-	setShellLinkStringProperty(shellLink, key, fmt.Sprintf("%s,-%d", exePath, 101+iconIndex))
+	setShellLinkStringProperty(shellLink, key, iconPath+",0")
 }
 
 func setShellLinkStringProperty(shellLink uintptr, key desktopPropertyKey, text string) {
