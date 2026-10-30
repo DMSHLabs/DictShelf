@@ -79,7 +79,7 @@ or a pasted link.
 -   **Share menu**: <kbd>Share</kbd> → <kbd>DictShelf</kbd>, for apps without the
     selection menu entry or for a longer passage.
 -   **A reading app's dictionary button**: see the table below.
--   **A `wudict://lookup?q=word` link**: from automation apps, note apps and
+-   **A `dictshelf://lookup?q=word` link**: from automation apps, note apps and
     scripts.
 
 The lookup opens in a floating window. Back, or a tap outside it, closes it;
@@ -87,7 +87,7 @@ it is not listed in Recents. Settings → *Look up in the full app* opens the
 full app instead, per source.
 
 ``` sh title="from Termux or Tasker"
-am start -a android.intent.action.VIEW -d "wudict://lookup?q=phubbing"
+am start -a android.intent.action.VIEW -d "dictshelf://lookup?q=phubbing"
 ```
 
 The link also takes `mode=exact|prefix|contains|fts`, `dict=<name>`, and
@@ -97,7 +97,7 @@ The link also takes `mode=exact|prefix|contains|fts`, `dict=<name>`, and
 
 | Reader | What to choose |
 | --- | --- |
-| **Moon+ Reader** | *ColorDict3* (listed as ColorDict/BlueDict/GoldenDict), *Lingvo*, *Fora* or *YunCi*; or *Customized*, with the URL `wudict://lookup?q=%s`; or DictShelf from its list of installed apps |
+| **Moon+ Reader** | *ColorDict3* (listed as ColorDict/BlueDict/GoldenDict), *Lingvo*, *Fora* or *YunCi*; or *Customized*, with the URL `dictshelf://lookup?q=%s`; or DictShelf from its list of installed apps |
 | **ReadEra** | DictShelf, from its list of dictionary and translator apps |
 | **Librera Reader** | DictShelf, from its dictionary list; it is listed more than once, and any of the entries works |
 | **FBReader** | *ColorDict 3*, *ABBYY Lingvo* or *Dictan* |

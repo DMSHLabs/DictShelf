@@ -6,7 +6,7 @@
 //
 // One activity behind four filters - the selection toolbar
 // (ACTION_PROCESS_TEXT), the share sheet (ACTION_SEND text/plain),
-// wudict://lookup?q= (ACTION_VIEW, for other apps and automation) and a reading
+// dictshelf://lookup?q= (ACTION_VIEW, for other apps and automation) and a reading
 // app's dictionary button (READER_ACTIONS, Dictan's category). They differ
 // only in where the string comes from; everything after that is the same, and
 // the whole feature reduces to loading `…/?q=<word>` in a WebView, because
@@ -20,7 +20,7 @@
 //
 // That is the default, not the only outcome. Per entry point, the user can ask
 // for the lookup to land in the app proper instead (D100, SettingsActivity), and
-// a wudict:// caller can say so per call with `&full=1`. Both are answered here
+// a dictshelf:// caller can say so per call with `&full=1`. Both are answered here
 // by forwarding to MainActivity and finishing before this window is built - the
 // same handoff the popup offers as a tap, taken automatically. The feature adds
 // no third kind of window: every screen it can produce is one the app already
@@ -134,7 +134,7 @@ public class LookupActivity extends Activity {
         CharSequence raw = text(i);
         query = clean(raw);
         if (query == null) {
-            // Nothing survived - a selection of whitespace, or a wudict:// URI
+            // Nothing survived - a selection of whitespace, or a dictshelf:// URI
             // with no q. A blank floating window over someone else's app would
             // be worse than saying so and getting out of the way.
             Toast.makeText(this, R.string.lookup_empty, Toast.LENGTH_SHORT).show();
@@ -166,7 +166,7 @@ public class LookupActivity extends Activity {
         Uri data = i == null ? null : i.getData();
         mode = mode(param(data, "mode"));
         // Reader integrations should find the selected inflected form as well
-        // as its lemma. An explicit mode in a wudict:// request still wins.
+        // as its lemma. An explicit mode in a dictshelf:// request still wins.
         if (mode == null && fromReader(i)) mode = "wordLemma";
         dict = clean(param(data, "dict"));
 
@@ -326,7 +326,7 @@ public class LookupActivity extends Activity {
 
     /**
      * A query parameter from a URI that another app controls entirely.
-     * getQueryParameter throws on an opaque URI (`wudict:lookup?q=x`, no `//`),
+     * getQueryParameter throws on an opaque URI (`dictshelf:lookup?q=x`, no `//`),
      * which is a shape a hand-written intent can easily have.
      */
     private static String param(Uri uri, String key) {
@@ -400,7 +400,7 @@ public class LookupActivity extends Activity {
 
     /**
      * Whether this lookup skips the popup and opens the app. The stored answer
-     * is per entry point (D100); a wudict:// caller may override it for this one
+     * is per entry point (D100); a dictshelf:// caller may override it for this one
      * call with `&full=`, and a reading app with ColorDict's EXTRA_FULLSCREEN.
      * PROCESS_TEXT and SEND carry neither.
      */
