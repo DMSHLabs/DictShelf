@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/indexconst"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 )
 
 // Browse result blocks share the bounded, on-disk result store used by

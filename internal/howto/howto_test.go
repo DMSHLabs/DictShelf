@@ -17,8 +17,8 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/format/wmd"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/format/wmd"
 )
 
 type article struct {

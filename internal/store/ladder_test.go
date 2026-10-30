@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/ftsq"
+	"github.com/DMSHLabs/DictShelf/internal/ftsq"
 )
 
 // run walks the relaxation ladder the way internal/search does and reports the

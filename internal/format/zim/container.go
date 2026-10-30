@@ -58,7 +58,7 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/ulikunitz/xz"
-	"github.com/wuweidict/wudict/internal/resource"
+	"github.com/DMSHLabs/DictShelf/internal/resource"
 )
 
 const (

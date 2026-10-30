@@ -36,7 +36,7 @@ done
 
 cat "$head" > "$tmp"
 
-sort -u "$tmp.mods" | grep -v '^github.com/wuweidict/wudict	' | grep -v '^	' |
+sort -u "$tmp.mods" | grep -v '^github.com/DMSHLabs/DictShelf	' | grep -v '^	' |
 while IFS='	' read -r path version dir; do
   [ -n "$dir" ] || continue
   lic=""

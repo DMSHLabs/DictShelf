@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // Removing a prepared dictionary (D63). The file manager is no answer on

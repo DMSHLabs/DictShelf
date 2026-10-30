@@ -15,15 +15,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 
-	_ "github.com/wuweidict/wudict/internal/format/bgl"
-	_ "github.com/wuweidict/wudict/internal/format/dsl"
-	_ "github.com/wuweidict/wudict/internal/format/mdx"
-	_ "github.com/wuweidict/wudict/internal/format/slob"
-	_ "github.com/wuweidict/wudict/internal/format/stardict"
-	_ "github.com/wuweidict/wudict/internal/format/wmd"
-	_ "github.com/wuweidict/wudict/internal/format/zim"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/bgl"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/dsl"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/mdx"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/slob"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/stardict"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/wmd"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/zim"
 )
 
 func TestCorruptDictionariesErrorCleanly(t *testing.T) {

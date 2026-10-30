@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // preparedDSL opens the test server's DSL dictionary, which prepares it (DSL

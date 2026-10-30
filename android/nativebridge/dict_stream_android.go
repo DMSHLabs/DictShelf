@@ -15,7 +15,7 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/wuweidict/wudict/internal/server"
+	"github.com/DMSHLabs/DictShelf/internal/server"
 )
 
 type dictionaryStream struct {

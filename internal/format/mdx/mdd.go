@@ -13,9 +13,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	go_mdict "github.com/wuweidict/wudict/internal/gomdict"
-	"github.com/wuweidict/wudict/internal/resource"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	go_mdict "github.com/DMSHLabs/DictShelf/internal/gomdict"
+	"github.com/DMSHLabs/DictShelf/internal/resource"
 )
 
 // MDD is ONE .mdd file opened on its own.

@@ -27,9 +27,9 @@ import (
 	"golang.org/x/text/encoding/unicode/utf32"
 	"golang.org/x/text/transform"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/lang"
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/lang"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // Reader is the sequential ingest scan over a .dsl / .dsl.dz file.

@@ -15,9 +15,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/artmark"
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/artmark"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // Golden is the recorded result: the versions in force when Hash was taken,

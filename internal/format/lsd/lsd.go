@@ -15,9 +15,9 @@ import (
 	"sync"
 	"unicode/utf16"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/lang"
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/lang"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 const pageSize = 512

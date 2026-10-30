@@ -7,7 +7,7 @@ package server
 import (
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // The cases are whole ELEMENTS, not bare `href="…"` fragments: the rewriter

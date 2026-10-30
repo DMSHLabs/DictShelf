@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/indexconst"
-	"github.com/wuweidict/wudict/internal/logx"
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // The panel's Rebuild: bring every OUTDATED dictionary current, as one job the

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/indexconst"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 )
 
 func TestAutomaticPipelineCost(t *testing.T) {

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 func clearDatabaseReq(t *testing.T, s *Server, body string) {

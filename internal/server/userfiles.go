@@ -14,7 +14,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 )
 
 // The user's own file store: whatever they need their custom CSS - or their

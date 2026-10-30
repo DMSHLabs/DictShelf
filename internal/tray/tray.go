@@ -34,7 +34,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // errNoTray is what a platform returns when it has no tray to give. It is a

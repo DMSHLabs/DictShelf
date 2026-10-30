@@ -7,7 +7,7 @@ package zim
 import (
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/store/goldentest"
+	"github.com/DMSHLabs/DictShelf/internal/store/goldentest"
 )
 
 // The prepared content of this package's fixture, pinned. A failure here

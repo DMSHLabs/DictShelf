@@ -35,7 +35,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // kindOf is dict.ClassifyName, with a candidate - a name whose content

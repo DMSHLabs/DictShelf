@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/morph"
+	"github.com/DMSHLabs/DictShelf/internal/morph"
 )
 
 // morphServer builds a registry over one temp folder holding the named DSL

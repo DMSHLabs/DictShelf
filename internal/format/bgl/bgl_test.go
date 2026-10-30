@@ -17,8 +17,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 )
 
 // block encodes one BGL block using the 4-byte explicit-length header form

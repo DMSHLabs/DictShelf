@@ -18,8 +18,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/resource"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/resource"
 )
 
 // buildStarDict writes a synthetic dictionary: 3 idx entries (one

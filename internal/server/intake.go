@@ -18,9 +18,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/config"
-	"github.com/wuweidict/wudict/internal/intake"
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/config"
+	"github.com/DMSHLabs/DictShelf/internal/intake"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // Importing an archive. internal/intake does the work; this file is

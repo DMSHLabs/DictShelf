@@ -12,7 +12,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // maxScan caps the folded index of a folder. A dictionary's own media folder

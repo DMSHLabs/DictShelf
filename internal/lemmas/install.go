@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/wuweidict/wudict/internal/morph"
+	"github.com/DMSHLabs/DictShelf/internal/morph"
 )
 
 // Local is one lemma file already in LEMMA_DIR.

@@ -12,9 +12,9 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	gomdict "github.com/wuweidict/wudict/internal/gomdict"
-	"github.com/wuweidict/wudict/internal/resource"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	gomdict "github.com/DMSHLabs/DictShelf/internal/gomdict"
+	"github.com/DMSHLabs/DictShelf/internal/resource"
 )
 
 // Where an .mdx's media is, instead of what it is (O8).

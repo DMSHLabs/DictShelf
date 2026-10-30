@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/wuweidict/wudict/internal/htmlref"
+	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 	"golang.org/x/text/unicode/norm"
 )
 

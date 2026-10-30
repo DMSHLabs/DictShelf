@@ -31,8 +31,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/lang"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/lang"
 )
 
 // entryTypes are the block types carrying word/definition entries.

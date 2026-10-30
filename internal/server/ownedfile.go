@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/facet"
-	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/facet"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 )
 
 // ownedFile is one text file the user owns beside wudict.toml - groups.ini,

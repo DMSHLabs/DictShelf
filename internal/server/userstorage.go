@@ -17,8 +17,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/wuweidict/wudict/internal/fsx"
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 const (

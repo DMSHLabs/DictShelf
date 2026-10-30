@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // The server's long-running work - rebuilding outdated dictionaries, a lemma

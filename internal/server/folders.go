@@ -16,12 +16,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/config"
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/howto"
-	"github.com/wuweidict/wudict/internal/indexconst"
-	"github.com/wuweidict/wudict/internal/logx"
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/config"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/howto"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // ConfigInfo is what the panel's "Folders & configuration" section shows: the

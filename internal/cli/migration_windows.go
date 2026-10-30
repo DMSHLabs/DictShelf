@@ -19,9 +19,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/config"
-	"github.com/wuweidict/wudict/internal/server"
-	"github.com/wuweidict/wudict/internal/tray"
+	"github.com/DMSHLabs/DictShelf/internal/config"
+	"github.com/DMSHLabs/DictShelf/internal/server"
+	"github.com/DMSHLabs/DictShelf/internal/tray"
 )
 
 var windowsFreshDataRoot bool

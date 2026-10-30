@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 )
 
 // unpreparedEntry is one dictionary with no library index in an isolated

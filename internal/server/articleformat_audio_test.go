@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/htmlref"
+	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 )
 
 // DSL now emits pronunciation as a link (D81), but <object type="audio/…"> is

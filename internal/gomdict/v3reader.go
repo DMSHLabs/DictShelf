@@ -13,7 +13,7 @@ import (
 	"os"
 	"sort"
 
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // v3 block type tags (big-endian uint32 in the block directory).

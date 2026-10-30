@@ -1,8 +1,7 @@
 # Changelog
 
-Notable changes in **wuDict2**, the Android fork of
-[WuWeiDict](https://github.com/wuweidict/wudict), relative to the upstream
-version it was forked from. Fork release tags are prefixed `wudict2-`; one
+Notable changes in **DictShelf**, based on the WuWeiDict codebase. Release tags
+for this fork are prefixed `wudict2-`; one
 tagged line per release, newest first.
 
 ## wudict2-v0.11.1 — 2026-10-08

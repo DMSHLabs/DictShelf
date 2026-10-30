@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // ErrUnreadable marks an open failure decided by a file's bytes and the

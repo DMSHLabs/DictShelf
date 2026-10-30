@@ -9,7 +9,7 @@ package cli
 import (
 	"errors"
 
-	"github.com/wuweidict/wudict/internal/server"
+	"github.com/DMSHLabs/DictShelf/internal/server"
 )
 
 func acquireProcessLock() (func(), error) { return nil, nil }

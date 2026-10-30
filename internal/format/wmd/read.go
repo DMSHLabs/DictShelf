@@ -19,10 +19,10 @@ import (
 	gmhtml "github.com/yuin/goldmark/v2/renderer/html"
 	"github.com/yuin/goldmark/v2/text"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/htmlref"
-	"github.com/wuweidict/wudict/internal/lang"
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/htmlref"
+	"github.com/DMSHLabs/DictShelf/internal/lang"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // The reader (spec §3). A stock CommonMark parser with the GFM table

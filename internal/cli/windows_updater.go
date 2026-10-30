@@ -26,7 +26,7 @@ import (
 	"time"
 
 	webview "github.com/jchv/go-webview2"
-	"github.com/wuweidict/wudict/internal/tray"
+	"github.com/DMSHLabs/DictShelf/internal/tray"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )

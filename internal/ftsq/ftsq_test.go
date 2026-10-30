@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/hilite"
+	"github.com/DMSHLabs/DictShelf/internal/hilite"
 )
 
 func matches(rs []Rung) []string {

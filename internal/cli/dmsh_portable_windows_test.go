@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/config"
+	"github.com/DMSHLabs/DictShelf/internal/config"
 )
 
 func TestPortableConfigAllowsExternalDictionaries(t *testing.T) {

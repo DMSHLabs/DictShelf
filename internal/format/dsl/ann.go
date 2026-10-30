@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // A Lingvo dictionary may ship its editorial blurb in a "<stem>.ann" sidecar

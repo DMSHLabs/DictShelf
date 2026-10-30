@@ -16,8 +16,8 @@ import (
 	"strings"
 	"unicode/utf16"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 const headwordExportKey = "headword-export"

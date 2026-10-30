@@ -30,11 +30,11 @@ import (
 	"golang.org/x/text/encoding/traditionalchinese"
 	"golang.org/x/text/transform"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/fsx"
-	gomdict "github.com/wuweidict/wudict/internal/gomdict"
-	"github.com/wuweidict/wudict/internal/logx"
-	"github.com/wuweidict/wudict/internal/resource"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
+	gomdict "github.com/DMSHLabs/DictShelf/internal/gomdict"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/resource"
 )
 
 func init() {

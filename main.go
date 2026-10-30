@@ -5,9 +5,9 @@
 // Command wudict is WuWeiDict's entry point - the only one.
 //
 // Go names an installed binary after the last element of its package path, so
-// the module path github.com/wuweidict/wudict makes
+// the module path github.com/DMSHLabs/DictShelf makes
 //
-//	go install github.com/wuweidict/wudict@latest
+//	go install github.com/DMSHLabs/DictShelf@latest
 //
 // yield "wudict" directly, with no second shim package (D28). Everything the
 // program actually does lives in internal/cli.
@@ -16,7 +16,7 @@ package main
 import (
 	_ "embed"
 
-	"github.com/wuweidict/wudict/internal/cli"
+	"github.com/DMSHLabs/DictShelf/internal/cli"
 )
 
 // The notices travel INSIDE the binary (`wudict licenses`), because a release

@@ -7,7 +7,7 @@ package server
 import (
 	"runtime"
 
-	"github.com/wuweidict/wudict/internal/indexconst"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 )
 
 func defaultResultCacheLimitGB() int {

@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	_ "github.com/wuweidict/wudict/internal/format/wmd"
-	"github.com/wuweidict/wudict/internal/howto"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/wmd"
+	"github.com/DMSHLabs/DictShelf/internal/howto"
 )
 
 // TestBuiltinGuide: the wudict howto is listed under its fixed id beside the

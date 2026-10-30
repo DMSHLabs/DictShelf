@@ -30,9 +30,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/wuweidict/wudict/internal/facet"
-	"github.com/wuweidict/wudict/internal/fsx"
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/facet"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
 )

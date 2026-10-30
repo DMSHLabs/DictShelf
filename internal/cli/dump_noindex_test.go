@@ -13,8 +13,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/format/wmd"
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/format/wmd"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // TestDumpPreparesNothing: a dictionary that indexes itself when opened as a

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 )
 
 func TestSingleDSLIndexRemoval(t *testing.T) {

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/wuweidict/wudict/internal/format/wmd"
-	"github.com/wuweidict/wudict/internal/store"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/wmd"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 func waitNewDictionaryIndexing(t *testing.T, r *Registry) {

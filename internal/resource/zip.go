@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // Zip is a resource archive beside a dictionary: a DSL ".files.zip", a

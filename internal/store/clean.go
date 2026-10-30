@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 )
 
 // Leftover is one deletable item in the db dir: an incomplete or unreadable

@@ -21,12 +21,12 @@ import (
 	// The server package registers no formats - the CLI does. Without these a
 	// sweep over a real corpus would silently discover only the handful of
 	// formats some other test happens to have pulled in, and measure nothing.
-	_ "github.com/wuweidict/wudict/internal/format/bgl"
-	_ "github.com/wuweidict/wudict/internal/format/dsl"
-	_ "github.com/wuweidict/wudict/internal/format/mdx"
-	_ "github.com/wuweidict/wudict/internal/format/slob"
-	_ "github.com/wuweidict/wudict/internal/format/stardict"
-	_ "github.com/wuweidict/wudict/internal/format/zim"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/bgl"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/dsl"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/mdx"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/slob"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/stardict"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/zim"
 )
 
 // A soft memory limit has exactly one lever: collect harder. Set below what

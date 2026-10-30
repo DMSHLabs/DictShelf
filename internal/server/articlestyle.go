@@ -11,8 +11,8 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/htmlref"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 )
 
 // `clean` and `text` need to know which of a dictionary's classes are blocks

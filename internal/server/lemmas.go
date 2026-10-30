@@ -18,9 +18,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/lang"
-	"github.com/wuweidict/wudict/internal/lemmas"
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/lang"
+	"github.com/DMSHLabs/DictShelf/internal/lemmas"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // The lemma installer over HTTP (D91). `wudict lemmas` (D88) answers this for

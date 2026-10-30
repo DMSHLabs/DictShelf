@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // ErrTooManyEntries is an archive whose directory is larger than any bundle

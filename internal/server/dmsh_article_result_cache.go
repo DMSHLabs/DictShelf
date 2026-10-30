@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/ftsq"
-	"github.com/wuweidict/wudict/internal/htmlref"
-	"github.com/wuweidict/wudict/internal/indexconst"
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/ftsq"
+	"github.com/DMSHLabs/DictShelf/internal/htmlref"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 type articleIDSource interface {

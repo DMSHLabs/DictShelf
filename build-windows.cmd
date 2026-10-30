@@ -300,7 +300,7 @@ set "CGO_ENABLED=%CGO%"
 go build ^
   -trimpath ^
   -tags %GO_TAGS% ^
-  -ldflags "%WINDOW_LDFLAGS% -s -w -X github.com/wuweidict/wudict/internal/cli.Version=%VERSION% -X github.com/wuweidict/wudict/internal/cli.DefaultServe=%DEFAULT_SERVE%" ^
+  -ldflags "%WINDOW_LDFLAGS% -s -w -X github.com/DMSHLabs/DictShelf/internal/cli.Version=%VERSION% -X github.com/DMSHLabs/DictShelf/internal/cli.DefaultServe=%DEFAULT_SERVE%" ^
   -o "%OUTPUT_EXE%" ^
   .
 

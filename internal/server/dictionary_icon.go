@@ -19,11 +19,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	lsdformat "github.com/wuweidict/wudict/internal/format/lsd"
-	"github.com/wuweidict/wudict/internal/fsx"
-	"github.com/wuweidict/wudict/internal/logx"
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	lsdformat "github.com/DMSHLabs/DictShelf/internal/format/lsd"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 	_ "image/gif"
 	_ "image/jpeg"
 )

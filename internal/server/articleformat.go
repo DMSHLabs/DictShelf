@@ -9,12 +9,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/artmark"
+	"github.com/DMSHLabs/DictShelf/internal/artmark"
 
 	"golang.org/x/net/html"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/htmlref"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 )
 
 // Article formats for /api/search (D61). An article body is the dictionary's

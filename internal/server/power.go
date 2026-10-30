@@ -15,9 +15,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/wuweidict/wudict/internal/logx"
-	"github.com/wuweidict/wudict/internal/store"
-	"github.com/wuweidict/wudict/internal/sysmem"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/sysmem"
 )
 
 // Power is how much this process may spend right now. It exists because a

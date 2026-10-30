@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // joined presents consecutive split-ZIM files as one ReaderAt. ZIM structures

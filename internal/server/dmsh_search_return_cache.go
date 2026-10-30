@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/logx"
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 const (

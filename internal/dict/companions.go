@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 )
 
 // A dictionary is rarely one file. MDX carries its resources in a sibling

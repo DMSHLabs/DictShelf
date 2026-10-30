@@ -6,10 +6,10 @@ package server
 import (
 	"fmt"
 
-	"github.com/wuweidict/wudict/internal/config"
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/intake"
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/config"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/intake"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // ConfigureLibrary selects the prepared database and protects it from being

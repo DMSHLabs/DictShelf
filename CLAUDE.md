@@ -2,7 +2,7 @@
 
 # Local Git checkout: `D:\Projects\Android\DictShelf\`.
 
-**Naming (D27, amended 2026-09-28).** In anything a user reads, prefer **`wudict`** (lowercase; **wuDict** in the Android app and browser extensions); **WuWeiDict** is the official full name, used only where the official name is required. The technical name is **`wudict`** everywhere else — binary, env prefix (`WUDICT_*`), config dir (`~/.wudict`), db format prefix (`wudict:`), localStorage keys, CSS classes. The module path is `github.com/wuweidict/wudict` because the repo is `wudict`.
+**Naming (D27, amended 2026-09-28).** In anything a user reads, prefer **`wudict`** (lowercase; **wuDict** in the Android app and browser extensions); **WuWeiDict** is the official full name, used only where the official name is required. The technical name is **`wudict`** everywhere else — binary, env prefix (`WUDICT_*`), config dir (`~/.wudict`), db format prefix (`wudict:`), localStorage keys, CSS classes. The Go module path is `github.com/DMSHLabs/DictShelf`; the executable and internal package names remain `wudict`.
 
 Go web dictionary app supporting MDX/MDD, StarDict, Aard2 Slob, Lingvo DSL, Babylon BGL, openZIM; wudict markdown (`.wudict.md`: standard CommonMark, read by `internal/format/wmd` and written by `wudict dump -format md`). Web search uses a prepared library folder — `<db dir>/<name>/{text.db, media.db, info.txt}` (D20), with an optional `icon.cache` sidecar — or ZIM's validated native index. New non-ZIM dictionaries enter the background index queue when added; search never starts indexing and skips dictionaries whose prepared index is not ready. *Contains* builds headword trigram and token FTS together; *full-text* independently indexes articles. Both are per-dictionary switches, and media packing is a third (D24). Main search shares Browse's headword modes and keeps article full-text separate.
 
@@ -21,7 +21,7 @@ open as a note on *why* the code is the way it is, not as a missing file.
 
 ## Layout
 
-This repository is the whole project (`github.com/wuweidict/wudict`); there is no enclosing workspace.
+This repository is the whole project (`github.com/DMSHLabs/DictShelf`); there is no enclosing workspace.
 
 - `internal/cli` — the CLI and server entry point (all of it). One `package main` shim builds from it: `./main.go` at the module root → `wudict` (D28). The version stamp targets `internal/cli.Version`, not `main.version`.
 - `internal/dict` — core interfaces, format registry, discovery.

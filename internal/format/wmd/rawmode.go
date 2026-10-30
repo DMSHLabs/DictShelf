@@ -10,7 +10,7 @@ import (
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 
-	"github.com/wuweidict/wudict/internal/htmlref"
+	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 )
 
 // The `html` writer mode (spec R6.5): an article's HTML kept verbatim as one

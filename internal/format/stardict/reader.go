@@ -7,7 +7,7 @@ package stardict
 import (
 	"io"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // Reader is the sequential ingest scan: idx entries in order, with .syn

@@ -5,8 +5,9 @@ description: DictShelf for Android - the two builds, adding dictionaries, lookin
 
 # Android app
 
-DictShelf is an Android fork of [WuWeiDict](https://github.com/wuweidict/wudict)
-with a separate application ID, `com.dmshlabs.dictshelf`.
+DictShelf is based on WuWeiDict and is maintained in the
+[DictShelf repository](https://github.com/DMSHLabs/DictShelf), with a separate
+application ID, `com.dmshlabs.dictshelf`.
 
 DictShelf searches `.mdx`, `.ifo`, `.slob`, `.dsl`, `.bgl`, `.zim` and `.wudict.md`
 dictionaries on the phone. The app runs the wudict server on the phone's

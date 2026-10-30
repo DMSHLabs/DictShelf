@@ -36,7 +36,7 @@ For problems, see [Troubleshooting](troubleshooting.md).
     Yes. wudict is free software under the GNU General Public License,
     version 3 or later. You can use, change and redistribute it under that
     licence. The source code is on
-    [GitHub](https://github.com/wuweidict/wudict). See [Licence](license.md).
+    [GitHub](https://github.com/DMSHLabs/DictShelf). See [Licence](license.md).
 
     The licence applies to wudict only. Each dictionary has its own licence.
 
@@ -281,7 +281,7 @@ For problems, see [Troubleshooting](troubleshooting.md).
     3.  Get the source code and build wudict:
 
         ``` sh
-        git clone https://github.com/wuweidict/wudict
+        git clone https://github.com/DMSHLabs/DictShelf
         cd wudict
         make build                            # cgo: fast SQLite, built-in Speex decoder
         install -m 755 wudict $PREFIX/bin/

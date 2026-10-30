@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // Finding the other half of a dictionary that was offered as several links.

@@ -14,7 +14,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/wuweidict/wudict/internal/facet"
+	"github.com/DMSHLabs/DictShelf/internal/facet"
 )
 
 // The dictionary picker's groups after language and language pair come from

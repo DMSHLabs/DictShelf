@@ -7,7 +7,7 @@ package store
 import (
 	"time"
 
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // ReportPrepared prints index outcome details, including counts, duration and

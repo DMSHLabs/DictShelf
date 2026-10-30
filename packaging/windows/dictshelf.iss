@@ -39,9 +39,9 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 VersionInfoVersion={#NumVersion}
 AppPublisher=DMSH Labs
-AppPublisherURL=https://github.com/DmShAl/wudict2
-AppSupportURL=https://github.com/DmShAl/wudict2/issues
-AppUpdatesURL=https://github.com/DmShAl/wudict2/releases
+AppPublisherURL=https://github.com/DMSHLabs/DictShelf
+AppSupportURL=https://github.com/DMSHLabs/DictShelf/issues
+AppUpdatesURL=https://github.com/DMSHLabs/DictShelf/releases
 
 ; Both install modes, all users first. PrivilegesRequired is where the mode
 ; dialog starts, so admin here makes "Install for all users" the preselected

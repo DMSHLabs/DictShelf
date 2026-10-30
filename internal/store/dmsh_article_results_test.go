@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 func TestStreamArticleIDsKeepsBoundedBatchesAndArticleOrder(t *testing.T) {

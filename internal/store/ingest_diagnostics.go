@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"sync/atomic"
 
-	"github.com/wuweidict/wudict/internal/indexconst"
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 type ingestParallelismPolicy struct {

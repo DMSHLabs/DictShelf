@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 type oneEntryReader struct {

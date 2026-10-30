@@ -11,7 +11,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // entryState reads the parts of an entry a rescan is supposed to re-derive.

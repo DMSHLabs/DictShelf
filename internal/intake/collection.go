@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // Collections: one link that names several dictionaries.

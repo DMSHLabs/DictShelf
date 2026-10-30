@@ -25,7 +25,7 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 )
 
 const (

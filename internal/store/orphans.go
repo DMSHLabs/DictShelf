@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // Orphaned prepared dictionaries (D156).

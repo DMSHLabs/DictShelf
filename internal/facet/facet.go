@@ -36,8 +36,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/lang"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/lang"
 )
 
 // Group is one (facet, value) membership, carrying its own labels so the

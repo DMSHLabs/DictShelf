@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/facet"
+	"github.com/DMSHLabs/DictShelf/internal/facet"
 )
 
 type groupsResp struct {

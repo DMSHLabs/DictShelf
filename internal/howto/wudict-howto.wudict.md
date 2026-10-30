@@ -20,7 +20,7 @@ Type `wudict help` in the search box for quick access, and [browse](/browse?dict
 - [Add local existing dictionaria](/setup)
 - Add/remove [morphology files](/lemmas)
 - Explore the [dictionary panel <kbd>☰</kbd>](<entry://wudict panel>)
-- Discover [wudict markdown](<entry://wudict markdown>) (this howto is written in [↗ it](https://github.com/wuweidict/wudict/blob/master/internal/howto/wudict-howto.wudict.md))
+- Discover [wudict markdown](<entry://wudict markdown>) (this howto is written in [↗ it](https://github.com/DMSHLabs/DictShelf/blob/dev/internal/howto/wudict-howto.wudict.md))
 
 > *wudict features*
 
@@ -389,7 +389,7 @@ To exclude a dictionary from *All dictionaries* searches, just untick its checkm
 
 ***
 
-- [↗ wudict markdown specification](https://github.com/wuweidict/wudict/blob/master/docs/WUDICT-MARKDOWN.md)
+- [↗ wudict markdown specification](https://github.com/DMSHLabs/DictShelf/blob/dev/docs/WUDICT-MARKDOWN.md)
 - [index](/browse?dict=wudict-howto)
 
 ```markdown
@@ -454,7 +454,7 @@ For English language dictionaries the `en-en` prefix is optional, since wudict w
 <details>
 <summary>What is the format used for this dictionary and where can I see its source code?</summary>
 
-The wudict howto dictionary uses **wudict markdown** format, and you can build your own markdown dictionary using the example source at [↗ wudict-howto.wudict.md](https://github.com/wuweidict/wudict/blob/master/internal/howto/wudict-howto.wudict.md)
+The wudict howto dictionary uses **wudict markdown** format, and you can build your own markdown dictionary using the example source at [↗ wudict-howto.wudict.md](https://github.com/DMSHLabs/DictShelf/blob/dev/internal/howto/wudict-howto.wudict.md)
 
 also see [<strong>`wudict markdown`</strong>](<entry://wudict markdown>)
 

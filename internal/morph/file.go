@@ -15,7 +15,7 @@ import (
 
 	"github.com/aaaton/golem/v4"
 
-	"github.com/wuweidict/wudict/internal/lang"
+	"github.com/DMSHLabs/DictShelf/internal/lang"
 )
 
 // Lemma data from a folder (LEMMA_DIR, D87).

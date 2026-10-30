@@ -11,7 +11,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 )
 
 // hashSuffix matches the content hash the pre-folder layout appended to a

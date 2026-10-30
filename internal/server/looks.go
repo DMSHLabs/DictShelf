@@ -15,7 +15,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // Saved appearances: one name for everything the Appearance sheet owns.

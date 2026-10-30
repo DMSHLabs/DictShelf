@@ -9,8 +9,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 )
 
 // A prepared dictionary is frozen output of the code that built it. When that

@@ -122,7 +122,7 @@ Everything the app produces is on your device.
 DictShelf is free software under the GPL-3.0-or-later. The source is public, so
 every statement on this page can be checked.
 
-- Source: [github.com/wuweidict/wudict](https://github.com/wuweidict/wudict)
+- Source: [github.com/DMSHLabs/DictShelf](https://github.com/DMSHLabs/DictShelf)
 
 ## Changes to this policy
 
@@ -134,4 +134,4 @@ collects would arrive with an app update.
 
 Questions about this policy:
 
-- [Open an issue](https://github.com/wuweidict/wudict/issues)
+- [Open an issue](https://github.com/DMSHLabs/DictShelf/issues)

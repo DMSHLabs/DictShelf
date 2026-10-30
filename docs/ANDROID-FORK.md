@@ -1,14 +1,13 @@
 # DictShelf Android identity
 
-DictShelf is an Android fork of [WuWeiDict](https://github.com/wuweidict/wudict).
+DictShelf is based on WuWeiDict and is maintained in the [DictShelf repository](https://github.com/DMSHLabs/DictShelf).
 The upstream copyright notices and GPL-3.0-or-later license remain in place.
-The fork's repository on GitHub is [DmShAl/wudict2](https://github.com/DmShAl/wudict2)
-(renamed from `DmShAl/wudict` on 2026-09-20; the old URL redirects).
+The repository on GitHub is [DMSHLabs/DictShelf](https://github.com/DMSHLabs/DictShelf).
 DictShelf is a separate Android application. Its application ID, Java package,
 and Gradle namespace are `com.dmshlabs.dictshelf`; a small activity in the
 `com.dmshlabs.dictshelf.lookup` package provides the external-reader lookup
-component. The Go module path and internal `wudict` APIs remain compatible with
-upstream.
+component. The Go module path is `github.com/DMSHLabs/DictShelf`; internal
+package names retain `wudict` where that is part of the code API.
 
 | Build | Application ID | Launcher name | Lookup activity |
 | --- | --- | --- | --- |

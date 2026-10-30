@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/resource"
+	"github.com/DMSHLabs/DictShelf/internal/resource"
 )
 
 func TestLinkSibling(t *testing.T) {

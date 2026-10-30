@@ -16,7 +16,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // Built-in style presets as toggleable layers, replacing the old Examples

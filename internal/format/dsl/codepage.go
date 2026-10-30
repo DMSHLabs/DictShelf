@@ -13,7 +13,7 @@ import (
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/japanese"
 
-	"github.com/wuweidict/wudict/internal/lang"
+	"github.com/DMSHLabs/DictShelf/internal/lang"
 )
 
 // Not every Lingvo export is Unicode. The compiler wrote UTF-16LE from Lingvo
