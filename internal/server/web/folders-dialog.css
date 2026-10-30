@@ -37,6 +37,14 @@ html[data-shell-image] .folders-dialog-scroll::-webkit-scrollbar-thumb{backgroun
 html[data-shell-image] .folders-dialog-scroll::-webkit-scrollbar-thumb:hover{background-color:rgba(90,65,35,.76)}
 .folders-dialog-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;
   margin-right:-1em;padding:.2em 1em .8em 0}
+.folders-dialog-scroll .setup-tabs{display:flex;border-bottom:1px solid var(--line);margin:.2em 0 1em}
+.folders-dialog-scroll .setup-tab{flex:1 1 0;min-width:0;min-height:calc(var(--ui-edit_control-height) * 1.5rem);
+  margin:0;padding:.55em .35em .45em;border:0;border-bottom:2px solid transparent;border-radius:0;
+  background:transparent;color:var(--label-quiet);font-size:calc(var(--ui-edit_control-font) * 1rem);
+  line-height:1.25;white-space:normal}
+.folders-dialog-scroll .setup-tab[aria-selected="true"]{border-bottom-color:var(--accent);color:var(--accent);font-weight:600}
+.folders-dialog-scroll .setup-tab:disabled{opacity:.45}
+.folders-dialog-scroll .setup-tab:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .folders-dialog-scroll h2{font-size:calc(var(--ui-font-section) * 1rem);margin:.65em 0 .3em}
 .folders-dialog-scroll>p,.folders-dialog-scroll #indexDefaults>p,.folders-dialog-scroll #addSection>p,
 .folders-dialog-scroll #origin,.folders-dialog-scroll #cfgProblems{font-size:calc(var(--ui-font-addition) * 1rem)}

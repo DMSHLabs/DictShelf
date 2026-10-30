@@ -121,7 +121,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{T:pages.folders}}</title>
+<title>{{T:pages.setupTitle}}</title>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="stylesheet" href="/assets/setup.css?v={{CSS}}">
 <link rel="stylesheet" href="/assets/checkbox.css?v={{CHECKBOXCSS}}">
@@ -167,6 +167,14 @@ html[data-shell-tone="dark"] {
 /* Page-specific only; the palette, card, buttons and typography come from
    /assets/setup.css, which lemmas.html shares. */
 .frow{display:flex;align-items:center;gap:.4em}
+.setup-tabs{display:flex;border-bottom:1px solid var(--line);margin:.7em 0 1em}
+.setup-tab{flex:1 1 0;min-width:0;min-height:calc(var(--ui-edit_control-height) * 1.5rem);
+  margin:0;padding:.55em .35em .45em;border:0;border-bottom:2px solid transparent;border-radius:0;
+  background:transparent;color:var(--label-quiet);font-size:calc(var(--ui-edit_control-font) * 1rem);
+  line-height:1.25;white-space:normal}
+.setup-tab[aria-selected="true"]{border-bottom-color:var(--accent);color:var(--accent);font-weight:600}
+.setup-tab:disabled{opacity:.45}
+.setup-tab:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .dsl-default-row{display:flex;flex-wrap:wrap;align-items:center;gap:.5em 1em;margin:.6em 0}
 .dsl-default-row>span{flex:0 0 auto;min-width:9em;white-space:nowrap}
 .dsl-default-row>div{display:flex;flex-wrap:wrap;gap:.5em 1em}
@@ -333,11 +341,18 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
      A first run has nothing behind it — the server sends an empty registry
      straight here, so this page IS the app — and the ✕ is hidden for it. -->
 <div class="top">
-<h1>{{T:pages.folders}}</h1>
+<h1>{{T:pages.setupTitle}}</h1>
 <button type="button" class="x" id="closePage" aria-label="{{T:pages.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
 </div>
 <div class="card-scroll workspace-scroll">
 <p>{{INTRO}}</p>
+
+<div class="setup-tabs" role="tablist" aria-label="{{T:pages.setupTabs}}">
+  <button type="button" id="foldersTab" class="setup-tab" role="tab" aria-controls="foldersPanel" aria-selected="true">{{T:pages.point}}</button>
+  <button type="button" id="downloadTab" class="setup-tab" role="tab" aria-controls="downloadPanel" aria-selected="false" tabindex="-1" disabled>{{T:pages.downloadDictionary}}</button>
+</div>
+
+<section id="foldersPanel" class="setup-panel" role="tabpanel" aria-labelledby="foldersTab">
 
 <section id="indexDefaults">
   <p>{{T:pages.indexDefaultsHint}}</p>
@@ -349,12 +364,19 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
   <p id="indexDefaultsError" class="err" role="alert" hidden></p>
 </section>
 
-<h2>{{T:pages.point}}</h2>
 <p>{{T:pages.folderHint}}</p>
 <div id="rows"></div>
 <button type="button" id="addRow" class="link">{{T:pages.addFolder}}</button>
 <div id="origin" class="warn hidden"></div>
 <div id="cfgProblems" class="warn hidden"></div>
+
+<hr class="sep">
+<div id="msg"></div>
+<button id="save" disabled>{{T:pages.useFolder}}</button>
+<p class="formats">{{T:pages.supported}}</p>
+</section>
+
+<section id="downloadPanel" class="setup-panel hidden" role="tabpanel" aria-labelledby="downloadTab" hidden>
 
 <div id="addSection" class="hidden">
   <hr class="sep">
@@ -388,14 +410,10 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
      {{T:pages.howtoCopyHint}}</p>
 </div>
 
-<hr class="sep">
-<div id="msg"></div>
-<button id="save" disabled>{{T:pages.useFolder}}</button>
-
 <!-- Shown only after the user removed the built-in guide (D154 Am. 5). -->
 <p class="formats hidden" id="howtoBackRow"><a href="#" id="howtoBack">{{T:pages.restoreHowto}}</a>
    {{T:pages.restoreHint}}</p>
-<p class="formats">{{T:pages.supported}}</p>
+</section>
 </div>
 </div>
 <script src="/assets/setup.js?v={{SETUPJS}}"></script>
