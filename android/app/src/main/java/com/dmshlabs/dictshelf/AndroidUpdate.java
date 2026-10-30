@@ -12,6 +12,7 @@ import android.content.IntentFilter;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.provider.Settings;
 
 import org.json.JSONObject;
 
@@ -26,6 +27,7 @@ final class AndroidUpdate {
     private static final String KEY_SHA = "download_sha256";
     private static final String KEY_VERSION = "download_version";
     private static final String KEY_VERIFIED = "download_verified";
+    private static final String KEY_PENDING_INSTALL = "pending_install_permission";
     private BroadcastReceiver receiver;
 
     AndroidUpdate() {}
@@ -40,6 +42,7 @@ final class AndroidUpdate {
             case "download": return start(activity, payload);
             case "status": return status(activity, request);
             case "install": return install(activity, request);
+            case "permission": return openInstallPermissionSettings(activity);
             default: throw new IllegalArgumentException("Unknown Android update action");
         }
     }
@@ -153,6 +156,42 @@ final class AndroidUpdate {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
         activity.startActivity(install);
         return new JSONObject().put("ok", true);
+    }
+
+    private static JSONObject openInstallPermissionSettings(Activity activity) throws Exception {
+        if (Build.VERSION.SDK_INT < 26 || activity.getPackageManager().canRequestPackageInstalls())
+            return new JSONObject().put("ok", true);
+        android.content.SharedPreferences prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        prefs.edit().putBoolean(KEY_PENDING_INSTALL, true).apply();
+        Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:" + activity.getPackageName()));
+        try {
+            activity.startActivity(settings);
+            return new JSONObject().put("ok", true);
+        } catch (Exception error) {
+            prefs.edit().putBoolean(KEY_PENDING_INSTALL, false).apply();
+            throw error;
+        }
+    }
+
+    void onResume(MainActivity activity) {
+        if (!available()) return;
+        android.content.SharedPreferences prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        if (!prefs.getBoolean(KEY_PENDING_INSTALL, false)) return;
+        prefs.edit().putBoolean(KEY_PENDING_INSTALL, false).apply();
+        if (Build.VERSION.SDK_INT >= 26
+                && !activity.getPackageManager().canRequestPackageInstalls()) {
+            activity.notifyAndroidInstallPermissionMissing();
+            return;
+        }
+        try {
+            JSONObject result = install(activity, new JSONObject().put("action", "install"));
+            if (result.has("error")) activity.notifyAndroidUpdateFailed();
+            else activity.notifyAndroidInstallStarted();
+        } catch (Exception error) {
+            SystemLog.warn("update", "could not install Android update after permission", error);
+            activity.notifyAndroidUpdateFailed();
+        }
     }
 
     private static String expectedSha256(JSONObject request) throws Exception {

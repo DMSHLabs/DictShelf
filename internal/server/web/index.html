@@ -1056,6 +1056,12 @@ window.wudictFontScale=(function(){
   <div class="system-log-saved-actions"><button type="button" class="btn" id="updateInstallCancel" autofocus>{{T:panel.cancel}}</button><button type="button" class="btn" id="updateInstallConfirm">{{T:system.installUpdate}}</button></div>
 </dialog>
 
+<dialog id="updatePermissionDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="updatePermissionTitle" aria-describedby="updatePermissionText">
+  <h2 id="updatePermissionTitle">{{T:system.updateAndroidPermissionTitle}}</h2>
+  <p id="updatePermissionText">{{T:system.updateAndroidPermissionText}}</p>
+  <div class="system-log-saved-actions"><button type="button" class="btn" id="updatePermissionClose" autofocus>{{T:panel.close}}</button><button type="button" class="btn" id="updatePermissionSettings">{{T:system.updateAndroidOpenSettings}}</button></div>
+</dialog>
+
 <dialog id="updateInstalledDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="updateInstalledTitle" aria-describedby="updateInstalledText">
   <h2 id="updateInstalledTitle">{{T:system.updateInstalledTitle}}</h2>
   <p id="updateInstalledText"></p>
@@ -5043,10 +5049,15 @@ function renderUpdateNotice(){
     const versionLink=document.createElement("a");versionLink.href=updateAvailable.url;versionLink.target="_blank";versionLink.rel="noopener";
     versionLink.textContent=tx("system.updateAvailable",{version:updateAvailable.version});versionLink.title=tx("system.viewRelease");
     versionLink.addEventListener("click",()=>setTimeout(clearUpdateAvailable,0));note.append(versionLink);
-    if(downloading){const progress=document.createElement("span");progress.className="update-download-progress";
-      progress.textContent=updateDownloadProgress>=0?tx("system.updateDownloadProgress",{percent:updateDownloadProgress}):tx("system.updateDownloading");
-      note.append(document.createElement("br"),progress)}
   }else if(showMessage){note.textContent=updateStatusMessage}
+  if(downloading){
+    const progress=document.createElement("span");progress.className="update-download-progress";
+    progress.textContent=updateDownloadProgress>=0?tx("system.updateDownloadProgress",{percent:updateDownloadProgress}):tx("system.updateDownloading");
+    const bar=document.createElement("progress");bar.className="update-download-bar";
+    if(updateDownloadProgress>=0)bar.value=updateDownloadProgress;else bar.removeAttribute("value");
+    bar.max=100;bar.setAttribute("aria-label",progress.textContent);
+    note.append(document.createElement("br"),progress,bar);
+  }
   action.disabled=updateStarting||updateDownloadPending||updateInstalling||!!updateAvailable&&!canDownload;
   action.textContent=updateStarting?tx(updateActionPhase==="download"?"system.updateDownloading":"system.updatePreparing"):
     updateDownloadPending?tx("system.updateDownloading"):
@@ -5105,6 +5116,10 @@ function showUpdateInstallConfirmation(){
   const dialog=$("updateInstallDialog");
   if(!dialog.open)dialog.showModal();
 }
+function showAndroidUpdatePermissionDialog(){
+  const dialog=$("updatePermissionDialog");
+  if(!dialog.open)dialog.showModal();
+}
 const updateInstallPendingKey="dictshelf_update_install_pending";
 function rememberPendingUpdateInstall(version){try{localStorage.setItem(updateInstallPendingKey,version)}catch(_){}}
 function clearPendingUpdateInstall(){try{localStorage.removeItem(updateInstallPendingKey)}catch(_){}}
@@ -5120,6 +5135,18 @@ $("updateInstalledClose").addEventListener("click",()=>$("updateInstalledDialog"
 $("updateInstallConfirm").addEventListener("click",()=>{
   $("updateInstallDialog").close();
   installUpdate();
+});
+$("updatePermissionClose").addEventListener("click",()=>$("updatePermissionDialog").close());
+$("updatePermissionSettings").addEventListener("click",()=>{
+  try{
+    const raw=window.prompt("wudict:android-update",JSON.stringify({action:"permission"}));
+    const result=raw?JSON.parse(raw):{error:"Android settings could not be opened"};
+    if(result.error)throw new Error(result.error);
+    $("updatePermissionDialog").close();
+  }catch(error){
+    updateStatusMessage=tx("system.updateStartFailed",{error:window.wudictI18n.errorText(error.message)});
+    updateManualResult=true;renderUpdateNotice();
+  }
 });
 $("updateInstallCancel").addEventListener("click",()=>$("updateInstallDialog").close());
 function clearUpdateAvailable(){
@@ -5269,7 +5296,7 @@ async function installUpdate(){
       const answer=window.prompt("wudict:android-update",JSON.stringify({action:"install",version:updateAvailable.version,androidApks:updateAvailable.androidApks||{}}));
       if(!answer)throw new Error("Android update was not started");
       const result=JSON.parse(answer);
-      if(result.permission){clearPendingUpdateInstall();updateStarting=false;updateActionPhase="";updateStatusMessage=tx("system.updateAndroidPermission");updateManualResult=true;renderUpdateNotice();return}
+      if(result.permission){updateStarting=false;updateActionPhase="";showAndroidUpdatePermissionDialog();return}
       if(result.error)throw new Error(result.error);
       updateStarting=false;updateInstalling=false;updateDownloaded=true;updateStatusMessage=tx("system.updateAndroidInstallStarted");updateManualResult=true;renderUpdateNotice();
     }else if(window.wudictUpdateWindows){
@@ -5304,6 +5331,14 @@ window.wudictAndroidUpdateReady=function(version,sha256){
 window.wudictAndroidUpdateFailed=function(){
   pendingAndroidUpdateState={state:"failed"};updateDownloaded=false;downloadedUpdateVersion="";
   clearTimeout(androidUpdatePollTimer);androidUpdatePollTimer=null;updateStarting=false;updateDownloadPending=false;updateDownloadProgress=-1;updateActionPhase="";updateStatusMessage=tx("system.updateDownloadFailed");updateManualResult=true;renderUpdateNotice();
+};
+window.wudictAndroidInstallStarted=function(){
+  updateStarting=false;updateActionPhase="";updateInstalling=false;updateDownloaded=true;
+  updateStatusMessage=tx("system.updateAndroidInstallStarted");updateManualResult=true;renderUpdateNotice();
+};
+window.wudictAndroidInstallPermissionMissing=function(){
+  updateStarting=false;updateActionPhase="";updateStatusMessage="";
+  showAndroidUpdatePermissionDialog();
 };
 window.wudictUpdateProgress=function(percent){
   updateStarting=false;updateDownloadPending=true;

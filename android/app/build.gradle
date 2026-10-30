@@ -105,6 +105,8 @@ android {
         ndk {
             androidAbis.each { abiFilters it }
         }
+        // build-android.cmd normally leaves this Git-derived; an explicit
+        // -PversionCode is available for installing an older updater-test APK.
         versionCode(project.hasProperty('versionCode') ? project.property('versionCode') as int : gitCount())
         versionName(appVersion)
     }

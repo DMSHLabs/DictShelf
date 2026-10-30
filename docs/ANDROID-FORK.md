@@ -142,6 +142,25 @@ next release tag instead. To reproduce that exact version locally, set it
 before building, for example `set DICTSHELF_VERSION=dictshelf-v1.02.01` and then run
 `build-android.cmd release`.
 
+`DICTSHELF_VERSION` controls `versionName`; it does not change Android's
+`versionCode`, which normally remains derived from Git history. To test the
+in-app updater from a deliberately older build, set
+`DICTSHELF_VERSION_CODE` to a positive code below the downloaded release APK's
+code. For the current device test, the installed update APK has code `1113`,
+so use `1112` for the test build:
+
+```bat
+set "DICTSHELF_VERSION=dictshelf-v1.02.01"
+set "DICTSHELF_VERSION_CODE=1112"
+build-android.cmd release arm64-v8a
+adb install -d -r android\app\build\outputs\apk\foss\release\dictshelf-android-arm64-v8a-foss.apk
+```
+
+The explicit code is passed to Gradle only when `DICTSHELF_VERSION_CODE` is
+set. Clear it after the test (`set DICTSHELF_VERSION_CODE=`) so later builds
+return to the normal Git-derived code. The test APK must still use the same
+signing certificate as the installed app and the downloaded update.
+
 `build-android.cmd debug intel` cross-compiles the in-process Go library
 for x86_64 as well, and ships both ABIs in one debug APK
 (`dictshelf-android-arm64-v8a-x86_64-foss-debug.apk`), so it installs on an x86_64

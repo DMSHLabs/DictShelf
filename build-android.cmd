@@ -285,9 +285,22 @@ if defined CHANNEL_SPECIFIED (
     )
 )
 
+rem Normally Gradle derives versionCode from Git history. Override it only for
+rem testing an update from an older installed build to a newer release APK.
+set "VERSION_CODE_OVERRIDE="
+if defined DICTSHELF_VERSION_CODE (
+    set "VERSION_CODE_OVERRIDE=%DICTSHELF_VERSION_CODE%"
+    echo(%DICTSHELF_VERSION_CODE%| findstr /r /x "[1-9][0-9]*" >nul
+    if errorlevel 1 (
+        echo ERROR: DICTSHELF_VERSION_CODE must be a positive integer.
+        exit /b 1
+    )
+)
+
 call :print_version
 echo Update channel:
 echo   %CHANNEL%
+if defined VERSION_CODE_OVERRIDE echo Android versionCode override: %VERSION_CODE_OVERRIDE%
 echo.
 
 rem ------------------------------------------------------------
@@ -372,6 +385,7 @@ rem -PemuX86=1 is what makes build.gradle look at src/emuX86/jniLibs; without
 rem it that directory is invisible to every variant.
 set "GRADLE_EXTRA="
 set "GRADLE_EXTRA=-PversionName=%VERSION%"
+if defined VERSION_CODE_OVERRIDE set "GRADLE_EXTRA=%GRADLE_EXTRA% -PversionCode=%VERSION_CODE_OVERRIDE%"
 set "GRADLE_EXTRA=%GRADLE_EXTRA% -PandroidAbis=%ANDROID_ABIS% -PapkAbiName=%APK_ABI%"
 if defined EMU_X86 set "GRADLE_EXTRA=%GRADLE_EXTRA% -PemuX86=1"
 
@@ -544,6 +558,8 @@ echo   --channel release^|pre-release^|beta
 echo.
 echo Set DICTSHELF_VERSION before running to choose a version, for example:
 echo   set "DICTSHELF_VERSION=dictshelf-v1.02.01"
+echo For update-flow tests, optionally set DICTSHELF_VERSION_CODE below the downloaded APK's code:
+echo   set "DICTSHELF_VERSION_CODE=1112"
 echo   build-android.cmd release arm64-v8a
 echo.
 echo Without DICTSHELF_VERSION, the version is read from Git.

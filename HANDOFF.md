@@ -1,5 +1,23 @@
 # Agent handoff — current state
 
+Android Settings → Update now keeps the DownloadManager percentage visible
+even when update notifications are disabled, and shows a determinate or
+indeterminate progress bar under the status. The ☰ progress ring remains in
+place on Android and Windows. If Android install permission is missing, a
+localized dialog links to DictShelf's system permission page and offers manual
+installation from Downloads; returning with permission starts the package
+installer automatically. Based on `dev` at `f962f9e0`; Android and Windows UI
+runtime verification is pending. Device `Power_Armor_18T` reports installed
+versionCode 1116; the downloaded `1.02.15` APK has versionCode 1113. The APK's
+ZIP alignment and v2 signature verify, and its signing certificate matches the
+installed app, so the visible generic “invalid or damaged package” error is a
+version-code downgrade rejection. `build-android.cmd` now accepts
+`DICTSHELF_VERSION_CODE` for a lower-code updater test build; normal builds
+remain Git-derived. The exact `1112` / `1113` test recipe is in
+`docs/ANDROID-FORK.md`. DictShelf-owned update dialogs follow the
+selected paper colour and image; Android's package-installer and permission
+screens use the system appearance and cannot be themed by the app.
+
 The Windows taskbar icon refresh removes the visible window's taskbar button
 after a theme-driven icon change and adds it again 150 ms later on the UI thread.
 Rapid changes cancel earlier additions. A Windows Go build passes; live Explorer
