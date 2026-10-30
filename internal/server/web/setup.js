@@ -561,6 +561,7 @@ let intakeWired=false;
 function wireIntake(dir){
   if(!dir)return; // nowhere to install into yet: the folder above comes first
   $("addDir").textContent=dir;
+  $("downloadTab").disabled=false;
   $("addSection").classList.remove("hidden");
   if(intakeWired)return;
   intakeWired=true;
@@ -611,6 +612,33 @@ function wireIntake(dir){
 
 $("addRow").addEventListener("click",()=>{addRow("").focus()});
 $("save").addEventListener("click",save);
+
+function activateSetupTab(id,focus=false){
+  const tab=$(id);
+  if(!tab||tab.disabled)return;
+  const download=id==="downloadTab";
+  $("foldersTab").setAttribute("aria-selected",String(!download));
+  $("foldersTab").tabIndex=download?-1:0;
+  $("downloadTab").setAttribute("aria-selected",String(download));
+  $("downloadTab").tabIndex=download?0:-1;
+  $("foldersPanel").hidden=download;
+  $("foldersPanel").classList.toggle("hidden",download);
+  $("downloadPanel").hidden=!download;
+  $("downloadPanel").classList.toggle("hidden",!download);
+  if(focus)tab.focus();
+}
+for(const id of ["foldersTab","downloadTab"]){
+  $(id).addEventListener("click",()=>activateSetupTab(id));
+  $(id).addEventListener("keydown",event=>{
+    const tabs=["foldersTab","downloadTab"],available=tabs.filter(key=>!$(key).disabled);
+    let index=available.indexOf(id),next=null;
+    if(event.key==="ArrowRight")next=available[(index+1)%available.length];
+    else if(event.key==="ArrowLeft")next=available[(index+available.length-1)%available.length];
+    else if(event.key==="Home")next=available[0];
+    else if(event.key==="End")next=available[available.length-1];
+    if(next){event.preventDefault();activateSetupTab(next,true)}
+  });
+}
 
 /* Pre-fill with the folders in use: this page is also the folder EDITOR, not
    only the first-run chooser, so it must show what is configured now. When a

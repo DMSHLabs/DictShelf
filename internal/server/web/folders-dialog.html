@@ -5,10 +5,15 @@
 <dialog id="foldersDialog" lang="{{T:locale}}" class="group-dialog panel-card workspace-dialog folders-dialog" aria-labelledby="foldersDialogTitle">
   <div class="folders-dialog-shell">
     <div class="folders-dialog-top">
-      <h2 id="foldersDialogTitle">{{T:pages.folders}}</h2>
+      <h2 id="foldersDialogTitle">{{T:pages.setupTitle}}</h2>
       <button type="button" class="btn" id="closePage" aria-label="{{T:pages.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
     </div>
     <div class="folders-dialog-scroll">
+      <div class="setup-tabs" role="tablist" aria-label="{{T:pages.setupTabs}}">
+        <button type="button" id="foldersTab" class="setup-tab" role="tab" aria-controls="foldersPanel" aria-selected="true">{{T:pages.point}}</button>
+        <button type="button" id="downloadTab" class="setup-tab" role="tab" aria-controls="downloadPanel" aria-selected="false" tabindex="-1" disabled>{{T:pages.downloadDictionary}}</button>
+      </div>
+      <section id="foldersPanel" class="setup-panel" role="tabpanel" aria-labelledby="foldersTab">
       <section id="indexDefaults">
         <p>{{T:pages.indexDefaultsHint}}</p>
         <div class="dsl-default-row"><div>
@@ -18,12 +23,18 @@
         </div></div>
         <p id="indexDefaultsError" class="err" role="alert" hidden></p>
       </section>
-      <h2>{{T:pages.point}}</h2>
       <p>{{T:pages.folderHint}}</p>
       <div id="rows"></div>
       <button type="button" id="addRow" class="link">{{T:pages.addFolder}}</button>
       <div id="origin" class="warn hidden"></div>
       <div id="cfgProblems" class="warn hidden"></div>
+      <hr class="sep">
+      <div id="msg"></div>
+      <button type="button" class="btn" id="save" disabled>{{T:pages.useFolder}}</button>
+      <p class="formats">{{T:pages.supported}}</p>
+      </section>
+
+      <section id="downloadPanel" class="setup-panel hidden" role="tabpanel" aria-labelledby="downloadTab" hidden>
       <div id="addSection" class="hidden">
         <hr class="sep">
         <h2>{{T:pages.addDictionaries}}</h2>
@@ -47,11 +58,8 @@
         </div>
         <div id="impMsg"></div>
       </div>
-      <hr class="sep">
-      <div id="msg"></div>
-      <button type="button" class="btn" id="save" disabled>{{T:pages.useFolder}}</button>
       <p class="formats hidden" id="howtoBackRow"><a href="#" id="howtoBack">{{T:pages.restoreHowto}}</a> {{T:pages.restoreHint}}</p>
-      <p class="formats">{{T:pages.supported}}</p>
+      </section>
     </div>
   </div>
 </dialog>
