@@ -253,6 +253,7 @@ async function impGET(){
    the native bridge; browser and Android keep the streaming HTTP upload. */
 async function impSend(file){
   if(!file||impBusy)return;
+  const dir=importDestination();if(!dir)return;
   impBusy=true;
   impSay(tx("pages.reading",{name:file.name}));
   $("found").classList.add("hidden");
@@ -261,7 +262,7 @@ async function impSend(file){
     if(window.wudictAndroidGo)j=await impSendAndroidFile(file);
     else if(typeof nativeSetupCall==="function")j=await impSendNativeFile(file);
     else{
-      r=await browserHTTP("/api/intake?name="+encodeURIComponent(file.name),{method:"POST",body:file});
+      r=await browserHTTP("/api/intake?name="+encodeURIComponent(file.name)+"&dir="+encodeURIComponent(dir),{method:"POST",body:file});
       j=await r.json();
     }
   }catch(e){ impBusy=false; impSay(tx("pages.readFailed",{name:file.name}),"err"); return }
@@ -277,7 +278,7 @@ function intakeChunkBase64(buffer){
   return btoa(binary);
 }
 async function impSendNativeFile(file){
-  const started=await nativeSetupCall("intakeFileStart",JSON.stringify({name:file.name,size:file.size}));
+  const started=await nativeSetupCall("intakeFileStart",JSON.stringify({name:file.name,size:file.size,dir:importDestination()}));
   const id=started.id,chunkSize=4*1024*1024;
   try{
     for(let offset=0;offset<file.size;offset+=chunkSize){
@@ -293,7 +294,7 @@ async function impSendNativeFile(file){
 }
 
 async function impSendAndroidFile(file){
-  const started=androidIntakeCall("fileStart",JSON.stringify({name:file.name,size:file.size}));
+  const started=androidIntakeCall("fileStart",JSON.stringify({name:file.name,size:file.size,dir:importDestination()}));
   const id=started.id,chunkSize=4*1024*1024;
   try{
     for(let offset=0;offset<file.size;offset+=chunkSize){
@@ -310,11 +311,12 @@ async function impSendAndroidFile(file){
 
 async function impSendPath(path){
   if(!path||impBusy)return;
+  const dir=importDestination();if(!dir)return;
   impBusy=true;
   impSay(tx("pages.reading",{name:path.split(/[\\/]/).pop()}));
   $("found").classList.add("hidden");
   try{
-    const j=await nativeSetupCall("intakePath",path);
+    const j=await nativeSetupCall("intakePath",JSON.stringify({path,dir}));
     impBusy=false;
     if(j.error){impSay("✕ "+window.wudictI18n.errorText(j.error),"err");return}
     showCandidates(j);
@@ -329,14 +331,15 @@ async function impSendPath(path){
 async function impFetch(){
   const u=$("url").value.trim();
   if(!u||impBusy)return;
+  const dir=importDestination();if(!dir)return;
   impBusy=true;
   impSay(tx("pages.connecting"));
   $("found").classList.add("hidden");
   let r,j;
   try{
-    if(window.wudictAndroidGo)j=androidIntakeCall("url",u);
-    else if(typeof nativeSetupCall==="function")j=await nativeSetupCall("intakeURL",u);
-    else {r=await browserHTTP("/api/intake?url="+encodeURIComponent(u),{method:"POST"});j=await r.json()}
+    if(window.wudictAndroidGo)j=androidIntakeCall("url",JSON.stringify({url:u,dir}));
+    else if(typeof nativeSetupCall==="function")j=await nativeSetupCall("intakeURL",JSON.stringify({url:u,dir}));
+    else {r=await browserHTTP("/api/intake?url="+encodeURIComponent(u)+"&dir="+encodeURIComponent(dir),{method:"POST"});j=await r.json()}
   }catch(e){ impBusy=false; impSay("✕ "+(window.wudictI18n.errorText(e.message)||tx("pages.cannotOpenMark")),"err"); return }
   impBusy=false;
   if(r&&!r.ok||j.error){impSay("✕ "+(window.wudictI18n.errorText(j&&j.error)||tx("pages.cannotOpen")),"err");return}
@@ -458,14 +461,14 @@ async function impInstall(){
   if(!await saveIndexDefaults())return;
   const pick=[...foldersDialogRoot.querySelectorAll("#cands input:checked")].map(i=>+i.value);
   const extras=[...foldersDialogRoot.querySelectorAll("#extras input:checked")].map(i=>+i.value);
-  if(!pick.length)return;
+  const dir=importDestination();if(!dir||!pick.length)return;
   $("install").disabled=true;
   let r,j;
   try{
-    const body=JSON.stringify({pick:pick,keep:$("srcKeep").checked,extras:extras});
+    const body=JSON.stringify({pick:pick,keep:$("srcKeep").checked,extras:extras,dir});
     if(window.wudictAndroidGo)j=androidIntakeCall("confirm",body);
     else if(typeof nativeSetupCall==="function")j=await nativeSetupCall("intakeConfirm",body);
-    else {r=await browserHTTP("/api/intake?confirm=1",{method:"POST",
+    else {r=await browserHTTP("/api/intake?confirm=1&dir="+encodeURIComponent(dir),{method:"POST",
       headers:{"Content-Type":"application/json"},body});j=await r.json()}
   }catch(e){ impSay("✕ "+(window.wudictI18n.errorText(e.message)||tx("pages.cannotStartMark")),"err"); return }
   if(r&&!r.ok||j.error){impSay("✕ "+(window.wudictI18n.errorText(j&&j.error)||tx("pages.cannotStart")),"err");
@@ -558,13 +561,28 @@ async function howtoCopy(e){
 }
 
 let intakeWired=false;
+let importDirs=[];
+function importDestination(){
+  const value=$("importTarget").value.trim();
+  const norm=s=>s.replace(/[\\/]+$/g,"").toLocaleLowerCase();
+  const match=importDirs.find(dir=>norm(dir.path)===norm(value));
+  $("importTargetWarning").classList.toggle("hidden",!!match);
+  return match?.path||"";
+}
 function wireIntake(dir){
   if(!dir)return; // nowhere to install into yet: the folder above comes first
-  $("addDir").textContent=dir;
   $("downloadTab").disabled=false;
   $("addSection").classList.remove("hidden");
   if(intakeWired)return;
   intakeWired=true;
+  $("importTarget").addEventListener("input",importDestination);
+  $("importTargetPick").addEventListener("click",()=>{
+    if(typeof window.wudictPickFolder!=="function")return;
+    window.wudictPickFolder(path=>{
+      if(typeof path!=="string"||!path.trim())return;
+      $("importTarget").value=path.trim();importDestination();
+    }).catch(()=>{});
+  });
   $("choose").addEventListener("click",()=>{
     if(typeof nativeSetupCall==="function"&&typeof window.wudictPickArchive==="function"){
       window.wudictPickArchive(impSendPath);
@@ -673,10 +691,14 @@ async function start(cachedConfig=null){
     ? await nativeSetupCall("config") : await (await browserHTTP("/api/config")).json()}catch(_){}}
   if(migration&&migration.available&&!foldersDialogEmbedded)await showMigrationDialog(migration.forked);
   for(const [feature,suffix] of [["contains","Contains"],["fullText","FullText"]]){
-    $("newIndex"+suffix).checked=!!cfg?.indexDefaults?.[feature];
+    $("newIndex"+suffix).checked=cfg?.indexDefaults
+      ? !!cfg.indexDefaults[feature] : feature==="contains";
   }
   syncIndexDefaults();
   const dirs=(cfg&&cfg.roots||[]).map(r=>r.path);
+  importDirs=(cfg&&cfg.roots||[]);
+  $("importTarget").value="";
+  $("importTargetWarning").classList.remove("hidden");
   if(dirs.length)dirs.forEach(d=>addRow(d)); else addRow("");
   /* howtoRemoved is a fact about the host: it stays false while the builtin
      guide is not wired, so this row never appears - kept whole, like the

@@ -274,7 +274,7 @@ func TestSingleDSLRetiresLegacySelectionWithoutDictionaries(t *testing.T) {
 	if f, _ := p.data(); f.Version != prefsVersion || f.IndexDefaults == nil || !f.IndexDefaults.Index {
 		t.Fatalf("migrated state = %+v, want version %d with unified base index", f, prefsVersion)
 	}
-	if defaults := p.newIndexDefaults(); !defaults.Index || defaults.Contains || defaults.FullText {
+	if defaults := p.newIndexDefaults(); !defaults.Index || !defaults.Contains || defaults.FullText {
 		t.Fatalf("old variant defaults affected current indexes: %+v", defaults)
 	}
 }

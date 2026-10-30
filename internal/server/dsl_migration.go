@@ -80,7 +80,7 @@ func (r *Registry) migrateDSLPreferences(selected map[string]string) error {
 	if changed && f.IndexDefaults == nil {
 		// The single index is mandatory for new dictionaries. Old split
 		// Original/GD defaults do not choose contains or full-text for it.
-		defaults := indexOptions{Index: true}
+		defaults := indexOptions{Index: true, Contains: true}
 		f.IndexDefaults = &defaults
 	}
 	enhanced := map[string]bool{}

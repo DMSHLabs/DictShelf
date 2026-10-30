@@ -94,41 +94,46 @@ func (s *Server) intakeStatus(j intake.Job) intakeStatus {
 	return intakeStatus{Job: j, Dir: s.importDir(), Keep: s.keepPolicy()}
 }
 
+func (s *Server) intakeStatusAt(j intake.Job, dir string) intakeStatus {
+	return intakeStatus{Job: j, Dir: dir, Keep: s.keepPolicy()}
+}
+
 func (s *Server) desktopIntakeStatus() intakeStatus {
 	return s.intakeStatus(s.importer().Status())
 }
 
-func (s *Server) desktopIntakeURL(raw string) (intakeStatus, error) {
-	dest := s.importDir()
-	if dest == "" {
-		return intakeStatus{}, intake.ErrNoDestination
+func (s *Server) desktopIntakeURL(raw, requestedDir string) (intakeStatus, error) {
+	dest, err := s.resolveImportDir(requestedDir)
+	if err != nil {
+		return intakeStatus{}, err
 	}
 	job, err := s.importer().BeginURL(dest, strings.TrimSpace(raw), s.fetcher())
 	if err != nil {
 		return intakeStatus{}, err
 	}
-	return s.intakeStatus(job), nil
+	return s.intakeStatusAt(job, dest), nil
 }
 
-func (s *Server) desktopIntakePath(path string) (intakeStatus, error) {
-	if s.importDir() == "" {
-		return intakeStatus{}, intake.ErrNoDestination
+func (s *Server) desktopIntakePath(path, requestedDir string) (intakeStatus, error) {
+	dest, err := s.resolveImportDir(requestedDir)
+	if err != nil {
+		return intakeStatus{}, err
 	}
 	src, err := localSource(path)
 	if err != nil {
 		return intakeStatus{}, err
 	}
-	job, err := s.importer().Begin(s.importDir(), src)
+	job, err := s.importer().Begin(dest, src)
 	if err != nil {
 		return intakeStatus{}, err
 	}
-	return s.intakeStatus(job), nil
+	return s.intakeStatusAt(job, dest), nil
 }
 
-func (s *Server) desktopIntakeUploadStart(name string, size int64) (map[string]string, error) {
-	dest := s.importDir()
-	if dest == "" {
-		return nil, intake.ErrNoDestination
+func (s *Server) desktopIntakeUploadStart(name string, size int64, requestedDir string) (map[string]string, error) {
+	dest, err := s.resolveImportDir(requestedDir)
+	if err != nil {
+		return nil, err
 	}
 	name = filepath.Base(strings.TrimSpace(name))
 	if name == "" || name == "." || name == string(filepath.Separator) || size < 0 || size > maxIntakeUpload {
@@ -232,7 +237,7 @@ func (s *Server) desktopIntakeUploadFinish(id string) (intakeStatus, error) {
 	if err != nil {
 		return intakeStatus{}, err
 	}
-	return s.intakeStatus(job), nil
+	return s.intakeStatusAt(job, upload.dest), nil
 }
 
 func (s *Server) desktopIntakeUploadCancel(id string) error {
@@ -253,13 +258,17 @@ func (s *Server) desktopIntakeUploadCancel(id string) error {
 }
 
 func (s *Server) desktopIntakeConfirm(req intakeConfirmReq) (intakeStatus, error) {
-	job, err := s.importer().Confirm(s.importDir(), req.Pick, intake.Options{
+	dest, err := s.resolveImportDir(req.Dir)
+	if err != nil {
+		return intakeStatus{}, err
+	}
+	job, err := s.importer().Confirm(dest, req.Pick, intake.Options{
 		Keep: s.keepSource(req.Keep), Extras: req.Extras,
 	})
 	if err != nil {
 		return intakeStatus{}, err
 	}
-	return s.intakeStatus(job), nil
+	return s.intakeStatusAt(job, dest), nil
 }
 
 func (s *Server) desktopIntakeCancel(id string) intakeStatus {
@@ -276,6 +285,30 @@ func (s *Server) desktopIntakeCancel(id string) intakeStatus {
 // which is the one the setup page presents as the dictionary folder. Empty
 // when none is configured, which is the state a first-run server is in and the
 // reason Confirm can fail with nothing to refuse.
+func (s *Server) resolveImportDir(requested string) (string, error) {
+	requested = strings.TrimSpace(requested)
+	if requested == "" {
+		requested = s.importDir()
+		if requested == "" {
+			return "", intake.ErrNoDestination
+		}
+	}
+	abs, err := filepath.Abs(filepath.Clean(requested))
+	if err != nil {
+		return "", intake.ErrNoDestination
+	}
+	for _, configured := range s.reg.Dirs() {
+		root, err := filepath.Abs(filepath.Clean(configured))
+		if err == nil && root == abs {
+			info, err := os.Stat(root)
+			if err == nil && info.IsDir() {
+				return root, nil
+			}
+		}
+	}
+	return "", intake.ErrNoDestination
+}
+
 func (s *Server) importDir() string {
 	if dirs := s.reg.Dirs(); len(dirs) > 0 {
 		return dirs[0]
@@ -318,9 +351,9 @@ func (s *Server) handleIntake(w http.ResponseWriter, r *http.Request) {
 		s.intakeConfirm(w, r)
 		return
 	}
-	dest := s.importDir()
-	if dest == "" {
-		intakeErr(w, intake.ErrNoDestination)
+	dest, err := s.resolveImportDir(q.Get("dir"))
+	if err != nil {
+		intakeErr(w, err)
 		return
 	}
 
@@ -329,7 +362,7 @@ func (s *Server) handleIntake(w http.ResponseWriter, r *http.Request) {
 	// no networking of its own (D130). It answers at once and the download
 	// runs behind the same poll the extraction uses.
 	if u := strings.TrimSpace(q.Get("url")); u != "" {
-		j, err := s.desktopIntakeURL(u)
+		j, err := s.desktopIntakeURL(u, dest)
 		if err != nil {
 			intakeErr(w, err)
 			return
@@ -349,7 +382,7 @@ func (s *Server) handleIntake(w http.ResponseWriter, r *http.Request) {
 			intakeErr(w, err)
 			return
 		}
-		s.intakeBegin(w, src)
+		s.intakeBegin(w, src, dest)
 		return
 	}
 
@@ -371,7 +404,7 @@ func (s *Server) handleIntake(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusInternalServerError, "could not receive the file: %v", err)
 		return
 	}
-	s.intakeBegin(w, src)
+	s.intakeBegin(w, src, dest)
 }
 
 // localSource describes a file named by path, refusing anything that is not a
@@ -392,12 +425,12 @@ func localSource(p string) (intake.Source, error) {
 	return intake.Source{Path: abs, Name: filepath.Base(abs)}, nil
 }
 
-func (s *Server) intakeBegin(w http.ResponseWriter, src intake.Source) {
+func (s *Server) intakeBegin(w http.ResponseWriter, src intake.Source, dest string) {
 	// The destination is passed at Begin as well as at Confirm because the
 	// sniff result says which candidates the library already holds, and that
 	// belongs on the screen where the user chooses (D134). An unconfigured
 	// server passes "" and simply marks nothing.
-	j, err := s.importer().Begin(s.importDir(), src)
+	j, err := s.importer().Begin(dest, src)
 	if err != nil {
 		intakeErr(w, err)
 		return
@@ -409,8 +442,9 @@ func (s *Server) intakeBegin(w http.ResponseWriter, src intake.Source) {
 // their archive survives. Indexes rather than names, because two dictionaries
 // in one archive may be named the same in different folders.
 type intakeConfirmReq struct {
-	Pick []int `json:"pick"`
-	Keep *bool `json:"keep"`
+	Dir  string `json:"dir"`
+	Pick []int  `json:"pick"`
+	Keep *bool  `json:"keep"`
 	// Extras are indexes into the job's extras: companion files found beside a
 	// downloaded one, which are fetched only when the user says so.
 	Extras []int `json:"extras"`
@@ -422,6 +456,9 @@ func (s *Server) intakeConfirm(w http.ResponseWriter, r *http.Request) {
 		if !decodeJSON(w, r, &req, 1<<20) {
 			return
 		}
+	}
+	if req.Dir == "" {
+		req.Dir = r.URL.Query().Get("dir")
 	}
 	if len(req.Pick) == 0 {
 		// The query form, for a caller with no JSON to hand: ?pick=0,2

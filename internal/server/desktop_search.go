@@ -315,24 +315,39 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 	case "intakeStatus":
 		return s.desktopIntakeStatus(), nil
 	case "intakeURL":
-		if len(argument) > 4096 {
+		if len(argument) > 32768 {
 			return nil, errors.New("import link is too long")
 		}
-		return s.desktopIntakeURL(argument)
+		var request struct {
+			URL string `json:"url"`
+			Dir string `json:"dir"`
+		}
+		if json.Unmarshal([]byte(argument), &request) != nil {
+			return nil, errors.New("invalid import request")
+		}
+		return s.desktopIntakeURL(request.URL, request.Dir)
 	case "intakePath":
-		if len(argument) > 32768 {
+		if len(argument) > 65536 {
 			return nil, errors.New("archive path is too long")
 		}
-		return s.desktopIntakePath(argument)
+		var request struct {
+			Path string `json:"path"`
+			Dir  string `json:"dir"`
+		}
+		if json.Unmarshal([]byte(argument), &request) != nil {
+			return nil, errors.New("invalid import request")
+		}
+		return s.desktopIntakePath(request.Path, request.Dir)
 	case "intakeFileStart":
 		var request struct {
 			Name string `json:"name"`
 			Size int64  `json:"size"`
+			Dir  string `json:"dir"`
 		}
 		if len(argument) > 4096 || json.Unmarshal([]byte(argument), &request) != nil {
 			return nil, errors.New("invalid archive file")
 		}
-		return s.desktopIntakeUploadStart(request.Name, request.Size)
+		return s.desktopIntakeUploadStart(request.Name, request.Size, request.Dir)
 	case "intakeFileChunk":
 		return nil, s.desktopIntakeUploadChunk(argument)
 	case "intakeFileFinish":
