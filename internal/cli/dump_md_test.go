@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/format/wmd"
+	"github.com/DMSHLabs/DictShelf/internal/format/wmd"
 )
 
 // silence runs f with stdout and stderr discarded.

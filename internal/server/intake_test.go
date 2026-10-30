@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/config"
-	"github.com/wuweidict/wudict/internal/intake"
+	"github.com/DMSHLabs/DictShelf/internal/config"
+	"github.com/DMSHLabs/DictShelf/internal/intake"
 )
 
 // intakeServer is a server over an EMPTY dictionary folder: the state a user

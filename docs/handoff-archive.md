@@ -1541,7 +1541,7 @@ package `com.dmshepeta.wudict2`; apksigner: V2, CN=Dmitry Shepeta). Release
 created via API and the signed APK uploaded as
 `wudict2-android-arm64-foss.apk` (7,241,264 bytes; download URL verified
 200 with matching length):
-https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.1.0
+https://github.com/DMSHLabs/DictShelf/releases/tag/wudict2-v0.1.0
 Fork-tag convention going forward: prefix release tags with `wudict2-…` so
 upstream's `vX.Y.Z` tags never clash when syncing `master`.
 
@@ -1577,7 +1577,7 @@ downloaded back and hashed against the local build — identical, 7,482,501
 bytes,
 sha256 `a5788eea6c102e8cd923177bb35c4c03fcdc5d1842fdc2cf3b6bd3f94126c45e`.
 The published body is byte-identical to CHANGELOG.md's v0.2.0 section.
-https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.2.0
+https://github.com/DMSHLabs/DictShelf/releases/tag/wudict2-v0.2.0
 
 Tooling facts that cost time here and will again:
 
@@ -1616,7 +1616,7 @@ signer certificate is the one v0.1.0 and v0.2.0 already carry
 (`b7ddc95d…`, CN=Dmitry Shepeta) with 376 > 371 > 291, so an installed v0.1.0
 or v0.2.0 updates in place, and the published body is byte-identical to
 CHANGELOG.md's v0.3.0 section.
-https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.3.0
+https://github.com/DMSHLabs/DictShelf/releases/tag/wudict2-v0.3.0
 
 One operational fact worth knowing: creating a release and uploading its asset
 are two API calls, so the release is PUBLIC and asset-less for the ~30 s
@@ -1643,7 +1643,7 @@ sha256 `961b8fc68bc46da6cfcb76b1215fb387e447677d1a46b0ac6ce825ae4fc11fe8`); the
 signer certificate is still the one every tag carries (`b7ddc95d…`, CN=Dmitry
 Shepeta) with 379 > 376, so v0.3.0 updates in place; the published body is
 byte-identical to CHANGELOG.md's v0.4.0 section.
-https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.4.0
+https://github.com/DMSHLabs/DictShelf/releases/tag/wudict2-v0.4.0
 
 Nothing new was learned about the tooling — the same commands, and the
 create-then-upload window noted under v0.3.0 above still applies. The cycle is
@@ -1667,7 +1667,7 @@ sha256 `9e2772d64a7b618f024e348e61c599fad23172b8a6d36f0e740973f07f40e0d7`); the
 signer certificate is still the one every tag carries (`b7ddc95d…`, CN=Dmitry
 Shepeta) with 385 > 379, so v0.4.0 updates in place; the published body is
 byte-identical to CHANGELOG.md's v0.5.0 section.
-https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.5.0
+https://github.com/DMSHLabs/DictShelf/releases/tag/wudict2-v0.5.0
 
 Two departures from the four before it, both worth knowing:
 
@@ -1801,7 +1801,7 @@ then the REST create and the asset upload. aapt2: `versionName='wudict2-v0.9.0'`
 versionCode 538, `locales: '--_--' 'ru'`, arm64 only, 8,952,897 bytes, sha256
 `1ea8e0535f7401500ffb7739922a1fdde31b136fa975b32de0651647c2ef6809`, the same
 signer certificate as every release. A normal release, so `latest` moved to it.
-https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.9.0
+https://github.com/DMSHLabs/DictShelf/releases/tag/wudict2-v0.9.0
 
 **Verified:** `go build ./...` and `go vet ./...` clean; `go test -count=1` green
 for `internal/format/dsl`, `internal/server`, `internal/store`, `internal/logx`
@@ -1834,7 +1834,7 @@ versionCode 515, `locales: '--_--' 'ru'`, arm64 only, 8,895,697 bytes, sha256
 signer certificate as every release. A normal release, so `latest` moved to it.
 The asset name is the new one — `wudict2-android-arm64-v8a-foss.apk` — the first
 release to carry the ABI spelled the way Android spells it.
-https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.8.0
+https://github.com/DMSHLabs/DictShelf/releases/tag/wudict2-v0.8.0
 
 **Verified:** `go build ./...` and `go vet ./...` clean, the server's
 `TestGroup|TestUserGroup|TestPrefs|TestBulk|TestIndex|TestI18n|TestOpenAPI|TestRoutes|TestGDAssets`
@@ -1948,7 +1948,7 @@ person to sync `master` needs them.
 
 **Rechecked 2026-10-04 (fourth upstream sync — editable groups):** `dev` is at the merge of upstream `master` (`9008d33`, carrying `74f1dde feat(groups): editable dictionary groups` and `6885dfc test(windows): win32 ci checks`) — nine conflicted files, and the round's real content is a cross-cutting refactor (new `internal/fsx`, `ownedfile.go`, `userdir.go`, `jobs.go`, the rules engine `internal/facet/rules.go` + `groups.ini`) plus upstream's editable group RULES. The fork's own group editor (membership) and upstream's feature are both kept, deliberately separated so upstream's half merges clean: upstream's `groups.go`/`groups_test.go`/`groups.html`/`facet/rules.go` are taken **verbatim** and keep `/api/groups` + `/groups`, while the fork's membership moved to **`internal/server/dmsh_groups.go` / `dmsh_groups_test.go`** (the fork's `dmsh_` prefix for a parallel implementation) behind **`/api/user-groups`** (`handleGroups` → `handleUserGroups`; `group-editor.js` and the picker payload follow). The fork's UI does not expose the rules editor — the file is edited by hand — so nothing links to `/groups`. `prefs.go` took upstream's `ownedFile` shape with the fork's fields (DSL*, Language, Groups) living in the record: `data()` for reads, and three helpers — `saveRecord`, `mutate` (a copy, so a failed save cannot change the value in effect and the hand-written rollbacks are gone) and `store` (for a record built from `data()` under `editMu`, which the fork keeps for whole read-decide-write sequences). The sixteen fork functions that touched the old in-memory fields were rewritten onto them (`dsl_defaults.go`, `dsl_modes.go`, `i18n.go`, `rescan_indexes.go`, `dmsh_groups.go`, `registry.go`), and their tests follow. `server.go`: the job-based ingest is upstream's, with the fork's `indexBlocked`/`restoreDSLIndex` hook re-inserted inside the job (the door that restores a deliberately removed DSL index), `handleLemmasPage` stays the fork's per-request render, `rebuildable` keeps the fork's `dict.SourceInput` check, and the search handler keeps the fork's `dslAvailable` filter with upstream's `newStream`. `style.go` keeps the fork's night pair and `styleWrite` (now on `ownedFile`); `cli.go` takes upstream's `UserDir` and keeps the fork's decision not to wire the built-in howto; `openapi.yaml` documents both groups APIs. `index.html` is the fork's, plus two engine fixes (group ids compared whole, since a name from `groups.ini` may contain `:`, and the picker drops only a group holding every VISIBLE dictionary) — and the auto-merge had spliced upstream's `following` guard into the fork's `runIngest` without the matching `following.delete(id)` on success, which is fixed; upstream's `groupsTrouble` (it addresses elements this fork does not have) was removed. Verified: `go build`, `go vet`, `gofmt -l` clean and the whole suite green in this worktree (a fresh LF checkout, 0 failures); live on port 6906 with an **isolated** library — the page's comments are stripped, a search returns both DSL variants with the article body in the shadow root and no page errors, the fork's editor lists its groups and creates/orders members through `/api/user-groups` (state.json written atomically), and upstream's `groups.ini` saved through `/api/groups` shows up as an optgroup in the desktop scope selector with the `/groups` page answering by URL. No APK/device check; the reader's device pass is still owed. Not pushed — `dev` fast-forwarded in the user's checkout only.
 
-**Rechecked 2026-10-04 (fifth upstream sync — pages, docs, labels):** `dev` is at the merge of upstream `master` (`a7f4f56`, carrying `317560c chore(docs): pages, docs, and labels overhaul` and `dec092f chore(docs)`) — sixteen conflicted files, and the round is almost entirely WORDS: a new `docs/STYLE.md` (one name per concept, with a table of banned synonyms) plus every manual page, `README`, the web pages' labels and the Android strings rewritten to it. Two real changes ride along: `IMPORT_URL_HOSTS` now accepts the TOML array spelling as well as the comma-separated string (+tests), and `SiteURL` moved to `https://wudict.legbehindneck.com` (taken; the About/`--help` link follows upstream's site — easy to point elsewhere if the fork wants its own). `internal/cli/cli.go` (577 lines, the `--help` text) and `internal/config/config.go` merged by themselves, keeping the fork's `UseUserGroups()` and its no-howto decision. Resolutions: the six manual pages took upstream's new text with the fork's identity re-applied on top (wuDict2, `com.dmshepeta.wudict2`, `wudict2-android-arm64-v8a-foss.apk` + `build-android.cmd release`, the ☀☾ theme glyph, no distribution badges); `README.md` is the fork's own; the catalogs carry the new vocabulary in EN **and** RU (`index/indexed/indexing`, `exact/prefix/contains/full-text`, `contains index`/`full-text index`/`media pack` as new keys driving `Add the {what}`/`Remove the {what}`/`Outdated {what}` tooltips, `lemma data`, `orphan`, `library`, `unticking`, the setup headings, wudict-unreachable messages) with `FEAT_NAME`/`MODE_SHORT` in `index.html` and one verb for the index chip and the feature switches; the Android copies took upstream's 13 reworded strings and their RU translations were rewritten, four previously untranslated hints gaining Russian text (see [translation_todo.md](translation_todo.md)); the two server test probes moved from a sentence to markup (`<title>Edit Folders</title>`), because every page ships the whole i18n catalog so a phrase from setup.html is in the app page's body too. One defect found by the live check and fixed: the bulk-index dialog's chips called `tx("dictUI.addHint")` without `{what}`, so their tooltips read "Add the {what}". `docs/DICTIONARY-GROUPS.md` now records the fork's one deliberate deviation from the guide — upstream calls the `groups.ini` sets *groups*, this fork calls them **filters** (its "group" is the reader's own curated set), and every app label follows that. Verified: `go build`, `go vet`, `gofmt -l` clean and the whole suite green (0 failures); live on port 6907 with an isolated library — the page's comments are stripped, a search answers, the mode chip reads "prefix", a CLICK on the index chip runs (the regression the previous round's review found, now confirmed fixed end to end), the switch tooltips read "Add the contains index" / "Add the full-text index", the group editor's filter control works ("All dictionaries" / "Oxford" / "Uncategorized") and `/groups` serves "Edit filters". The outdated-index line is verified by code — the restored `renderReindex()` call at the end of `renderPanel`, unchanged draw code, and its keys covered by `TestI18nCatalogs` — because a live catch is impractical: listing a dictionary heals its staleness, and the smoke rebuild finishes in under a second. No APK/device check; the phone pass for the new Russian labels is owed. Not pushed — `dev` fast-forwarded in the user's checkout only.
+**Rechecked 2026-10-04 (fifth upstream sync — pages, docs, labels):** `dev` is at the merge of upstream `master` (`a7f4f56`, carrying `317560c chore(docs): pages, docs, and labels overhaul` and `dec092f chore(docs)`) — sixteen conflicted files, and the round is almost entirely WORDS: a new `docs/STYLE.md` (one name per concept, with a table of banned synonyms) plus every manual page, `README`, the web pages' labels and the Android strings rewritten to it. Two real changes ride along: `IMPORT_URL_HOSTS` now accepts the TOML array spelling as well as the comma-separated string (+tests), and `SiteURL` moved to `https://dmshlabs.github.io/DictShelf` (taken; the About/`--help` link follows upstream's site — easy to point elsewhere if the fork wants its own). `internal/cli/cli.go` (577 lines, the `--help` text) and `internal/config/config.go` merged by themselves, keeping the fork's `UseUserGroups()` and its no-howto decision. Resolutions: the six manual pages took upstream's new text with the fork's identity re-applied on top (wuDict2, `com.dmshepeta.wudict2`, `wudict2-android-arm64-v8a-foss.apk` + `build-android.cmd release`, the ☀☾ theme glyph, no distribution badges); `README.md` is the fork's own; the catalogs carry the new vocabulary in EN **and** RU (`index/indexed/indexing`, `exact/prefix/contains/full-text`, `contains index`/`full-text index`/`media pack` as new keys driving `Add the {what}`/`Remove the {what}`/`Outdated {what}` tooltips, `lemma data`, `orphan`, `library`, `unticking`, the setup headings, wudict-unreachable messages) with `FEAT_NAME`/`MODE_SHORT` in `index.html` and one verb for the index chip and the feature switches; the Android copies took upstream's 13 reworded strings and their RU translations were rewritten, four previously untranslated hints gaining Russian text (see [translation_todo.md](translation_todo.md)); the two server test probes moved from a sentence to markup (`<title>Edit Folders</title>`), because every page ships the whole i18n catalog so a phrase from setup.html is in the app page's body too. One defect found by the live check and fixed: the bulk-index dialog's chips called `tx("dictUI.addHint")` without `{what}`, so their tooltips read "Add the {what}". `docs/DICTIONARY-GROUPS.md` now records the fork's one deliberate deviation from the guide — upstream calls the `groups.ini` sets *groups*, this fork calls them **filters** (its "group" is the reader's own curated set), and every app label follows that. Verified: `go build`, `go vet`, `gofmt -l` clean and the whole suite green (0 failures); live on port 6907 with an isolated library — the page's comments are stripped, a search answers, the mode chip reads "prefix", a CLICK on the index chip runs (the regression the previous round's review found, now confirmed fixed end to end), the switch tooltips read "Add the contains index" / "Add the full-text index", the group editor's filter control works ("All dictionaries" / "Oxford" / "Uncategorized") and `/groups` serves "Edit filters". The outdated-index line is verified by code — the restored `renderReindex()` call at the end of `renderPanel`, unchanged draw code, and its keys covered by `TestI18nCatalogs` — because a live catch is impractical: listing a dictionary heals its staleness, and the smoke rebuild finishes in under a second. No APK/device check; the phone pass for the new Russian labels is owed. Not pushed — `dev` fast-forwarded in the user's checkout only.
 
 ## Release wudict2-v0.7.1 (2026-10-04, this session)
 
@@ -1966,7 +1966,7 @@ then the REST create and the asset upload. aapt2: `versionName='wudict2-v0.7.1'`
 versionCode 494, `locales: '--_--' 'ru'`, arm64 only, 8,848,889 bytes, sha256
 `5c7c36cc06da34b2646233774fe022d4bf09e5127d66d6a80cce5fb67778a99a`, the same
 signer certificate as every release. A normal release, so `latest` moved to it.
-https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.7.1
+https://github.com/DMSHLabs/DictShelf/releases/tag/wudict2-v0.7.1
 
 **Verified:** `go build ./...` and `go vet ./...` clean, `go test -count=1
 ./internal/server ./internal/store ./internal/format/dsl` green — the store and
@@ -1999,7 +1999,7 @@ only, 8,835,605 bytes, sha256
 `5ee146e040f33dff11dbb71301e6be8f3669e4a4a35d9370b0a693027ef78c7d`, the same
 signer certificate as every release. Normal release, not a pre-release, so
 `latest` moved to it.
-https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.7.0
+https://github.com/DMSHLabs/DictShelf/releases/tag/wudict2-v0.7.0
 
 **The release notes were written from the user's own summary of three things**
 (shortened, reworked and put into English), with the rest found in the diff:
@@ -2036,7 +2036,7 @@ aapt2: `versionName='wudict2-v0.6.0'`, versionCode 468, `locales: '--_--' 'ru'`,
 arm64 only, 10,071,197 bytes (the APK grew by about 2 MB: the GD style and its
 fonts), sha256 `934f8113c040179b9edb0cd4b169b0ba06473a3a3031ac1287c027a0cfc4f44f`,
 the same signer certificate as every release. `latest` moves to it now.
-https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.6.0
+https://github.com/DMSHLabs/DictShelf/releases/tag/wudict2-v0.6.0
 
 **Why not a pre-release, unlike ru.1:** the preview announced the 0.6.0 line,
 this is that line finished, and the user called it the full-featured build. The
@@ -2100,7 +2100,7 @@ matters is that the translation is really INSIDE the artifact: the packaged
 successful build proves none of that by itself. sha256
 `d1af995b935fcefbcdf69cff0bdf38b02fef85dcb6dc46fe2f0ae84833b56935`, 8,009,173
 bytes, the same signer certificate as every release so far.
-https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.6.0-ru.1
+https://github.com/DMSHLabs/DictShelf/releases/tag/wudict2-v0.6.0-ru.1
 
 **Why pre-release:** so GitHub's `latest` stays the stable v0.5.0 and a visitor
 is not pointed at a build whose translation is explicitly unfinished. One PATCH
@@ -3091,7 +3091,7 @@ and the asset upload. aapt2: `versionName='wudict2-v0.11.1'`, versionCode 589,
 `locales: '--_--' 'ru'`, arm64 only, 9,031,641 bytes, sha256
 `1886ed8ab42be581ed1bb24e45224e56e1d015a090c0e3265aa328e70c635b85`, the same signer
 certificate as every release. A normal release, so `latest` moved to it.
-https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.11.1
+https://github.com/DMSHLabs/DictShelf/releases/tag/wudict2-v0.11.1
 
 **Verified:** `go build ./...` and `go vet ./...` clean; `go test -count=1` green for
 `internal/server`, `internal/store`, `internal/dict`; the packaged `.so` unpacked and
@@ -3131,7 +3131,7 @@ and the asset upload. aapt2: `versionName='wudict2-v0.11.0'`, versionCode 579,
 `locales: '--_--' 'ru'`, arm64 only, 9,020,753 bytes, sha256
 `4bf786925048e27809aa452c5148b2c5206dffb55e7126c25ecd9279b65bfd89`, the same signer
 certificate as every release. A normal release, so `latest` moved to it.
-https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.11.0
+https://github.com/DMSHLabs/DictShelf/releases/tag/wudict2-v0.11.0
 
 **Verified:** `go build ./...` and `go vet ./...` clean; `go test -count=1` green for
 `internal/server`, `internal/store`, `internal/cli`, `internal/format/dsl`; the packaged

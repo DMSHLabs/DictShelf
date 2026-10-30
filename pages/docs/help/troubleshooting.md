@@ -149,5 +149,5 @@ step and audio conversion.
 wudict --verbose
 ```
 
-[Open an issue](https://github.com/wuweidict/wudict/issues) with that output
+[Open an issue](https://github.com/DMSHLabs/DictShelf/issues) with that output
 and the output of `wudict --version`.

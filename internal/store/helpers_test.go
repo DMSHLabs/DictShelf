@@ -7,7 +7,7 @@ package store
 import (
 	"context"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 var bg = context.Background()

@@ -12,8 +12,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/config"
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/config"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 func TestPortableLayout(t *testing.T) {

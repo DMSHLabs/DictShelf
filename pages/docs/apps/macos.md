@@ -11,7 +11,7 @@ without a terminal and shows a **menu-bar icon**.
 ## Install
 
 1.  Download **`wudict-macos-universal-app-<version>.zip`** from
-    [the releases page](https://github.com/wuweidict/wudict/releases). It is a
+    [the releases page](https://github.com/DMSHLabs/DictShelf/releases). It is a
     universal binary, for Apple silicon and Intel.
 2.  Unzip it and move **DictShelf.app** to *Applications*.
 3.  Open the app. macOS blocks the first launch ("Apple could not verify…"):

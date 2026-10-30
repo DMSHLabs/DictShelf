@@ -82,7 +82,7 @@ commit_preprocessors = [
     # Comment-style subjects: "# multiple folders for DICT_DIR" -> "multiple folders for DICT_DIR"
     { pattern = '^# ', replace = '' },
     # Turn issue references into links (#12 -> [#12](.../issues/12)).
-    { pattern = '#([0-9]+)\b', replace = '[#${1}](https://github.com/wuweidict/wudict/issues/${1})' },
+    { pattern = '#([0-9]+)\b', replace = '[#${1}](https://github.com/DMSHLabs/DictShelf/issues/${1})' },
     # Check spelling of the commit message using https://github.com/crate-ci/typos.
     # #{ pattern = '.*', replace_command = 'typos --write-changes -' },
 ]

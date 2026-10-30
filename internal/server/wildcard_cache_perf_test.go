@@ -17,10 +17,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/indexconst"
-	"github.com/wuweidict/wudict/internal/search"
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
+	"github.com/DMSHLabs/DictShelf/internal/search"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // TestWildcardCachePerformance runs only when explicitly enabled. It uses real

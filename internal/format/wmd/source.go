@@ -19,8 +19,8 @@ import (
 	"runtime/debug"
 	"unicode/utf8"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 )
 
 // The text a Reader reads, a range at a time, so that it never holds a whole

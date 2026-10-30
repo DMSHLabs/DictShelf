@@ -19,10 +19,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/config"
-	"github.com/wuweidict/wudict/internal/dict"
-	_ "github.com/wuweidict/wudict/internal/format/dsl" // register .dsl
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/config"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/dsl" // register .dsl
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // stubReader ingests a single entry; used to fabricate a native .text.db.

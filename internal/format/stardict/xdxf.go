@@ -10,7 +10,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/artmark"
+	"github.com/DMSHLabs/DictShelf/internal/artmark"
 )
 
 // xdxfToHTML converts XDXF article markup (StarDict sametypesequence 'x')

@@ -8,7 +8,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/wuweidict/wudict/internal/indexconst"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 )
 
 // MaskInitial groups a headword under the same readable initial as Browse.

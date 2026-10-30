@@ -20,10 +20,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/artmark"
+	"github.com/DMSHLabs/DictShelf/internal/artmark"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/indexconst"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 )
 
 // Progress is called during ingest with entries processed so far and the

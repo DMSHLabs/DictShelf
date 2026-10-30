@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // fake is a minimal prepared-style backend (a dict.Searcher); the contains

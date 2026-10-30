@@ -62,7 +62,7 @@ info:
     name: GPL-3.0-or-later
     identifier: GPL-3.0-or-later
   contact:
-    url: https://github.com/wuweidict/wudict
+    url: https://github.com/DMSHLabs/DictShelf
 
 servers:
   - url: http://127.0.0.1:6888

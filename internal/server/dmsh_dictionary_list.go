@@ -10,8 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/wuweidict/wudict/internal/facet"
-	"github.com/wuweidict/wudict/internal/search"
+	"github.com/DMSHLabs/DictShelf/internal/facet"
+	"github.com/DMSHLabs/DictShelf/internal/search"
 )
 
 type dictionaryListResult struct {

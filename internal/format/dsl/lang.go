@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/lang"
+	"github.com/DMSHLabs/DictShelf/internal/lang"
 )
 
 // [lang] names its language in one of two ways (lingvo-ref "Тэг

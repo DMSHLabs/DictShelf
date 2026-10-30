@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // wedgedDict answers Exact by announcing itself and then never returning.

@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/facet"
-	"github.com/wuweidict/wudict/internal/fsx"
-	"github.com/wuweidict/wudict/internal/indexconst"
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/facet"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // StateFile holds the part of the UI that describes the COLLECTION rather than

@@ -14,8 +14,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/config"
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/config"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 const portableJobKey = "create-portable"

@@ -49,7 +49,7 @@ The property of an object that depends on the light it reflects.
 
 `wudict dump -format md` writes any dictionary readable by wudict in this format.
 
-[Specification](https://github.com/wuweidict/wudict/blob/master/docs/WUDICT-MARKDOWN.md){ .md-button }
+[Specification](https://github.com/DMSHLabs/DictShelf/blob/dev/docs/WUDICT-MARKDOWN.md){ .md-button }
 [wudict dump](../reference/cli.md#dump){ .md-button }
 
 ## Audio

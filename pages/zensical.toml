@@ -8,18 +8,18 @@
 
 [project]
 
-site_name = "WuWeiDict"
-site_description = "WuWeiDict (wudict) searches MDict, StarDict, Aard 2, Lingvo DSL, Babylon, ZIM and wudict markdown dictionaries in the browser, on macOS, Linux, Windows and Android."
-site_author = "The WuWeiDict contributors"
-site_url = "https://wudict.legbehindneck.com"
+site_name = "DictShelf"
+site_description = "DictShelf searches MDict, StarDict, Aard 2, Lingvo DSL, Babylon, ZIM and wudict markdown dictionaries on Windows, macOS, Linux and Android."
+site_author = "DMSH Labs"
+site_url = "https://dmshlabs.github.io/DictShelf/"
 
 copyright = """
-Copyright &copy; 2026 The WuWeiDict contributors
+Copyright &copy; 2026 DMSH Labs
 """
 
-repo_url = "https://github.com/wuweidict/wudict"
-repo_name = "wuweidict/wudict"
-edit_uri = "edit/master/pages/docs/"
+repo_url = "https://github.com/DMSHLabs/DictShelf"
+repo_name = "DMSHLabs/DictShelf"
+edit_uri = "edit/dev/pages/docs/"
 
 # ----------------------------------------------------------------------------
 # Navigation.
@@ -191,8 +191,8 @@ new = "Recently added"
 
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
-link = "https://github.com/wuweidict/wudict"
-name = "wuDict Server"
+link = "https://github.com/DMSHLabs/DictShelf"
+name = "DictShelf"
 
 [[project.extra.social]]
 icon = "fontawesome/brands/github"

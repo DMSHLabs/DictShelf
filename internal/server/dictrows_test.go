@@ -19,13 +19,13 @@ import (
 	// carries these under !windows (its sweep is unix-only), so without them
 	// here a Windows test binary discovers only the formats another test file
 	// happens to have pulled in, and a broken .mdx finds no row at all.
-	_ "github.com/wuweidict/wudict/internal/format/bgl"
-	_ "github.com/wuweidict/wudict/internal/format/mdx"
-	_ "github.com/wuweidict/wudict/internal/format/slob"
-	_ "github.com/wuweidict/wudict/internal/format/stardict"
-	_ "github.com/wuweidict/wudict/internal/format/zim"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/bgl"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/mdx"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/slob"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/stardict"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/zim"
 
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // dictsWith requests /api/dicts with an optional If-None-Match and returns the

@@ -15,13 +15,13 @@ Windows.
 === "With a C compiler"
 
     ``` sh title="cgo SQLite plus the built-in Speex decoder"
-    go install -tags sqlite_fts5 github.com/wuweidict/wudict@latest
+    go install -tags sqlite_fts5 github.com/DMSHLabs/DictShelf@latest
     ```
 
 === "Without a C compiler"
 
     ``` sh title="pure-Go SQLite"
-    go install github.com/wuweidict/wudict@latest
+    go install github.com/DMSHLabs/DictShelf@latest
     ```
 
 The tag selects the SQLite driver and the Speex decoder. Without a C compiler,

@@ -5,7 +5,7 @@
 package store
 
 import (
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // Sequential access to a whole prepared dictionary: the read side of what

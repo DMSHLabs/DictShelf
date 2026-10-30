@@ -23,7 +23,7 @@ GOFLAGS      := -tags $(GO_TAGS) -trimpath
 # a blank version, overriding cli.Version's "dev" default).
 # The stamp targets internal/cli, not main: main is a one-line shim (D28).
 VERSION    := $(shell git -C . describe --tags --always --dirty 2>/dev/null || echo dev)
-VERSION_PKG := github.com/wuweidict/wudict/internal/cli
+VERSION_PKG := github.com/DMSHLabs/DictShelf/internal/cli
 LDFLAGS    := -s -w -X $(VERSION_PKG).Version=$(VERSION)
 
 # Integration tests need real dictionaries; point these at files you have

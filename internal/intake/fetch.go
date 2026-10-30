@@ -24,7 +24,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // Fetching an archive over https.

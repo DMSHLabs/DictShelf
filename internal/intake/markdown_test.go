@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	_ "github.com/wuweidict/wudict/internal/format/wmd"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/wmd"
 )
 
 // TestMarkdownGate: WuWeiDict markdown is a dictionary by its content - the

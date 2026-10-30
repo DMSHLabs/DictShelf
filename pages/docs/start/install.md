@@ -8,7 +8,7 @@ description: Download and run wudict on macOS, Linux, Windows or Android - one e
 `wudict` is one executable per platform, with no runtime or database server to
 install. macOS also has an app bundle, Windows an installer, Android an APK.
 
-[Releases](https://github.com/wuweidict/wudict/releases/latest){ .md-button .md-button--primary }
+[Releases](https://github.com/DMSHLabs/DictShelf/releases/latest){ .md-button .md-button--primary }
 
 ## Download and run
 

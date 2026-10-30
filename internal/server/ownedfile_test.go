@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/facet"
+	"github.com/DMSHLabs/DictShelf/internal/facet"
 )
 
 func countingFile(path string, parses *int) *ownedFile[string] {

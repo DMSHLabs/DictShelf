@@ -4,7 +4,7 @@
 
 package server
 
-import "github.com/wuweidict/wudict/internal/facet"
+import "github.com/DMSHLabs/DictShelf/internal/facet"
 
 func (s *Server) groupsSnapshot() map[string]any {
 	return groupsResponse(s.User.Groups(), s.groupsNow())

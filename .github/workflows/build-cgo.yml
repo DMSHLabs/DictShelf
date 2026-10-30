@@ -108,7 +108,7 @@ jobs:
             export CGO_LDFLAGS="$CGO_CFLAGS"
           fi
           go build -trimpath -tags sqlite_fts5 \
-            -ldflags="-s -w -X github.com/wuweidict/wudict/internal/cli.Version=${VERSION}" \
+            -ldflags="-s -w -X github.com/DMSHLabs/DictShelf/internal/cli.Version=${VERSION}" \
             -o "${BINARY}" .
 
       - name: Upload artifact

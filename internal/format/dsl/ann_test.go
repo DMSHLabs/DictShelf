@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // writeAnn puts a .dsl and its annotation sidecar in one folder, which is what

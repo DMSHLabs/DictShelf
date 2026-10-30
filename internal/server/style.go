@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/facet"
+	"github.com/DMSHLabs/DictShelf/internal/facet"
 )
 
 // Global user styling: two CSS files the user owns, applied to everything.

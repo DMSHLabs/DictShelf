@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // One import at a time, everywhere, and the reasons are not only about RAM.

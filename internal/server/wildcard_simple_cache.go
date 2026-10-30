@@ -9,8 +9,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/search"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/search"
 )
 
 // streamSimpleWildcardCache materializes masks containing only '*' and '?'

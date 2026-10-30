@@ -29,32 +29,32 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/config"
-	"github.com/wuweidict/wudict/internal/dict"
-	zimformat "github.com/wuweidict/wudict/internal/format/zim"
-	"github.com/wuweidict/wudict/internal/fsx"
-	"github.com/wuweidict/wudict/internal/howto"
-	"github.com/wuweidict/wudict/internal/htmlref"
-	"github.com/wuweidict/wudict/internal/indexconst"
-	"github.com/wuweidict/wudict/internal/logx"
-	"github.com/wuweidict/wudict/internal/search"
-	"github.com/wuweidict/wudict/internal/server"
-	"github.com/wuweidict/wudict/internal/speex"
-	"github.com/wuweidict/wudict/internal/store"
-	"github.com/wuweidict/wudict/internal/tray"
+	"github.com/DMSHLabs/DictShelf/internal/config"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	zimformat "github.com/DMSHLabs/DictShelf/internal/format/zim"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/howto"
+	"github.com/DMSHLabs/DictShelf/internal/htmlref"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/search"
+	"github.com/DMSHLabs/DictShelf/internal/server"
+	"github.com/DMSHLabs/DictShelf/internal/speex"
+	"github.com/DMSHLabs/DictShelf/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/tray"
 
-	_ "github.com/wuweidict/wudict/internal/format/bgl"      // register .bgl
-	_ "github.com/wuweidict/wudict/internal/format/dsl"      // register .dsl(.dz)
-	_ "github.com/wuweidict/wudict/internal/format/lsd"      // register .lsd
-	_ "github.com/wuweidict/wudict/internal/format/mdx"      // register .mdx
-	_ "github.com/wuweidict/wudict/internal/format/slob"     // register .slob
-	_ "github.com/wuweidict/wudict/internal/format/stardict" // register .ifo
-	_ "github.com/wuweidict/wudict/internal/format/wmd"      // register .wudict.md (+ .md with a wudict: field)
-	_ "github.com/wuweidict/wudict/internal/format/zim"      // register .zim
+	_ "github.com/DMSHLabs/DictShelf/internal/format/bgl"      // register .bgl
+	_ "github.com/DMSHLabs/DictShelf/internal/format/dsl"      // register .dsl(.dz)
+	_ "github.com/DMSHLabs/DictShelf/internal/format/lsd"      // register .lsd
+	_ "github.com/DMSHLabs/DictShelf/internal/format/mdx"      // register .mdx
+	_ "github.com/DMSHLabs/DictShelf/internal/format/slob"     // register .slob
+	_ "github.com/DMSHLabs/DictShelf/internal/format/stardict" // register .ifo
+	_ "github.com/DMSHLabs/DictShelf/internal/format/wmd"      // register .wudict.md (+ .md with a wudict: field)
+	_ "github.com/DMSHLabs/DictShelf/internal/format/zim"      // register .zim
 )
 
 // Version is stamped by the Makefile via
-// -ldflags "-X github.com/wuweidict/wudict/internal/cli.Version=…".
+// -ldflags "-X github.com/DMSHLabs/DictShelf/internal/cli.Version=…".
 // It lives here rather than in main because this package, not the one-line
 // shim at the module root, is where the program is.
 var Version = "dev"
@@ -75,8 +75,8 @@ var Notices string
 // About box, setup page - sources its wording from here or mirrors it.
 const (
 	ProductName = "DictShelf"
-	SiteURL     = "https://wudict.legbehindneck.com"
-	RepoURL     = "https://github.com/wuweidict/wudict"
+	SiteURL     = "https://dmshlabs.github.io/DictShelf/"
+	RepoURL     = "https://github.com/DMSHLabs/DictShelf"
 )
 
 func usage() string {
@@ -431,7 +431,7 @@ EXAMPLES
   SERVER_PORT=9000 wudict
 
 MANUAL
-  https://wudict.legbehindneck.com
+  https://dmshlabs.github.io/DictShelf/
 
 ABOUT
   %s %s
@@ -585,7 +585,7 @@ func cmdLicenses() {
 		"You may redistribute it under the terms of the GNU General Public\n" +
 		"License, version 3 or later: <https://www.gnu.org/licenses/gpl-3.0.html>\n\n")
 	if Notices == "" {
-		fmt.Printf("Third-party notices: %s/blob/master/THIRD-PARTY-NOTICES.md\n", RepoURL)
+		fmt.Printf("Third-party notices: %s/blob/dev/THIRD-PARTY-NOTICES.md\n", RepoURL)
 		return
 	}
 	fmt.Print(Notices)

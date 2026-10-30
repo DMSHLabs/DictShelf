@@ -29,4 +29,4 @@ The full text is in the repository at `LICENSE`, and at the
 
 The BGL format was reverse-engineered by Raul Fernandes and Karl Grill. The
 notices for all dependencies are in
-[THIRD-PARTY-NOTICES.md](https://github.com/wuweidict/wudict/blob/master/THIRD-PARTY-NOTICES.md).
+[THIRD-PARTY-NOTICES.md](https://github.com/DMSHLabs/DictShelf/blob/dev/THIRD-PARTY-NOTICES.md).

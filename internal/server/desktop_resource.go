@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 const desktopMemoryThreshold = 8 << 20

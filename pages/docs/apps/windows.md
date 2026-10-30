@@ -14,7 +14,7 @@ other Arm64 systems use `wudict-windows-arm64-purego.exe`.
 ## Install
 
 1.  Download **`dictshelf-windows-x64-setup-<version>.exe`** from
-    [the releases page](https://github.com/wuweidict/wudict/releases).
+    [the releases page](https://github.com/DMSHLabs/DictShelf/releases).
 2.  Run it. The file is not code-signed, so Windows shows *Windows protected
     your PC*: choose **More info**, then **Run anyway**.
 3.  Choose an install mode:
@@ -70,7 +70,7 @@ instance.
 
 ## Upgrade
 
-[Download](https://github.com/wuweidict/wudict/releases/latest) and run the latest installer.
+[Download](https://github.com/DMSHLabs/DictShelf/releases/latest) and run the latest installer.
 It keeps the install mode, closes a running
 `DictShelf.exe`, and does not restart unless asked. Existing dictionary files, `dictshelf.toml` and the
 library are not changed.

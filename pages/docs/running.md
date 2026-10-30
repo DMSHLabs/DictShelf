@@ -6,7 +6,7 @@ description: Start wudict at login - a macOS LaunchAgent, a Linux systemd user u
 # Run at startup
 
 The macOS and Linux setups use `make` targets in a clone of the
-[source repository](https://github.com/wuweidict/wudict).
+[source repository](https://github.com/DMSHLabs/DictShelf).
 
 === "macOS"
 

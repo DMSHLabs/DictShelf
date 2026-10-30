@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/format/dsl"
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/format/dsl"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 type pageCursor struct {

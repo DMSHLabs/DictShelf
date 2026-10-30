@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/wuweidict/wudict/internal/hilite"
+	"github.com/DMSHLabs/DictShelf/internal/hilite"
 )
 
 // node is one operator-mode expression. Every node knows how to render itself

@@ -17,15 +17,15 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/format/bgl"
-	"github.com/wuweidict/wudict/internal/format/dsl"
-	"github.com/wuweidict/wudict/internal/format/wmd"
-	"github.com/wuweidict/wudict/internal/fsx"
-	"github.com/wuweidict/wudict/internal/htmlref"
-	"github.com/wuweidict/wudict/internal/logx"
-	"github.com/wuweidict/wudict/internal/resource"
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/format/bgl"
+	"github.com/DMSHLabs/DictShelf/internal/format/dsl"
+	"github.com/DMSHLabs/DictShelf/internal/format/wmd"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/htmlref"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/resource"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // `wudict dump` writes one dictionary out, as pyglossary's CSV (the default)

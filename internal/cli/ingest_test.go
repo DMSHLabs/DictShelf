@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // `wudict ingest` with no path prepares the configured DICT_DIR, a dictionary

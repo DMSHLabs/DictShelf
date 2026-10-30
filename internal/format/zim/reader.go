@@ -8,7 +8,7 @@ import (
 	"io"
 	"sort"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // Reader is the sequential ingest scan.

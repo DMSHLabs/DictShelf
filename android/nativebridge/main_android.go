@@ -15,8 +15,8 @@ import "C"
 import (
 	"encoding/json"
 
-	"github.com/wuweidict/wudict/internal/config"
-	"github.com/wuweidict/wudict/internal/server"
+	"github.com/DMSHLabs/DictShelf/internal/config"
+	"github.com/DMSHLabs/DictShelf/internal/server"
 )
 
 //export WudictGoBridgeProtocol

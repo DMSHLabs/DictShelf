@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // writePair writes a DSL and its abbreviation companion into ONE folder, which

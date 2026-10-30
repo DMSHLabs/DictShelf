@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/store"
-	"github.com/wuweidict/wudict/internal/sysmem"
+	"github.com/DMSHLabs/DictShelf/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/sysmem"
 )
 
 func (s *Server) handleIndexLog(w http.ResponseWriter, r *http.Request) {

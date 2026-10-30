@@ -48,8 +48,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/lang"
-	"github.com/wuweidict/wudict/internal/morph"
+	"github.com/DMSHLabs/DictShelf/internal/lang"
+	"github.com/DMSHLabs/DictShelf/internal/morph"
 )
 
 // Version is the manifest format this build understands. A manifest declaring

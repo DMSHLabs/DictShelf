@@ -23,8 +23,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/resource"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/resource"
 )
 
 // ReaderVersion is the behaviour version of this format's Reader (see

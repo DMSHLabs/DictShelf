@@ -71,9 +71,9 @@ import (
 
 	"github.com/aaaton/golem/v4"
 
-	"github.com/wuweidict/wudict/internal/lang"
-	"github.com/wuweidict/wudict/internal/lemmas"
-	"github.com/wuweidict/wudict/internal/morph"
+	"github.com/DMSHLabs/DictShelf/internal/lang"
+	"github.com/DMSHLabs/DictShelf/internal/lemmas"
+	"github.com/DMSHLabs/DictShelf/internal/morph"
 )
 
 // defaultBase is where -fetch reads from. Raw file access, not the contents

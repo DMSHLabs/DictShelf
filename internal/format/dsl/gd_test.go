@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/store"
-	"github.com/wuweidict/wudict/internal/store/goldentest"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/store/goldentest"
 )
 
 func TestGDMarkup(t *testing.T) {

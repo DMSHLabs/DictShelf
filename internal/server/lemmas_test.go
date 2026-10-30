@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/morph"
+	"github.com/DMSHLabs/DictShelf/internal/morph"
 )
 
 // The catalogue these tests install from. Plain .tsv rather than .tsv.gz: the

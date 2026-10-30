@@ -14,7 +14,7 @@
 # template in the repo (systemd/dictshelf.service.in) instead.
 [Unit]
 Description=DictShelf dictionary server
-Documentation=https://github.com/wuweidict/wudict
+Documentation=https://github.com/DMSHLabs/DictShelf
 
 [Service]
 Type=simple

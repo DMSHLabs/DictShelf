@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // testMDD resolves a real .mdd from the .mdx fixture's companions.

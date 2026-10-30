@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 )
 
 // setMeta overwrites (or, with v == "", deletes) one meta key in place, the

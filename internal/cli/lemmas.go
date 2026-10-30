@@ -16,11 +16,11 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/wuweidict/wudict/internal/config"
-	"github.com/wuweidict/wudict/internal/intake"
-	"github.com/wuweidict/wudict/internal/lang"
-	"github.com/wuweidict/wudict/internal/lemmas"
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/config"
+	"github.com/DMSHLabs/DictShelf/internal/intake"
+	"github.com/DMSHLabs/DictShelf/internal/lang"
+	"github.com/DMSHLabs/DictShelf/internal/lemmas"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // `wudict lemmas` - obtaining the lemma data LEMMA_DIR holds (D88).

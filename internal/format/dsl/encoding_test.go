@@ -19,7 +19,7 @@ import (
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/unicode"
 
-	"github.com/wuweidict/wudict/internal/lang"
+	"github.com/DMSHLabs/DictShelf/internal/lang"
 )
 
 // The sniff peeks a fixed 4096 bytes, which cuts mid-rune whenever the byte at

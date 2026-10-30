@@ -9,8 +9,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/logx"
-	"github.com/wuweidict/wudict/internal/search"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/search"
 )
 
 type browseFindDiagnosticKey struct{}

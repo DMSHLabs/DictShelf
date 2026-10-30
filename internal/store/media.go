@@ -15,9 +15,9 @@ import (
 
 	"golang.org/x/text/unicode/norm"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/htmlref"
-	"github.com/wuweidict/wudict/internal/resource"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/htmlref"
+	"github.com/DMSHLabs/DictShelf/internal/resource"
 )
 
 // Media is one opened `media.db` (SPEC §3): binary resources

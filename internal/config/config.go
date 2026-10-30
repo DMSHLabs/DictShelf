@@ -19,7 +19,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 )
 
 // Config holds all server settings.

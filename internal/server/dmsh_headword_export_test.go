@@ -6,7 +6,7 @@ package server
 import (
 	"context"
 	"errors"
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"io"
 	"os"
 	"path/filepath"

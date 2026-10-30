@@ -9,12 +9,12 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/wuweidict/wudict/internal/config"
-	dslformat "github.com/wuweidict/wudict/internal/format/dsl"
-	"github.com/wuweidict/wudict/internal/indexconst"
-	"github.com/wuweidict/wudict/internal/logx"
-	"github.com/wuweidict/wudict/internal/morph"
-	"github.com/wuweidict/wudict/internal/search"
+	"github.com/DMSHLabs/DictShelf/internal/config"
+	dslformat "github.com/DMSHLabs/DictShelf/internal/format/dsl"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/morph"
+	"github.com/DMSHLabs/DictShelf/internal/search"
 )
 
 // Runtime is the application state shared by the HTTP adapter and native

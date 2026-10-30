@@ -1,4 +1,4 @@
-module github.com/wuweidict/wudict
+module github.com/DMSHLabs/DictShelf
 
 go 1.26.5
 

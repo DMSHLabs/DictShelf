@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // This reader reuses its headword slice on every Next. The ingest reader must

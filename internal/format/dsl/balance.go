@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/htmlref"
+	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 )
 
 // Zones and their nesting (D165).

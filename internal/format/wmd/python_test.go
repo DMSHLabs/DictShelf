@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/htmlref"
+	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 )
 
 // The pyglossary plugin (wudict_md) ports this package to Python, and its

@@ -61,7 +61,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/wuweidict/wudict/internal/hilite"
+	"github.com/DMSHLabs/DictShelf/internal/hilite"
 )
 
 const (

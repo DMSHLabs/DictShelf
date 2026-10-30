@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // A packed resource over the streaming threshold must come back as a

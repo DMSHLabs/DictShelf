@@ -8,8 +8,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/fsx"
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // Old comparison receipts remain readable when the source is unavailable.

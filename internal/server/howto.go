@@ -10,7 +10,7 @@ import (
 	"io/fs"
 	"net/http"
 
-	"github.com/wuweidict/wudict/internal/howto"
+	"github.com/DMSHLabs/DictShelf/internal/howto"
 )
 
 // handleHowtoCopy puts an editable copy of the wudict howto into the folder

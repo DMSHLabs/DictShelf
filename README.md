@@ -1,10 +1,12 @@
-# DictShelf — an Android fork of WuWeiDict
+# DictShelf — based on WuWeiDict
 
-**DictShelf** is an Android fork of [WuWeiDict](https://github.com/wuweidict/wudict)
-("wuDict"): a fast, _native_, self-contained, multi-format dictionary server that
-runs in your browser at [http://localhost:6888](http://localhost:6888).
+**DictShelf** is a cross-platform dictionary app based on the WuWeiDict codebase.
+Its source, releases and maintained documentation live in the
+[DMSHLabs/DictShelf repository](https://github.com/DMSHLabs/DictShelf). The app
+is a fast, _native_, self-contained, multi-format dictionary server that runs
+in your browser at [http://localhost:6888](http://localhost:6888).
 
-What differs from upstream:
+DictShelf keeps the original format support and adds its own product identity and platform work:
 
 - Its own Android identity — launcher name **DictShelf** — so it installs and
   runs **beside** the upstream wuDict app.
@@ -18,8 +20,7 @@ What differs from upstream:
   this fork authored carry its own — `Copyright (C) 2026 DmShAl (Shepeta
   Dmitry)`, under the same license.
 
-Desktop builds and the general manual live in the
-[upstream repository](https://github.com/wuweidict/wudict). To build the
+Desktop builds and the general manual live in this repository. To build the
 Android app from source, see the
 [Android build instructions](pages/docs/reference/building.md).
 
@@ -27,7 +28,7 @@ Runs on Android, macOS, Linux, Windows.
 
 One native golang binary, no dependencies and minimum configuration — just set the folders with your `.mdx/.slob/.bgl/.zim/.ifo` dictionary collections, and you are good to go.
 
-Runs natively on [android](https://wuweidict.github.io/wudict/apps/android/), [mac](https://wuweidict.github.io/wudict/apps/macos/), [windows](https://wuweidict.github.io/wudict/apps/windows/), [linux](https://wudict.legbehindneck.com/running/#__tabbed_1_2), and even raspberry pi.
+Runs natively on [android](https://dmshlabs.github.io/DictShelf/apps/android/), [mac](https://dmshlabs.github.io/DictShelf/apps/macos/), [windows](https://dmshlabs.github.io/DictShelf/apps/windows/), [linux](https://dmshlabs.github.io/DictShelf/running/#__tabbed_1_2), and even raspberry pi.
 
 **Supported formats**
 
@@ -45,9 +46,9 @@ Runs natively on [android](https://wuweidict.github.io/wudict/apps/android/), [m
 ## wuDict for Desktop
 
 1. Download the standalone binary for your OS from
-   [releases](https://github.com/wuweidict/wudict/releases), rename to `wudict`, 
+   [releases](https://github.com/DMSHLabs/DictShelf/releases), rename to `wudict`,
    `chmod +x wudict` (macOS/Linux) and move to a folder in `$PATH`, e.g. `/usr/local/bin`.
-2. Run `wudict` or `./wudict` if the file is in the current folder. For Windows, use the `dictshelf-windows-x64-setup-<version>.exe` installer or the `DictShelf.exe` desktop build. For macOS an app bundle is provided (it is not signed with a commercial Apple Developer Certificate, macOS flags it as unverified, and extra steps are needed to de-quarantine the app as described in the [manual](https://wuweidict.github.io/wudict/apps/macos/)).
+2. Run `wudict` or `./wudict` if the file is in the current folder. For Windows, use the `dictshelf-windows-x64-setup-<version>.exe` installer or the `DictShelf.exe` desktop build. For macOS an app bundle is provided (it is not signed with a commercial Apple Developer Certificate, macOS flags it as unverified, and extra steps are needed to de-quarantine the app as described in the [manual](https://dmshlabs.github.io/DictShelf/apps/macos/)).
 3. By default `wudict` searches for dictionaries under `~/Dictionaries` (including subfolders); 
    if the dictionary folder is missing or empty, a setup page opens where you can configure your dictionary folders.
 
@@ -112,7 +113,7 @@ be searched by selecting it in the dictionary dropdown.
 
 ## Run as an app (macOS)
 
-For macOS you can either run the `wudict` binary from a terminal, or use the **`wudict-macos-universal-app-<version>.zip`** from [releases](https://github.com/wuweidict/wudict/releases) which wraps `wudict` into a macOS app bundle.
+For macOS you can either run the `wudict` binary from a terminal, or use the **`wudict-macos-universal-app-<version>.zip`** from [releases](https://github.com/DMSHLabs/DictShelf/releases) which wraps `wudict` into a macOS app bundle.
 
 > [!WARNING]
 > The macOS bundle is signed with an ad-hoc certificate therefore on first run the bundle has be de-quarantined with `/usr/bin/xattr -cr /Applications/DictShelf.app` and then launched via righ-click → <kbd>**Open**</kbd>.
@@ -139,7 +140,7 @@ window. The same executable handles terminal commands, for example
 It also shows a tray icon; closing the window leaves the server running
 in the tray. **Exit** in Settings or **Quit** in the tray stops the server. If
 the WebView2 Runtime is absent, it opens the default browser instead. Logs go to
-`%USERPROFILE%\.dmshlabs\dictshelf\db.logs\dictshelf.log`. See also [running on Windows](https://wuweidict.github.io/wudict/apps/windows/).
+`%USERPROFILE%\.dmshlabs\dictshelf\db.logs\dictshelf.log`. See also [running on Windows](https://dmshlabs.github.io/DictShelf/apps/windows/).
 
 
 ## Run as a service (Linux)
@@ -202,7 +203,7 @@ BROWSER_EXTENSIONS = ["chrome-extension://bknaaoffefipfnpefmkbipcdemljbhjh"]
 (Firefox generates a fresh `moz-extension://` id for every installation, so
 there is no stable origin to pin there.)
 
-See also: [chrome/firefox browser extension](https://wuweidict.github.io/wudict/extension/)
+See also: [chrome/firefox browser extension](https://dmshlabs.github.io/DictShelf/extension/)
 
 Config file search order: `--config` / `CONFIG_PATH`, then
 `<exe-dir>/dictshelf.toml`, `~/.dmshlabs/dictshelf/dictshelf.toml`,
@@ -255,7 +256,7 @@ wudict res ~/Dicts/Oxford.mdd audio/a.mp3
 ```
 
 For more on command line usage see the manual:
-- [wuDict Command Line](https://wudict.legbehindneck.com/reference/cli/)
+- [wuDict Command Line](https://dmshlabs.github.io/DictShelf/reference/cli/)
 
 ## Sharing dictionaries (one folder each)
 
@@ -395,10 +396,10 @@ Or with the Go toolchain alone:
 
 ```sh
 # recommended flavour, the fastest (cgo sqlite + built-in speex), needs a C compiler
-go install -tags sqlite_fts5 github.com/wuweidict/wudict@latest
+go install -tags sqlite_fts5 github.com/DMSHLabs/DictShelf@latest
 
 # no C compiler? drop the tag — pure-Go sqlite, .spx audio via external speexdec
-go install github.com/wuweidict/wudict@latest
+go install github.com/DMSHLabs/DictShelf@latest
 ```
 
 Both produce a working `wudict`; the tag only chooses the SQLite driver.
@@ -411,7 +412,7 @@ for the cgo flavour with internal speex decoder and optimized sqlite3, and
 Supported OS's: macOS (arm64/amd64), Linux (amd64/arm64/armv7/armv6) and Windows
 (amd64/arm64).
 
-More details: https://wudict.legbehindneck.com/reference/building/
+More details: https://dmshlabs.github.io/DictShelf/reference/building/
 
 ### Building the macOS bundle from source
 
@@ -426,7 +427,7 @@ make mac-app-install    # copy it to ~/Applications (APP_DEST= to relocate)
 ```
 
 The bundle is the same binary as console `wudict` which spawns no terminal window, and 
-additionally adds a **menu-bar icon** with common actions. See more about [running on macOS](https://wuweidict.github.io/wudict/apps/macos/).
+additionally adds a **menu-bar icon** with common actions. See more about [running on macOS](https://dmshlabs.github.io/DictShelf/apps/macos/).
 
 
 ## Acknowledgements

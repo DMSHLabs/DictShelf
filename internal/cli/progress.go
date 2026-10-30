@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // meter is the in-place counter of a long CLI pass: how many items are done,

@@ -6,7 +6,7 @@
 
 package server
 
-import "github.com/wuweidict/wudict/internal/fsx"
+import "github.com/DMSHLabs/DictShelf/internal/fsx"
 
 // releasePrepared hands back the prepared databases an ingest is about to
 // replace. A rebuild ends in os.Rename over the existing text.db (and media

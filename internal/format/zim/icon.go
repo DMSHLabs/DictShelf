@@ -10,7 +10,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
 // Icon returns the first standard OpenZIM illustration available in the

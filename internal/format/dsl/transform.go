@@ -15,7 +15,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/wuweidict/wudict/internal/artmark"
+	"github.com/DMSHLabs/DictShelf/internal/artmark"
 )
 
 // stripComments removes `{{...}}` comments. A comment may itself contain a

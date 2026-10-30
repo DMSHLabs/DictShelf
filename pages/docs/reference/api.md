@@ -59,7 +59,7 @@ document. A test checks it against the server's routes in both directions.
 | Where | |
 | --- | --- |
 | `http://127.0.0.1:6888/api/openapi.yaml` | served by the running server |
-| [`internal/server/web/openapi.yaml`](https://github.com/wuweidict/wudict/blob/master/internal/server/web/openapi.yaml) | in the repository |
+| [`internal/server/web/openapi.yaml`](https://github.com/DMSHLabs/DictShelf/blob/dev/internal/server/web/openapi.yaml) | in the repository |
 | [API reference](../api/index.html) | rendered, with a `curl` example per endpoint |
 | `make api-ui` | rendered to `dist/api-explorer.html`, for offline use |
 

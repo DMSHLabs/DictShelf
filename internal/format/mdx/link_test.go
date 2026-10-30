@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	gomdict "github.com/wuweidict/wudict/internal/gomdict"
-	"github.com/wuweidict/wudict/internal/resource"
+	gomdict "github.com/DMSHLabs/DictShelf/internal/gomdict"
+	"github.com/DMSHLabs/DictShelf/internal/resource"
 )
 
 // linkSize collapses two spellings of "to the end of the block" into one, and

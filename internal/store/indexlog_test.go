@@ -5,7 +5,7 @@ package store
 
 import (
 	"errors"
-	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"os"
 	"path/filepath"
 	"strings"

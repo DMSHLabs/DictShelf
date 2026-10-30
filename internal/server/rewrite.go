@@ -8,9 +8,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/hilite"
-	"github.com/wuweidict/wudict/internal/htmlref"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/hilite"
+	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 )
 
 // schemeRef matches any real URI scheme (http:, data:, bword:, entry:, d:, x:…).

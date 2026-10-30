@@ -14,10 +14,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/facet"
-	"github.com/wuweidict/wudict/internal/search"
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/facet"
+	"github.com/DMSHLabs/DictShelf/internal/search"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // dictRowsVersion is part of every row key and list tag: bump it when a

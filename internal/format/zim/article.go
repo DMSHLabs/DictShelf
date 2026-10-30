@@ -10,8 +10,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/htmlref"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 )
 
 // A ZIM article is a complete HTML DOCUMENT - doctype, <html>, a <head> full

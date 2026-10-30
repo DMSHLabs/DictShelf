@@ -24,11 +24,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/wuweidict/wudict/internal/artmark"
-	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/artmark"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 func init() {

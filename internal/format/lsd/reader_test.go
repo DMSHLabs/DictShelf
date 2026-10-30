@@ -16,9 +16,9 @@ import (
 	"testing"
 	"unicode/utf16"
 
-	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/format/dsl"
-	"github.com/wuweidict/wudict/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/format/dsl"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 func TestDSLHeadingPreservesSupplementaryUnicode(t *testing.T) {
