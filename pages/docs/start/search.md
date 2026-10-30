@@ -192,7 +192,7 @@ http://localhost:6888/?q=serendipity&mode=prefix&dict=all
 | `dict` | `all`, a dictionary id ([`/api/dicts`](../reference/api.md) lists them), or a group, e.g. `g:lang:en` |
 | `theme` | `auto`, `light` or `dark`; kept for later visits |
 
-On Android, `wudict://lookup?q=serendipity` opens the same search; see
+On Android, `dictshelf://lookup?q=serendipity` opens the same search; see
 [the Android app](../apps/android.md).
 
 ## Search from the terminal

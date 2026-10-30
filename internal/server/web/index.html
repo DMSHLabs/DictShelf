@@ -1345,7 +1345,7 @@ const articleResultCaches=new Map();
 const articleFindPageLoads=new Set();
 let articleCacheQueue=[],articleCacheActive=0,articleCacheAbort=null,articleCacheSeq=0,articleCacheFinished=0,articleCacheTotal=0;
 let articleCacheGroupID="",articleCacheGroupCount=1;
-let articleCacheSearchSettled=false,articleCacheFirstOrder=Infinity;
+let articleCacheSearchSettled=false;
 let countAllResultsInBackground=false,activeSearchCountsInBackground=false;
 function newArticleResultCacheID(){
   const bytes=new Uint8Array(16);
@@ -1357,7 +1357,7 @@ function stopArticleResultCaches(){
   for(const state of articleResultCaches.values())clearTimeout(state.indexTimer);
   articleCacheQueue=[];articleCacheActive=0;articleCacheFinished=0;articleCacheTotal=0;
   articleCacheGroupID="";articleCacheGroupCount=1;
-  articleCacheSearchSettled=false;articleCacheFirstOrder=Infinity;
+  articleCacheSearchSettled=false;
   articleResultCaches.clear();maskTaskFinish("search-results");
 }
 function cancelArticleResultCaches(){
@@ -1417,17 +1417,15 @@ function finishArticleCacheInitialPage(state){
     node.dataset.searchDict===state.dict&&node.dataset.searchMode===state.mode&&
     node.dataset.searchQuery===state.displayQuery);
   if(!det)return;
-  const first=state.order===articleCacheFirstOrder,portion=searchPortionSize();
+  const portion=searchPortionSize();
   if(state.total<=state.initial)return;
   state.initialPageRequested=true;
-  fetchSearchPortion(det,0,{openAfter:state.mode!=="fts",size:first?state.initial:portion,
-    pageSize:portion,firstPageSize:first?state.initial:0});
+  fetchSearchPortion(det,0,{openAfter:state.mode!=="fts",size:state.initial,
+    pageSize:portion,firstPageSize:state.initial});
 }
 function settleArticleCacheSearch(seq){
   if(seq!==searchSeq)return;
-  articleCacheSearchSettled=true;articleCacheFirstOrder=Infinity;
-  for(const state of articleResultCaches.values())if(state.seq===seq)
-    articleCacheFirstOrder=Math.min(articleCacheFirstOrder,state.order);
+  articleCacheSearchSettled=true;
   for(const state of articleResultCaches.values())finishArticleCacheInitialPage(state);
 }
 function pumpArticleResultCaches(){
@@ -9525,7 +9523,7 @@ async function fetchSearchPortion(det,start,options={}){
   const cached=articleResultCaches.get(id);
   const savedFirstPageSize=Math.max(0,Number(options.firstPageSize??det.dataset.searchFirstPageSize)||0);
   const firstPageSize=savedFirstPageSize||
-    (cached&&cached.displayQuery===query&&cached.order===articleCacheFirstOrder?cached.initial:0);
+    (cached&&cached.displayQuery===query&&cached.mode===mode?cached.initial:0);
   if(cached&&cached.displayQuery===query&&cached.mode===mode&&!cached.error&&
      (cached.background||cached.started||cached.done)){
     let loaded=null;
@@ -9965,7 +9963,7 @@ async function requestArticleBlock(det,direction){
   const start=Number(det.dataset.searchPageStart)||0;
   const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
   const firstPageSize=Math.max(0,Number(det.dataset.searchFirstPageSize)||
-    (cache&&cache.displayQuery===query&&cache.order===articleCacheFirstOrder?cache.initial:0));
+    (cache&&cache.displayQuery===query&&cache.mode===mode?cache.initial:0));
   const page=searchPortionPageAt(start,size,firstPageSize),targetPage=page+direction;
   if(targetPage<1||det.dataset.searchHasNext==="false"&&direction>0)return null;
   const target=searchPortionOffset(targetPage,size,firstPageSize);

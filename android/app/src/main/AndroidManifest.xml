@@ -269,17 +269,15 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
 
-            <!-- wudict://lookup?q=… - other apps and automation (Tasker,
-                 Termux, note apps). The scheme is already the page→shell
-                 private channel (Storage.handleShellUri, host "import"), and
-                 the hosts do not collide: in-page wudict:// URLs are
-                 intercepted by Shell.openExternal and never reach the system,
-                 while this filter only ever sees other apps' intents. -->
+            <!-- dictshelf://lookup?q=… - other apps and automation (Tasker,
+                 Termux, note apps). This app-specific scheme avoids competing
+                 with wuDict's wudict:// lookup links. The separate wudict://
+                 scheme remains private to page→shell navigation. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:host="lookup" android:scheme="wudict" />
+                <data android:host="lookup" android:scheme="dictshelf" />
             </intent-filter>
 
             <!-- A reading app's own dictionary button. Every action below was

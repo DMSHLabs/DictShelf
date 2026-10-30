@@ -286,7 +286,7 @@ Tap a letter to jump; type the start of a word to go there; tap a headword to re
 
 **Click a link in an article to follow it; double-click any word (📱 double-tap) to look it up**. A link is looked up in the dictionary you are reading first, then in all of them. Back returns to where you were.
 
-Every search has its own address, so you can bookmark it: `/?q=word&mode=exact`. 📱 `wudict://lookup?q=word` opens a lookup from other apps and scripts.
+Every search has its own address, so you can bookmark it: `/?q=word&mode=exact`. 📱 `dictshelf://lookup?q=word` opens a lookup from other apps and scripts.
 
 ***
 
@@ -353,8 +353,8 @@ To exclude a dictionary from *All dictionaries* searches, just untick its checkm
 - **Add dictionaries** by opening or sharing a file to wuDict: see [wudict add dictionaries](<entry://wudict add dictionaries>).
 - **Full screen**: long-tap the wuDict icon on the home screen → <kbd>Settings</kbd> → **Screen**: *Hide while you read* hides the system bars, *Edges of the screen* draws edge to edge, into the camera cutout.
 - The keyboard hides when you scroll an article. Off screen, wuDict uses one core, to avoid draining the battery.
-- **Reading apps**: in the reader's dictionary settings, choose wuDict, or a dictionary wuDict answers for: *ColorDict*/*GoldenDict*, *Aard 2*, *Lingvo*, *Fora* or *Dictan*. In Moon+ Reader, a *Customized* dictionary with the URL `wudict://lookup?q=%s` also works.
-- `wudict://lookup?q=word` opens a lookup from automation apps and scripts.
+- **Reading apps**: in the reader's dictionary settings, choose wuDict, or a dictionary wuDict answers for: *ColorDict*/*GoldenDict*, *Aard 2*, *Lingvo*, *Fora* or *Dictan*. In Moon+ Reader, a *Customized* dictionary with the URL `dictshelf://lookup?q=%s` also works.
+- `dictshelf://lookup?q=word` opens a lookup from automation apps and scripts.
 
 ***
 
