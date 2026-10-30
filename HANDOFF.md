@@ -1,6 +1,6 @@
 # Agent handoff — current state
 
-Canonical checkout: `D:\Projects\Android\DictShelf\`, branch `codex/android-folder-tabs` from `dev` at `4ef13d84`. Edit Folders now has **Dictionary folders** and **Download Dictionary** tabs in the same window; import is available when an install folder exists. Runtime verification is pending.
+Canonical checkout: `D:\Projects\Android\DictShelf\`, branch `codex/android-folder-tabs` at `1601bccb`. Edit Folders now has **Dictionary folders** and **Download Dictionary** tabs in the same window; import is available when an install folder exists. Main search suggestions now follow the selected headword mode, including wildcards, cancel on edits or scope changes, and use Results limits of 40 per dictionary and 500 overall by default. Full-text remains excluded. Runtime UI verification is pending.
 
 Android Settings → Update shows byte progress and a determinate/indeterminate
 bar on Android and Windows, including when notifications are off. Missing

@@ -428,6 +428,8 @@
   "panel.searchAllResultsInBackground": "Search all matches in the background",
   "panel.resultPageSize": "Results per portion:",
   "panel.resultPageSizeHint": "Choose how many articles to load at a time after the first results.",
+  "panel.suggestionPerDictionary": "Suggestions per dictionary:",
+  "panel.suggestionListLimit": "Maximum suggestion list length:",
   "panel.clear": "Clear",
   "panel.system": "System",
   "panel.systemDoor": "System settings…",

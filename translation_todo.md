@@ -1,3 +1,5 @@
+2026-10-31 Main search suggestions now use the selected headword mode, including wildcards, with EN/RU labels for per-dictionary and total list limits in Settings → Results. Full-text suggestions are excluded. Both catalogs parse and `go build ./internal/server` passes; runtime wording and dropdown behavior remain to be checked.
+
 2026-10-29 Windows System Settings → Window now offers four supplied application icons and localizes their labels in EN/RU. The selection updates the window, taskbar and tray; an existing matching desktop shortcut is updated when Windows allows it. Catalog and runtime checks remain pending.
 2026-10-28 Settings → Results now labels the background match count in EN/RU and saves its opt-out in `state.json`. Layout and fresh-profile platform defaults remain to be checked in the app.
 

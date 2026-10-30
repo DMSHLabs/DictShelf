@@ -78,7 +78,10 @@ type UIPrefs struct {
 	SkipBackgroundResultCount bool   `json:"skipBackgroundResultCount,omitempty"`
 	SearchReturnCache         string `json:"searchReturnCache,omitempty"`
 	CombinedDictionaryLimit   int    `json:"combinedDictionaryLimit,omitempty"`
-	DictIconsOff              bool   `json:"dictIconsOff,omitempty"`
+	// Suggestion limits apply to headword suggestions in the main search field.
+	SuggestionPerDictionary int  `json:"suggestionPerDictionary,omitempty"`
+	SuggestionListLimit     int  `json:"suggestionListLimit,omitempty"`
+	DictIconsOff            bool `json:"dictIconsOff,omitempty"`
 
 	FontSize int `json:"fontSize,omitempty"` // article text, px; 0 = the default
 
