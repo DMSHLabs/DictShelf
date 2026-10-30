@@ -9,3 +9,5 @@ package cli
 func cleanupWindowsUpdaterHelperState() {}
 
 func runWindowsUpdateHelper([]string) bool { return false }
+
+func runWindowsTaskbarRefreshHelper([]string) bool { return false }

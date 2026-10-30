@@ -31,6 +31,30 @@ var trayIcon2Transparent []byte
 //go:embed icons/tray-windows-icon2_transparent_light.png
 var trayIcon2TransparentLight []byte
 
+//go:embed icons/taskbar-icon1.ico
+var taskbarIcon1 []byte
+
+//go:embed icons/taskbar-icon1_transparent.ico
+var taskbarIcon1Transparent []byte
+
+//go:embed icons/taskbar-icon1_transparent_light.ico
+var taskbarIcon1TransparentLight []byte
+
+//go:embed icons/taskbar-icon2.ico
+var taskbarIcon2 []byte
+
+//go:embed icons/taskbar-icon2_transparent.ico
+var taskbarIcon2Transparent []byte
+
+//go:embed icons/taskbar-icon2_transparent_light.ico
+var taskbarIcon2TransparentLight []byte
+
+var windowsTaskbarICO = map[string][]byte{
+	"icon1": taskbarIcon1, "icon1_transparent": taskbarIcon1Transparent,
+	"icon1_transparent_light": taskbarIcon1TransparentLight, "icon2": taskbarIcon2,
+	"icon2_transparent": taskbarIcon2Transparent, "icon2_transparent_light": taskbarIcon2TransparentLight,
+}
+
 var windowsTrayIcons = map[string][]byte{
 	"icon1": trayIcon1, "icon1_transparent": trayIcon1Transparent,
 	"icon1_transparent_light": trayIcon1TransparentLight, "icon2": trayIcon2,
@@ -65,6 +89,42 @@ func WindowsIconIndex(name string) (int, bool) {
 	}
 }
 
+func WindowsIconName(index int) (string, bool) {
+	for name := range windowsTaskbarICO {
+		if i, ok := WindowsIconIndex(name); ok && i == index {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+func WindowsTaskbarICO(name string) ([]byte, bool) {
+	data, ok := windowsTaskbarICO[name]
+	return data, ok
+}
+
+func WindowsTaskbarICOPair(name string) (dark, light []byte, automatic bool, ok bool) {
+	switch name {
+	case "icon1_transparent", "icon1_transparent_light":
+		return taskbarIcon1Transparent, taskbarIcon1TransparentLight, true, true
+	case "icon2_transparent", "icon2_transparent_light":
+		return taskbarIcon2Transparent, taskbarIcon2TransparentLight, true, true
+	default:
+		data, exists := windowsTaskbarICO[name]
+		return data, data, false, exists
+	}
+}
+
+func WindowsTaskbarIconName() (string, bool) {
+	windowsTrayChoiceMu.RLock()
+	name := windowsTrayChoice
+	windowsTrayChoiceMu.RUnlock()
+	if name == "" {
+		return "", false
+	}
+	return windowsTaskbarIconName(name), true
+}
+
 func SetWindowsIcon(name string) bool {
 	if _, ok := windowsTrayIcons[name]; !ok {
 		return false
@@ -90,24 +150,14 @@ func SetWindowsTaskbarIconCallback(callback func(string)) {
 func applyWindowsTrayChoice(name string) {
 	icon := windowsTrayIcons[name]
 	dark := icon
-	taskbarName := name
+	taskbarName := windowsTaskbarIconName(name)
 	switch name {
 	case "icon1_transparent", "icon1_transparent_light":
 		icon = trayIcon1Transparent
 		dark = trayIcon1TransparentLight
-		if windowsTrayUsesDarkTheme() {
-			taskbarName = "icon1_transparent_light"
-		} else {
-			taskbarName = "icon1_transparent"
-		}
 	case "icon2_transparent", "icon2_transparent_light":
 		icon = trayIcon2Transparent
 		dark = trayIcon2TransparentLight
-		if windowsTrayUsesDarkTheme() {
-			taskbarName = "icon2_transparent_light"
-		} else {
-			taskbarName = "icon2_transparent"
-		}
 	}
 	setActiveSystemTrayIcons(icon, dark)
 	windowsTrayChoiceMu.RLock()
@@ -115,6 +165,23 @@ func applyWindowsTrayChoice(name string) {
 	windowsTrayChoiceMu.RUnlock()
 	if callback != nil {
 		callback(taskbarName)
+	}
+}
+
+func windowsTaskbarIconName(name string) string {
+	switch name {
+	case "icon1_transparent", "icon1_transparent_light":
+		if windowsTrayUsesDarkTheme() {
+			return "icon1_transparent_light"
+		}
+		return "icon1_transparent"
+	case "icon2_transparent", "icon2_transparent_light":
+		if windowsTrayUsesDarkTheme() {
+			return "icon2_transparent_light"
+		}
+		return "icon2_transparent"
+	default:
+		return name
 	}
 }
 

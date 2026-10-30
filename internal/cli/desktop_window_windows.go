@@ -211,10 +211,12 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 		logx.SystemDiagnostic("desktop windowclose hwnd=%#x visible=%t hidden_state=%t close_to_tray=%t", hwnd, windowVisible, desktopWindowHidden.Load(), closeToTray)
 		if !closeToTray {
 			desktopWindowHidden.Store(false)
+			desktopRefreshTaskbarShortcutIcon(hwnd)
 			return false
 		}
 		if !windowVisible {
 			desktopWindowHidden.Store(true)
+			desktopRefreshTaskbarShortcutIcon(hwnd)
 			return true
 		}
 		const swHide = 0
@@ -222,6 +224,7 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 		desktopWindowHidden.Store(true)
 		visibleAfter, _, _ := procIsWindowVisible.Call(hwnd)
 		logx.SystemDiagnostic("desktop close-to-tray hide hwnd=%#x visible_after=%t", hwnd, visibleAfter != 0)
+		desktopRefreshTaskbarShortcutIcon(hwnd)
 		return true
 	})
 	webview.SetMinimizeToTrayHook(func(hwnd uintptr) bool {
@@ -232,6 +235,7 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 		procShowWindow.Call(hwnd, swHide)
 		desktopWindowHidden.Store(true)
 		logx.SystemDiagnostic("desktop minimize-to-tray hide hwnd=%#x", hwnd)
+		desktopRefreshTaskbarShortcutIcon(hwnd)
 		return true
 	})
 	var lastUILanguage atomic.Uint32
@@ -308,10 +312,12 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		}
 	}
 	webviewStarted := time.Now()
+	initialAppIconIndex, initialTaskbarIconIndex := desktopInitialWindowsIcons(desktopRequest)
+	desktopCurrentTaskbarIcon.Store(int32(initialTaskbarIconIndex))
 	w := webview.NewWithOptions(webview.WebViewOptions{
 		DataPath:  profile,
 		AutoFocus: true,
-		WindowOptions: webview.WindowOptions{Title: "DictShelf", Width: windowWidth, Height: windowHeight, IconId: 101, Center: windowCenter,
+		WindowOptions: webview.WindowOptions{Title: "DictShelf", Width: windowWidth, Height: windowHeight, IconId: uint(101 + initialTaskbarIconIndex), Center: windowCenter,
 			BackgroundColor: initialColor, CaptionColor: customCaptionColor, StartupSplash: true},
 	})
 	if w == nil {
@@ -331,6 +337,7 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		}
 		return
 	}
+	desktopSetWindowIcon(uintptr(w.Window()), initialAppIconIndex)
 	if !desktopInstallKeyboardHook() {
 		logx.Warn("could not install the layout-independent global hot-key listener")
 	}
@@ -837,6 +844,38 @@ func desktopInitialWindowColors(request func(context.Context, string, string) (a
 		return "#1C1A17", "#1C1A17"
 	}
 	return "#F4ECD8", "#F4ECD8"
+}
+
+func desktopInitialWindowsIcons(request func(context.Context, string, string) (any, error)) (appIconIndex, taskbarIconIndex int) {
+	appName := "icon2_transparent"
+	trayName := "icon2_transparent"
+	if request != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+		if value, err := request(ctx, "storageRead", ""); err == nil {
+			if values, ok := value.(map[string]string); ok {
+				if values["wudict_windows_app_icon"] != "" {
+					appName = values["wudict_windows_app_icon"]
+				}
+				if values["wudict_windows_tray_icon"] != "" {
+					trayName = values["wudict_windows_tray_icon"]
+				}
+			}
+		}
+	}
+	if index, ok := tray.WindowsIconIndex(appName); ok {
+		appIconIndex = index
+	}
+	if !tray.SetWindowsIcon(trayName) {
+		trayName = "icon2_transparent"
+		tray.SetWindowsIcon(trayName)
+	}
+	if name, ok := tray.WindowsTaskbarIconName(); ok {
+		if index, found := tray.WindowsIconIndex(name); found {
+			taskbarIconIndex = index
+		}
+	}
+	return appIconIndex, taskbarIconIndex
 }
 
 func validWindowHexColor(value string) bool {
