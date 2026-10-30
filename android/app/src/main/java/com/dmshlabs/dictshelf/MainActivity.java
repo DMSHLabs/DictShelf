@@ -696,6 +696,12 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        androidUpdate.onResume(this);
+    }
+
+    @Override
     protected void onStop() {
         super.onStop();
         androidUpdate.onStop(this);
@@ -719,6 +725,20 @@ public class MainActivity extends Activity {
         runOnUiThread(() -> {
             if (web != null) web.evaluateJavascript(
                     "window.wudictAndroidUpdateFailed&&window.wudictAndroidUpdateFailed()", null);
+        });
+    }
+
+    void notifyAndroidInstallStarted() {
+        runOnUiThread(() -> {
+            if (web != null) web.evaluateJavascript(
+                    "window.wudictAndroidInstallStarted&&window.wudictAndroidInstallStarted()", null);
+        });
+    }
+
+    void notifyAndroidInstallPermissionMissing() {
+        runOnUiThread(() -> {
+            if (web != null) web.evaluateJavascript(
+                    "window.wudictAndroidInstallPermissionMissing&&window.wudictAndroidInstallPermissionMissing()", null);
         });
     }
 

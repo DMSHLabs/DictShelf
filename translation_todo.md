@@ -187,7 +187,7 @@ The user confirmed that the former Language dialog worked and Browse changed lan
 - [ ] Check day/night, custom background color, wallpaper, and Quiet labels. Translation must not restore grey text to active controls or break window appearance.
 - [ ] Verify **Camera area and system bars** appears only in Android Appearance, not Windows WebView; check the EN/RU labels and Android controls after rebuilding.
 - [ ] Check Russian counts: 1/2/5/11/21/22; limited results with `+`; long dictionary/group names and paths.
-- [ ] Check import, notifications, and native dialogs in the required flavors; Android's system picker may remain in the system language.
+- [ ] Check import, notifications, and native dialogs in the required flavors, including the Android update permission dialog, opening install permission settings, automatic installer launch after returning with permission, and manual APK installation from Downloads; Android's system picker may remain in the system language.
 - [ ] Check Advanced: inherited value, ranges, invalid input, restore, and the notice about applying settings on next opening. Do not change real settings solely for testing without necessity and an authorized context.
 - [ ] Check read aloud with a real engine: voice selection, stopping, multiple voices for one region, unavailable voice, speech settings. English text must remain English with the Russian interface.
 - [ ] Check expandable subentry links in an ordinary article and a JS/iframe article: closing, no result, and loading failure.

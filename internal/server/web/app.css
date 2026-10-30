@@ -1685,6 +1685,7 @@ html[data-dict-icons-off] .dict-icon{display:none}
 #panel .panel-update-status[hidden]{display:none}
 #panel .panel-update-status a{color:var(--link)}
 #panel .panel-update-status .update-download-progress{display:inline-block;margin-top:.2em;color:var(--label)}
+#panel .panel-update-status .update-download-bar{display:block;width:min(100%,22rem);height:.45rem;margin-top:.3em;accent-color:var(--accent)}
 #panelBtn{position:relative}
 #panelBtn.update-downloading{z-index:1}
 #panelBtn.update-downloading::after{content:"";position:absolute;inset:-3px;z-index:2;border-radius:50%;pointer-events:none;

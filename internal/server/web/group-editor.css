@@ -12,8 +12,8 @@ dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560p
 #systemLogSavedDialog .system-log-saved-actions{margin-top:.35em}
 dialog#clearSystemLogDialog.group-dialog.panel-card{height:fit-content;margin:auto;background-color:var(--paper-bg,var(--bg))}
 html[data-shell-image] dialog#clearSystemLogDialog.group-dialog.panel-card{background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%;background-position:center;background-repeat:no-repeat}
-dialog#updateInstallDialog.group-dialog.panel-card,dialog#updateInstalledDialog.group-dialog.panel-card{height:fit-content;margin:auto;background-color:var(--paper-bg,var(--bg))}
-html[data-shell-image] dialog#updateInstallDialog.group-dialog.panel-card,html[data-shell-image] dialog#updateInstalledDialog.group-dialog.panel-card{background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%;background-position:center;background-repeat:no-repeat}
+dialog#updateInstallDialog.group-dialog.panel-card,dialog#updatePermissionDialog.group-dialog.panel-card,dialog#updateInstalledDialog.group-dialog.panel-card{height:fit-content;margin:auto;background-color:var(--paper-bg,var(--bg))}
+html[data-shell-image] dialog#updateInstallDialog.group-dialog.panel-card,html[data-shell-image] dialog#updatePermissionDialog.group-dialog.panel-card,html[data-shell-image] dialog#updateInstalledDialog.group-dialog.panel-card{background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%;background-position:center;background-repeat:no-repeat}
 #clearSystemLogDialog p{margin:0;line-height:1.4}
 #clearSystemLogDialog #clearSystemLogStatus:empty{display:none}
 #clearSystemLogDialog .system-log-saved-actions{margin-top:.35em}
