@@ -5407,9 +5407,11 @@ async function checkForUpdates(silent=false){
     if(!silent)updateManualResult=true;
     renderUpdateNotice();
     refreshUpdateDownloadState();
+    return true;
   }catch(e){
     if(silent){try{localStorage.removeItem("dictshelf_update_check_"+updateChannel)}catch(_){}}
     else{updateStatusMessage=tx("system.updateCheckFailed",{error:checkTimedOut?tx("system.updateCheckTimeout"):window.wudictI18n.errorText(e.message)});updateManualResult=true;renderUpdateNotice()}
+    return false;
   }finally{
     if(timeoutId)clearTimeout(timeoutId);
   }
@@ -5447,6 +5449,25 @@ async function installUpdate(){
   updateStarting=true;updateActionPhase="install";updateStatusMessage="";renderUpdateNotice();
   try{
     if(window.wudictAndroidUpdaterAvailable){
+      const installedCandidate=updateAvailable.version;
+      const checked=await checkForUpdates(true);
+      if(!checked){
+        clearPendingUpdateInstall();updateStarting=false;updateActionPhase="";
+        updateStatusMessage=tx("system.updateCheckFailed",{error:tx("system.updateCheckTimeout")});
+        updateManualResult=true;renderUpdateNotice();return;
+      }
+      if(!updateAvailable){
+        clearPendingUpdateInstall();updateStarting=false;updateActionPhase="";
+        updateStatusMessage=tx("system.noUpdates");updateManualResult=true;renderUpdateNotice();return;
+      }
+      if(updateAvailable.version!==installedCandidate||downloadedUpdateVersion!==updateAvailable.version){
+        clearPendingUpdateInstall();updateStarting=false;updateActionPhase="";
+        if(downloadedUpdateVersion!==updateAvailable.version){
+          updateDownloaded=false;pendingAndroidUpdateState=null;
+          updateStatusMessage=tx("system.updateAvailable",{version:updateAvailable.version});
+        }
+        updateManualResult=true;renderUpdateNotice();return;
+      }
       rememberPendingUpdateInstall(updateAvailable.version);
       const answer=window.prompt("wudict:android-update",JSON.stringify({action:"install",version:updateAvailable.version,androidApks:updateAvailable.androidApks||{}}));
       if(!answer)throw new Error("Android update was not started");
