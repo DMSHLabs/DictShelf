@@ -20,12 +20,13 @@ func searchRequestFromQuery(q url.Values) SearchRequest {
 	cacheCount, _ := strconv.Atoi(q.Get("cacheCount"))
 	cacheOrder, _ := strconv.Atoi(q.Get("cacheOrder"))
 	highlight, _ := queryFlag(q, "hl")
+	suggestions, _ := queryFlag(q, "suggest")
 	ignoreDiacritics, _ := queryFlag(q, "ignoreDiacritics")
 	pageCacheDiagnostics, _ := queryFlag(q, "pageCacheDiagnostics")
 	searchDiagnostics, _ := queryFlag(q, "searchDiagnostics")
 	return SearchRequest{
 		Query: q.Get("q"), Mode: q.Get("mode"), Format: q.Get("format"),
-		Dictionary: q.Get("dict"), Limit: n, Highlight: highlight,
+		Dictionary: q.Get("dict"), Limit: n, Highlight: highlight, Suggestions: suggestions,
 		IgnoreDiacritics:     ignoreDiacritics,
 		PageCacheDiagnostics: pageCacheDiagnostics,
 		SearchDiagnostics:    searchDiagnostics,
