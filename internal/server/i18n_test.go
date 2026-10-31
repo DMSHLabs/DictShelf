@@ -113,8 +113,12 @@ func TestI18nPagesAndCache(t *testing.T) {
 		if path != "/" && strings.Contains(body, `id="languageBtn"`) {
 			t.Errorf("temporary language selector remains on %s", path)
 		}
-		for route, title := range map[string]string{"/setup": "Папки словарей", "/lemmas": "Словоформы"} {
-			if path == route && !strings.Contains(body, "<title>"+title+"</title>") {
+		// The expected title is read from the catalogue rather than copied as a
+		// literal: the setup page's title was renamed once already
+		// ("Dictionary folders" → "Dictionary management"), and a hardcoded
+		// copy here turns that into a fake failure instead of a caught bug.
+		for route, key := range map[string]string{"/setup": "pages.setupTitle", "/lemmas": "pages.lemmas"} {
+			if path == route && !strings.Contains(body, "<title>"+uiText("ru", key)+"</title>") {
 				t.Errorf("page title not translated: %s", path)
 			}
 		}

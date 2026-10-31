@@ -1021,6 +1021,7 @@ html:not([data-shell-image]) #hotkeysSection .hotkey-row input{background-image:
 #systemSettingsBody .sys-row:has(>.sys-return-cache-select)>.sys-label{flex:0 1 auto}
 #systemSettingsBody .sys-combined-limit>.sys-label{flex:0 1 auto}
 #systemSettingsBody .sys-combined-limit>input{height:calc(var(--ui-control-height) * 1em);min-height:0;padding:0 .6em;line-height:1}
+#systemSettingsBody .sys-search-threads>.sys-label{flex:0 1 auto}
 #systemSettingsBody .sys-num .sys-return-cache-select>select{display:block;width:100%;max-width:none;min-width:0;box-sizing:border-box;
   height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1;color:var(--fg);background:var(--bg);
   border:1px solid var(--line);border-radius:5px;padding:0 1.8em 0 .55em;appearance:none;-webkit-appearance:none}

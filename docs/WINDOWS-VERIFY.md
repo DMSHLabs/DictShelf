@@ -51,9 +51,11 @@ them are in `docs/handoff-archive.md`.
   the browser must be reloaded after the server is really new.
 - Go: `go build ./...`; targeted `go test ./internal/<pkg> -run '...' -count=1`.
 - **`build-windows.cmd [cli|server|installer] [--channel ...] [--update-icon]`** —
-  the fork's Windows builds. The embedded PE icon is reused from the checked-in
-  `dictshelf_windows_amd64.syso`; pass `--update-icon` after changing
-  `packaging\windows\dictshelf.ico` to regenerate it. Before replacing a
+  the fork's Windows builds. The PE resource object `dictshelf_windows_amd64.syso`
+  is generated on every build and holds the six icons (from
+  `packaging\windows\dictshelf.rc`) together with the version block, because the
+  Go linker accepts only one `.rsrc` section. Pass `--update-icon` after changing
+  `packaging\windows\dictshelf.ico` to refresh the icon half alone. Before replacing a
   running output executable, the script force-stops it and waits up to 60 seconds
   for Windows to release the file. The default command builds listenerless WebView
   `DictShelf.exe`, `cli` builds console `DictShelf-cli.exe`, `server` builds console HTTP-server

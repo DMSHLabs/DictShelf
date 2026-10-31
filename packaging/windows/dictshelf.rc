@@ -4,7 +4,10 @@
 // The _windows_amd64 suffix makes cmd/go link the object ONLY for that
 // GOOS/GOARCH pair; an unsuffixed .syso is linked into every target, where
 // the Android ELF linker rejects it ("unknown file type").
-// Regenerate with windres -F pe-x86-64 -i packaging/windows/dictshelf.rc -o dictshelf_windows_amd64.syso.
+// This file holds the icons only. The build appends the version block and
+// compiles the pair into the single dictshelf_windows_amd64.syso
+// (tools/make-windows-version-info.ps1), because Go links only one .rsrc.
+// For an icon-only object: windres -F pe-x86-64 -i packaging/windows/dictshelf.rc -o dictshelf_windows_amd64.syso
 // Resource IDs map to icon indices in System Settings; icon2_transparent is default.
 101 ICON "packaging/windows/icons/icon2_transparent.ico"
 102 ICON "packaging/windows/icons/icon1.ico"

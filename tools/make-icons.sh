@@ -197,8 +197,9 @@ printf 'dictshelf.ico   '
 ls -l "$ico" | awk '{print $5 " bytes"}'
 
 # Keep the app/window PE icon in sync with the ICO. The resource compiler is
-# only available on Windows; the committed, OS-filtered .syso is the build
-# input on every Windows build and is also what Android builds safely ignore.
+# only available on Windows, and this writes an icon-only object: the Windows
+# build regenerates the same file with the version block appended, because Go
+# links only one .rsrc section (see tools/make-windows-version-info.ps1).
 windres_bin=${WINDRES:-}
 if [ -z "$windres_bin" ] && command -v windres >/dev/null 2>&1; then
 	windres_bin=$(command -v windres)
@@ -218,7 +219,7 @@ if [ -z "$windres_bin" ] && [ -n "$gcc_path" ]; then
 fi
 if [ -n "$windres_bin" ]; then
 	(cd "$root" && "$windres_bin" -F pe-x86-64 -i packaging/windows/dictshelf.rc -o dictshelf_windows_amd64.syso)
-	echo "dictshelf_windows_amd64.syso regenerated"
+	echo "dictshelf_windows_amd64.syso regenerated (icons only; the Windows build adds the version block)"
 else
 	echo "make-icons: windres not found — run the resource command in packaging/windows/dictshelf.rc to refresh the Windows executable icon" >&2
 fi

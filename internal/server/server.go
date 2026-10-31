@@ -590,6 +590,7 @@ func (s *Server) basePage() []byte {
 		page = strings.ReplaceAll(page, "{{SEARCH_DEBOUNCE_MS}}", strconv.Itoa(indexconst.SearchDebounceMS))
 		page = strings.ReplaceAll(page, "{{COMBINED_DICTIONARY_LIMIT_DEFAULT}}", strconv.Itoa(indexconst.CombinedDictionaryLimitDefault))
 		page = strings.ReplaceAll(page, "{{COMBINED_DICTIONARY_LIMIT_MAX}}", strconv.Itoa(indexconst.CombinedDictionaryLimitMax))
+		page = strings.ReplaceAll(page, "{{SEARCH_THREADS_MAX}}", strconv.Itoa(SearchThreadsMax))
 		page = strings.ReplaceAll(page, "{{HEADWORDCSS}}", assetTag(headwordControlCSS))
 		// The role stylesheet for articles wudict writes itself
 		// (internal/artmark). It is a floor under BOTH article surfaces, so

@@ -37,6 +37,7 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 		}
 	}
 	if n := config.MaxProcs(); n > 0 {
+		searchWorkersBaseline = n
 		SetActiveProcs(n)
 		search.SetWorkers(n)
 		logx.V("parallelism: GOMAXPROCS=%d, search fan-out=%d", n, n)
@@ -97,6 +98,7 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 	s.User = user
 	s.wildcardPages.setLimit(resultCacheLimitBytes(reg.prefs.UI()))
 	s.wildcardPages.init(s.wildcardCacheDir())
+	s.applySearchParallelismPrefs()
 	s.InstallDesktopBackgrounds()
 	s.Morph = morph.New(cfg.MorphCache, cfg.LemmaDir)
 	if cfg.MemoryLimit > 0 {

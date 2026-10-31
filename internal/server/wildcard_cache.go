@@ -33,6 +33,13 @@ var wildcardCacheIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{16,80}$`)
 
 var errWildcardCacheStreamReplaced = errors.New("wildcard cache stream replaced")
 
+// wildcardParallelismDiagnostics gates the per-dictionary Wildcards build log
+// line - how long each append waited for the cache's write mutex and how long
+// its own work took. Enabled from Settings → System settings → Log file.
+var wildcardParallelismDiagnostics atomic.Bool
+
+func setWildcardParallelismDiagnostics(enabled bool) { wildcardParallelismDiagnostics.Store(enabled) }
+
 type wildcardCacheSignature struct {
 	query     string
 	group     string
@@ -696,7 +703,25 @@ func (e *wildcardCacheEntry) append(dictID, within string, withinMask bool, toke
 	if collectStats {
 		waitStarted = time.Now()
 	}
+	// The opt-in Wildcards parallelism log. lockWait is the time this append
+	// spent queued behind other dictionaries on the entry's single write mutex;
+	// the remainder is its own work. A lockWait that grows with the worker count
+	// is the cache serializing the build, not the scan being slow.
+	diag := wildcardParallelismDiagnostics.Load()
+	var diagStart time.Time
+	if diag {
+		diagStart = time.Now()
+	}
 	e.mu.Lock()
+	diagLockWait := time.Duration(0)
+	if diag {
+		diagLockWait = time.Since(diagStart)
+		defer func() {
+			logx.SystemDiagnostic("wildcards_append dict=%q words=%d total=%d lock_wait_ms=%d write_ms=%d done=%t",
+				dictID, len(event.Words), event.Total, diagLockWait.Milliseconds(),
+				(time.Since(diagStart) - diagLockWait).Milliseconds(), event.Done)
+		}()
+	}
 	defer e.mu.Unlock()
 	var appendStarted time.Time
 	var lockWait, transactionTime, metadataTime time.Duration

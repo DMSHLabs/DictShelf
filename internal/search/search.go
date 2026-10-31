@@ -14,9 +14,11 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/ftsq"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // Mode selects the query type; dictionaries lacking the capability are
@@ -217,6 +219,14 @@ func SetWorkers(n int) {
 	workers.Store(int32(n))
 }
 
+// diagnostics gates a per-dictionary fan-out log line. Off by default; enabled
+// from Settings → System settings → Log file, so the timing of one search is
+// recorded only while someone is measuring it.
+var diagnostics atomic.Bool
+
+// SetDiagnostics turns the per-dictionary fan-out log on or off.
+func SetDiagnostics(enabled bool) { diagnostics.Store(enabled) }
+
 // Workers reports the current fan-out width, so the other place that touches
 // every dictionary at once (the dictionary list) can use the same number.
 func Workers() int {
@@ -280,10 +290,17 @@ func StreamOpenWithTerms(ctx context.Context, openers []Opener, mode Mode, term 
 		wg.Add(1)
 		go func(i int, open Opener) {
 			defer wg.Done()
+			started := time.Now()
+			var dictName, errText string
+			defer func() {
+				logx.SystemDiagnosticIf(diagnostics.Load(), "search_fanout index=%d dict=%q mode=%s workers=%d elapsed_ms=%d error=%q",
+					i, dictName, mode, Workers(), time.Since(started).Milliseconds(), errText)
+			}()
 			select {
 			case sem <- struct{}{}:
 				defer func() { <-sem }()
 			case <-ctx.Done():
+				errText = ctx.Err().Error()
 				send(i, Hit{Err: ctx.Err()})
 				return
 			}
@@ -303,17 +320,23 @@ func StreamOpenWithTerms(ctx context.Context, openers []Opener, mode Mode, term 
 			// bounds the damage of a cancelled search to the opens already in
 			// flight.
 			if err := ctx.Err(); err != nil {
+				errText = err.Error()
 				send(i, Hit{Err: err})
 				return
 			}
 			d, err := safeOpen(open)
 			if err != nil {
+				errText = err.Error()
 				send(i, Hit{Err: err})
 				return
+			}
+			if diagnostics.Load() {
+				dictName = d.Meta().Name
 			}
 			if err := ctx.Err(); err != nil {
 				// Cancelled during the open. The dictionary is now materialised
 				// either way; skip only the query, and let the janitor shed it.
+				errText = err.Error()
 				send(i, Hit{Err: err})
 				return
 			}
@@ -322,11 +345,19 @@ func StreamOpenWithTerms(ctx context.Context, openers []Opener, mode Mode, term 
 				var meta dict.Meta
 				queryTerm, meta, err = safeTermFor(termFor, i, d, term)
 				if err != nil {
+					dictName, errText = meta.Name, err.Error()
 					send(i, Hit{Meta: meta, Term: term, Err: err})
 					return
 				}
 			}
-			send(i, runQuery(ctx, d, mode, queryTerm, plan, perDict))
+			hit := runQuery(ctx, d, mode, queryTerm, plan, perDict)
+			if hit.Meta.Name != "" {
+				dictName = hit.Meta.Name
+			}
+			if hit.Err != nil {
+				errText = hit.Err.Error()
+			}
+			send(i, hit)
 		}(i, open)
 	}
 	wg.Wait()
