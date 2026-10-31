@@ -32,6 +32,7 @@ type SearchRequest struct {
 	Dictionary           string `json:"dict,omitempty"`
 	Limit                int    `json:"n,omitempty"`
 	Highlight            bool   `json:"hl,omitempty"`
+	Suggestions          bool   `json:"suggest,omitempty"`
 	IgnoreDiacritics     bool   `json:"ignoreDiacritics,omitempty"`
 	Origin               string `json:"-"`
 	CacheAction          string `json:"cacheAction,omitempty"`
@@ -398,9 +399,15 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	budget := 30 * time.Second
 	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
-	search.StreamOpenWithTerms(ctx, openers, mode, q, n, s.searchTermFor(entries, mode, q), func(i int, h search.Hit) {
-		writeLine(renderHit(i, h))
-	})
+	if request.Suggestions && mode == search.Wildcards {
+		search.StreamHeadwordSuggestions(ctx, openers, q, n, func(i int, h search.Hit) {
+			writeLine(renderHit(i, h))
+		})
+	} else {
+		search.StreamOpenWithTerms(ctx, openers, mode, q, n, s.searchTermFor(entries, mode, q), func(i int, h search.Hit) {
+			writeLine(renderHit(i, h))
+		})
+	}
 	writeLine(SearchEvent{T: "end"})
 	return emitErr
 }

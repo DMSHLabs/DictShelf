@@ -1667,9 +1667,10 @@ window.wuSearchHistory.setSuggest((q,onHit,signal,mode)=>{
   const ids=sel==="all"?activeUserGroupIds():sel.startsWith("g:")?groupIds(sel):null;
   if(ids&&!ids.length)return;
   const dict=ids?ids.join(","):sel,perDictionary=window.wudictSuggestionPerDictionary||40;
-  const n=Math.min(501,Math.max(perDictionary,perDictionary*4));
+  const n=perDictionary;
   return fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+
-    "&hl=0"+diacriticsSearchParam()+"&dict="+encodeURIComponent(dict)+"&n="+n,msg=>{
+    "&hl=0"+diacriticsSearchParam()+"&dict="+encodeURIComponent(dict)+"&n="+n+
+    (mode==="wildcards"?"&suggest=1":""),msg=>{
       if(msg.t==="hit")onHit(msg.results,mode,msg.dict,msg.term);
     },signal);
 });
@@ -7246,7 +7247,7 @@ async function fetchStream(url,onMsg,signal,options){
        (options?.method||"GET").toUpperCase()==="GET"){
       const params=requestURL.searchParams,n=Number.parseInt(params.get("n"),10);
       const flag=(value)=>!!value&&!/^(0|false|no|off)$/i.test(value.trim());
-      const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),pageCacheDiagnostics:flag(params.get("pageCacheDiagnostics")||""),searchDiagnostics:flag(params.get("searchDiagnostics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",returnCacheID:params.get("returnCacheID")||"",returnCacheStorage:params.get("returnCacheStorage")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
+      const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),suggest:flag(params.get("suggest")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),pageCacheDiagnostics:flag(params.get("pageCacheDiagnostics")||""),searchDiagnostics:flag(params.get("searchDiagnostics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",returnCacheID:params.get("returnCacheID")||"",returnCacheStorage:params.get("returnCacheStorage")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
       await androidGoStream(()=>window.wudictAndroidGo.startSearchStream(window.location.origin,JSON.stringify(request)),onMsg,signal);
       return;
     }
@@ -7258,7 +7259,7 @@ async function fetchStream(url,onMsg,signal,options){
       if(requestURL.pathname==="/api/search"&&method==="GET"){
         const params=requestURL.searchParams,n=Number.parseInt(params.get("n"),10);
         const flag=(value)=>!!value&&!/^(0|false|no|off)$/i.test(value.trim());
-        const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),pageCacheDiagnostics:flag(params.get("pageCacheDiagnostics")||""),searchDiagnostics:flag(params.get("searchDiagnostics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",returnCacheID:params.get("returnCacheID")||"",returnCacheStorage:params.get("returnCacheStorage")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
+        const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),suggest:flag(params.get("suggest")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),pageCacheDiagnostics:flag(params.get("pageCacheDiagnostics")||""),searchDiagnostics:flag(params.get("searchDiagnostics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",returnCacheID:params.get("returnCacheID")||"",returnCacheStorage:params.get("returnCacheStorage")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
         await window.wudictNativeCall("search",JSON.stringify(request),onMsg,signal);
         return;
       }
@@ -9839,7 +9840,7 @@ document.addEventListener("click",e=>{
 /* Typing updates suggestions; committing the field updates articles. */
 $("q").addEventListener("input",()=>{
   if($("mode").value==="wildcards"){
-    maskInvalidate();window.wuSearchHistory.hide();return;
+    maskInvalidate();window.wuSearchHistory.onInput($("q").value);return;
   }
   window.wuSearchHistory.onInput($("q").value);
 });

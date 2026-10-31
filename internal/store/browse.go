@@ -136,6 +136,24 @@ func headwordCaseTokens(value string) []string {
 // StreamBrowseHeadwords emits matched headwords as soon as a result block is
 // ready. total is the number found so far; done marks the final exact count.
 func (s *Store) StreamBrowseHeadwords(ctx context.Context, query string, mask bool, emit func([]string, int, bool, int, int) error) error {
+	return s.streamBrowseHeadwords(ctx, query, mask, time.Second, dict.MaskPageSize, emit)
+}
+
+// StreamBrowseSuggestions sends every wildcard headword to its consumer as
+// soon as the index scan finds it. Batching and display cadence belong to the
+// consumer, so the dictionary scan never waits for a presentation interval.
+func (s *Store) StreamBrowseSuggestions(ctx context.Context, query string, emit func(string) error) error {
+	return s.streamBrowseHeadwords(ctx, query, true, time.Hour, 1, func(words []string, _ int, _ bool, _, _ int) error {
+		for _, word := range words {
+			if err := emit(word); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (s *Store) streamBrowseHeadwords(ctx context.Context, query string, mask bool, interval time.Duration, batchSize int, emit func([]string, int, bool, int, int) error) error {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return emit(nil, 0, true, 0, s.meta.EntryCount)
@@ -147,7 +165,7 @@ func (s *Store) StreamBrowseHeadwords(ctx context.Context, query string, mask bo
 		if compileErr != nil {
 			return compileErr
 		}
-		stream := newBrowseRowStream(s.meta.EntryCount, emit)
+		stream := newBrowseRowStream(s.meta.EntryCount, interval, batchSize, emit)
 		strategy := s.MaskCandidateStrategy(query)
 		if strategy == "exact_key" {
 			folded := dict.Fold(query)
@@ -205,7 +223,7 @@ func (s *Store) StreamBrowseHeadwords(ctx context.Context, query string, mask bo
 }
 
 func streamBrowseRows(ctx context.Context, rows *sql.Rows, matches func(string) bool, scanTotal int, emit func([]string, int, bool, int, int) error) error {
-	stream := newBrowseRowStream(scanTotal, emit)
+	stream := newBrowseRowStream(scanTotal, time.Second, dict.MaskPageSize, emit)
 	if err := stream.rows(ctx, rows, matches); err != nil {
 		return err
 	}
@@ -220,12 +238,20 @@ type browseRowStream struct {
 	scanTotal    int
 	previous     string
 	nextProgress time.Time
+	interval     time.Duration
+	batchSize    int
 	emit         func([]string, int, bool, int, int) error
 }
 
-func newBrowseRowStream(scanTotal int, emit func([]string, int, bool, int, int) error) *browseRowStream {
+func newBrowseRowStream(scanTotal int, interval time.Duration, batchSize int, emit func([]string, int, bool, int, int) error) *browseRowStream {
+	if interval <= 0 {
+		interval = time.Second
+	}
+	if batchSize <= 0 {
+		batchSize = dict.MaskPageSize
+	}
 	return &browseRowStream{words: make([]string, 0, dict.MaskPageSize), scanTotal: scanTotal,
-		nextProgress: time.Now().Add(time.Second), emit: emit}
+		nextProgress: time.Now().Add(interval), interval: interval, batchSize: batchSize, emit: emit}
 }
 
 func (s *browseRowStream) rows(ctx context.Context, rows *sql.Rows, matches func(string) bool) error {
@@ -254,18 +280,18 @@ func (s *browseRowStream) rows(ctx context.Context, rows *sql.Rows, matches func
 			}
 			s.words = make([]string, 0, dict.MaskPageSize)
 			s.firstMatch = true
-			s.nextProgress = now.Add(time.Second)
-		} else if len(s.words) >= dict.MaskPageSize || (len(s.words) > 0 && !now.Before(s.nextProgress)) {
+			s.nextProgress = now.Add(s.interval)
+		} else if len(s.words) >= s.batchSize || (len(s.words) > 0 && !now.Before(s.nextProgress)) {
 			if err := s.emit(s.words, s.total, false, s.scanned, s.scanTotal); err != nil {
 				return err
 			}
 			s.words = make([]string, 0, dict.MaskPageSize)
-			s.nextProgress = now.Add(time.Second)
+			s.nextProgress = now.Add(s.interval)
 		} else if now.After(s.nextProgress) {
 			if err := s.emit(nil, s.total, false, s.scanned, s.scanTotal); err != nil {
 				return err
 			}
-			s.nextProgress = now.Add(time.Second)
+			s.nextProgress = now.Add(s.interval)
 		}
 	}
 	return rows.Err()
