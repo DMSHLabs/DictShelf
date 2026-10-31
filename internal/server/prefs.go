@@ -78,6 +78,11 @@ type UIPrefs struct {
 	SkipBackgroundResultCount bool   `json:"skipBackgroundResultCount,omitempty"`
 	SearchReturnCache         string `json:"searchReturnCache,omitempty"`
 	CombinedDictionaryLimit   int    `json:"combinedDictionaryLimit,omitempty"`
+	// SearchThreads caps how many dictionaries a search touches at once: the
+	// server fan-out, and the Wildcards list build the page drives itself. 0 is
+	// automatic - the fan-out the app chose for the platform - and a positive
+	// value is the reader overriding it to measure.
+	SearchThreads int `json:"searchThreads,omitempty"`
 	// Suggestion limits apply to headword suggestions in the main search field.
 	SuggestionPerDictionary int  `json:"suggestionPerDictionary,omitempty"`
 	SuggestionListLimit     int  `json:"suggestionListLimit,omitempty"`
@@ -189,6 +194,12 @@ type UIPrefs struct {
 const (
 	FontSizeMin = 11
 	FontSizeMax = 32
+
+	// SearchThreadsMax bounds the configurable search fan-out. It is set well
+	// past any sane device so the field cannot express a value the app would
+	// then refuse; the per-search memory budget, not this, is what actually
+	// keeps a wide fan-out honest.
+	SearchThreadsMax = 256
 )
 
 // normalize repairs what a hand-edited file may carry. Clamping rather than
@@ -206,6 +217,13 @@ func (u *UIPrefs) normalize() {
 		u.CombinedDictionaryLimit = indexconst.CombinedDictionaryLimitDefault
 	} else {
 		u.CombinedDictionaryLimit = min(u.CombinedDictionaryLimit, indexconst.CombinedDictionaryLimitMax)
+	}
+	// A negative thread count states no intent, so it becomes automatic; a
+	// large one is clamped to the same ceiling the settings field offers.
+	if u.SearchThreads < 0 {
+		u.SearchThreads = 0
+	} else {
+		u.SearchThreads = min(u.SearchThreads, SearchThreadsMax)
 	}
 	switch u.SearchReturnCache {
 	case "memory", "disk":
@@ -862,6 +880,7 @@ func (s *Server) SavePrefs(body io.Reader) (map[string]any, error) {
 	}
 	if mentioned(req.UI) {
 		s.applyResultCachePrefs()
+		s.applySearchParallelismPrefs()
 	}
 	dicts, _ := s.reg.prefs.Snapshot()
 	if dicts == nil {

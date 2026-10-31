@@ -259,18 +259,18 @@ echo Output:
 echo   %CD%\%OUTPUT_EXE%
 echo.
 
-rem Recompile the PE icon resource only when explicitly requested. The checked-in
-rem .syso keeps ordinary builds and clean CI builds self-contained.
+rem The Windows resource object is generated on EVERY build: it carries the six
+rem icons (packaging/windows/dictshelf.rc) together with the version block,
+rem because the Go PE linker accepts only one .rsrc section, so the icons and
+rem the version cannot live in two .syso files. --update-icon still refreshes
+rem the icon half alone; the version step below rebuilds the combined object
+rem either way, so the final .syso always has both.
 if defined UPDATE_ICON call :update_embedded_icon
 if errorlevel 1 exit /b 1
-if not defined UPDATE_ICON if not exist "dictshelf_windows_amd64.syso" (
-    echo ERROR: the embedded icon resource is missing.
-    echo   Restore dictshelf_windows_amd64.syso or run build-windows.cmd --update-icon.
-    exit /b 1
-)
 
 rem Version information is generated for every executable build from the same
-rem version that is stamped into the Go binary.
+rem version that is stamped into the Go binary. This step is the sole producer
+rem of dictshelf_windows_amd64.syso.
 call :update_version_info
 if errorlevel 1 exit /b 1
 

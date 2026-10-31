@@ -1144,6 +1144,8 @@ window.wudictFontScale=(function(){
     <p class="sys-hint">{{T:system.mergedSearchHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysMergedFTS"><span class="sys-label">{{T:system.mergedFTS}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysMergedTrigram"><span class="sys-label">{{T:system.mergedTrigram}}</span></label>
+    <div class="sys-row sys-num sys-search-threads"><span class="sys-label" id="sysSearchThreadsLabel">{{T:system.searchThreads}}</span><input type="number" id="sysSearchThreads" min="1" max="{{SEARCH_THREADS_MAX}}" step="1" inputmode="numeric" placeholder="{{T:system.auto}}" aria-labelledby="sysSearchThreadsLabel"></div>
+    <p class="sys-hint" id="sysSearchThreadsHint">{{T:system.searchThreadsHint}}</p>
 
     <h3 class="sys-head" id="sysIndexingHeading">{{T:system.indexing}}</h3>
     <label class="sys-row sys-num sys-indexing-mode"><span class="sys-label">{{T:system.indexingMode}}</span><span class="panel-select-wrap panel-dropdown sys-indexing-mode-select"><select id="sysIndexingMode"><option value="parallel-dictionaries-single-worker">{{T:system.indexingModeParallel}}</option><option value="adaptive">{{T:system.indexingModeAdaptive}}</option></select></span></label>
@@ -1161,6 +1163,7 @@ window.wudictFontScale=(function(){
     <label class="sys-row"><input type="checkbox" id="sysDictionaryListDiagnostics"><span class="sys-label">{{T:system.dictionaryListDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysDictionaryCacheDiagnostics"><span class="sys-label">{{T:system.dictionaryCacheDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysIndexParallelismDiagnostics"><span class="sys-label">{{T:system.indexParallelismDiagnostics}}</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysSearchParallelismDiagnostics"><span class="sys-label">{{T:system.searchParallelismDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysFolderDiagnostics"><span class="sys-label">{{T:system.folderDiagnostics}}</span></label>
 
     <!-- Advanced FOLDS, and starts folded (the reader's ask, 2026-09-28). Two
@@ -1988,7 +1991,8 @@ async function loadPrefs(){
       suggestionListLimit=Math.max(1,Math.min(500,Number(st.ui.suggestionListLimit)||500));
       syncSuggestionLimits();
       $("countAllResultsInBackground").checked=countAllResultsInBackground;
-      combinedDictionaryLimit=Math.max(1,Math.min(Number(st.ui.combinedDictionaryLimit)||defaultCombinedDictionaryLimit,maxCombinedDictionaryLimit));syncCombinedDictionaryLimitUI()}
+      combinedDictionaryLimit=Math.max(1,Math.min(Number(st.ui.combinedDictionaryLimit)||defaultCombinedDictionaryLimit,maxCombinedDictionaryLimit));syncCombinedDictionaryLimitUI();
+      searchThreads=Math.max(0,Math.min(Number(st.ui.searchThreads)||0,maxSearchThreads));syncSearchThreadsUI()}
     syncUpdateControls();restoreCachedUpdate();
     scheduleUpdateCheck(true);
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
@@ -2013,6 +2017,12 @@ let searchReturnCacheStorage="disk";
 const defaultCombinedDictionaryLimit={{COMBINED_DICTIONARY_LIMIT_DEFAULT}},maxCombinedDictionaryLimit={{COMBINED_DICTIONARY_LIMIT_MAX}};
 let combinedDictionaryLimit=defaultCombinedDictionaryLimit;
 function syncCombinedDictionaryLimitUI(){const field=$("sysCombinedLimit");if(field)field.value=String(combinedDictionaryLimit)}
+const maxSearchThreads={{SEARCH_THREADS_MAX}};
+/* 0 is automatic: the Wildcards build keeps choosing its own width from the
+   core count, and the server keeps its platform fan-out. A positive value is
+   the reader pinning both to one number to compare them. */
+let searchThreads=0;
+function syncSearchThreadsUI(){const field=$("sysSearchThreads");if(field)field.value=searchThreads>0?String(searchThreads):""}
 function combinedLimitErrorText(message){
   const match=/^combined A–Z list limit is (\d+) dictionaries; (\d+) selected$/.exec(String(message||""));
   return match?tx("search.combinedLimitExceeded",{limit:match[1],selected:match[2]}):message;
@@ -2037,6 +2047,12 @@ $("sysCombinedLimit").addEventListener("change",e=>{
   combinedDictionaryLimit=Math.min(n,maxCombinedDictionaryLimit);syncCombinedDictionaryLimitUI();savePrefs(true);
 });
 syncCombinedDictionaryLimitUI();
+$("sysSearchThreads").addEventListener("change",e=>{
+  const n=Math.floor(Number(e.target.value));
+  if(!Number.isFinite(n)||n<=0){searchThreads=0;syncSearchThreadsUI();savePrefs(true);return}
+  searchThreads=Math.min(n,maxSearchThreads);syncSearchThreadsUI();savePrefs(true);
+});
+syncSearchThreadsUI();
 function savePrefs(now){
   clearTimeout(prefsTimer);
   // Never write a baseline we could not read: if the load failed, "no order"
@@ -2051,6 +2067,7 @@ function savePrefs(now){
       countAllResultsInBackground,
       suggestionPerDictionary,suggestionListLimit,
       resultCacheLimitGB,resultCacheNoLimit,combinedDictionaryLimit,searchReturnCache:searchReturnCacheStorage,updateChannel,
+      searchThreads,
       updateNotificationsOff:!updateNotifications}});
   if(body===prefsSent)return;
   prefsSent=body;
@@ -4578,6 +4595,7 @@ function sysPaint(state){
   $("sysDictionaryListDiagnostics").checked=dictionaryListDiagnosticsEnabled();
   $("sysDictionaryCacheDiagnostics").checked=dictionaryCacheDiagnosticsEnabled();
   $("sysIndexParallelismDiagnostics").checked=indexParallelismDiagnosticsEnabled();
+  $("sysSearchParallelismDiagnostics").checked=searchParallelismDiagnosticsEnabled();
   $("sysIndexingMode").value=indexingModePreference();
   $("sysFolderDiagnostics").checked=folderDiagnosticsEnabled();
   const box=$("sysAdvanced");
@@ -5034,6 +5052,8 @@ async function showSystemSettings(){
     searchHint:$("sysMergedFTS").closest(".sys-row").previousElementSibling,
     searchFTS:$("sysMergedFTS").parentElement,
     searchTrigram:$("sysMergedTrigram").parentElement,
+    searchThreads:$("sysSearchThreads").parentElement,
+    searchThreadsHint:$("sysSearchThreadsHint"),
     logEnabled:$("sysLogEnabled").parentElement,
     logBase:$("sysLogBase").parentElement,
     logWeb:$("sysLogWeb").parentElement,
@@ -5127,7 +5147,8 @@ async function showSystemSettings(){
   syncResultCacheLimitUI();
   syncCombinedDictionaryLimitUI();
   body.append(systemSettingsNodes.searchHeading,systemSettingsNodes.searchHint,
-    systemSettingsNodes.searchFTS,systemSettingsNodes.searchTrigram);
+    systemSettingsNodes.searchFTS,systemSettingsNodes.searchTrigram,
+    systemSettingsNodes.searchThreads,systemSettingsNodes.searchThreadsHint);
   $("sysMergedFTS").checked=wildcardSearchIndexEnabled("fts");
   $("sysMergedTrigram").checked=wildcardSearchIndexEnabled("trigram");
   const indexingHeading=document.createElement("h3");indexingHeading.className="sys-head";
@@ -5174,6 +5195,11 @@ async function showSystemSettings(){
   indexParallelismDiagnostics.addEventListener("change",()=>setIndexParallelismDiagnostics(indexParallelismDiagnostics.checked));
   const indexParallelismText=document.createElement("span");indexParallelismText.className="sys-label";indexParallelismText.textContent=tx("system.indexParallelismDiagnostics");
   indexParallelismLabel.append(indexParallelismDiagnostics,indexParallelismText);body.append(indexParallelismLabel);
+  const searchParallelismLabel=document.createElement("label");searchParallelismLabel.className="sys-row";
+  const searchParallelismDiagnostics=document.createElement("input");searchParallelismDiagnostics.type="checkbox";searchParallelismDiagnostics.checked=searchParallelismDiagnosticsEnabled();
+  searchParallelismDiagnostics.addEventListener("change",()=>setSearchParallelismDiagnostics(searchParallelismDiagnostics.checked));
+  const searchParallelismText=document.createElement("span");searchParallelismText.className="sys-label";searchParallelismText.textContent=tx("system.searchParallelismDiagnostics");
+  searchParallelismLabel.append(searchParallelismDiagnostics,searchParallelismText);body.append(searchParallelismLabel);
   const dictionaryListLabel=document.createElement("label");dictionaryListLabel.className="sys-row";
   const dictionaryListDiagnostics=document.createElement("input");dictionaryListDiagnostics.type="checkbox";dictionaryListDiagnostics.checked=dictionaryListDiagnosticsEnabled();
   dictionaryListDiagnostics.addEventListener("change",()=>setDictionaryListDiagnostics(dictionaryListDiagnostics.checked));
@@ -5744,6 +5770,8 @@ function dictionaryCacheDiagnosticsEnabled(){try{return localStorage.getItem("wu
 function setDictionaryCacheDiagnostics(on){try{if(on)localStorage.setItem("wudict_dictionary_cache_diagnostics","1");else localStorage.removeItem("wudict_dictionary_cache_diagnostics")}catch(_){}}
 function indexParallelismDiagnosticsEnabled(){try{return localStorage.getItem("wudict_index_parallelism_diagnostics")==="1"}catch(_){return false}}
 function setIndexParallelismDiagnostics(on){try{if(on)localStorage.setItem("wudict_index_parallelism_diagnostics","1");else localStorage.removeItem("wudict_index_parallelism_diagnostics")}catch(_){}sendBrowseDiagnostic({event:"index_parallelism_diagnostics",enabled:!!on})}
+function searchParallelismDiagnosticsEnabled(){try{return localStorage.getItem("wudict_search_parallelism_diagnostics")==="1"}catch(_){return false}}
+function setSearchParallelismDiagnostics(on){try{if(on)localStorage.setItem("wudict_search_parallelism_diagnostics","1");else localStorage.removeItem("wudict_search_parallelism_diagnostics")}catch(_){}sendBrowseDiagnostic({event:"search_parallelism_diagnostics",enabled:!!on})}
 function indexingModePreference(){const fallback=window.wudictWindowsShell||window.wudictAndroidShell?"parallel-dictionaries-single-worker":"adaptive";try{const mode=localStorage.getItem("wudict_indexing_mode");return mode==="parallel-dictionaries-single-worker"||mode==="adaptive"?mode:fallback}catch(_){return fallback}}
 async function setIndexingMode(mode,select){
   const previous=indexingModePreference();
@@ -5788,6 +5816,7 @@ $("sysLogBase").addEventListener("change",sysLogChange);
 $("sysLogWeb").addEventListener("change",sysLogChange);
 $("sysBrowseDiagnostics").addEventListener("change",e=>setBrowseDiagnostics(e.target.checked));
 $("sysIndexParallelismDiagnostics").addEventListener("change",e=>setIndexParallelismDiagnostics(e.target.checked));
+$("sysSearchParallelismDiagnostics").addEventListener("change",e=>setSearchParallelismDiagnostics(e.target.checked));
 $("sysIndexingMode").addEventListener("change",e=>setIndexingMode(e.target.value,e.target));
 $("sysMergedFTS").addEventListener("change",e=>setWildcardSearchIndexEnabled("fts",e.target.checked));
 $("sysMergedTrigram").addEventListener("change",e=>setWildcardSearchIndexEnabled("trigram",e.target.checked));
@@ -5798,6 +5827,7 @@ $("sysDictionaryListDiagnostics").addEventListener("change",e=>setDictionaryList
 $("sysDictionaryCacheDiagnostics").addEventListener("change",e=>setDictionaryCacheDiagnostics(e.target.checked));
 $("sysFolderDiagnostics").addEventListener("change",e=>setFolderDiagnostics(e.target.checked));
 sendBrowseDiagnostic({event:"index_parallelism_diagnostics",enabled:indexParallelismDiagnosticsEnabled()});
+sendBrowseDiagnostic({event:"search_parallelism_diagnostics",enabled:searchParallelismDiagnosticsEnabled()});
 sendBrowseDiagnostic({event:"indexing_mode",mode:indexingModePreference()});
 /* Restore defaults: one tap clears every Advanced row at once, which is why it
    is confirmed. Clearing writes nothing anywhere else - it withdraws the
@@ -7933,7 +7963,11 @@ function maskBusyStart(key){maskBusyJobs.add(key);maskBusyApply()}
 function maskBusyFinish(key){maskBusyJobs.delete(key);maskBusyApply()}
 function maskWorkerCount(count){
   const cores=Math.max(1,Number(navigator.hardwareConcurrency)||1);
-  const limit=Math.min(4,Math.max(1,cores-1));
+  const ceiling=Math.max(1,cores-1);
+  /* The setting can only narrow the build, never widen it past one CPU less
+     than this device has; empty asks for five, where measurements over a
+     110-dictionary list showed the curve flattening. */
+  const limit=searchThreads>0?Math.min(searchThreads,ceiling):Math.min(5,ceiling);
   return Math.min(count,limit);
 }
 function maskAbort(){

@@ -207,6 +207,7 @@ func applyProcs(p Power) {
 	}
 	runtime.GOMAXPROCS(n)
 	updateIndexParallelismLimits(currentIndexCPUCount(), n)
+	applySearchWorkers() // the fan-out follows the scheduler cap, so battery saver and heat reach it
 	updateIngestParallelismPolicy(p)
 }
 

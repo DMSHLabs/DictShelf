@@ -76,4 +76,8 @@ tools/testdata/desktop-large-media/stardict/res/as.mp4
 tools/testdata/desktop-large-media/stardict/res/large-image.png
 DictShelf.exe
 DictShelf.exe.bak
-/dictshelf_version_windows_amd64.syso
+# The Windows PE resource object is generated on every build: one .syso holds
+# the icons AND the version block, because Go links only one .rsrc section.
+# packaging/windows/dictshelf.rc is the committed source for the icons.
+/dictshelf_windows_amd64.syso
+/.dictshelf-version-*.rc

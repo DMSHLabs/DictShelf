@@ -17,6 +17,7 @@ import (
 
 	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/search"
 	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
@@ -216,6 +217,12 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 	}
 	if d.Event == "index_parallelism_diagnostics" {
 		store.SetIngestParallelismDiagnostics(d.Enabled)
+		return nil
+	}
+	if d.Event == "search_parallelism_diagnostics" {
+		search.SetDiagnostics(d.Enabled)
+		setWildcardParallelismDiagnostics(d.Enabled)
+		logx.SystemDiagnostic("search_parallelism enabled=%t workers=%d", d.Enabled, search.Workers())
 		return nil
 	}
 	if d.Event == "browse_return_route" {
