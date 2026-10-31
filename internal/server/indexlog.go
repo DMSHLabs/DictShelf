@@ -59,9 +59,9 @@ func (s *Server) systemLogSnapshot() ([]byte, string, error) {
 	if totalMemory > 0 {
 		totalMemoryText = fmt.Sprintf("%s (%d bytes)", formatLogBytes(totalMemory), totalMemory)
 	}
-	header := fmt.Sprintf("DictShelf System Log\nBuild: %s\nCommit: %s\nVCS modified: %s\nSystem: %s\nRuntime: %s %s/%s\nProcess bitness: %d-bit\nLogical processors (Go runtime): %d\nGo scheduler processors (GOMAXPROCS): %d\nPhysical memory: %s\nCurrently available memory: %s\nGo memory limit: %s\nGo heap: allocated=%s (%d bytes) system=%s (%d bytes)\nTimestamps: UTC\n\n--- Server ---\n",
+	header := fmt.Sprintf("DictShelf System Log\nBuild: %s\nCommit: %s\nVCS modified: %s\nSystem: %s\nRuntime: %s %s/%s\nProcess bitness: %d-bit\nLogical processors (Go runtime startup snapshot): %d\nCurrent indexing CPU allowance: %d\nGo scheduler processors (GOMAXPROCS): %d\nPhysical memory: %s\nCurrently available memory: %s\nGo memory limit: %s\nGo heap: allocated=%s (%d bytes) system=%s (%d bytes)\nTimestamps: UTC\n\n--- Server ---\n",
 		version, revision, modified, systemVersion(), runtime.Version(), runtime.GOOS, runtime.GOARCH, strconv.IntSize,
-		runtime.NumCPU(), runtime.GOMAXPROCS(0), totalMemoryText, availableText,
+		runtime.NumCPU(), currentIndexCPUCount(), runtime.GOMAXPROCS(0), totalMemoryText, availableText,
 		memoryLimitText, formatLogBytes(int64(memory.Alloc)), memory.Alloc, formatLogBytes(int64(memory.Sys)), memory.Sys)
 	filename := fmt.Sprintf("DictShelf_SystemLog_%s.log", time.Now().Format("2006_01_02-15-04"))
 	return append([]byte(header), b...), filename, nil

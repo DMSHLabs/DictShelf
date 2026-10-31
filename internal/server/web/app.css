@@ -283,7 +283,7 @@ html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image
    width before any of the gaps becomes smaller than its shared minimum. */
 .sbar{--sbar-gap:clamp(.4em,2vw,var(--sbar-sq,2.2em))}
 .sbar .rpad{flex:1 0 var(--sbar-gap);width:var(--sbar-gap);height:var(--sbar-sq,2.2em)}
-.sbar .rpad.edge{flex:none;width:var(--sbar-sq,2.2em)}
+.sbar .rpad.edge{flex:none;width:var(--wd-sbar-edge,4px)}
 /* Narrow screens share the free space between all four gaps. On wide screens
    the dictionary arrows form a pair; the other three gaps share the slack. */
 .sbar .rpad.floor{margin:0}

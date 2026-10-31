@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -205,7 +204,7 @@ func classifyAutomaticIndex(item *pendingDictionaryIndex, budget int, strategy i
 
 func adaptiveSingleIndexContext(ctx context.Context, e *entry) context.Context {
 	item := pendingDictionaryIndex{entry: e}
-	classifyAutomaticIndex(&item, max(1, runtime.NumCPU()-1), indexconst.ModeAdaptive)
+	classifyAutomaticIndex(&item, max(1, currentIndexCPUCount()-1), indexconst.ModeAdaptive)
 	return indexconst.WithIngestMode(ctx, item.mode)
 }
 
@@ -287,6 +286,7 @@ func (s *Server) saveIndexDefaults(next indexOptions) (indexOptions, error) {
 }
 
 func (r *Registry) queueNewDictionaries() error {
+	refreshIndexParallelism()
 	entries := r.all()
 	families := make(map[string][]*entry)
 	for _, e := range entries {
@@ -419,6 +419,7 @@ func preparedHasIndexes(path string, wanted indexOptions) bool {
 }
 
 func (r *Registry) prepareNewDictionaries(parent ...*job) {
+	refreshIndexParallelism()
 	r.indexQueueMu.Lock()
 	defer r.indexQueueMu.Unlock()
 	var queueJob *job
@@ -593,7 +594,7 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 		}
 	}
 	mode := indexconst.CurrentMode()
-	budget := max(1, runtime.NumCPU()-1)
+	budget := max(1, currentIndexCPUCount()-1)
 	if len(pending) == 1 && !indexconst.IsAutomaticMode(mode) {
 		classifyAutomaticIndex(&pending[0], budget, indexconst.ModeAdaptive)
 	}
@@ -630,7 +631,7 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 		runHybridPriorityDictionaryQueue(queue, budget, stopped, process)
 		store.IndexDiagnostic("automatic index queue finished strategy=%s dictionaries=%d elapsed_ms=%d", indexconst.ModeString(mode), len(pending), time.Since(started).Milliseconds())
 	} else {
-		workers := min(cap(currentIndexLimit()), len(pending))
+		workers := min(currentIndexLimit().Limit(), len(pending))
 		runPriorityDictionaryQueue(queue, workers, stopped, process)
 	}
 	if queueJob != nil && queueJob.canceled() {

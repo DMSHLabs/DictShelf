@@ -136,7 +136,7 @@ func (r *Registry) queueDictionaryIconRefresh(e *entry) {
 }
 
 func (r *Registry) runDictionaryIconLoad(e *entry, gen uint64) {
-	release := acquire(currentIndexLimit())
+	release := currentIndexLimit().Acquire()
 	defer release()
 	e.ingestMu.Lock()
 	defer e.ingestMu.Unlock()
@@ -165,7 +165,7 @@ func (r *Registry) refreshDictionaryIcons() {
 	if len(entries) == 0 {
 		return
 	}
-	workers := cap(currentIndexLimit())
+	workers := currentIndexLimit().Limit()
 	if workers < 1 {
 		workers = 1
 	}

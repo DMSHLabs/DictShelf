@@ -30,6 +30,26 @@ type ingestParallelismSnapshot struct {
 
 var ingestParallelismDiagnostics atomic.Bool
 var ingestParallelismPolicyState atomic.Pointer[ingestParallelismPolicy]
+var ingestLogicalCPUs atomic.Int32
+
+func init() {
+	ingestLogicalCPUs.Store(int32(max(1, runtime.NumCPU())))
+}
+
+// SetIngestParallelismCPUCount refreshes the process CPU allowance sampled by
+// the Android shell before an indexing job starts.
+func SetIngestParallelismCPUCount(n int) {
+	if n > 0 {
+		ingestLogicalCPUs.Store(int32(n))
+	}
+}
+
+func ingestCPUCount() int {
+	if n := int(ingestLogicalCPUs.Load()); n > 0 {
+		return n
+	}
+	return max(1, runtime.NumCPU())
+}
 
 // SetIngestParallelismDiagnostics gates indexing stages and ingest-pipeline snapshots.
 // The surrounding system log must also be enabled to retain the records.
@@ -57,7 +77,7 @@ func logIngestParallelism(event, dictionary, job string) {
 }
 
 func (p *ingestPool) snapshot() ingestParallelismSnapshot {
-	logical, gomax := runtime.NumCPU(), runtime.GOMAXPROCS(0)
+	logical, gomax := ingestCPUCount(), runtime.GOMAXPROCS(0)
 	policy := ingestParallelismPolicyState.Load()
 	s := ingestParallelismSnapshot{
 		logicalCPUs: logical, gomaxprocs: gomax,

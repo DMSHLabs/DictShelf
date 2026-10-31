@@ -93,11 +93,12 @@ func (p *ingestPool) begin(parent context.Context) *ingestSession {
 	p.registryMu.Lock()
 	// Spawn for the machine, even if Android is backgrounded at start. The
 	// active limit below follows GOMAXPROCS when the app returns to foreground.
-	wanted := indexconst.IngestWorkerLimitForMode(runtime.NumCPU(), 1)
+	logical := ingestCPUCount()
+	wanted := indexconst.IngestWorkerLimitForMode(logical, 1)
 	if indexconst.IsAutomaticMode(indexconst.CurrentMode()) {
 		// Small dictionary scans leave this pool later; create the lanes once
 		// and let workerLimit account for their changing CPU use.
-		wanted = indexconst.IngestWorkerLimit(runtime.NumCPU(), 1)
+		wanted = indexconst.IngestWorkerLimit(logical, 1)
 	}
 	for int(p.workers.Load()) < wanted {
 		p.workers.Add(1)
@@ -232,7 +233,7 @@ func (p *ingestPool) reserveWorker(sessions int) bool {
 // Reserve one logical processor for the rest of the app and a reader and
 // writer lane for each active ingest. The remaining processors are shared.
 func (p *ingestPool) workerLimit(sessions int) int {
-	logical := min(runtime.NumCPU(), runtime.GOMAXPROCS(0))
+	logical := min(ingestCPUCount(), runtime.GOMAXPROCS(0))
 	return min(int(p.workers.Load()), indexconst.IngestWorkerLimitForMode(logical, sessions))
 }
 
