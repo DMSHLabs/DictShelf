@@ -3039,8 +3039,8 @@ function pickerGroupStatusName(id,found=livePickerRows().length){
   return dictionaryGroupStatusName(pickerGroupName(id),found,pickerGroupDictionaryCount(id));
 }
 function dictionaryGroupStatusName(name,found,total){
-  return tx("search.dictionaryPickerGroupCount",{name,
-    found:window.wudictI18n.number(found),total:window.wudictI18n.number(total)});
+  return name+" "+window.wudictI18n.number(found)+" ("+
+    window.wudictI18n.number(total)+")";
 }
 /* Repaint the chip after the standing group changes in the dictionary picker. */
 function paintPickerGroup(){
@@ -7933,8 +7933,7 @@ function maskBusyStart(key){maskBusyJobs.add(key);maskBusyApply()}
 function maskBusyFinish(key){maskBusyJobs.delete(key);maskBusyApply()}
 function maskWorkerCount(count){
   const cores=Math.max(1,Number(navigator.hardwareConcurrency)||1);
-  const reported=Number(cfgInfo?.indexConcurrency);
-  const limit=Number.isSafeInteger(reported)&&reported>0?reported:Math.max(1,Math.floor(Math.max(1,cores-1)/4));
+  const limit=Math.min(4,Math.max(1,cores-1));
   return Math.min(count,limit);
 }
 function maskAbort(){
