@@ -76,6 +76,14 @@ dialog#systemSettingsDialog:not([open]){display:none}
 /* The selector section and each dictionary own their visible card borders;
    the dialog itself only provides the window surface and padding. */
 #dictSettings.group-dialog.panel-card{padding:16px 0;border:0;box-shadow:none}
+#dictInfoDialog.group-dialog.panel-card{box-sizing:border-box;display:none;flex-direction:column;gap:.75em;
+  width:min(560px,94vw);max-height:min(85dvh,720px);overflow:hidden;padding:1em}
+#dictInfoDialog.group-dialog.panel-card[open]{display:flex}
+#dictInfoTitle>span{flex:1;min-width:0;overflow-wrap:anywhere}
+.dict-info-scroll{min-height:0;overflow:auto;overscroll-behavior:contain}
+.dict-info-paths{margin-bottom:.8em;overflow-wrap:anywhere}
+.dict-info-counts{margin-bottom:.7em;line-height:1.5}
+#dictInfoDialog h3{margin:.6em 0 .3em;font-size:calc(var(--ui-font-section) * 1rem);color:var(--label)}
 #workspaceFrameWindow.workspace-dialog{position:fixed;inset:var(--wd-inset-top,0px) 0 var(--wd-inset-bottom,0px);
   width:auto;height:auto;max-width:none;max-height:none;margin:0;box-sizing:border-box;overflow:hidden;
   padding:0;border:0;border-radius:0;background:var(--paper-bg,var(--bg))}
@@ -294,7 +302,7 @@ html[data-shell-image] dialog#groupEditor.group-dialog.panel-card{background-ima
 #groupMemberHint span{font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.25}
 #groupMembers:has(#groupMemberHint:not([hidden])) #groupRows{padding-top:0}
 #groupOrderToolbar{position:relative;z-index:1;display:flex;align-self:stretch;align-items:center;box-sizing:border-box;width:100%;max-width:100%;flex:none;margin-bottom:.3em;border-bottom:1px solid var(--line)}
-#groupOrderToolbar[hidden],#groupOrderHint[hidden],#groupOrderControls[hidden]{display:none}
+#groupOrderToolbar[hidden],#groupOrderMulti[hidden],#groupOrderControls[hidden]{display:none}
 #groupOrderActions{display:flex;align-items:center;gap:.35em;margin-left:.35em;flex:none;order:2}
 #groupOrderActions[hidden],#groupPinControls[hidden]{display:none}
 #groupPinControls{display:flex;align-items:center;justify-content:flex-end;gap:.35em;width:100%;margin-left:.35em}
@@ -305,7 +313,10 @@ html[data-shell-image] dialog#groupEditor.group-dialog.panel-card{background-ima
 #groupOrderToolbar #groupEditToggle{display:flex;flex:0 1 auto;min-width:2.5em;height:auto;padding:0 .55em;border:1px solid var(--line);border-radius:.5em;background:var(--bg)}
 #groupOrderToolbar #groupEditToggle[hidden]{display:none}
 #groupOrderToolbar #groupEditToggle svg{display:block;width:1.1em;height:1.1em;min-width:1.1em;min-height:1.1em;flex:0 0 1.1em}
-#groupOrderHint{flex:0 1 auto;min-width:0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.25}
+#groupOrderToolbar #groupOrderMulti{display:flex;align-items:center;justify-content:center;gap:.35em;flex:none;width:auto;min-width:3.6em;height:2.25em;padding:0 .5em;border:1px solid var(--line);border-radius:.5em;background:var(--bg);font-size:calc(var(--ui-hint-font-size) * 1rem);white-space:nowrap}
+#groupOrderToolbar #groupOrderMulti[hidden]{display:none}
+#groupOrderToolbar #groupOrderMulti svg{display:block;width:1.35em;height:1.35em;flex:none}
+#groupOrderToolbar #groupOrderMulti span{font-size:inherit}
 #groupOrderControls{display:grid;grid-template-columns:minmax(1.2em,auto) repeat(4,minmax(1.7em,1fr)) minmax(2.5em,auto);align-items:center;width:100%;gap:.1em}
 #groupOrderCount{padding:.1em}
 #groupOrderToolbar button{display:grid;place-items:center;min-width:0;height:2em;padding:.15em;border:0;background:transparent;color:var(--fg);font:inherit;cursor:pointer}
@@ -354,7 +365,8 @@ html[data-shell-image] dialog#groupEditor.group-dialog.panel-card{background-ima
 #groupEditor .list-search-input{height:calc(var(--ui-edit_control-height) * 1.5rem);min-height:0;font:inherit}
 #groupAvailableSearch::placeholder,#groupMembersSearch::placeholder{color:var(--label)}
 .group-row{display:flex;align-items:center;gap:.7em;min-height:44px;padding:.25em 0;overflow-wrap:anywhere}
-.group-dictionary-name{font-size:calc(var(--ui-font-base) * 1rem);display:inline-flex;align-items:center;gap:.35em}
+.group-dictionary-name{font-size:calc(var(--ui-font-base) * 1rem);display:inline-flex;align-items:center;gap:.35em;flex:1;min-width:0}
+.dict-info-name{user-select:none;-webkit-user-select:none}
 .group-dictionary-count{color:var(--label-quiet);font-size:.9em;white-space:nowrap}
 .group-row.list-search-match{position:relative;outline:none}
 .group-row.list-search-match::before{content:"";position:absolute;inset:1px 0;border:2px solid var(--accent);border-radius:16px;pointer-events:none}

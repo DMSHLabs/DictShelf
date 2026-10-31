@@ -1004,6 +1004,10 @@ window.wudictFontScale=(function(){
   </div>
   <div id="dictSettingsSearch" class="list-search-dock" role="search" aria-label="{{T:dictUI.listSearchLabel}}"></div>
 </dialog>
+<dialog id="dictInfoDialog" lang="{{T:locale}}" class="group-dialog panel-card dict-info-dialog" aria-labelledby="dictInfoTitle">
+  <h2 id="dictInfoTitle"><span id="dictInfoName"></span><button type="button" class="btn" id="dictInfoClose" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
+  <div class="dict-info-scroll"><div id="dictInfoPaths" class="dict-info-paths"></div><h3>{{T:dictUI.about}}</h3><div id="dictInfoAbout" class="aboutbody">…</div></div>
+</dialog>
 <dialog id="workspaceFrameWindow" lang="{{T:locale}}" class="group-dialog panel-card workspace-dialog workspace-frame-window" aria-label="{{T:panel.editFilters}}">
   <div id="workspaceFrameLoading" class="workspace-frame-loading" role="status" aria-live="polite" hidden>{{T:panel.loading}}</div>
   <iframe id="workspaceFrame" title="{{T:panel.editFilters}}"></iframe>
@@ -3102,7 +3106,7 @@ function paintWebDictionaryPicker(){
   list.replaceChildren(...rows.map(row=>{
     const button=document.createElement('button');
     button.type='button';button.className='web-picker-row';button.dataset.dict=row.id;
-    const name=document.createElement('span');name.className='web-picker-name';name.textContent=row.name||row.label;
+    const name=document.createElement('span');name.className='web-picker-name dict-info-name';name.dataset.dict=row.id;name.textContent=row.name||row.label;
     button.append(document.createRange().createContextualFragment(dictIconHTML(row.id)),name);
     if(row.meta){const meta=document.createElement('span');meta.className='web-picker-meta';meta.textContent=row.meta;button.append(meta)}
     button.setAttribute('aria-current',String(row.id===currentID));
@@ -4075,7 +4079,7 @@ function renderPanel(){
     else if(indexed||selfIndexed)acts=`<a class="browse btn" href="/browse?dict=${encodeURIComponent(d.id)}&${browseOriginQuery(d.id)}" title="${escAttr(tx("dictUI.browseHint"))}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>${esc(tx("dictUI.browse"))}</a>`;
     if(d.unavailable||d.dsl&&!d.error)acts="";
     div.innerHTML=`<div class="hd">
-        <span class="dict-name-line">${dictIconHTML(d.id)}<b tabindex="${d.unavailable?-1:0}" role="button" aria-disabled="${!!d.unavailable}" title="${escAttr(tx(d.unavailable?"dictUI.dslUnavailable":"dictUI.searchOnly"))}">${esc(dictLabel(d))}</b><button type="button" class="dict-rename" aria-label="${escAttr(tx("dictUI.renameDictionary"))}" title="${escAttr(tx("dictUI.renameDictionary"))}" data-rename="${escAttr(d.id)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button></span>
+        <span class="dict-name-line">${dictIconHTML(d.id)}<b class="dict-info-name" data-dict="${escAttr(d.id)}" tabindex="${d.unavailable?-1:0}" role="button" aria-disabled="${!!d.unavailable}" title="${escAttr(tx(d.unavailable?"dictUI.dslUnavailable":"dictUI.searchOnly"))}">${esc(dictLabel(d))}</b><button type="button" class="dict-rename" aria-label="${escAttr(tx("dictUI.renameDictionary"))}" title="${escAttr(tx("dictUI.renameDictionary"))}" data-rename="${escAttr(d.id)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button></span>
       </div>
       <div class="meta">${esc(d.format||"?")}${d.entries?" · "+esc(tx("dictUI.entries",{number:window.wudictI18n.number(d.entries)})):""}${d.dbSize||selfIndexed?tx("dictUI.indexed"):""}</div>
       ${dslIndexControls(d)}
@@ -6214,6 +6218,95 @@ function aboutLangs(j){
   if(!parts.length)return "";
   return `<div class="aboutlangs">${parts.join(" · ")}</div>`;
 }
+let dictInfoRequest=0;
+window.wudictShowDictionaryInfo=async id=>{
+  const d=dicts.find(item=>item.id===id);if(!d)return;
+  const dialog=$("dictInfoDialog"),name=$("dictInfoName"),paths=$("dictInfoPaths"),about=$("dictInfoAbout");
+  const request=++dictInfoRequest;
+  dialog.dataset.dict=id;
+  name.textContent=dictLabel(d);
+  const fullPaths=[...(d.sourceFiles||[]),d.source,...(d.mediaSrc||[])].filter((path,index,all)=>path&&all.indexOf(path)===index);
+  paths.innerHTML=fullPaths.map(path=>`<div class="prow"><span class="path" data-full="${escAttr(path)}" title="${escAttr(tx("panel.copyPath"))}">${pathHTML(path)}</span></div>`).join("");
+  paths.parentElement.querySelectorAll(":scope > .dict-info-counts").forEach(node=>node.remove());
+  const counts=[];
+  if(d.headwords)counts.push(tx("dictUI.numberOfHeadwords",{number:Number(d.headwords).toLocaleString("en-US")}));
+  if(d.entries)counts.push(tx("dictUI.numberOfEntries",{number:Number(d.entries).toLocaleString("en-US")}));
+  if(counts.length)paths.insertAdjacentHTML("beforebegin",`<div class="dict-info-counts">${counts.map(esc).join("<br>")}</div>`);
+  about.textContent="…";
+  if(!dialog.open)dialog.showModal();
+  try{
+    const response=await apiFetch("/api/about?dict="+encodeURIComponent(id));
+    if(!response.ok)throw new Error(response.status);
+    const info=await response.json();
+    if(request!==dictInfoRequest||!dialog.open)return;
+    about.innerHTML=(info.html||`<p>${esc(tx("dictUI.emptyAbout"))}</p>`)+aboutLangs(info);
+  }catch(_){
+    if(request===dictInfoRequest&&dialog.open)about.textContent=tx("dictUI.notAvailable");
+  }
+};
+$("dictInfoClose").onclick=()=>$("dictInfoDialog").close();
+$("dictInfoDialog").addEventListener("close",()=>{dictInfoRequest++});
+$("dictInfoDialog").addEventListener("click",event=>{
+  const path=event.target.closest(".path");
+  if(!path)return;
+  navigator.clipboard?.writeText(path.dataset.full||path.textContent);
+  path.style.color="var(--accent)";
+});
+let dictInfoPress=null,dictInfoSuppressed=null;
+function cancelDictionaryInfoPress(){
+  if(dictInfoPress)clearTimeout(dictInfoPress.timer);
+  dictInfoPress=null;
+}
+function suppressDictionaryInfoClick(press){
+  dictInfoSuppressed=press;
+  setTimeout(()=>{if(dictInfoSuppressed===press)dictInfoSuppressed=null},500);
+}
+document.addEventListener("pointerdown",event=>{
+  if(event.button!==0||event.isPrimary===false)return;
+  const target=event.target.closest?.(".dict-info-name");
+  if(!target||target.closest("#dictInfoDialog"))return;
+  cancelDictionaryInfoPress();
+  const press={target,pointerId:event.pointerId,x:event.clientX,y:event.clientY,fired:false,timer:0};
+  press.timer=setTimeout(()=>{
+    if(dictInfoPress!==press)return;
+    press.fired=true;dictInfoSuppressed=press;
+    window.wudictShowDictionaryInfo(target.dataset.dict);
+  },550);
+  dictInfoPress=press;
+},true);
+document.addEventListener("pointermove",event=>{
+  const press=dictInfoPress;
+  if(press&&event.pointerId===press.pointerId&&Math.hypot(event.clientX-press.x,event.clientY-press.y)>10)cancelDictionaryInfoPress();
+},true);
+document.addEventListener("pointerup",event=>{
+  const press=dictInfoPress;
+  if(!press||event.pointerId!==press.pointerId)return;
+  clearTimeout(press.timer);dictInfoPress=null;
+  if(press.fired)suppressDictionaryInfoClick(press);
+},true);
+document.addEventListener("pointercancel",cancelDictionaryInfoPress,true);
+document.addEventListener("click",event=>{
+  const press=dictInfoSuppressed;
+  if(!press)return;
+  if(event.target===press.target||press.target.contains(event.target)){
+    event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();dictInfoSuppressed=null;
+  }
+},true);
+document.addEventListener("contextmenu",event=>{
+  const target=event.target.closest?.(".dict-info-name");
+  const summary=event.target.closest?.("details.dict:not(.noindex)>summary");
+  if(!target&&!summary)return;
+  if(event.target.closest(".priority-index,.upgrade,.result-page-action,.search-browse"))return;
+  const det=summary?.parentElement;
+  const id=target?.dataset.dict||det?.dataset.searchDict||det?.dataset.deferred||det?.dataset.dict||det?.querySelector(":scope > dl > dd[data-dict]")?.dataset.dict;
+  if(!id)return;
+  event.preventDefault();
+  const press=dictInfoPress;
+  if(press&&target&&press.target===target){clearTimeout(press.timer);press.fired=true;dictInfoPress=null;suppressDictionaryInfoClick(press)}
+  else cancelDictionaryInfoPress();
+  if($("dictInfoDialog").open&&$("dictInfoDialog").dataset.dict===id)return;
+  window.wudictShowDictionaryInfo(id);
+});
 $("panelList").addEventListener("click",e=>{
   const index=e.target.closest("[data-delete-index]");
   if(index){if(!index.disabled&&!index.classList.contains("busy"))askDSLIndexRemoval(index);return}
@@ -7389,7 +7482,7 @@ function loadDeferred(det,box,h,mode,q){
     // Answered, and the answer is "not in this one". Saying so is the whole
     // point — a section that vanished under the finger it was tapped with
     // would read as a bug.
-    box.innerHTML=`<details class="dict" open><summary>${dictIconHTML(h.dict)}${esc(hitName(h))}`+
+    box.innerHTML=`<details class="dict" data-dict="${escAttr(h.dict)}" open><summary>${dictIconHTML(h.dict)}<span class="dict-info-name" data-dict="${escAttr(h.dict)}">${esc(hitName(h))}</span>`+
       `<span class="count">${esc(tx("search.noResults"))}</span></summary></details>`;
   }).catch(err=>{
     if(!box.isConnected)return; // superseded and already off screen
@@ -7480,7 +7573,7 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
     const det=document.createElement("details");
     det.className="dict";
     det.dataset.deferred=h.dict; // also what excludes it from expand-all
-    det.innerHTML=`<summary>${dictIconHTML(h.dict)}${esc(hitName(h))}`+
+    det.innerHTML=`<summary>${dictIconHTML(h.dict)}<span class="dict-info-name" data-dict="${escAttr(h.dict)}">${esc(hitName(h))}</span>`+
       `<span class="count hint">${esc(deferLabel())}</span></summary>`;
     // `toggle` does not bubble, so this is bound to the element rather than
     // delegated on #out. It is not `once`: a failed load re-arms itself.
@@ -7493,7 +7586,7 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
     return{shown:true};
   }
   if(h.error){
-    box.innerHTML=`<details class="dict"><summary>${dictIconHTML(h.dict)}${esc(hitName(h))}<span class="count">⚠ ${esc(window.wudictI18n.errorText(h.error))}</span></summary></details>`;
+    box.innerHTML=`<details class="dict" data-dict="${escAttr(h.dict)}"><summary>${dictIconHTML(h.dict)}<span class="dict-info-name" data-dict="${escAttr(h.dict)}">${esc(hitName(h))}</span><span class="count">⚠ ${esc(window.wudictI18n.errorText(h.error))}</span></summary></details>`;
     return{shown:true};
   }
   if(h.skipped){
@@ -7517,7 +7610,7 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
          stops a scoped miss from silently widening. */
       if(group)return{shown:true,noIndex:{dict:h.dict,name:h.name,feat}};
       const what=FEAT_NAME[feat];
-      box.innerHTML=`<details class="dict"><summary>${dictIconHTML(h.dict)}${esc(h.name)}`+
+      box.innerHTML=`<details class="dict" data-dict="${escAttr(h.dict)}"><summary>${dictIconHTML(h.dict)}<span class="dict-info-name" data-dict="${escAttr(h.dict)}">${esc(h.name)}</span>`+
         `<span class="upgrade" data-id="${h.dict}" data-feat="${feat}">${esc(tx("search.enableMode",{what}))}</span></summary></details>`;
       return{shown:true};
     }
@@ -7554,7 +7647,7 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
   const countLabel=paging?(rung?`<span class="count">${rung}</span>`:``):more
     ?`<span class="count">${rung}${more} ${esc(tx("search.results",{count:perDict,number:""}).trim())}</span>`
     :`<span class="count">${rung}${esc(tx("search.results",{count:h.results.length,number:window.wudictI18n.number(h.results.length)}))}</span>`;
-  det.innerHTML=`<summary class="search-result-summary"><span class="search-dict-identity">${dictIconHTML(h.dict)}<span class="search-dict-name">${esc(h.name)}</span></span><span class="search-dict-controls">${pageControls}${countLabel}${browse}</span></summary>`;
+  det.innerHTML=`<summary class="search-result-summary"><span class="search-dict-identity">${dictIconHTML(h.dict)}<span class="search-dict-name dict-info-name" data-dict="${escAttr(h.dict)}">${esc(h.name)}</span></span><span class="search-dict-controls">${pageControls}${countLabel}${browse}</span></summary>`;
   const dl=document.createElement("dl"),roots=[];
   for(const r of h.results){
     const dt=document.createElement("dt");
@@ -12920,7 +13013,7 @@ $("styler").addEventListener("keydown",e=>{
     <p id="groupError" class="group-error" role="alert"></p>
     <p id="groupHint" role="status"></p>
   </div>
-  <div id="groupLists"><div id="groupMembers" class="group-section"><div id="groupMemberDraftActions" hidden><button type="button" class="btn group-edit-toggle" id="groupEditToggle" aria-label="{{T:dictUI.editGroupMembers}}" title="{{T:dictUI.editGroupMembers}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M10 2h4l.5 2.4 1.8.8 2.1-1.3 1.7 1.7-1.3 2.1.8 1.8L22 10v4l-2.4.5-.8 1.8 1.3 2.1-1.7 1.7-2.1-1.3-1.8.8L14 22h-4l-.5-2.4-1.8-.8-2.1 1.3-1.7-1.7 1.3-2.1-.8-1.8L2 14v-4l2.4-.5.8-1.8-1.3-2.1 1.7-1.7 2.1 1.3 1.8-.8Z"/></svg><span class="group-edit-label">{{T:dictUI.editGroupMembers}}</span></button><button type="button" class="btn group-draft-icon" id="groupMemberApply" aria-label="{{T:dictUI.applyGroupChanges}}" title="{{T:dictUI.applyGroupChanges}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button><button type="button" class="btn group-draft-icon" id="groupMemberCancel" aria-label="{{T:dictUI.discardGroupChanges}}" title="{{T:dictUI.discardGroupChanges}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div id="groupMemberHint" hidden><span>{{T:dictUI.memberEditHint}}</span></div><div id="groupOrderToolbar" hidden><span id="groupOrderHint">{{T:dictUI.longPressSelect}}</span><div id="groupOrderControls" hidden><output id="groupOrderCount" aria-live="polite">0</output><button type="button" class="group-order-button" id="groupOrderTop" aria-label="{{T:dictUI.moveSelectedTop}}" title="{{T:dictUI.moveSelectedTop}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 3h16"/><path d="m12 5-7 8h14zM12 12l-7 8h14z" fill="currentColor" stroke="none"/></svg></button><button type="button" class="group-order-button" id="groupOrderUp" aria-label="{{T:dictUI.moveSelectedUp}}" title="{{T:dictUI.moveSelectedUp}}">▲</button><button type="button" class="group-order-button" id="groupOrderDown" aria-label="{{T:dictUI.moveSelectedDown}}" title="{{T:dictUI.moveSelectedDown}}">▼</button><button type="button" class="group-order-button" id="groupOrderBottom" aria-label="{{T:dictUI.moveSelectedBottom}}" title="{{T:dictUI.moveSelectedBottom}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21h16"/><path d="m5 4 7 8 7-8zM5 11l7 8 7-8z" fill="currentColor" stroke="none"/></svg></button><button type="button" class="btn group-order-exit" id="groupOrderExit" aria-label="{{T:dictUI.exitSelection}}" title="{{T:dictUI.exitSelection}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></div><div id="groupEmptyHint" role="status" hidden><span id="groupEmptyHintText"></span></div><div id="groupRows"></div><div id="groupMembersSearchDock" class="list-search-dock" role="search"></div></div><div id="groupAvailable" class="group-section" hidden><div id="groupAvailableFilterHost"></div><div id="groupAddToolbar"><span id="groupAddHint">{{T:dictUI.availableEditHint}}</span><button type="button" class="btn" id="groupAddAll">{{T:dictUI.addAll}}</button></div><div id="groupOtherRows"></div><div id="groupAvailableSearchDock" class="list-search-dock" role="search"></div></div></div>
+  <div id="groupLists"><div id="groupMembers" class="group-section"><div id="groupMemberDraftActions" hidden><button type="button" class="btn group-edit-toggle" id="groupEditToggle" aria-label="{{T:dictUI.editGroupMembers}}" title="{{T:dictUI.editGroupMembers}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M10 2h4l.5 2.4 1.8.8 2.1-1.3 1.7 1.7-1.3 2.1.8 1.8L22 10v4l-2.4.5-.8 1.8 1.3 2.1-1.7 1.7-2.1-1.3-1.8.8L14 22h-4l-.5-2.4-1.8-.8-2.1 1.3-1.7-1.7 1.3-2.1-.8-1.8L2 14v-4l2.4-.5.8-1.8-1.3-2.1 1.7-1.7 2.1 1.3 1.8-.8Z"/></svg><span class="group-edit-label">{{T:dictUI.editGroupMembers}}</span></button><button type="button" class="btn group-draft-icon" id="groupMemberApply" aria-label="{{T:dictUI.applyGroupChanges}}" title="{{T:dictUI.applyGroupChanges}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button><button type="button" class="btn group-draft-icon" id="groupMemberCancel" aria-label="{{T:dictUI.discardGroupChanges}}" title="{{T:dictUI.discardGroupChanges}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div id="groupMemberHint" hidden><span>{{T:dictUI.memberEditHint}}</span></div><div id="groupOrderToolbar" hidden><button type="button" id="groupOrderMulti" aria-label="{{T:dictUI.multiSelect}}" title="{{T:dictUI.multiSelect}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8.5" y="3" width="12" height="12" rx="2"/><path d="m11 8 2.1 2.1L17 6.5"/><rect x="3.5" y="9" width="12" height="12" rx="2"/><path d="m6 14 2.1 2.1L12 12.5"/></svg><span>{{T:dictUI.multiSelect}}</span></button><div id="groupOrderControls" hidden><output id="groupOrderCount" aria-live="polite">0</output><button type="button" class="group-order-button" id="groupOrderTop" aria-label="{{T:dictUI.moveSelectedTop}}" title="{{T:dictUI.moveSelectedTop}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 3h16"/><path d="m12 5-7 8h14zM12 12l-7 8h14z" fill="currentColor" stroke="none"/></svg></button><button type="button" class="group-order-button" id="groupOrderUp" aria-label="{{T:dictUI.moveSelectedUp}}" title="{{T:dictUI.moveSelectedUp}}">▲</button><button type="button" class="group-order-button" id="groupOrderDown" aria-label="{{T:dictUI.moveSelectedDown}}" title="{{T:dictUI.moveSelectedDown}}">▼</button><button type="button" class="group-order-button" id="groupOrderBottom" aria-label="{{T:dictUI.moveSelectedBottom}}" title="{{T:dictUI.moveSelectedBottom}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21h16"/><path d="m5 4 7 8 7-8zM5 11l7 8 7-8z" fill="currentColor" stroke="none"/></svg></button><button type="button" class="btn group-order-exit" id="groupOrderExit" aria-label="{{T:dictUI.exitSelection}}" title="{{T:dictUI.exitSelection}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></div><div id="groupEmptyHint" role="status" hidden><span id="groupEmptyHintText"></span></div><div id="groupRows"></div><div id="groupMembersSearchDock" class="list-search-dock" role="search"></div></div><div id="groupAvailable" class="group-section" hidden><div id="groupAvailableFilterHost"></div><div id="groupAddToolbar"><span id="groupAddHint">{{T:dictUI.availableEditHint}}</span><button type="button" class="btn" id="groupAddAll">{{T:dictUI.addAll}}</button></div><div id="groupOtherRows"></div><div id="groupAvailableSearchDock" class="list-search-dock" role="search"></div></div></div>
 </dialog>
 <dialog id="linkGroupDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="linkGroupTitle">
   <h2 id="linkGroupTitle">{{T:dictUI.linkFilter}}</h2>

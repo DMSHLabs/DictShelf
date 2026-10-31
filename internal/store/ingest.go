@@ -248,6 +248,7 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 		"source_path":      srcMeta.Path,
 		"description":      srcMeta.Description,
 		"entry_count":      fmt.Sprint(id - int64(subEntries)),
+		"headword_count":   fmt.Sprint(total),
 		"sub_entries":      fmt.Sprint(subEntries), // @-prefixed, hidden from browsing
 		"ingest_level":     ingestLevel(plan),
 		"has_trigram":      boolMeta(plan.Contains),      // cheap-list flag; Open feature-detects the table

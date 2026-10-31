@@ -1016,6 +1016,7 @@ type dictInfo struct {
 	Format      string    `json:"format"`
 	Path        string    `json:"path"`
 	Entries     int       `json:"entries"`
+	Headwords   int       `json:"headwords,omitempty"`
 	Caps        dict.Caps `json:"caps"`
 	DBPath      string    `json:"dbPath,omitempty"` // exposed per D7: users share these files
 	Error       string    `json:"error,omitempty"`
@@ -1054,12 +1055,13 @@ type dictInfo struct {
 
 	// provenance (panel display): where the dictionary came from and what
 	// derived files exist. All optional and filesystem-cheap.
-	Source       string   `json:"source,omitempty"`   // foreign source file, if still on disk
-	MediaSrc     []string `json:"mediaSrc,omitempty"` // companion media sources (.mdd, .files.zip, res/)
-	TextDB       string   `json:"textDB,omitempty"`   // prepared text.db, if present
-	MediaDB      string   `json:"mediaDB,omitempty"`  // packed media.db, if present
-	Folder       string   `json:"folder,omitempty"`   // library folder holding them (the transferable unit)
-	DBSize       int64    `json:"dbSize,omitempty"`   // bytes of text.db - what the indexes actually cost
+	Source       string   `json:"source,omitempty"`      // foreign source file, if still on disk
+	SourceFiles  []string `json:"sourceFiles,omitempty"` // dictionary and its source companions
+	MediaSrc     []string `json:"mediaSrc,omitempty"`    // companion media sources (.mdd, .files.zip, res/)
+	TextDB       string   `json:"textDB,omitempty"`      // prepared text.db, if present
+	MediaDB      string   `json:"mediaDB,omitempty"`     // packed media.db, if present
+	Folder       string   `json:"folder,omitempty"`      // library folder holding them (the transferable unit)
+	DBSize       int64    `json:"dbSize,omitempty"`      // bytes of text.db - what the indexes actually cost
 	ContainsSize int64    `json:"containsSize,omitempty"`
 	FullTextSize int64    `json:"fullTextSize,omitempty"`
 	MediaSz      int64    `json:"mediaSize,omitempty"` // bytes of media.db
@@ -1197,6 +1199,7 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 		ec, _ := strconv.Atoi(meta["entry_count"])
 		info := dictInfo{
 			ID: e.ID, Path: e.Path, Name: meta["name"], Format: meta["format"], Entries: ec,
+			Headwords:         sourceHeadwordCount(e.Path, meta),
 			SelfIndexed:       formatHasSelfIndex(meta["format"]),
 			Caps:              dict.Caps{Exact: true, Prefix: true, Contains: p.Plan.Contains, FTS: p.Plan.FullText},
 			DBPath:            p.TextDB,
@@ -1216,7 +1219,8 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 			selfIndexed := formatHasSelfIndex(m.Format)
 			info := dictInfo{ // probeable, not prepared → direct backend
 				ID: e.ID, Path: e.Path, Name: m.Name, Format: m.Format, Entries: m.EntryCount,
-				Caps: dict.Caps{}, SelfIndexed: selfIndexed,
+				Headwords: m.EntryCount,
+				Caps:      dict.Caps{}, SelfIndexed: selfIndexed,
 			}
 			if selfIndexed {
 				info.Caps = dict.Caps{Exact: true, Prefix: true}
@@ -1237,6 +1241,7 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 		defer reader.Close()
 		m := reader.Meta()
 		info.Name, info.Format, info.Entries = m.Name, m.Format, m.EntryCount
+		info.Headwords = m.EntryCount
 		info.SelfIndexed = formatHasSelfIndex(m.Format)
 		info.Caps = dict.Caps{}
 		s.langFacts(&info, m.Name, m.IndexLang, m.ContentsLang)
@@ -1249,6 +1254,7 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 	}
 	m := d.Meta()
 	info.Name, info.Format, info.Entries, info.Caps = m.Name, m.Format, m.EntryCount, d.Caps()
+	info.Headwords = m.EntryCount
 	info.SelfIndexed = dictionaryHasSelfIndex(d)
 	s.langFacts(&info, m.Name, m.IndexLang, m.ContentsLang)
 	if cs, ok := d.(interface{ ContainsStale() bool }); ok {
@@ -1262,6 +1268,21 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 		}
 	}
 	return info
+}
+
+// sourceHeadwordCount is the number declared by the source format. Prepared
+// metadata stores it for new indexes; older libraries can still get it from a
+// cheap format prober when the source is available.
+func sourceHeadwordCount(path string, meta map[string]string) int {
+	if n, err := strconv.Atoi(meta["headword_count"]); err == nil && n > 0 {
+		return n
+	}
+	if dict.HasProber(path) {
+		if m, err := dict.Probe(path); err == nil {
+			return m.EntryCount
+		}
+	}
+	return 0
 }
 
 func needsFoldedReindex(meta map[string]string) bool {
@@ -1331,6 +1352,7 @@ func addProvenance(info *dictInfo, entryPath string) {
 	native := store.IsTextDB(entryPath)
 	if !native && fsx.FileExists(entryPath) {
 		info.Source = entryPath
+		info.SourceFiles = dict.SourceFiles(entryPath)
 		info.MediaSrc = dict.CompanionMedia(dict.SourceInput(entryPath))
 	}
 
