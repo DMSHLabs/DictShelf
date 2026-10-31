@@ -219,8 +219,21 @@ jobs:
             # The message keeps the shape of every hand-made tag in this
             # repository (wuDict2 v0.11.1), so the two are one line in a log.
             git tag -a "${TAG}" -m "DictShelf ${TAG}"
-            git push origin "${TAG}"
-            echo "Tag ${TAG} pushed."
+            TAG_REF="refs/tags/${TAG}"
+            if git push origin "${TAG_REF}"; then
+              echo "Tag ${TAG} pushed."
+            else
+              echo "Tag push was rejected; checking whether another release workflow created it."
+              REMOTE_TAG_INFO="$(git ls-remote --tags origin "${TAG_REF}" "${TAG_REF}^{}")" || exit 1
+              REMOTE_TAG_COMMIT="$(printf '%s\n' "$REMOTE_TAG_INFO" | awk -v ref="$TAG_REF" '$2 == ref "^{}" { peeled=$1 } $2 == ref { direct=$1 } END { print peeled ? peeled : direct }')"
+              LOCAL_TAG_COMMIT="$(git rev-parse "${TAG}^{commit}")"
+              if [ -n "$REMOTE_TAG_COMMIT" ] && [ "$REMOTE_TAG_COMMIT" = "$LOCAL_TAG_COMMIT" ]; then
+                echo "Tag ${TAG} was created concurrently for the same commit."
+              else
+                echo "::error::Tag ${TAG} exists remotely but does not point to this build's commit."
+                exit 1
+              fi
+            fi
           fi
 
       - name: Create or update GitHub release

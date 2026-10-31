@@ -382,9 +382,9 @@ func LoadPrefs(path string) *Prefs {
 	return p
 }
 
-// recordAppVersion marks the first startup of each build version. Background
-// match search is enabled once when the version changes; later preference
-// edits survive every restart of that same build.
+// recordAppVersion marks the first startup of each build version. Versioned
+// preference changes are applied here once; later user edits survive every
+// restart of that same build.
 func (p *Prefs) recordAppVersion(version string) error {
 	if version == "" {
 		return nil
@@ -402,6 +402,11 @@ func (p *Prefs) recordAppVersion(version string) error {
 	on := true
 	f.UI.CountAllResultsInBackground = &on
 	f.UI.SkipBackgroundResultCount = false
+	if f.IndexDefaults == nil {
+		f.IndexDefaults = &indexOptions{Index: true}
+	}
+	f.IndexDefaults.Index = true
+	f.IndexDefaults.Contains = true
 	return p.saveRecord(f)
 }
 
