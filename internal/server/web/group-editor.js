@@ -477,6 +477,12 @@ function renderGroupRows(){
     label.dataset.dict=d.id;label.dataset.search=dictLabel(d).toLocaleLowerCase();
     const name=document.createElement("span");name.className='group-dictionary-name';
     const title=document.createElement('span');title.className='group-dictionary-title';title.textContent=dictLabel(d);
+    if(d.entries!==undefined&&d.entries!==null&&Number.isFinite(Number(d.entries))){
+      const count=document.createElement('span');count.className='group-dictionary-count';
+      count.textContent=' ('+window.wudictI18n.number(Number(d.entries))+')';
+      count.title=tx('dictUI.headwordsCount',{number:window.wudictI18n.number(Number(d.entries))});
+      title.append(count);
+    }
     const icon=document.createElement('img');icon.className='dict-icon';icon.src='/dict-icon/'+encodeURIComponent(d.id);icon.alt='';icon.setAttribute('aria-hidden','true');icon.loading='lazy';icon.decoding='async';
     icon.addEventListener('error',()=>icon.remove(),{once:true});
     name.append(icon,title);

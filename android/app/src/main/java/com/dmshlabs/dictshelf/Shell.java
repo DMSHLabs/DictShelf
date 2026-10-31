@@ -706,6 +706,28 @@ final class Shell {
                     }
                     return true;
                 }
+                if ("wudict:system-settings-diagnostic".equals(message)) {
+                    try {
+                        org.json.JSONObject diagnostic = new org.json.JSONObject(defaultValue);
+                        String action = diagnostic.optString("action", "record");
+                        if ("get".equals(action)) {
+                            result.confirm(new org.json.JSONObject()
+                                    .put("enabled", SystemLog.systemSettingsDiagnostics()).toString());
+                        } else if ("set".equals(action)) {
+                            SystemLog.setSystemSettingsDiagnostics(a, diagnostic.getBoolean("enabled"));
+                            result.confirm("ok");
+                        } else if ("record".equals(action)) {
+                            SystemLog.recordSystemSettingsDiagnostic(diagnostic.optString("stage", "unknown"),
+                                    diagnostic.optString("detail", ""));
+                            result.confirm("ok");
+                        } else {
+                            result.confirm("error");
+                        }
+                    } catch (org.json.JSONException bad) {
+                        result.confirm("error");
+                    }
+                    return true;
+                }
                 if ("wudict:save-article".equals(message)) {
                     try {
                         SystemLogExport.startArticle(a, defaultValue == null ? "{}" : defaultValue);
@@ -729,6 +751,17 @@ final class Shell {
                         String detail = error.getMessage() == null
                                 ? "Update could not be started" : error.getMessage();
                         result.confirm("{\"error\":" + org.json.JSONObject.quote(detail) + "}");
+                    }
+                    return true;
+                }
+                if ("wudict:launcher-icon".equals(message)) {
+                    try {
+                        org.json.JSONObject request = new org.json.JSONObject(defaultValue);
+                        LauncherIcon.set(a, request.optString("family", "icon2"), request.optBoolean("automatic", true));
+                        result.confirm("ok");
+                    } catch (Exception error) {
+                        SystemLog.warn(TAG, "could not change launcher icon", error);
+                        result.confirm("error");
                     }
                     return true;
                 }
@@ -908,6 +941,8 @@ final class Shell {
                         }
                         result.confirm(systemState(a).toString());
                     } catch (org.json.JSONException | RuntimeException bad) {
+                        SystemLog.recordSystemSettingsDiagnostic("native_state_error",
+                                bad.getClass().getSimpleName() + ": " + bad.getMessage());
                         // Nothing is said here: the page holds the sentence a
                         // refused value deserves (its own field, its own
                         // words), and a cancel is how it learns to say it.

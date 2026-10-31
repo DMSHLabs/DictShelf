@@ -958,117 +958,97 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    four of them, which made it grey in BOTH looks, the one thing the register
    exists to prevent). The greys are LEFT to things the reader cannot act on,
    which in this window is nothing: no row here can be disabled. */
-#sysSettings h3.sys-head,#desktopSysBody h3.sys-head{margin:calc(var(--ui-row-gap) * 1em) 0 calc(var(--ui-section-space-after) * 1em);font-size:calc(var(--ui-font-section) * 1rem);font-weight:600;color:var(--label)}
-#sysSettings h3.sys-head:first-child,#desktopSysBody h3.sys-head:first-of-type{margin-top:0}
-/* The one group that folds, wearing the heading it replaces: same type, same
-   spacing, plus the ▸/▾ this app uses everywhere it means "there is more
-   behind this word" (.act.disc, .prov, .pd .about). A button and not a
-   heading, because it IS the control, and aria-expanded is the only thing the
-   marker reads - the handler keeps it in step with #sysAdvBody.hidden.
-   The marker is sized against the HEADING, not against the 9px one the button
-   rows use: at that size beside 14px bold it read as a speck (the reader's
-   screenshot), and this is the only place the triangle is the sole sign that a
-   group is folded - the rows it hides are the window's longest. The box it
-   reserves is stated in ems so it keeps the label's left edge steady when the
-   glyph swaps to ▾.
-   A RULE stands over that heading (the reader's ask): the groups above it are
-   about the reader's lookups, this one is about the server's own limits, and
-   the line is what says so before the fold is opened. It is drawn from the INK
-   exactly as the drawer's section rules are (`.sect`, and the measurement that
-   chose the ratio is written there) - a `--line` rule was the thing that read
-   as invisible on a phone in the two light looks, and this window wears the
-   same paper. */
-#sysSettings .sys-fold,#desktopSysBody .sys-fold{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);width:100%;
+#systemSettingsBody h3.sys-head{margin:calc(var(--ui-row-gap) * 1em) 0 calc(var(--ui-section-space-after) * 1em);font-size:calc(var(--ui-font-section) * 1rem);font-weight:600;color:var(--label)}
+#systemSettingsBody h3.sys-head:first-child,#systemSettingsBody h3.sys-head:first-of-type{margin-top:0}
+#systemSettingsBody .sys-fold{display:flex;align-items:center;gap:0;width:100%;
   margin:calc(var(--ui-row-gap) * 1em) 0 .2em;padding:.8em 0 0;border:0;background:none;text-align:left;
-  font:inherit;font-size:calc(var(--ui-font-section) * 1rem);font-weight:600;color:var(--fg);cursor:pointer;
+  font:inherit;font-size:calc(var(--ui-font-section) * 1rem);font-weight:700;color:var(--label);cursor:pointer;
   border-top:1px solid color-mix(in srgb,var(--fg) 22%,transparent)}
-#sysSettings .sys-fold[hidden],#desktopSysBody .sys-fold[hidden]{display:none}
-#sysSettings .sys-fold::before,#desktopSysBody .sys-fold::before{content:"▸";color:var(--label);font-size:1em;
-  line-height:1;display:inline-block;width:.9em;flex:none;text-align:center}
-#sysSettings .sys-fold[aria-expanded="true"]::before,#desktopSysBody .sys-fold[aria-expanded="true"]::before{content:"▾";color:var(--accent)}
-#sysSettings .sys-fold:hover::before,#desktopSysBody .sys-fold:hover::before{color:var(--fg)}
-#sysSettings .sys-fold:focus-visible,#desktopSysBody .sys-fold:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+#systemSettingsBody .sys-fold[hidden]{display:none}
+#systemSettingsBody .sys-fold::before{content:"▶";display:inline-block;width:1em;
+  margin-right:.4em;font-size:1em;line-height:1}
+#systemSettingsBody .sys-fold[aria-expanded="true"]::before{content:"▼"}
+#systemSettingsBody .sys-fold:hover{background:var(--line-soft)}
+#systemSettingsBody .sys-fold:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .sys-fold-body[hidden]{display:none!important}
 /* The blank row the reader asked for, between the Advanced rows and the button
    that clears them - inside that group, where the break is read. A row of air
    rather than a margin on the button: the rows above it end in whatever the
    shell's table ends with, and this keeps the separation the same whatever that
    is. */
-#sysSettings .sys-gap{height:calc(var(--ui-row-gap) * 1em)}
-#sysSettings .sys-hint{margin:0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.618;color:var(--label)}
-#desktopSysBody .sys-hint{margin:0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.618;color:var(--label)}
-#sysSettings .sys-item{margin:.5em 0 .2em}
-#sysSettings .sys-row,#desktopSysBody .sys-row{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);margin:calc(var(--ui-row-gap) * .5em) 0;font-size:calc(var(--ui-main-control-font) * 1rem);cursor:pointer}
-#sysSettings .sys-row input[type="checkbox"],#desktopSysBody .sys-row input[type="checkbox"]{
+#systemSettingsBody .sys-gap{height:calc(var(--ui-row-gap) * 1em)}
+#systemSettingsBody .sys-hint{margin:0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.618;color:var(--label)}
+#systemSettingsBody .sys-item{margin:.5em 0 .2em}
+#systemSettingsBody .sys-row{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);margin:calc(var(--ui-row-gap) * .5em) 0;font-size:calc(var(--ui-main-control-font) * 1rem);cursor:pointer}
+#systemSettingsBody .sys-row input[type="checkbox"]{
   --ds-checkbox-margin:0;
   --ds-checkbox-disabled-background:var(--fg-soft);
   --ds-checkbox-disabled-border-color:var(--fg-soft);
   --ds-checkbox-disabled-mark-color:var(--bg);
   --ds-checkbox-disabled-opacity:.8}
-#sysSettings .sys-hint+.sys-row,#desktopSysBody .sys-hint+.sys-row{margin-top:calc(var(--ui-addition-gap) * 1em)}
-#sysSettings .sys-row+.sys-row,#desktopSysBody .sys-row+.sys-row{margin-top:calc(var(--ui-row-gap) * 1em)}
-#sysSettings .sys-row+.sys-hint,#desktopSysBody .sys-row+.sys-hint{margin-top:calc(var(--ui-addition-gap) * 1em)}
-#sysSettings .sys-head+.sys-hint,#desktopSysBody .sys-head+.sys-hint{margin-top:0}
-#sysSettings .sys-hint+.sys-head,#desktopSysBody .sys-hint+.sys-head{margin-top:calc(var(--ui-section-space-before) * 1em)}
-#desktopSysBody .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:inherit;overflow-wrap:anywhere}
+#systemSettingsBody .sys-hint+.sys-row{margin-top:calc(var(--ui-addition-gap) * 1em)}
+#systemSettingsBody .sys-row+.sys-row{margin-top:calc(var(--ui-row-gap) * 1em)}
+#systemSettingsBody .sys-row+.sys-hint{margin-top:calc(var(--ui-addition-gap) * 1em)}
+#systemSettingsBody .sys-head+.sys-hint{margin-top:0}
+#systemSettingsBody .sys-hint+.sys-head{margin-top:calc(var(--ui-section-space-before) * 1em)}
+#systemSettingsBody .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:inherit;overflow-wrap:anywhere}
 #hotkeysSection .hotkey-row .sys-row{align-items:flex-start;cursor:default;flex-wrap:wrap}
 #hotkeysSection .hotkey-row .sys-label{flex:1 1 100%;color:var(--label)}
 #hotkeysSection .hotkey-row input{box-sizing:border-box;width:100%;height:calc(var(--ui-control-height) * 1em);font:inherit;padding:0 .6em;
   color:var(--fg);background-color:var(--paper-bg,var(--bg));background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%;border:1px solid var(--line);border-radius:5px}
 html:not([data-shell-image]) #hotkeysSection .hotkey-row input{background-image:linear-gradient(#ffffff24,#ffffff24)}
-#sysSettings .sys-row.sys-switch-ready,#desktopSysBody .sys-row.sys-switch-ready{justify-content:flex-start;gap:.8em}
-#sysSettings .sys-row.sys-switch-ready>.sys-label,#desktopSysBody .sys-row.sys-switch-ready>.sys-label{
+#systemSettingsBody .sys-row.sys-switch-ready{justify-content:flex-start;gap:.8em}
+#systemSettingsBody .sys-row.sys-switch-ready>.sys-label{
   box-sizing:border-box;flex:0 1 var(--sys-switch-label-width,auto);width:var(--sys-switch-label-width,auto);
   max-width:calc(100% - 3.5em);min-width:0;white-space:nowrap}
 #panel #examplesExtraRow+.facts{margin-top:calc(var(--ui-row-gap) * 1em)}
 #panel .appearance-row:has(#appearanceColorOn){flex-wrap:wrap}
 #panel .appearance-row:has(#appearanceColorOn)>.color-box{flex:1 1 12em}
-#sysSettings .sys-row.sys-num{cursor:default}
-#sysSettings .sys-result-cache-limit,#desktopSysBody .sys-result-cache-limit{justify-content:flex-start;gap:.45em;padding-left:0;font-size:calc(var(--ui-main-control-font) * 1rem)}
-#sysSettings .sys-result-cache-limit.sys-switch-ready>.sys-label,#desktopSysBody .sys-result-cache-limit.sys-switch-ready>.sys-label{flex:0 0 auto;width:max-content;max-width:calc(100% - 10em)}
-#sysSettings .sys-result-cache-limit>#sysResultCacheUnit,#desktopSysBody .sys-result-cache-limit>#sysResultCacheUnit{flex:none;white-space:nowrap}
-#sysSettings .sys-result-cache-limit input[type="text"],#desktopSysBody .sys-result-cache-limit input[type="text"]{width:7em;height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1;padding:0 .6em;text-align:right}
-#sysSettings .sys-result-cache-limit input[type="text"]:disabled,#desktopSysBody .sys-result-cache-limit input[type="text"]:disabled{box-sizing:border-box;width:12em;max-width:calc(100% - 1em);text-align:left}
-#sysSettings .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:inherit;overflow-wrap:anywhere}
-#sysSettings .sys-num input:not([type="checkbox"]),#desktopSysBody .sys-num input:not([type="checkbox"]){box-sizing:border-box;flex:none;width:6.5em;height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1;text-align:right;
+#systemSettingsBody .sys-row.sys-num{cursor:default}
+#systemSettingsBody .sys-result-cache-limit{justify-content:flex-start;gap:.45em;padding-left:0;font-size:calc(var(--ui-main-control-font) * 1rem)}
+#systemSettingsBody .sys-result-cache-limit.sys-switch-ready>.sys-label{flex:0 0 auto;width:max-content;max-width:calc(100% - 10em)}
+#systemSettingsBody .sys-result-cache-limit>#sysResultCacheUnit{flex:none;white-space:nowrap}
+#systemSettingsBody .sys-result-cache-limit input[type="text"]{width:7em;height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1;padding:0 .6em;text-align:right}
+#systemSettingsBody .sys-result-cache-limit input[type="text"]:disabled{box-sizing:border-box;width:12em;max-width:calc(100% - 1em);text-align:left}
+#systemSettingsBody .sys-num input:not([type="checkbox"]){box-sizing:border-box;flex:none;width:6.5em;height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1;text-align:right;
   color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:0 .6em}
-#sysSettings .sys-num:not(.sys-result-cache-limit) .sys-label,#desktopSysBody .sys-num:not(.sys-result-cache-limit) .sys-label{font-size:calc(var(--ui-main-control-font) * 1rem)}
-#sysSettings .sys-num .sys-workers-select{flex:none;width:6.5em}
-#sysSettings .sys-num .sys-workers-select>select{display:block;width:100%;max-width:none;min-width:0;box-sizing:border-box;
+#systemSettingsBody .sys-num:not(.sys-result-cache-limit) .sys-label{font-size:calc(var(--ui-main-control-font) * 1rem)}
+#systemSettingsBody .sys-num .sys-workers-select{flex:none;width:6.5em}
+#systemSettingsBody .sys-num .sys-workers-select>select{display:block;width:100%;max-width:none;min-width:0;box-sizing:border-box;
   height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;color:var(--fg);background:var(--bg);
   border:1px solid var(--line);border-radius:5px;padding:0 1.8em 0 .55em;appearance:none;-webkit-appearance:none}
-#sysSettings .sys-num .sys-return-cache-select,#desktopSysBody .sys-num .sys-return-cache-select{flex:none;width:8em}
-#sysSettings .sys-row:has(>.sys-return-cache-select)>.sys-label,#desktopSysBody .sys-row:has(>.sys-return-cache-select)>.sys-label{flex:0 1 auto}
-#sysSettings .sys-combined-limit>.sys-label,#desktopSysBody .sys-combined-limit>.sys-label{flex:0 1 auto}
-#sysSettings .sys-combined-limit>input,#desktopSysBody .sys-combined-limit>input{height:calc(var(--ui-control-height) * 1em);min-height:0;padding:0 .6em;line-height:1}
-#sysSettings .sys-num .sys-return-cache-select>select,#desktopSysBody .sys-num .sys-return-cache-select>select{display:block;width:100%;max-width:none;min-width:0;box-sizing:border-box;
+#systemSettingsBody .sys-num .sys-return-cache-select{flex:none;width:8em}
+#systemSettingsBody .sys-row:has(>.sys-return-cache-select)>.sys-label{flex:0 1 auto}
+#systemSettingsBody .sys-combined-limit>.sys-label{flex:0 1 auto}
+#systemSettingsBody .sys-combined-limit>input{height:calc(var(--ui-control-height) * 1em);min-height:0;padding:0 .6em;line-height:1}
+#systemSettingsBody .sys-num .sys-return-cache-select>select{display:block;width:100%;max-width:none;min-width:0;box-sizing:border-box;
   height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1;color:var(--fg);background:var(--bg);
   border:1px solid var(--line);border-radius:5px;padding:0 1.8em 0 .55em;appearance:none;-webkit-appearance:none}
-#sysSettings .sys-indexing-mode,#desktopSysBody .sys-indexing-mode{justify-content:flex-start;gap:.45em}
-#sysSettings .sys-indexing-mode>.sys-label,#desktopSysBody .sys-indexing-mode>.sys-label{flex:0 1 auto}
-#sysSettings .sys-indexing-mode-select,#desktopSysBody .sys-indexing-mode-select{flex:0 1 14em;width:14em;max-width:calc(100% - 5.5em);min-width:0}
-#sysSettings .sys-indexing-mode-select,#desktopSysBody .sys-indexing-mode-select{height:calc(var(--ui-control-height) * 1em);min-height:0}
-#sysSettings .sys-indexing-mode-select>select,#desktopSysBody .sys-indexing-mode-select>select{display:block;width:100%;max-width:none;min-width:0;box-sizing:border-box;
+#systemSettingsBody .sys-indexing-mode{justify-content:flex-start;gap:.45em}
+#systemSettingsBody .sys-indexing-mode>.sys-label{flex:0 1 auto}
+#systemSettingsBody .sys-indexing-mode-select{flex:0 1 14em;width:14em;max-width:calc(100% - 5.5em);min-width:0}
+#systemSettingsBody .sys-indexing-mode-select{height:calc(var(--ui-control-height) * 1em);min-height:0}
+#systemSettingsBody .sys-indexing-mode-select>select{display:block;width:100%;max-width:none;min-width:0;box-sizing:border-box;
   height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1;color:var(--fg);background:var(--bg);
   border:1px solid var(--line);border-radius:5px;padding:0 1.8em 0 .55em;appearance:none;-webkit-appearance:none}
-#sysSettings .sys-action-spaced{margin-top:calc(var(--ui-row-gap) * 1em)}
-#sysSettings .sys-action-spaced+.sys-head,#desktopSysBody .sys-action-spaced+.sys-head{margin-top:calc(var(--ui-section-space-before) * 1em + var(--ui-row-gap) * 1em)}
-#sysSettings .sys-num input:focus,#desktopSysBody .sys-num input:focus{outline:none;border-color:var(--focus);
+#systemSettingsBody .sys-action-spaced{margin-top:calc(var(--ui-row-gap) * 1em)}
+#systemSettingsBody .sys-action-spaced+.sys-head{margin-top:calc(var(--ui-section-space-before) * 1em + var(--ui-row-gap) * 1em)}
+#systemSettingsBody .sys-num input:focus{outline:none;border-color:var(--focus);
   box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}
 /* The unit beside a megabytes field. The box holds a bare number - a number
    input can hold nothing else - so this is the only thing that says what the
    number is OF. Muted and pulled back against its field, so the row reads as
    one control rather than as a field with a word beside it. */
-#sysSettings .sys-unit{flex:none;margin-left:-.35em;font-size:calc(var(--ui-font-addition) * 1rem);
+#systemSettingsBody .sys-unit{flex:none;margin-left:-.35em;font-size:calc(var(--ui-font-addition) * 1rem);
   color:var(--label);font-variant-numeric:tabular-nums}
 /* The window's two voices. The stale note is a state of the MACHINE - the
    server is still running with the settings it was started with - so it is a
    boxed sentence where this app's other notes are plain text; the line under it
    answers a refusal, and is quiet because it is not a control. An empty one
    takes no room, and both exist from the moment the window opens. */
-#sysSettings .sys-note{margin:calc(var(--ui-addition-gap) * 1em) 0 0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.618;color:var(--label)}
-#sysSettings .sys-note:empty{margin:0}
-#sysSettings #sysStale{border:1px solid var(--line);border-radius:8px;padding:.5em .7em}
+#systemSettingsBody .sys-note{margin:calc(var(--ui-addition-gap) * 1em) 0 0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.618;color:var(--label)}
+#systemSettingsBody .sys-note:empty{margin:0}
+#systemSettingsBody #sysStale{border:1px solid var(--line);border-radius:8px;padding:.5em .7em}
 /* Checkbox shape and paper are shared by checkbox.css; these declarations
    only tune the appearance drawer's local spacing. */
 .appearance-row input[type=checkbox]{--ds-checkbox-margin:0}
@@ -1150,6 +1130,7 @@ html[data-shell-image] .menu-card{
 .sys-icon-setting{margin:.75em 0 1em}
 .sys-icon-setting>.sys-label{display:block;margin-bottom:.4em}
 .icon-choice-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;max-width:400px}
+.android-icon-choice-grid{grid-template-columns:repeat(2,minmax(0,1fr));max-width:270px}
 .icon-choice{box-sizing:border-box;display:flex;align-items:center;justify-content:center;min-width:0;min-height:62px;padding:5px;border:2px solid var(--line);border-radius:7px;background:var(--bg-card);color:var(--fg);cursor:pointer}
 .icon-choice:hover{border-color:var(--accent)}
 .icon-choice[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}

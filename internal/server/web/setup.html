@@ -289,6 +289,7 @@ body{font-size:calc(var(--ui-font-base) * 1rem)}
   font-size:calc(var(--ui-edit_control-font) * 1rem)}
 #indexDefaults .dsl-default-row input[type=checkbox]{
   --ds-checkbox-size:calc(var(--ui-edit_control-height) * 1em)}
+#indexDefaults .index-defaults-note{margin-top:.6em}
 #rows .frow input{box-sizing:border-box;flex:1 1 0;
   height:calc(var(--ui-edit_control-height) * 1.5rem);min-height:0;
   font-size:calc(var(--ui-edit_control-font) * 1rem)}
@@ -355,6 +356,7 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
     <label><input type="checkbox" id="newIndexContains" checked>{{T:dictUI.contains}}</label>
     <label><input type="checkbox" id="newIndexFullText">{{T:dictUI.fts}}</label>
   </div></div>
+  <p class="index-defaults-note">{{T:pages.containsRecommendation}}</p>
   <p id="indexDefaultsError" class="err" role="alert" hidden></p>
 </section>
 <p class="formats">{{T:pages.supported}}</p>

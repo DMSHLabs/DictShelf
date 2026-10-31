@@ -61,6 +61,7 @@ html[data-shell-image] .folders-dialog-scroll code,html[data-shell-image] .folde
 .folders-dialog-scroll .dsl-default-row label{display:inline-flex;align-items:center;gap:.3em;min-height:calc(var(--ui-edit_control-height) * 1em);
   font-size:calc(var(--ui-edit_control-font) * 1rem)}
 .folders-dialog-scroll .dsl-default-row input[type=checkbox]{--ds-checkbox-size:calc(var(--ui-edit_control-height) * 1em)}
+.folders-dialog-scroll #indexDefaults .index-defaults-note{margin-top:.6em}
 .folders-dialog-scroll .frow{display:flex;align-items:center;gap:.4em}
 .folders-dialog-scroll .frow input{flex:1 1 0;min-width:0}
 .folders-dialog-scroll #importTarget{flex:1 1 0}

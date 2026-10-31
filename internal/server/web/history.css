@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-.search-history{position:absolute;top:calc(100% + 4px);left:0;right:0;
-  max-height:min(50vh,320px);overflow-y:auto;background:var(--bg-card);
+.search-history{position:absolute;top:calc(100% + 4px);left:0;right:0;box-sizing:border-box;
+  max-height:none;overflow-y:auto;overscroll-behavior:contain;background:var(--bg-card);
   border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);
   z-index:110}
 /* The Android mode and dictionary pickers are native windows. With a shell
@@ -26,6 +26,8 @@ html[data-shell-image] .search-history{
   background:none;color:var(--fg);text-align:left;font:inherit;cursor:pointer}
 .search-history button:hover,.search-history button:focus-visible{
   background:var(--line-soft);outline:none}
+.article-find-query-box{position:relative;min-width:0}
+.article-find-history{z-index:200}
 .history-setting{display:inline-flex;align-items:center;gap:.4em;
   color:var(--label);font-size:13px}
 .history-controls{display:inline-flex;align-items:center;gap:.45em}
