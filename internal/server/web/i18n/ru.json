@@ -993,7 +993,7 @@
   "search.progress": "Проверено словарей: {done} из {total}",
   "search.countingArticles": "Подсчёт найденных статей…",
   "search.dictionaryFoundCount": "{found} из {total}",
-  "search.dictionaryPickerGroupCount": "{name} {found} из {total}",
+  "search.dictionaryPickerGroupCount": "{name} {found} ({total})",
   "work.backgroundProgress": "Ход фоновой задачи",
   "search.fullListUnavailable": "Полный список недоступен",
   "search.stop": "Остановить",
