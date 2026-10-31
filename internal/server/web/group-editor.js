@@ -162,7 +162,7 @@ async function groupRequest(path,method,body,pickerTrace=false){
 }
 function renderGroupOptions(){
   const select=$("groupSelect");select.replaceChildren();
-  for(const group of userGroups)select.add(new Option(pickerGroupName(group.id),group.id));
+  for(const group of userGroups)select.add(new Option(pickerGroupOptionName(group.id),group.id));
   select.value=selectedGroup;
   window.wudictThemedSelects?.group?.sync();
 }
@@ -444,6 +444,7 @@ function renderGroupRows(){
   const showAll={checked:!locked&&(nameMode||groupShowAllPreferred)};
   const ordered=orderedDicts();
   const members=groupMemberDraft?.groupId===group.id?groupMemberDraft.members:new Set(group.readonly?ordered.map(d=>d.id):group.members);
+  const draftMembership=groupMemberDraft?.groupId===group.id;
   const displayGroup=groupMemberDraft?.groupId===group.id?{...group,members:[...members],order:groupMemberDraft.order}:group;
   const inside=group.readonly?ordered:orderedGroupDicts(displayGroup,ordered);
   const outside=locked?[]:ordered.filter(d=>!members.has(d.id));
@@ -510,6 +511,19 @@ function renderGroupRows(){
       const grip=document.createElement("button");grip.type="button";grip.className="group-grip";
       grip.textContent="≡";grip.setAttribute("aria-label",tx("dictUI.dragNamed",{name:dictLabel(d)}));
       label.append(grip,name);rows.append(label);continue;
+    }
+    if(draftMembership){
+      const member=members.has(d.id),action=document.createElement("button");
+      action.type="button";action.className="group-membership-action";
+      action.classList.add(member?"group-membership-remove":"group-membership-add");
+      action.textContent=member?"−":"+";action.disabled=groupSaving;
+      action.setAttribute("aria-label",tx(member?"dictUI.removeHint":"dictUI.addHint",{what:dictLabel(d)}));
+      action.addEventListener("click",()=>{
+        if(member){groupMemberDraft.members.delete(d.id);groupMemberDraft.order=groupMemberDraft.order.filter(id=>id!==d.id)}
+        else{groupMemberDraft.members.add(d.id);groupMemberDraft.order.push(d.id)}
+        renderGroupRows();
+      });
+      label.append(action,name);(member?rows:otherRows).append(label);continue;
     }
     const checkbox=document.createElement("input");checkbox.type="checkbox";checkbox.dataset.dict=d.id;checkbox.checked=members.has(d.id);checkbox.disabled=group.readonly||groupSaving;
     label.append(checkbox,name);(members.has(d.id)?rows:otherRows).append(label);

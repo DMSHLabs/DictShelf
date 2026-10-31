@@ -3027,6 +3027,14 @@ function pickerGroupName(id){
   const g=userGroups.find(x=>x.id===(id||pickerGroup));
   return g&&g.id!=="all"?(g.filter?"🔗 ":"")+g.name:tx("panel.allDictionaries");
 }
+function pickerGroupDictionaryCount(id){
+  const group=userGroups.find(g=>g.id===id);
+  if(group)return (group.members||[]).length;
+  return id==="all"?orderedDicts().length:0;
+}
+function pickerGroupOptionName(id){
+  return pickerGroupName(id)+" ("+window.wudictI18n.number(pickerGroupDictionaryCount(id))+")";
+}
 /* Repaint the chip after the standing group changes in the dictionary picker. */
 function paintPickerGroup(){
   syncChips();
@@ -3096,16 +3104,22 @@ function paintWebDictionaryPicker(){
   const group=$('webPickerGroup'),current=maskContext?null:scopedDictionary();
   const selected=current?current.id:pickerGroup;
   $('webDictionaryPicker').classList.toggle('wildcards-picker',maskContext);
-  const choices=userGroups.map(g=>({id:g.id,name:pickerGroupName(g.id)}));
+  const rows=maskContext?maskPickerRows():livePickerRows();
+  const choices=userGroups.map(g=>({id:g.id,name:pickerGroupOptionName(g.id)}));
+  if(!maskContext&&!current){
+    const choice=choices.find(item=>item.id===selected);
+    if(choice)choice.name=tx("search.dictionaryPickerGroupCount",{name:pickerGroupName(selected),
+      found:window.wudictI18n.number(rows.length),total:window.wudictI18n.number(pickerGroupDictionaryCount(selected))});
+  }
   if(current)choices.splice(1,0,current);
   group.replaceChildren(...choices.map(g=>new Option(g.name,g.id)));
   group.value=selected;
   window.wudictThemedSelects?.pickerGroup.sync();
-  const rows=maskContext?maskPickerRows():livePickerRows(),list=$('webPickerRows');
+  const list=$('webPickerRows');
   const currentID=maskContext?maskRows[maskCurrent]?.id:livePickerCurrentID();
   list.replaceChildren(...rows.map(row=>{
     const button=document.createElement('button');
-    button.type='button';button.className='web-picker-row';button.dataset.dict=row.id;
+    button.type='button';button.className='web-picker-row dict-info-name';button.dataset.dict=row.id;
     const name=document.createElement('span');name.className='web-picker-name dict-info-name';name.dataset.dict=row.id;name.textContent=row.name||row.label;
     button.append(document.createRange().createContextualFragment(dictIconHTML(row.id)),name);
     if(row.meta){const meta=document.createElement('span');meta.className='web-picker-meta';meta.textContent=row.meta;button.append(meta)}
@@ -3297,7 +3311,7 @@ $('openHeadwordExport').onclick=async()=>{
  try{
   userGroups=await groupRequest('/api/user-groups','GET');
   const selected=$('exportGroup').value;
-  $('exportGroup').replaceChildren(...userGroups.map(g=>new Option(pickerGroupName(g.id),g.id)));
+  $('exportGroup').replaceChildren(...userGroups.map(g=>new Option(pickerGroupOptionName(g.id),g.id)));
   $('exportGroup').value=userGroups.some(g=>g.id===selected)?selected:'all';
   $('exportPath').value=localStorage.getItem('wudict_headword_export_path')||'';
   $('exportFolder').hidden=typeof window.wudictPickFolder!=='function';

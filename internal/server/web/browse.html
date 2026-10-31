@@ -300,6 +300,21 @@ footer .browse-search-dock{width:100%;max-width:54rem}
 .picks span{flex:none;margin-left:auto;font-size:calc(var(--ui-hint-font-size) * 1rem)}
 .picks .pick-name{flex:1;min-width:0;margin:0;font-size:inherit;overflow-wrap:anywhere}
 .picks .pick-headword-count{flex:none;margin:0;color:var(--label-quiet);font-size:.9em;white-space:nowrap}
+.browse-dict-info{position:fixed;inset:0;margin:auto;box-sizing:border-box;width:min(560px,calc(100vw - 24px));height:fit-content;max-height:calc(100dvh - 24px);padding:1em;border:1px solid var(--line);border-radius:12px;color:var(--fg);background:var(--bg);box-shadow:0 8px 32px #0004;z-index:30;font-size:calc(var(--ui-font-base) * 1rem)}
+.browse-dict-info:not([open]){display:none}
+.browse-dict-info[open]{display:flex;flex-direction:column}
+.browse-dict-info::backdrop{background:rgba(0,0,0,.42)}
+.browse-dict-info-head{display:flex;align-items:center;gap:.5em;flex:none;margin:0 0 .7em;font-size:calc(var(--ui-font-title) * 1rem)}
+.browse-dict-info-head span{flex:1;min-width:0;overflow-wrap:anywhere}
+.browse-dict-info-head button{display:grid;place-items:center;flex:none;width:2.5em;height:2.5em;padding:0;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--fg);cursor:pointer}
+.browse-dict-info-head button svg{width:1.3em;height:1.3em}
+.browse-dict-info-scroll{min-height:0;overflow:auto;overscroll-behavior:contain}
+.browse-dict-info-counts{margin-bottom:.7em;line-height:1.5}
+.browse-dict-info-paths{margin-bottom:.8em;overflow-wrap:anywhere}
+.browse-dict-info-path{padding:.15em 0;overflow-wrap:anywhere;cursor:pointer}
+.browse-dict-info h3{margin:.6em 0 .25em;font-size:calc(var(--ui-font-title) * 1rem)}
+.browse-dict-info .aboutbody{line-height:1.45}
+.browse-dict-info .aboutbody p{margin:.25em 0}
 .msg.chooser-list{box-sizing:border-box;display:flex;flex-direction:column;
   min-height:0;margin:1rem auto;max-height:calc(100dvh - 2rem)}
 .chooser-list .chooser-head,.chooser-list .chooser-hint{flex:none}
@@ -387,6 +402,11 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
       <button type="submit">{{T:browse.gotoBlockAction}}</button>
     </div>
   </form>
+</dialog>
+
+<dialog class="browse-dict-info" id="browseDictInfo" lang="{{T:locale}}" aria-labelledby="browseDictInfoTitle">
+  <h2 class="browse-dict-info-head"><span id="browseDictInfoTitle"></span><button type="button" id="browseDictInfoClose" aria-label="{{T:pages.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
+  <div class="browse-dict-info-scroll"><div id="browseDictInfoCounts" class="browse-dict-info-counts"></div><div id="browseDictInfoPaths" class="browse-dict-info-paths"></div><h3>{{T:dictUI.about}}</h3><div id="browseDictInfoAbout" class="aboutbody">…</div></div>
 </dialog>
 
 <main>
@@ -489,7 +509,7 @@ try{const t=localStorage.getItem("wudict_theme");
   if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);
   else if(!t)document.documentElement.setAttribute("data-theme","light")}catch(e){document.documentElement.setAttribute("data-theme","light")}
 
-let dictId="",state=null,last={p:1},poll=0,stripFor="",stripLettersPainted=0,stripMetricKey="",stripWidths=[],stripOffsets=[],stripTotalWidth=0,stripCurrentIndex=-1,stripCurrentPositionedIndex=-1,stripWindowStart=-1,stripWindowEnd=-1,stripFrame=0,stripMeasureFrame=0,stripMeasureGeneration=0,stripMeasureStarted=0,stripMeasureStartCount=0,stripMeasureChunks=0,chooserSearch=null,browsePageAbort=null,browseAlphabetTask=null,browsePageBusy=false;
+let dictId="",state=null,last={p:1},poll=0,stripFor="",stripLettersPainted=0,stripMetricKey="",stripWidths=[],stripOffsets=[],stripTotalWidth=0,stripCurrentIndex=-1,stripCurrentPositionedIndex=-1,stripWindowStart=-1,stripWindowEnd=-1,stripFrame=0,stripMeasureFrame=0,stripMeasureGeneration=0,stripMeasureStarted=0,stripMeasureStartCount=0,stripMeasureChunks=0,chooserSearch=null,browsePageAbort=null,browseAlphabetTask=null,browsePageBusy=false,browseChooserDictionaries=[];
 const browseAlphabetCache=new Map(),browseAlphabetPartial=new Map(),browsePageCache=new Map(),browsePageCacheMetrics=new Map(),browsePagePrefetches=new Map();
 const BROWSE_PAGE_CACHE_LIMIT=12,BROWSE_PAGE_SESSION_LIMIT=8;
 const BROWSE_ALPHABET_SESSION_KEY="wudict_browse_alphabet_v2";
@@ -1951,6 +1971,74 @@ async function unprepared(){
     tx("browse.chooseAnother")+"</a></p>");
 }
 
+let browseDictInfoRequest=0,browseDictInfoPress=null,browseDictInfoSuppress=null;
+async function showBrowseDictionaryInfo(id){
+  const d=(browseChooserDictionaries||[]).find(item=>item.id===id);if(!d)return;
+  const dialog=$("browseDictInfo"),title=$("browseDictInfoTitle"),counts=$("browseDictInfoCounts"),paths=$("browseDictInfoPaths"),about=$("browseDictInfoAbout");
+  if(dialog.open&&dialog.dataset.dict===id)return;
+  const request=++browseDictInfoRequest;
+  dialog.dataset.dict=id;
+  title.textContent=d.browseLabel||d.name||d.id;
+  const countLines=[];
+  if(d.headwords)countLines.push(t("dictUI.numberOfHeadwords",{number:num(Number(d.headwords))}));
+  if(d.entries)countLines.push(t("dictUI.numberOfEntries",{number:num(Number(d.entries))}));
+  counts.innerHTML=countLines.map(esc).join("<br>");
+  const files=[...(d.sourceFiles||[]),d.source,...(d.mediaSrc||[])].filter((path,index,all)=>path&&all.indexOf(path)===index);
+  paths.innerHTML=files.map(path=>'<div class="browse-dict-info-path" data-full="'+esc(path)+'" title="'+tx("panel.copyPath")+'">'+esc(path)+'</div>').join("");
+  about.textContent="…";
+  if(!dialog.open)dialog.showModal();
+  try{
+    let info;
+    if(window.wudictAndroidGo){info=JSON.parse(window.wudictAndroidGo.about(location.origin,id))}
+    else if(typeof window.wudictNativeCall==="function"){info=await window.wudictNativeCall("about",id)}
+    else{const response=await fetch("/api/about?dict="+encodeURIComponent(id));if(!response.ok)throw new Error(response.status);info=await response.json()}
+    if(request!==browseDictInfoRequest||!dialog.open)return;
+    const langs=[];
+    if(info.indexLang)langs.push(t("dictUI.headwords",{language:info.indexLang}));
+    if(info.contentsLang)langs.push(t("dictUI.articles",{language:info.contentsLang}));
+    about.innerHTML=(info.html||"<p>"+esc(t("dictUI.emptyAbout"))+"</p>")+(langs.length?'<div class="aboutlangs">'+langs.map(esc).join(" · ")+"</div>":"");
+  }catch(_){if(request===browseDictInfoRequest&&dialog.open)about.textContent=t("dictUI.notAvailable")}
+}
+$("browseDictInfoClose").addEventListener("click",()=>$("browseDictInfo").close());
+$("browseDictInfo").addEventListener("close",()=>{browseDictInfoRequest++});
+$("browseDictInfo").addEventListener("click",event=>{
+  const path=event.target.closest(".browse-dict-info-path");if(!path)return;
+  navigator.clipboard?.writeText(path.dataset.full||path.textContent);
+  path.style.color="var(--accent)";
+});
+function cancelBrowseDictionaryInfoPress(){if(browseDictInfoPress)clearTimeout(browseDictInfoPress.timer);browseDictInfoPress=null}
+document.addEventListener("pointerdown",event=>{
+  if(event.button!==0||event.isPrimary===false)return;
+  const target=event.target.closest?.(".picks a[data-dict]");if(!target)return;
+  cancelBrowseDictionaryInfoPress();
+  const press={target,pointerId:event.pointerId,x:event.clientX,y:event.clientY,fired:false,timer:0};
+  press.timer=setTimeout(()=>{
+    if(browseDictInfoPress!==press)return;
+    press.fired=true;browseDictInfoSuppress=press;showBrowseDictionaryInfo(target.dataset.dict);
+  },550);
+  browseDictInfoPress=press;
+},true);
+document.addEventListener("pointermove",event=>{
+  const press=browseDictInfoPress;
+  if(press&&event.pointerId===press.pointerId&&Math.hypot(event.clientX-press.x,event.clientY-press.y)>10)cancelBrowseDictionaryInfoPress();
+},true);
+document.addEventListener("pointerup",event=>{
+  const press=browseDictInfoPress;if(!press||event.pointerId!==press.pointerId)return;
+  clearTimeout(press.timer);browseDictInfoPress=null;
+  if(press.fired)browseDictInfoSuppress=press;
+},true);
+document.addEventListener("pointercancel",cancelBrowseDictionaryInfoPress,true);
+document.addEventListener("click",event=>{
+  const press=browseDictInfoSuppress;if(!press)return;
+  if(event.target===press.target||press.target.contains(event.target)){
+    event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();browseDictInfoSuppress=null;
+  }
+},true);
+document.addEventListener("contextmenu",event=>{
+  const target=event.target.closest?.(".picks a[data-dict]");if(!target)return;
+  event.preventDefault();cancelBrowseDictionaryInfoPress();showBrowseDictionaryInfo(target.dataset.dict);
+});
+
 /* No ?dict= is not an error: it is the question "which one?", and a page that
    can be reached from a bookmark bar has to be able to answer it. */
 async function chooser(){
@@ -2024,8 +2112,9 @@ async function chooser(){
   window.wudictTasks?.finishMatching?.("browse",t("browse.loadingDictionaries"));
   if(!ds.length)return card(heading+"<b>"+tx("browse.empty")+"</b><p>"+tx("browse.emptyBody")+
     '</p><p><a href="/">'+tx("browse.openApp")+"</a></p>");
+  browseChooserDictionaries=ds.map(d=>({...d,browseLabel:label(d)}));
   card(heading+"<div class='picks'>"+
-    ds.map(d=>'<a href="?dict='+encodeURIComponent(d.id)+'&chooser=1">'+browseDictIconHTML(d.id)+'<span class="pick-name">'+esc(label(d))+'</span>'+
+    ds.map(d=>'<a href="?dict='+encodeURIComponent(d.id)+'&chooser=1" data-dict="'+esc(d.id)+'">'+browseDictIconHTML(d.id)+'<span class="pick-name">'+esc(label(d))+'</span>'+
       (d.entries!==undefined&&d.entries!==null&&Number.isFinite(Number(d.entries))?'<span class="pick-headword-count" title="'+esc(tx("dictUI.headwordsCount",{number:num(Number(d.entries))}))+'">('+num(Number(d.entries))+')</span>':"")+"</a>").join("")+"</div>"+
     '<div class="list-search-dock" role="search"></div>',true);
   requestAnimationFrame(()=>requestAnimationFrame(()=>logBrowseNavigation("chooser_ready",performance.now()-chooserStarted,{words:ds.length})));
