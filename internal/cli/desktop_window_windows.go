@@ -215,11 +215,13 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 			return false
 		}
 		if !windowVisible {
+			desktopSetHotkeyCapture(hwnd, false)
 			desktopWindowHidden.Store(true)
 			desktopRefreshTaskbarShortcutIcon(hwnd)
 			return true
 		}
 		const swHide = 0
+		desktopSetHotkeyCapture(hwnd, false)
 		procShowWindow.Call(hwnd, swHide)
 		desktopWindowHidden.Store(true)
 		visibleAfter, _, _ := procIsWindowVisible.Call(hwnd)
@@ -232,6 +234,7 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 			return false
 		}
 		const swHide = 0
+		desktopSetHotkeyCapture(hwnd, false)
 		procShowWindow.Call(hwnd, swHide)
 		desktopWindowHidden.Store(true)
 		logx.SystemDiagnostic("desktop minimize-to-tray hide hwnd=%#x", hwnd)
@@ -424,6 +427,7 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		w.Dispatch(func() {
 			const swHide = 0
 			hwnd := uintptr(w.Window())
+			desktopSetHotkeyCapture(hwnd, false)
 			procShowWindow.Call(hwnd, swHide)
 			desktopWindowHidden.Store(true)
 			visible, _, _ := procIsWindowVisible.Call(hwnd)
@@ -1207,20 +1211,35 @@ func desktopSetHotkeysRestore(hwnd uintptr, old desktopHotkeyAction) {
 func desktopSetHotkeyCapture(hwnd uintptr, enabled bool) {
 	desktopHotkeyMu.Lock()
 	defer desktopHotkeyMu.Unlock()
-	if desktopHotkeyCaptureActive == enabled {
-		return
-	}
 	desktopHotkeyCaptureActive = enabled
 	for _, action := range desktopHotkeyActions {
 		if len(action.sequence) == 0 {
 			continue
 		}
-		if enabled {
-			action.waiting = false
-			action.waitToken++
-			desktopHotkeyActions[action.action] = action
-		}
+		action.waiting = false
+		action.waitToken++
+		desktopHotkeyActions[action.action] = action
 	}
+}
+
+// A global keyboard hook runs outside WebView2's window thread. Dispatch the
+// restore there so Windows sees a normal user-triggered activation request.
+func desktopRestoreAndFocusWindow(hwnd uintptr) {
+	restore := func() {
+		desktopWindowHidden.Store(false)
+		restoreAndFocusWindow(hwnd)
+		visible, _, _ := procIsWindowVisible.Call(hwnd)
+		foreground, _, _ := windowUser32.NewProc("GetForegroundWindow").Call()
+		logx.SystemDiagnostic("desktop hotkey restore hwnd=%#x visible=%t foreground=%#x active=%t", hwnd, visible != 0, foreground, foreground == hwnd)
+	}
+	desktopWindowMu.Lock()
+	w := desktopWindow
+	desktopWindowMu.Unlock()
+	if w != nil && uintptr(w.Window()) == hwnd {
+		w.Dispatch(restore)
+		return
+	}
+	restore()
 }
 
 func parseDesktopHotkey(value string) ([]desktopHotkeyChord, bool) {
@@ -1368,8 +1387,9 @@ func desktopHandleHotkey(hwnd uintptr, id, lparam uintptr) bool {
 	switch action.action {
 	case 0:
 		if desktopWindowHidden.Swap(false) || func() bool { iconic, _, _ := procIsIconic.Call(hwnd); return iconic != 0 }() {
-			restoreAndFocusWindow(hwnd)
+			desktopRestoreAndFocusWindow(hwnd)
 		} else {
+			desktopSetHotkeyCapture(hwnd, false)
 			procShowWindow.Call(hwnd, 0)
 			desktopWindowHidden.Store(true)
 		}
@@ -1381,7 +1401,7 @@ func desktopHandleHotkey(hwnd uintptr, id, lparam uintptr) bool {
 			desktopSendHotkeyChord(desktopHotkeyChord{key: 0x2E, mods: 0x0002}, true)
 		} else {
 			desktopWindowHidden.Store(false)
-			restoreAndFocusWindow(hwnd)
+			desktopRestoreAndFocusWindow(hwnd)
 		}
 		go func() {
 			time.Sleep(60 * time.Millisecond)
@@ -1397,8 +1417,7 @@ func desktopHandleHotkey(hwnd uintptr, id, lparam uintptr) bool {
 				sequence, _, _ := windowClipboardSequence.Call()
 				if uint32(sequence) == copySeq {
 					if len(action.sequence) == 1 && hwnd != 0 {
-						desktopWindowHidden.Store(false)
-						restoreAndFocusWindow(hwnd)
+						desktopRestoreAndFocusWindow(hwnd)
 					}
 					return
 				}
@@ -1414,8 +1433,7 @@ func desktopHandleHotkey(hwnd uintptr, id, lparam uintptr) bool {
 				return
 			}
 			if len(action.sequence) == 1 && hwnd != 0 {
-				desktopWindowHidden.Store(false)
-				restoreAndFocusWindow(hwnd)
+				desktopRestoreAndFocusWindow(hwnd)
 			}
 			if clipboard == "" {
 				return

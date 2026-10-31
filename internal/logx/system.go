@@ -23,6 +23,7 @@ var systemRoot func() string
 var systemSessionPath string
 var diagnosticURL = regexp.MustCompile(`https?://[^\s"<>]+`)
 var canceledSystemErrorField = regexp.MustCompile(`(?i)\berror=(?:"(?:\\.|[^"\\])*context canceled"|context canceled)(?:$|[\s,;])`)
+var emptySystemErrorField = regexp.MustCompile(`(?i)\berror=""`)
 var systemLogEnabled = true
 var systemLogBaseEvents = true
 var systemLogWebEvents = true
@@ -239,6 +240,8 @@ func isSystemError(message string) bool {
 	// the Info panel report a false positive.
 	message = strings.ReplaceAll(message, `error="<nil>"`, "")
 	message = strings.ReplaceAll(message, "error=<nil>", "")
+	// Successful diagnostic records may include an empty error field.
+	message = emptySystemErrorField.ReplaceAllString(message, "")
 	// Safe Stop cancels in-flight indexing jobs. Their context-canceled error
 	// fields are expected and should not make the Info panel report a failure.
 	message = canceledSystemErrorField.ReplaceAllString(message, "")

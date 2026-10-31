@@ -327,23 +327,28 @@ if not exist "%OUTPUT_EXE%" (
     exit /b 1
 )
 
-rem It has to START, not merely exist. A cgo build links the mingw runtime
-rem dynamically unless it is told otherwise, so a missing libwinpthread-1.dll
-rem or libgcc_s_seh-1.dll yields a build that reports success and a binary
-rem that dies before main. --version is the cheapest run there is: no port,
-rem no dictionary, no tray.
-set "RAN="
-for /f "delims=" %%V in ('"%OUTPUT_EXE%" --version') do if not defined RAN set "RAN=%%V"
-
-if not defined RAN (
-    echo ERROR: %OUTPUT_EXE% was built but does not run.
-    echo   Check that the mingw runtime DLLs ^(libwinpthread-1.dll,
-    echo   libgcc_s_seh-1.dll^) are beside the exe or on PATH.
-    exit /b 1
+rem It has to START, not merely exist. --version is the cheapest run there is:
+rem no port, no dictionary, no tray.
+if /i "%WINDOW_MODE%"=="gui" (
+    rem GUI-subsystem executables have no inherited stdout, so FOR /F cannot
+    rem capture --version even when the process starts and exits successfully.
+    rem Start-Process verifies the actual GUI artifact and its exit code.
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; try { $p=Start-Process -FilePath '%CD%\%OUTPUT_EXE%' -ArgumentList '--version' -PassThru -Wait -WindowStyle Hidden; if ($p.ExitCode -ne 0) { exit $p.ExitCode }; exit 0 } catch { exit 1 }"
+    if errorlevel 1 (
+        echo ERROR: %OUTPUT_EXE% could not start or exited with an error.
+        exit /b 1
+    )
+    echo OK: %OUTPUT_EXE% starts and exits successfully
+) else (
+    set "RAN="
+    for /f "delims=" %%V in ('"%OUTPUT_EXE%" --version') do if not defined RAN set "RAN=%%V"
+    if not defined RAN (
+        echo ERROR: %OUTPUT_EXE% was built but did not print its version.
+        exit /b 1
+    )
+    echo OK: %OUTPUT_EXE% runs
+    echo   %RAN%
 )
-
-echo OK: %OUTPUT_EXE% runs
-echo   %RAN%
 echo.
 
 rem The build records its tags, its CGO_ENABLED and the whole module graph

@@ -16,6 +16,14 @@ state synchronously before UI-started indexing work, then Go applies the
 existing power policy. Both indexing limiters retain a minimum of one active
 dictionary job. Runtime/device verification is pending.
 
+System Log error detection ignores empty `error=""` fields, which occur in
+successful Browse diagnostics. Windows GUI builds now verify startup by exit
+code because `windowsgui` executables have no capturable stdout; the cgo build
+and `--version` startup check pass. Tray hides clear hot-key capture state;
+global restore dispatches through the WebView window thread and moves the
+window to the top of the normal Z order. Live tray/focus verification remains
+pending.
+
 Release workflows now handle concurrent tag creation: after a rejected push they continue only when the remote tag resolves to the same commit; Android, Windows, and native-release workflows share this guard. `dictshelf-v1.02.17` already exists remotely.
 
 Group selectors show each group's dictionary count. Both the status-bar group chip and the dictionary picker header show the selected group's found-dictionary count followed by its total in parentheses (for example, `Essential 4 (12)`).
