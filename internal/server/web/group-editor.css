@@ -303,8 +303,10 @@ html[data-shell-image] dialog#groupEditor.group-dialog.panel-card{background-ima
 #groupMembers:has(#groupMemberHint:not([hidden])) #groupRows{padding-top:0}
 #groupOrderToolbar{position:relative;z-index:1;display:flex;align-self:stretch;align-items:center;box-sizing:border-box;width:100%;max-width:100%;flex:none;margin-bottom:.3em;border-bottom:1px solid var(--line)}
 #groupOrderToolbar[hidden],#groupOrderMulti[hidden],#groupOrderControls[hidden]{display:none}
-#groupOrderActions{display:flex;align-items:center;gap:.35em;margin-left:.35em;flex:none;order:2}
+#groupOrderActions{display:flex;align-items:center;gap:2.25em;margin-left:.35em;flex:none;order:2}
 #groupOrderActions[hidden],#groupPinControls[hidden]{display:none}
+#groupOrderActions .group-order-button{box-sizing:border-box;height:2.25em;padding:0 .55em;border:1px solid var(--line);border-radius:.5em;background:var(--bg)}
+#groupOrderActions #groupPinStart{width:2.25em;padding:0}
 #groupPinControls{display:flex;align-items:center;justify-content:flex-end;gap:.35em;width:100%;margin-left:.35em}
 #groupPinHint{flex:1;min-width:0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.2;overflow-wrap:anywhere}
 #groupPinControls button{white-space:nowrap;padding-inline:.45em}
@@ -365,6 +367,8 @@ html[data-shell-image] dialog#groupEditor.group-dialog.panel-card{background-ima
 #groupEditor .list-search-input{height:calc(var(--ui-edit_control-height) * 1.5rem);min-height:0;font:inherit}
 #groupAvailableSearch::placeholder,#groupMembersSearch::placeholder{color:var(--label)}
 .group-row{display:flex;align-items:center;gap:.7em;min-height:44px;padding:.25em 0;overflow-wrap:anywhere}
+.group-membership-action{display:grid;place-items:center;flex:none;width:2.25em;height:2.25em;padding:0;border:1px solid var(--line);border-radius:.5em;background:var(--bg);color:var(--accent);font:inherit;font-size:1.35em;font-weight:600;line-height:1;cursor:pointer}
+.group-membership-action:disabled{opacity:.45;cursor:default}
 .group-dictionary-name{font-size:calc(var(--ui-font-base) * 1rem);display:inline-flex;align-items:center;gap:.35em;flex:1;min-width:0}
 .dict-info-name{user-select:none;-webkit-user-select:none}
 .group-dictionary-count{color:var(--label-quiet);font-size:.9em;white-space:nowrap}
