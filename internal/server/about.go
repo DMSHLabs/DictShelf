@@ -7,11 +7,13 @@ package server
 import (
 	"html"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/fsx"
 	"github.com/DMSHLabs/DictShelf/internal/htmlref"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // What a dictionary says about itself. Six formats parse a description out of
@@ -27,13 +29,16 @@ import (
 // formats happen to have a prober.
 
 type aboutInfo struct {
-	ID           string `json:"id"`
-	Name         string `json:"name,omitempty"`
-	Format       string `json:"format,omitempty"`
-	HTML         string `json:"html"`
-	Source       string `json:"source,omitempty"`
-	IndexLang    string `json:"indexLang,omitempty"`
-	ContentsLang string `json:"contentsLang,omitempty"`
+	ID           string   `json:"id"`
+	Name         string   `json:"name,omitempty"`
+	Format       string   `json:"format,omitempty"`
+	HTML         string   `json:"html"`
+	Source       string   `json:"source,omitempty"`
+	SourceFiles  []string `json:"sourceFiles,omitempty"`
+	Headwords    int      `json:"headwords,omitempty"`
+	Entries      int      `json:"entries,omitempty"`
+	IndexLang    string   `json:"indexLang,omitempty"`
+	ContentsLang string   `json:"contentsLang,omitempty"`
 }
 
 // aboutSource is what one dictionary declares about itself, gathered without
@@ -46,6 +51,7 @@ type aboutSource struct {
 	srcPath            string
 	indexLang          string
 	contentsLang       string
+	headwords, entries int
 }
 
 func (s *Server) aboutSourceFor(e *entry) aboutSource {
@@ -60,6 +66,7 @@ func (s *Server) aboutSourceFor(e *entry) aboutSource {
 			desc:      dict.DisplayText(m["description"]),
 			srcPath:   src,
 			indexLang: m["index_lang"], contentsLang: m["contents_lang"],
+			headwords: parseAboutCount(m["headword_count"]), entries: parseAboutCount(m["entry_count"]),
 		}
 	}
 	if dict.HasProber(e.Path) {
@@ -67,6 +74,7 @@ func (s *Server) aboutSourceFor(e *entry) aboutSource {
 			return aboutSource{
 				name: m.Name, format: m.Format, desc: m.Description,
 				srcPath: e.Path, indexLang: m.IndexLang, contentsLang: m.ContentsLang,
+				headwords: m.EntryCount, entries: m.EntryCount,
 			}
 		}
 	}
@@ -90,7 +98,13 @@ func (s *Server) aboutSourceFor(e *entry) aboutSource {
 	return aboutSource{
 		name: m.Name, format: strings.TrimPrefix(m.Format, "wudict:"), desc: m.Description,
 		srcPath: e.Path, indexLang: m.IndexLang, contentsLang: m.ContentsLang,
+		headwords: m.EntryCount, entries: m.EntryCount,
 	}
+}
+
+func parseAboutCount(value string) int {
+	n, _ := strconv.Atoi(value)
+	return n
 }
 
 // aboutOf composes the About for one dictionary, cheapest first: the live
@@ -108,11 +122,13 @@ func (s *Server) aboutOf(e *entry, base string) (aboutInfo, bool) {
 	info := aboutInfo{
 		ID: e.ID, Name: src.name, Format: src.format,
 		IndexLang: src.indexLang, ContentsLang: src.contentsLang,
+		Headwords: src.headwords, Entries: src.entries,
 	}
 	// A source that has been moved away or deleted still leaves a working
 	// library behind (D2/D9); its sidecar is simply gone, and the description
 	// copied at ingest is then all there is.
-	if src.srcPath != "" && fsx.FileExists(src.srcPath) {
+	if src.srcPath != "" && !store.IsTextDB(src.srcPath) && fsx.FileExists(src.srcPath) {
+		info.SourceFiles = dict.SourceFiles(src.srcPath)
 		// With a format name, ask that format's provider; without one - the
 		// dictionary is neither prepared, nor probeable, nor already open -
 		// ask them all, which is a handful of stats and still no open.

@@ -176,7 +176,8 @@ header{position:sticky;top:0;z-index:5;background:var(--bar);
 html[data-dict-icons-off] .dict-icon{display:none}
 .title .dict-icon{font-size:calc(var(--ui-font-title) * 1rem)}
 .title-copy{flex:1;min-width:0}
-.title b{display:block;font-size:calc(var(--ui-font-title) * 1rem);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.title b{display:block;font-size:calc(var(--ui-font-title) * 1rem);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:none;-webkit-user-select:none;touch-action:pan-y;cursor:pointer}
+.title b:hover{color:var(--link)}
 .title b.two-line{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
   white-space:normal;overflow-wrap:anywhere}
 /* The running head, exactly as a printed page carries it: the first and last
@@ -1722,6 +1723,7 @@ function render(){
   document.title=t("browse.pageTitle",{name:displayName});
   $("top").hidden=false;$("foot").hidden=false;
   setBrowseDictIcon(d.dict);
+  $("name").dataset.dict=d.dict;
   $("name").textContent=displayName;
   fitTitle();
   const filtering=findFilter&&!!$("findInput").value.trim()&&findResult;
@@ -1973,18 +1975,24 @@ async function unprepared(){
 
 let browseDictInfoRequest=0,browseDictInfoPress=null,browseDictInfoSuppress=null;
 async function showBrowseDictionaryInfo(id){
-  const d=(browseChooserDictionaries||[]).find(item=>item.id===id);if(!d)return;
+  const d=(browseChooserDictionaries||[]).find(item=>item.id===id)||
+    (state?.dict===id?{id,browseLabel:state.title||state.name,headwords:state.total}:null);
+  if(!d)return;
   const dialog=$("browseDictInfo"),title=$("browseDictInfoTitle"),counts=$("browseDictInfoCounts"),paths=$("browseDictInfoPaths"),about=$("browseDictInfoAbout");
   if(dialog.open&&dialog.dataset.dict===id)return;
   const request=++browseDictInfoRequest;
   dialog.dataset.dict=id;
   title.textContent=d.browseLabel||d.name||d.id;
-  const countLines=[];
-  if(d.headwords)countLines.push(t("dictUI.numberOfHeadwords",{number:num(Number(d.headwords))}));
-  if(d.entries)countLines.push(t("dictUI.numberOfEntries",{number:num(Number(d.entries))}));
-  counts.innerHTML=countLines.map(esc).join("<br>");
+  const paintCounts=(headwords,entries)=>{
+    const countLines=[];
+    if(Number(headwords)>0)countLines.push(t("dictUI.numberOfHeadwords",{number:num(Number(headwords))}));
+    if(Number(entries)>0)countLines.push(t("dictUI.numberOfEntries",{number:num(Number(entries))}));
+    counts.innerHTML=countLines.map(esc).join("<br>");
+  };
+  paintCounts(d.headwords,d.entries);
   const files=[...(d.sourceFiles||[]),d.source,...(d.mediaSrc||[])].filter((path,index,all)=>path&&all.indexOf(path)===index);
-  paths.innerHTML=files.map(path=>'<div class="browse-dict-info-path" data-full="'+esc(path)+'" title="'+tx("panel.copyPath")+'">'+esc(path)+'</div>').join("");
+  const paintPaths=allFiles=>{const unique=allFiles.filter((path,index,all)=>path&&all.indexOf(path)===index);paths.innerHTML=unique.map(path=>'<div class="browse-dict-info-path" data-full="'+esc(path)+'" title="'+tx("panel.copyPath")+'">'+esc(path)+'</div>').join("")};
+  paintPaths(files);
   about.textContent="…";
   if(!dialog.open)dialog.showModal();
   try{
@@ -1993,6 +2001,8 @@ async function showBrowseDictionaryInfo(id){
     else if(typeof window.wudictNativeCall==="function"){info=await window.wudictNativeCall("about",id)}
     else{const response=await fetch("/api/about?dict="+encodeURIComponent(id));if(!response.ok)throw new Error(response.status);info=await response.json()}
     if(request!==browseDictInfoRequest||!dialog.open)return;
+    paintCounts(d.headwords||info.headwords,d.entries||info.entries);
+    paintPaths([...files,...(info.sourceFiles||[])]);
     const langs=[];
     if(info.indexLang)langs.push(t("dictUI.headwords",{language:info.indexLang}));
     if(info.contentsLang)langs.push(t("dictUI.articles",{language:info.contentsLang}));
@@ -2009,7 +2019,7 @@ $("browseDictInfo").addEventListener("click",event=>{
 function cancelBrowseDictionaryInfoPress(){if(browseDictInfoPress)clearTimeout(browseDictInfoPress.timer);browseDictInfoPress=null}
 document.addEventListener("pointerdown",event=>{
   if(event.button!==0||event.isPrimary===false)return;
-  const target=event.target.closest?.(".picks a[data-dict]");if(!target)return;
+  const target=event.target.closest?.(".picks a[data-dict],#name[data-dict]");if(!target)return;
   cancelBrowseDictionaryInfoPress();
   const press={target,pointerId:event.pointerId,x:event.clientX,y:event.clientY,fired:false,timer:0};
   press.timer=setTimeout(()=>{
@@ -2035,8 +2045,12 @@ document.addEventListener("click",event=>{
   }
 },true);
 document.addEventListener("contextmenu",event=>{
-  const target=event.target.closest?.(".picks a[data-dict]");if(!target)return;
+  const target=event.target.closest?.(".picks a[data-dict],#name[data-dict]");if(!target)return;
   event.preventDefault();cancelBrowseDictionaryInfoPress();showBrowseDictionaryInfo(target.dataset.dict);
+});
+document.addEventListener("click",event=>{
+  const target=event.target.closest?.("#name[data-dict]");if(!target)return;
+  event.preventDefault();showBrowseDictionaryInfo(target.dataset.dict);
 });
 
 /* No ?dict= is not an error: it is the question "which one?", and a page that

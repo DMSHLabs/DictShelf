@@ -2488,14 +2488,16 @@ paths:
       tags: [internal]
       operationId: about
       x-internal: true
-      summary: What a dictionary says about itself
+      summary: What a dictionary says about itself and its source files
       description: >
         The dictionary's own annotation: the publisher's blurb, the edition, the
         copyright. Composed from the live sidecar beside the source file where
         the format ships one (Lingvo's `<stem>.ann`) and otherwise from the
         description its header declared, then normalised server-side - plain
         text escaped, markup reduced to prose elements - so a client renders
-        `html` as-is and needs no sanitiser of its own.
+        `html` as-is and needs no sanitiser of its own. The response also gives
+        source companion paths (including linked abbreviation files) and any
+        cheap headword/article counts already available.
 
 
         Same-origin only. It is not part of the client API a browser extension
@@ -2534,6 +2536,12 @@ paths:
                   source:
                     type: string
                     description: The sidecar the text came from, absent when the header supplied it.
+                  sourceFiles:
+                    type: array
+                    items: { type: string }
+                    description: Source dictionary and its companion resources; absent for database-only dictionaries.
+                  headwords: { type: integer, description: Source headword count when cheaply available. }
+                  entries: { type: integer, description: Prepared article-entry count when available. }
                   indexLang:
                     type: string
                     description: ISO 639-1 code of the headword language, as the dictionary declared it.

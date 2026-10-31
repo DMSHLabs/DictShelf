@@ -3035,6 +3035,13 @@ function pickerGroupDictionaryCount(id){
 function pickerGroupOptionName(id){
   return pickerGroupName(id)+" ("+window.wudictI18n.number(pickerGroupDictionaryCount(id))+")";
 }
+function pickerGroupStatusName(id,found=livePickerRows().length){
+  return dictionaryGroupStatusName(pickerGroupName(id),found,pickerGroupDictionaryCount(id));
+}
+function dictionaryGroupStatusName(name,found,total){
+  return tx("search.dictionaryPickerGroupCount",{name,
+    found:window.wudictI18n.number(found),total:window.wudictI18n.number(total)});
+}
 /* Repaint the chip after the standing group changes in the dictionary picker. */
 function paintPickerGroup(){
   syncChips();
@@ -3087,14 +3094,23 @@ function scopeLabel(){
   if(d.value==="all"){
     if(!inBar)return "";
     let name=tx("search.all");
-    try{name=pickerGroupName()}catch(_){}
+    try{name=pickerGroupStatusName(pickerGroup)}catch(_){}
     return name;
+  }
+  if(d.value.startsWith("g:")){
+    const name=opt?(opt.dataset.label||opt.text):"";
+    if(!inBar)return name;
+    try{
+      const ids=groupIds(d.value),shown=new Set(livePickerRows().map(row=>row.id));
+      return dictionaryGroupStatusName(name,ids.filter(id=>shown.has(id)).length,ids.length);
+    }catch(_){return name}
   }
   // A dictionary the reader named for one search keeps its name even in the
   // field: that is what is being searched, not a group the bar can speak for.
   return opt?(opt.dataset.label||opt.text):"";
 }
 function refreshLivePicker(){
+  if($("dictLbl")&&$("dictSeg")?.parentElement===$("sbar"))$("dictLbl").textContent=scopeLabel();
   if($('webDictionaryPicker').open)paintWebDictionaryPicker();
 }
 let webPickerSearch=null;
@@ -3108,8 +3124,7 @@ function paintWebDictionaryPicker(){
   const choices=userGroups.map(g=>({id:g.id,name:pickerGroupOptionName(g.id)}));
   if(!maskContext&&!current){
     const choice=choices.find(item=>item.id===selected);
-    if(choice)choice.name=tx("search.dictionaryPickerGroupCount",{name:pickerGroupName(selected),
-      found:window.wudictI18n.number(rows.length),total:window.wudictI18n.number(pickerGroupDictionaryCount(selected))});
+    if(choice)choice.name=pickerGroupStatusName(selected,rows.length);
   }
   if(current)choices.splice(1,0,current);
   group.replaceChildren(...choices.map(g=>new Option(g.name,g.id)));
