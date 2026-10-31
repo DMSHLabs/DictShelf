@@ -4477,7 +4477,7 @@ function sysRequest(request){
 }
 function androidLauncherIconChanged(){
   try{
-    const answer=window.prompt("wudict:launcher-icon",JSON.stringify({family:localStorage.getItem("wudict_android_icon_choice")||"icon2_transparent",automatic:localStorage.getItem("wudict_android_icon_auto")!=="0"}));
+    const answer=window.prompt("wudict:launcher-icon",JSON.stringify({family:localStorage.getItem("wudict_android_icon_choice")||"icon2_transparent"}));
     if(answer!=="ok")console.warn("Could not change launcher icon");
   }catch(e){console.warn("Could not change launcher icon",e)}
 }
@@ -5028,20 +5028,9 @@ async function showSystemSettings(){
     for(const [value,labelKey,preview] of iconChoices){
       const option=document.createElement("button");option.type="button";option.className="icon-choice";option.setAttribute("aria-pressed",String(value===family));option.setAttribute("aria-label",tx(labelKey));option.title=tx(labelKey);
       const img=document.createElement("img");img.src="/assets/icon-previews/"+preview+".svg";img.alt="";img.width=48;img.height=48;option.append(img);
-      option.addEventListener("click",()=>{family=value;localStorage.setItem("wudict_android_icon_choice",family);for(const item of iconPicker.children)item.setAttribute("aria-pressed",String(item===option));paintIconAutoOption();androidLauncherIconChanged()});iconPicker.append(option);
+      option.addEventListener("click",()=>{family=value;localStorage.setItem("wudict_android_icon_choice",family);for(const item of iconPicker.children)item.setAttribute("aria-pressed",String(item===option));androidLauncherIconChanged()});iconPicker.append(option);
     }
     const iconRow=document.createElement("div");iconRow.className="sys-icon-setting";iconRow.append(iconPicker);body.append(iconRow);
-    const autoRow=document.createElement("label");autoRow.className="sys-row";
-    const autoCheck=document.createElement("input");autoCheck.type="checkbox";autoCheck.className="panel-checkbox";
-    autoCheck.addEventListener("change",()=>{localStorage.setItem("wudict_android_icon_auto",autoCheck.checked?"1":"0");androidLauncherIconChanged()});
-    const autoLabel=document.createElement("span");autoLabel.className="sys-label";autoLabel.textContent=tx("system.appIconAuto");autoRow.append(autoCheck,autoLabel);body.append(autoRow);
-    const iconHint=document.createElement("p");iconHint.className="sys-hint";body.append(iconHint);
-    function paintIconAutoOption(){
-      const autoAvailable=family==="icon2_transparent";
-      autoCheck.disabled=!autoAvailable;autoCheck.checked=autoAvailable&&localStorage.getItem("wudict_android_icon_auto")!=="0";
-      iconHint.textContent=tx(autoAvailable?"system.appIconAutoHint":"system.appIconFixedHint");
-    }
-    paintIconAutoOption();
   }
   if(window.wudictWindowsShell===true){
     const trayHeading=document.createElement("h3");trayHeading.className="sys-head";trayHeading.textContent=tx("system.closeToTrayHeading");body.append(trayHeading);

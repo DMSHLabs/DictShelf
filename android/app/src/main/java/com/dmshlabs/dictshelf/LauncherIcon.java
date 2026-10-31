@@ -5,7 +5,6 @@ package com.dmshlabs.dictshelf;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.content.res.Configuration;
 import android.os.Build;
 
 import java.util.ArrayList;
@@ -15,17 +14,16 @@ final class LauncherIcon {
     private static final String PREFS = "launcher_icon";
     private static final String CHOICE = "choice";
     private static final String LEGACY_FAMILY = "family";
-    private static final String AUTO = "auto";
     private static final String[] ALIASES = {
         ".LauncherIcon2", ".LauncherIcon2Transparent", ".LauncherIcon2TransparentLight"
     };
 
     private LauncherIcon() {}
 
-    static void set(Context context, String family, boolean automatic) {
+    static void set(Context context, String family) {
         String choice = "icon2_transparent_light".equals(family) ? family : "icon2_transparent";
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(CHOICE, choice).putBoolean(AUTO, automatic).apply();
+            .putString(CHOICE, choice).apply();
         apply(context);
     }
 
@@ -41,11 +39,8 @@ final class LauncherIcon {
             choice = "icon2_transparent";
             prefs.edit().putString(CHOICE, choice).apply();
         }
-        boolean automatic = prefs.getBoolean(AUTO, true);
-        boolean night = (context.getResources().getConfiguration().uiMode
-            & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
         String selected = "icon2_transparent_light".equals(choice) ? ".LauncherIcon2TransparentLight"
-            : automatic && night ? ".LauncherIcon2TransparentLight" : ".LauncherIcon2Transparent";
+            : ".LauncherIcon2Transparent";
         if (selected.equals(prefs.getString("applied", ""))) return;
 
         PackageManager pm = context.getPackageManager();
