@@ -1660,7 +1660,16 @@ $("clearSystemLogConfirm").addEventListener("click",async event=>{
     button.disabled=false;
   }
 });
-window.wuSearchHistory.setSearch(word=>{ if($("mode").value==="wildcards"){ $("q").value=word;window.wuSearchHistory.hide();maskSubmitRequested=true;commitOnce=true;doSearch(); } else searchFor(word,{preserveMode:true}); });
+window.wuSearchHistory.setSearch((word,source)=>{
+  if($("mode").value==="wildcards"){
+    $("q").value=word;window.wuSearchHistory.hide();
+    if(source?.kind==="suggestion"){
+      maskInvalidate();setSearchMode("wildcards","exactLemma");maskSubmitRequested=false;
+      searchModeOnce="exactLemma";
+    }else{setSearchMode("wildcards");maskSubmitRequested=true}
+    commitOnce=true;doSearch();
+  }else searchFor(word,{preserveMode:true});
+});
 window.wuSearchHistory.setSuggest((q,onHit,signal,mode)=>{
   const sel=$("dict").value||"all";
   if(mode==="fts")return;
@@ -3089,13 +3098,14 @@ function paintWebDictionaryPicker(){
   group.value=selected;
   window.wudictThemedSelects?.pickerGroup.sync();
   const rows=maskContext?maskPickerRows():livePickerRows(),list=$('webPickerRows');
+  const currentID=maskContext?maskRows[maskCurrent]?.id:livePickerCurrentID();
   list.replaceChildren(...rows.map(row=>{
     const button=document.createElement('button');
     button.type='button';button.className='web-picker-row';button.dataset.dict=row.id;
     const name=document.createElement('span');name.className='web-picker-name';name.textContent=row.name||row.label;
     button.append(document.createRange().createContextualFragment(dictIconHTML(row.id)),name);
     if(row.meta){const meta=document.createElement('span');meta.className='web-picker-meta';meta.textContent=row.meta;button.append(meta)}
-    if(maskContext)button.setAttribute('aria-current',String(row.id===maskRows[maskCurrent]?.id));
+    button.setAttribute('aria-current',String(row.id===currentID));
     button.title=row.meta?(row.name||row.label)+" · "+row.meta:row.label;
     button.onclick=()=>{
       $('webDictionaryPicker').close();
@@ -3707,15 +3717,16 @@ function modeMark(el,mode){
 }
 const SEARCH_MODE_KEY="wudict_search_mode";
 const canonicalSearchMode=mode=>mode==="mask"?"wildcards":mode;
-function setSearchMode(mode){
+function setSearchMode(mode,viewMode=mode){
 	mode=canonicalSearchMode(mode);
   if(!Object.prototype.hasOwnProperty.call(MODE_SHORT,mode))return;
   $("mode").value=mode;
+  const showMaskView=canonicalSearchMode(viewMode)==="wildcards";
   $("maskSubmit").hidden=mode!=="wildcards";
-  $("maskProgress").hidden=mode!=="wildcards";
-  $("maskView").hidden=mode!=="wildcards";
-  $("maskSearchControls").hidden=mode!=="wildcards";
-  document.body.classList.toggle("mask-view-active",mode==="wildcards");
+  $("maskProgress").hidden=!showMaskView;
+  $("maskView").hidden=!showMaskView;
+  $("maskSearchControls").hidden=!showMaskView;
+  document.body.classList.toggle("mask-view-active",showMaskView);
   window.wuSearchHistory?.modeChanged();
   try{localStorage.setItem(SEARCH_MODE_KEY,mode)}catch(_){}
 }
@@ -9378,10 +9389,11 @@ async function doSearch(ev){
   if(maskBusyJobs.size)return;
   const q=$("q").value.trim();
   if(!q){if(browseReturnRouteContext)logBrowseReturnRoute("search_skipped_empty_query");return}
-  if(browseReturnRouteContext)logBrowseReturnRoute("search_started",{query:q,mode:$("mode").value,dict:$("dict").value||"all"});
+  const mode=searchModeOnce||$("mode").value;searchModeOnce=null;lastSearchMode=mode;
+  if(browseReturnRouteContext)logBrowseReturnRoute("search_started",{query:q,mode,dict:$("dict").value||"all"});
   activeSearchCountsInBackground=countAllResultsInBackground;
   stopArticleResultCaches();
-  if($("mode").value==="wildcards"){
+  if(mode==="wildcards"){
     restoreSearchReturnCacheID=null;
     if(!maskSubmitRequested)return;
     maskSubmitRequested=false;scopeOnce=null;lastScope=null;commitOnce=false;
@@ -9401,7 +9413,7 @@ async function doSearch(ev){
   // ||"all" is the floor under a selection that no longer exists: assigning
   // an id the <select> does not have leaves .value empty, and a saved id or a
   // ?dict= from an older library can do exactly that.
-  const mode=$("mode").value,dictSel=scope||$("dict").value||"all",seq=++searchSeq;
+  const dictSel=scope||$("dict").value||"all",seq=++searchSeq;
   const searchDiag=searchArticleDiagnosticsEnabled();
   const searchDiagStarted=performance.now();
   let searchDiagSlots=[];
@@ -10715,6 +10727,7 @@ function placeDictSeg(){
    cleared. */
 let sbarAimed=null;
 function sbarAt(list){
+  if(!list.length)return -1;
   if(sbarAimed&&list.includes(sbarAimed))return list.indexOf(sbarAimed);
   // The sections' own scroll-margin-top is the line a jump lands them on - NOT
   // barH(), which reads 0 while the top bar is auto-hidden, and a jump downward
@@ -10730,6 +10743,17 @@ function sbarAt(list){
   let at=0;
   for(let i=0;i<list.length;i++)if(list[i].getBoundingClientRect().top<=line)at=i;
   return at;
+}
+function livePickerCurrentID(){
+  const list=sbarSections();
+  const current=list[sbarAt(list)];
+  return current?.querySelector(":scope > dl > dd[data-dict]")?.dataset.dict||"";
+}
+function sbarPickerCurrentChanged(){
+  if(!$('webDictionaryPicker').open||webPickerContext!=="search")return;
+  const current=livePickerCurrentID();
+  for(const button of $('webPickerRows').querySelectorAll('.web-picker-row'))
+    button.setAttribute('aria-current',String(button.dataset.dict===current));
 }
 /* The ends of the list, and what happens there. The walk does NOT wrap - the
    reader asked for a first and a last dictionary, and an arrow that comes back
@@ -10761,7 +10785,7 @@ let sbarEndsQueued=false;
 function sbarEndsChanged(){
   if(sbarEndsQueued)return;
   sbarEndsQueued=true;
-  requestAnimationFrame(()=>{sbarEndsQueued=false;sbarEndsPaint()});
+  requestAnimationFrame(()=>{sbarEndsQueued=false;sbarEndsPaint();sbarPickerCurrentChanged()});
 }
 /* The reader's own scrolling puts the page back in charge of "where am I", and
    it is also what moves the ends. A press inside the bar does neither: that is
@@ -10816,6 +10840,7 @@ addEventListener("scroll",()=>{
      following a link  → pushState    (one entry per entry visited)
      Back/Forward      → restore from the URL, recording nothing */
 let navRecord="replace"; // how the NEXT doSearch should record itself
+let searchModeOnce=null,lastSearchMode="";
 /* One-shot state consumed by the next doSearch, same idiom as navRecord.
 
    scopeOnce is the dictionary a cross-reference came FROM. An `entry://` link
@@ -10845,10 +10870,12 @@ function applyURL(){
   if(browseReturnRouteContext)logBrowseReturnRoute(p.get("q")?"apply_url_has_query":"apply_url_no_query",{hasFrom:p.has("from")});
   maskMergeAZ=p.get("maskmerge")==="1";updateMergedAZ();
   if(p.get("theme")){localStorage.setItem("wudict_theme",p.get("theme"));applyTheme(p.get("theme"))}
-  if(p.get("mode"))setSearchMode(p.get("mode"));
+  const resultMode=p.get("mode"),inputMode=p.get("inputMode");
+  searchModeOnce=inputMode&&inputMode!==resultMode?resultMode:null;
+  if(inputMode)setSearchMode(inputMode,resultMode);else if(resultMode)setSearchMode(resultMode);
   if(p.get("dict"))$("dict").value=p.get("dict");
   syncChips();
-  if(p.get("q")){$("q").value=p.get("q");scopeOnce=p.get("from")||null;commitOnce=true;if($("mode").value==="wildcards")maskSubmitRequested=true;doSearch()}
+  if(p.get("q")){$("q").value=p.get("q");scopeOnce=p.get("from")||null;commitOnce=true;if(searchModeOnce){maskSubmitRequested=false}else if($("mode").value==="wildcards")maskSubmitRequested=true;doSearch()}
 }
 const _doSearch=doSearch;
 doSearch=function(ev){
@@ -10859,13 +10886,15 @@ doSearch=function(ev){
   const r=_doSearch(ev);
   const q=$("q").value.trim();
   if(q&&record!=="none"){
-    const params={q,mode:$("mode").value,dict:$("dict").value};
+    const resultMode=lastSearchMode||$("mode").value;
+    const params={q,mode:resultMode,dict:$("dict").value};
+    if(resultMode!==$("mode").value)params.inputMode=$("mode").value;
     // `from` is the one-shot cross-reference scope; `dict` stays the user's
     // own selector, so restoring a link-followed view never rewrites it
     if(lastScope)params.from=lastScope;
-    if(openDict&&$("mode").value!=="wildcards")params.openDict=openDict;
-    if(articleCacheGroupID&&$("mode").value!=="wildcards")params.returnCacheID=articleCacheGroupID;
-    if($("mode").value==="wildcards"&&maskMergeAZ)params.maskmerge="1";
+    if(openDict&&resultMode!=="wildcards")params.openDict=openDict;
+    if(articleCacheGroupID&&resultMode!=="wildcards")params.returnCacheID=articleCacheGroupID;
+    if(resultMode==="wildcards"&&maskMergeAZ)params.maskmerge="1";
     if(browseReturn)params.browse=browseReturn;
     if(maskReturn)params.wildcards=maskReturn;
     const url="?"+new URLSearchParams(params).toString();
@@ -10885,7 +10914,9 @@ window.addEventListener("popstate",()=>{
   maskMergeAZ=p.get("maskmerge")==="1";updateMergedAZ();
   browseReturn=browseReturnFromURL();maskReturn=maskReturnFromURL();sbarPaint();
   if(canonicalSearchMode(p.get("mode"))==="wildcards"&&maskRestoreCached(new URL(location.href)))return;
-  if(p.get("mode"))setSearchMode(p.get("mode"));
+  const resultMode=p.get("mode"),inputMode=p.get("inputMode");
+  searchModeOnce=inputMode&&inputMode!==resultMode?resultMode:null;
+  if(inputMode)setSearchMode(inputMode,resultMode);else if(resultMode)setSearchMode(resultMode);
   if(p.get("dict"))$("dict").value=p.get("dict");
   syncChips();
   const q=p.get("q")||"";
@@ -10904,7 +10935,7 @@ window.addEventListener("popstate",()=>{
   navRecord="none";
   scopeOnce=p.get("from")||null; // a link-followed view was scoped; restore that
   commitOnce=true;               // Back/Forward restores a view, it does not type
-  if($("mode").value==="wildcards")maskSubmitRequested=true;
+  if(searchModeOnce)maskSubmitRequested=false;else if($("mode").value==="wildcards")maskSubmitRequested=true;
   doSearch();
 });
 $("frm").removeEventListener("submit",_doSearch);
@@ -10936,7 +10967,7 @@ $("frm").addEventListener("submit",e=>{
   window.wuSearchHistory.record($("q").value);
   window.wuSearchHistory.hide();
   commitOnce=true; // the one moment the query is finished: this search may scroll
-  if($("mode").value==="wildcards")maskSubmitRequested=true;
+  if($("mode").value==="wildcards"){setSearchMode("wildcards");maskSubmitRequested=true}
   return doSearch(e);
 });
 $("q").addEventListener("blur",()=>setTimeout(()=>{

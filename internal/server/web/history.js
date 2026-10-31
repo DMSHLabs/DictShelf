@@ -225,7 +225,7 @@
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = word;
-      button.addEventListener("click", () => { picking = false; hide(); search(word); });
+      button.addEventListener("click", () => { picking = false; hide(); search(word, {kind:typed?"suggestion":"history"}); });
       box.appendChild(button);
       if (box.childElementCount >= maxRows) break;
     }

@@ -63,7 +63,7 @@ dialog#systemSettingsDialog:not([open]){display:none}
 .web-picker-row{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);width:100%;padding:.7em .5em;border:0;border-radius:8px;
   background:transparent;color:var(--fg);font:inherit;text-align:left;cursor:pointer}
 .wildcards-picker .web-picker-row{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);min-width:0}
-.wildcards-picker .web-picker-row[aria-current="true"]::before{content:"✓";flex:none;width:1em;color:var(--accent)}
+.web-picker-row[aria-current="true"]::before{content:"✓";flex:none;width:1em;color:var(--accent)}
 .wildcards-picker .web-picker-name{display:block;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .web-picker-row>.dict-icon{flex:none;margin:0;vertical-align:middle}
 .web-picker-name{flex:1 1 auto;min-width:0}
