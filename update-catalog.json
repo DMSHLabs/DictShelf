@@ -1,0 +1,243 @@
+{
+  "schema": 1,
+  "generated": "2026-10-31T09:33:47+00:00",
+  "release": [
+    {
+      "version": "1.02.25",
+      "url": "https://github.com/DMSHLabs/DictShelf/releases/tag/dictshelf-v1.02.25",
+      "windowsInstaller": {
+        "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.25/dictshelf-windows-x64-setup-1.02.25.exe",
+        "sha256": "8d295efbf87fc050c2320fbeb35fdf1d808d5e0f619f0dee21c8efd9d1ba9b2e"
+      },
+      "windowsPortable": {
+        "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.25/DictShelf.exe",
+        "sha256": "ba93f5c0a85f0c41fe39e9093b2aa1326676c6434f33999f03776da97b4556b0"
+      },
+      "androidApks": {
+        "arm64-v8a": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.25/dictshelf-android-arm64-v8a-foss.apk",
+          "sha256": "6ddd29be38fa886bdd9022cf514a446a1ef5b83b21fdc1e006419e9cabfe4022"
+        },
+        "armeabi-v7a": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.25/dictshelf-android-armeabi-v7a-foss.apk",
+          "sha256": "4d8392e36925aa1206571db2a8b3225ade7da7f21ea87ed4ea6915ebcf2da4ad"
+        },
+        "universal": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.25/dictshelf-android-universal-foss.apk",
+          "sha256": "6e71d7eb8583f376b245e9c8dce07c6996889937b05b5b5e628e4012d7876d8f"
+        }
+      }
+    },
+    {
+      "version": "1.02.23",
+      "url": "https://github.com/DMSHLabs/DictShelf/releases/tag/dictshelf-v1.02.23",
+      "windowsInstaller": {
+        "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.23/dictshelf-windows-x64-setup-1.02.23.exe",
+        "sha256": "ae50b73222eaf9673aab8a288bff0025300087cf1e74991166e42555832767fd"
+      },
+      "windowsPortable": {
+        "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.23/DictShelf.exe",
+        "sha256": "d4776339a2d1be7153d296b1f0de6de3a0e0ca56018586641cafa93e45c5b509"
+      },
+      "androidApks": {
+        "arm64-v8a": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.23/dictshelf-android-arm64-v8a-foss.apk",
+          "sha256": "a0935b8aab79b48e0531f26544b63e04f154ea92103d28a16215d79e41d338a5"
+        },
+        "armeabi-v7a": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.23/dictshelf-android-armeabi-v7a-foss.apk",
+          "sha256": "a144c33e09553d2b77b9896ed7fd96de3e96379b910fc3a503b72ce0a08369db"
+        },
+        "universal": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.23/dictshelf-android-universal-foss.apk",
+          "sha256": "e566eca32770196d200ab8a52e447733a99eb991017a54bb022f6a7a53abbc4f"
+        }
+      }
+    },
+    {
+      "version": "1.02.21",
+      "url": "https://github.com/DMSHLabs/DictShelf/releases/tag/dictshelf-v1.02.21",
+      "windowsInstaller": {
+        "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.21/dictshelf-windows-x64-setup-1.02.21.exe",
+        "sha256": "3130faab334547c7de1d99c32e938930489bf957ffa2e5ddc3f2a341cd0a26db"
+      },
+      "windowsPortable": {
+        "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.21/DictShelf.exe",
+        "sha256": "87bdf2300ce2ba11c6e4d79c921a5ad6e275cca67a98b492050e3865ff8cb690"
+      },
+      "androidApks": {
+        "arm64-v8a": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.21/dictshelf-android-arm64-v8a-foss.apk",
+          "sha256": "1571cbe5f06aed104520d4aaed808a6a3ef55296055a17a112fc33549a111e62"
+        },
+        "armeabi-v7a": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.21/dictshelf-android-armeabi-v7a-foss.apk",
+          "sha256": "9546720e3798e52a8f3cf666502b59967b4d726f483a76fb268d01f74917cc49"
+        },
+        "universal": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.21/dictshelf-android-universal-foss.apk",
+          "sha256": "6ecc243b2c2fca359e026035b9a1143d550aa3e804bdeba79ee55b16ce3e4fdd"
+        }
+      }
+    },
+    {
+      "version": "1.02.19",
+      "url": "https://github.com/DMSHLabs/DictShelf/releases/tag/dictshelf-v1.02.19",
+      "windowsInstaller": {
+        "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.19/dictshelf-windows-x64-setup-1.02.19.exe",
+        "sha256": "8ecb7cb4238ca71ea86a1c09b6dbd3e0a66128a1d1dc56c17a1a7de98505bb9a"
+      },
+      "windowsPortable": {
+        "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.19/DictShelf.exe",
+        "sha256": "2dbe54712012dec4bb47abf54fe23971dc6885a8474f414b4c7ae84171f951a8"
+      },
+      "androidApks": {
+        "arm64-v8a": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.19/dictshelf-android-arm64-v8a-foss.apk",
+          "sha256": "fbfce7a9d870af2c56dc9a1a0b00f65ef88d7a1ef5d46b54929ba2107df95476"
+        },
+        "armeabi-v7a": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.19/dictshelf-android-armeabi-v7a-foss.apk",
+          "sha256": "f7c521dec9be5ff66482f16beac64e76af4732c1bc0c4eca9ba7d37740b14721"
+        },
+        "universal": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.19/dictshelf-android-universal-foss.apk",
+          "sha256": "e3c9bcfc5b952f3c06df1d590f764c24ebe40c3fa57557ae7382741cadbfef01"
+        }
+      }
+    },
+    {
+      "version": "1.02.15",
+      "url": "https://github.com/DMSHLabs/DictShelf/releases/tag/dictshelf-v1.02.15",
+      "windowsInstaller": {
+        "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.15/dictshelf-windows-x64-setup-1.02.15.exe",
+        "sha256": "00656ce796a352caaa912ed149e9518fcfbd9316d75d876daef26e59a7ae4ee4"
+      },
+      "windowsPortable": {
+        "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.15/DictShelf.exe",
+        "sha256": "8d2ff3111c16edf7177e71d431961944323bc0768d9385ba905f980adeb0e582"
+      },
+      "androidApks": {
+        "arm64-v8a": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.15/dictshelf-android-arm64-v8a-foss.apk",
+          "sha256": "6401e37633fe31063378480fea9f6671e8e766ad65484f7c41a38292c42cc443"
+        },
+        "armeabi-v7a": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.15/dictshelf-android-armeabi-v7a-foss.apk",
+          "sha256": "06e66786e34cf0046983191bfcf47d1989d59bde53876de7cece789e095c00e5"
+        },
+        "universal": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.15/dictshelf-android-universal-foss.apk",
+          "sha256": "e8daf43e9a220ecaa1e430b668f4a36056f8c8621e69087c0ba34e2081b00d4d"
+        }
+      }
+    },
+    {
+      "version": "1.02.11",
+      "url": "https://github.com/DMSHLabs/DictShelf/releases/tag/dictshelf-v1.02.11",
+      "windowsInstaller": {
+        "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.11/dictshelf-windows-x64-setup-1.02.09.exe",
+        "sha256": "cef08eedd649e40bed8bcc5cdee98a601661d9bf80478581f398385f132d0282"
+      },
+      "windowsPortable": {
+        "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.11/DictShelf.exe",
+        "sha256": "a1225418d49b23dd1e154e5907bc490be80d84dcdb5d521be9483e8d3fd3ad63"
+      },
+      "androidApks": {
+        "arm64-v8a": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.11/dictshelf-android-arm64-v8a-foss.apk",
+          "sha256": "725ed079703c87e85d8eac8ef06891503d27fa455b1d4503e17cf587089eded0"
+        },
+        "armeabi-v7a": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.11/dictshelf-android-armeabi-v7a-foss.apk",
+          "sha256": "44ff8c3c2e9d32205aca54cfa9b62022e207c43b90dfbb6dc7c11aff261e12a1"
+        },
+        "universal": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.11/dictshelf-android-universal-foss.apk",
+          "sha256": "b4478017b032883003f82cd1ffb211b1dab78a45f187a7005d3a28894d11006c"
+        }
+      }
+    },
+    {
+      "version": "1.02.09",
+      "url": "https://github.com/DMSHLabs/DictShelf/releases/tag/dictshelf-v1.02.09",
+      "windowsInstaller": {
+        "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.09/dictshelf-windows-x64-setup-1.02.09.exe",
+        "sha256": "2b80bfb386ec3100d550e0ab624ba4a2d76bf8bf9db2463c7d92a2f4c984697f"
+      },
+      "windowsPortable": {
+        "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.09/DictShelf.exe",
+        "sha256": "a31cd92f72061d1c7b259757175fea79a98a62609e5b7000325a5be804fb5f3c"
+      },
+      "androidApks": {
+        "arm64-v8a": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.09/dictshelf-android-arm64-v8a-foss.apk",
+          "sha256": "2ec3900aeb34cec1393080994970f720a66231c29ab209145073f79fb51a44ab"
+        },
+        "armeabi-v7a": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.09/dictshelf-android-armeabi-v7a-foss.apk",
+          "sha256": "916c1dac4c25698f1814c6f9830b21af6e8932af9b4945b5b9e5259ae205ffc9"
+        },
+        "universal": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.09/dictshelf-android-universal-foss.apk",
+          "sha256": "182c02fe558fa028235f9408a47b7ec0002fefc5a1ea74c059dd3b4918e18179"
+        }
+      }
+    },
+    {
+      "version": "1.02.07",
+      "url": "https://github.com/DMSHLabs/DictShelf/releases/tag/dictshelf-v1.02.07",
+      "windowsInstaller": {
+        "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.07/dictshelf-windows-x64-setup-1.02.07.exe",
+        "sha256": "fa5338e2f68c9a39f5760fade41d05f740dade2f91da31eb622d4260f4df2bba"
+      },
+      "windowsPortable": {
+        "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.07/DictShelf.exe",
+        "sha256": "11e736bd02acb4b26f4747ae91f3033c83f2c9957bf45334fc104b706090a761"
+      },
+      "androidApks": {
+        "arm64-v8a": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.07/dictshelf-android-arm64-v8a-foss.apk",
+          "sha256": "4c66a8325158a2c97335365409636753751434bb338d493c15747285d4854d71"
+        },
+        "armeabi-v7a": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.07/dictshelf-android-armeabi-v7a-foss.apk",
+          "sha256": "6d96c2e1e70fe0f24db3258fd2a94193474625fe8a2c83ce937336579cc95d3f"
+        },
+        "universal": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.07/dictshelf-android-universal-foss.apk",
+          "sha256": "5802ab2c349cccb3893f2e4c2069df00972d11aaa694d48f7fda445db8a609e5"
+        }
+      }
+    }
+  ],
+  "prerelease": [
+    {
+      "version": "1.02.02",
+      "url": "https://github.com/DMSHLabs/DictShelf/releases/tag/dictshelf-v1.02.02",
+      "windowsInstaller": {
+        "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.02/dictshelf-windows-x64-setup-1.02.02.exe",
+        "sha256": "f4f713fdc27873a4fca790c978f73b5439987a41631bce18f6d98594bc971af0"
+      },
+      "windowsPortable": {
+        "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.02/DictShelf.exe",
+        "sha256": "041dc7933300036cd3db5b7e96a8349d6fba14bfa85ffc8024a7483b8eb1daf3"
+      },
+      "androidApks": {
+        "arm64-v8a": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.02/dictshelf-android-arm64-v8a-foss.apk",
+          "sha256": "b7f82a8795598474b032379d6112ad6eb298449ce0de05f1fdbfb24644baf4b8"
+        },
+        "armeabi-v7a": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.02/dictshelf-android-armeabi-v7a-foss.apk",
+          "sha256": "aed8d849be9a09b0e83598a260af89552155bd871170a6b4ed21b7b5b4598b3e"
+        },
+        "universal": {
+          "url": "https://github.com/DMSHLabs/DictShelf/releases/download/dictshelf-v1.02.02/dictshelf-android-universal-foss.apk",
+          "sha256": "b6b16f11636272b1bc8e21b5aa0e0d4b398c677d74c7e105baee20f03473992d"
+        }
+      }
+    }
+  ],
+  "beta": []
+}
