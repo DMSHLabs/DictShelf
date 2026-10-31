@@ -51,6 +51,15 @@ final class Power {
     }
 
     static void apply(Context c) {
+        PowerSignal.set(state(c));
+    }
+
+    /** Re-samples power-save and charging state synchronously before a new job. */
+    static void applyForWork(Context c) {
+        PowerSignal.setNow(state(c));
+    }
+
+    private static String state(Context c) {
         PowerManager pm = c.getSystemService(PowerManager.class);
         boolean hot = thermal >= PowerManager.THERMAL_STATUS_MODERATE;
         boolean saving = pm != null && pm.isPowerSaveMode();
@@ -61,21 +70,20 @@ final class Power {
             // and threads through it is how an app earns a place on a vendor's
             // battery-abuse list, and the user is holding a device that is
             // getting warm.
-            state = PowerSignal.RESTRICTED;
+            return PowerSignal.RESTRICTED;
         } else if (windows == 0) {
             // Charging is the one case where staying active off-screen is
             // defensible: preparing a dictionary is the only real work this
             // app has, it is what the user is waiting for, and a plugged-in
             // device is not spending the user's battery on it.
-            state = charging(c) ? PowerSignal.ACTIVE : PowerSignal.BACKGROUND;
+            return charging(c) ? PowerSignal.ACTIVE : PowerSignal.BACKGROUND;
         } else if (saving) {
             // Visible, but the user has asked the whole system to conserve.
             // Serve lookups, on one thread, holding nothing extra.
-            state = PowerSignal.BACKGROUND;
+            return PowerSignal.BACKGROUND;
         } else {
-            state = PowerSignal.ACTIVE;
+            return PowerSignal.ACTIVE;
         }
-        PowerSignal.set(state);
     }
 
     private static boolean charging(Context c) {

@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -176,7 +175,7 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 		if indexconst.IsAutomaticMode(indexconst.CurrentMode()) {
 			lane = parallelDictionaryIndexLimit
 		}
-		release := acquire(lane)
+		release := lane.Acquire()
 		defer release()
 		ctx, cancel, ok := j.beginDictionary(e.ID)
 		if !ok {
@@ -227,7 +226,7 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 		indexTaskQueuesActive.Add(1)
 		indexModeMu.Unlock()
 		defer indexTaskQueuesActive.Add(-1)
-		budget := max(1, runtime.NumCPU()-1)
+		budget := max(1, currentIndexCPUCount()-1)
 		items := make([]pendingDictionaryIndex, len(todo))
 		for i, e := range todo {
 			items[i] = pendingDictionaryIndex{entry: e}
@@ -243,7 +242,7 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 		singleMode := indexconst.CurrentMode()
 		if len(todo) == 1 {
 			item := pendingDictionaryIndex{entry: todo[0]}
-			classifyAutomaticIndex(&item, max(1, runtime.NumCPU()-1), indexconst.ModeAdaptive)
+			classifyAutomaticIndex(&item, max(1, currentIndexCPUCount()-1), indexconst.ModeAdaptive)
 			singleMode = item.mode
 		}
 		runIndexTasks(todo, j.canceled, func(e *entry) { process(e, singleMode) })

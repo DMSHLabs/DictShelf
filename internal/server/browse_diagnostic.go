@@ -442,7 +442,7 @@ func setIndexingMode(mode string, prefs *Prefs) error {
 		}
 	}
 	logx.System("indexing mode changed mode=%s dictionary_worker_limit=%d logical_cpus=%d gomaxprocs=%d",
-		indexconst.ModeName(), cap(currentIndexLimit()), runtime.NumCPU(), runtime.GOMAXPROCS(0))
+		indexconst.ModeName(), currentIndexLimit().Limit(), currentIndexCPUCount(), runtime.GOMAXPROCS(0))
 	return nil
 }
 

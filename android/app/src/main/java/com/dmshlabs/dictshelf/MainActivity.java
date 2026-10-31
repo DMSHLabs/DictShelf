@@ -17,6 +17,7 @@ import android.os.PowerManager;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowInsets;
+import android.view.RoundedCorner;
 import android.view.WindowInsetsController;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceError;
@@ -179,6 +180,14 @@ public class MainActivity extends Activity {
     //     before the first paint actually show.
     private void applyWindowInsets() {
         root.setOnApplyWindowInsetsListener((v, insets) -> {
+            int statusBarEdge = dp(4);
+            if (Build.VERSION.SDK_INT >= 31) {
+                RoundedCorner left = insets.getRoundedCorner(RoundedCorner.POSITION_BOTTOM_LEFT);
+                RoundedCorner right = insets.getRoundedCorner(RoundedCorner.POSITION_BOTTOM_RIGHT);
+                if (left != null) statusBarEdge = Math.max(statusBarEdge, left.getRadius());
+                if (right != null) statusBarEdge = Math.max(statusBarEdge, right.getRadius());
+            }
+            publishStatusBarEdge(statusBarEdge);
             if (Build.VERSION.SDK_INT >= 30) {
                 Insets bars = insets.getInsets(
                         WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
@@ -210,6 +219,17 @@ public class MainActivity extends Activity {
             return insets;
         });
         root.requestApplyInsets();
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private void publishStatusBarEdge(int pixels) {
+        if (web.getParent() == null) return;
+        int cssPixels = Math.round(pixels / getResources().getDisplayMetrics().density);
+        web.evaluateJavascript("document.documentElement.style.setProperty('--wd-sbar-edge','"
+                + cssPixels + "px')", null);
     }
 
     // ── handing the insets to the page (EDGE_NONE only) ──────────────────

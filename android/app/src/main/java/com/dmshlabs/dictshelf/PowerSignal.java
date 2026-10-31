@@ -36,6 +36,7 @@ final class PowerSignal {
     private static final long IDLE_MS = 30_000;
 
     private static final Object LOCK = new Object();
+    private static final Object SEND_LOCK = new Object();
     private static String pending;   // newest state not yet delivered
     private static String delivered; // newest state Go acknowledged
     private static String requested; // latest state, replayed when Go starts
@@ -58,6 +59,44 @@ final class PowerSignal {
         Thread t = new Thread(PowerSignal::pump, "wudict-power");
         t.setDaemon(true);
         t.start();
+    }
+
+    /** Applies a freshly sampled state before the Go side starts user-requested work. */
+    static void setNow(String state) {
+        boolean startPump = false;
+        synchronized (LOCK) {
+            requested = state;
+            pending = state;
+            LOCK.notifyAll();
+            if (!running) {
+                running = true;
+                startPump = true;
+            }
+        }
+        boolean current;
+        boolean ok = false;
+        synchronized (SEND_LOCK) {
+            synchronized (LOCK) {
+                current = state.equals(pending);
+            }
+            if (current) ok = post(state);
+        }
+        boolean needPump = false;
+        synchronized (LOCK) {
+            if (state.equals(pending) && ok) {
+                pending = null;
+                delivered = state;
+            }
+            if (startPump) {
+                if (pending == null) running = false;
+                else needPump = true;
+            }
+        }
+        if (needPump) {
+            Thread t = new Thread(PowerSignal::pump, "wudict-power");
+            t.setDaemon(true);
+            t.start();
+        }
     }
 
     /** Re-sends the last device state after the in-process Go runtime starts. */
@@ -104,7 +143,7 @@ final class PowerSignal {
                         if (!state.equals(pending)) break;
                     }
                 }
-                ok = post(state);
+                ok = postCurrent(state);
             }
             synchronized (LOCK) {
                 if (state.equals(pending)) {
@@ -123,6 +162,15 @@ final class PowerSignal {
         } catch (RuntimeException e) {
             Log.d(TAG, "power " + state + ": " + e);
             return false;
+        }
+    }
+
+    private static boolean postCurrent(String state) {
+        synchronized (SEND_LOCK) {
+            synchronized (LOCK) {
+                if (!state.equals(pending)) return true;
+            }
+            return post(state);
         }
     }
 }

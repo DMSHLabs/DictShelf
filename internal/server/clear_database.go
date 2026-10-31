@@ -178,7 +178,7 @@ func (e *entry) clearDatabase(want clearDatabaseRequest) error {
 		store.IndexDiagnostic("skip database index request source=%q dictionary=%q index=%v contains=%v fulltext=%v obsolete=%v reason=native-index", e.Path, e.probeName(), want.Index, want.Contains, want.FullText, want.Obsolete)
 		return nil
 	}
-	defer acquire(currentIndexLimit())()
+	defer currentIndexLimit().Acquire()()
 	e.ingestMu.Lock()
 	defer e.ingestMu.Unlock()
 	dir, ok := store.LookupDir(e.Path)

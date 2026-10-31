@@ -32,11 +32,12 @@ func runIndexDictionaryGroups(groups [][]indexOperation, stopped func() bool, ru
 	if len(groups) == 0 {
 		return
 	}
+	refreshIndexParallelism()
 	indexModeMu.Lock()
 	indexTaskQueuesActive.Add(1)
 	indexModeMu.Unlock()
 	defer indexTaskQueuesActive.Add(-1)
-	workers := cap(currentIndexLimit())
+	workers := currentIndexLimit().Limit()
 	if workers < 1 {
 		workers = 1
 	}
@@ -72,12 +73,13 @@ func runIndexTasks[T any](items []T, stopped func() bool, run func(T)) {
 	if len(items) == 0 {
 		return
 	}
+	refreshIndexParallelism()
 	indexModeMu.Lock()
 	indexTaskQueuesActive.Add(1)
 	indexModeMu.Unlock()
 	defer indexTaskQueuesActive.Add(-1)
 	startedAt := time.Now()
-	workers := cap(currentIndexLimit())
+	workers := currentIndexLimit().Limit()
 	if workers < 1 {
 		workers = 1
 	}
@@ -85,7 +87,7 @@ func runIndexTasks[T any](items []T, stopped func() bool, run func(T)) {
 		workers = len(items)
 	}
 	store.IndexDiagnostic("index task queue started tasks=%d workers=%d dictionary_worker_limit=%d logical_cpus=%d gomaxprocs=%d mode=%s",
-		len(items), workers, cap(currentIndexLimit()), runtime.NumCPU(), runtime.GOMAXPROCS(0), indexconst.ModeName())
+		len(items), workers, currentIndexLimit().Limit(), currentIndexCPUCount(), runtime.GOMAXPROCS(0), indexconst.ModeName())
 	queue := make(chan T, len(items))
 	var wg sync.WaitGroup
 	var started atomic.Int32

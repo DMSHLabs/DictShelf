@@ -97,6 +97,10 @@ dialog#systemSettingsDialog:not([open]){display:none}
   dialog.group-dialog.panel-card{
     inset:calc(16px + var(--wd-inset-top,0px)) 16px calc(16px + var(--wd-inset-bottom,0px));
     width:auto;max-width:none;height:auto;max-height:none;padding:16px}
+  /* On phones the shared progress dock can occupy the bottom of the WebView;
+     work-progress.js raises this dialog's bottom by --workh. Let the insets
+     determine its height too, or fixed 100dvh keeps it behind the dock. */
+  #systemSettingsDialog{height:auto}
   dialog.group-dialog.panel-card.workspace-dialog{inset:var(--wd-inset-top,0px) 0 var(--wd-inset-bottom,0px);
     width:auto;max-width:none;height:auto;max-height:none;padding:16px;border-radius:0}
   #dictSettings{height:auto;max-height:none}

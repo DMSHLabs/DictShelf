@@ -85,16 +85,19 @@ final class GoBridge {
 
     static int startRescanStream() {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
+        refreshPowerForWork();
         return nativeRescanStreamStart();
     }
 
     static int startRescanIndexes(String origin, String request) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
+        refreshPowerForWork();
         return nativeRescanIndexesStart(origin, request);
     }
 
     static int startIngest(String origin, String query) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
+        refreshPowerForWork();
         return nativeIngestStart(origin, query);
     }
 
@@ -222,8 +225,14 @@ final class GoBridge {
         return loaded && nativePower(state);
     }
 
+    private static void refreshPowerForWork() {
+        Context context = appContext;
+        if (context != null) Power.applyForWork(context);
+    }
+
     static String reindex(String action) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
+        if ("start".equals(action)) refreshPowerForWork();
         String result = nativeReindex(action);
         if (result == null) throw new IllegalStateException("Go runtime is unavailable");
         return result;
@@ -231,6 +240,8 @@ final class GoBridge {
 
     static String indexWork(String action, String id, String body) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
+        if ("start".equals(action) || "startSingle".equals(action) || "priority".equals(action))
+            refreshPowerForWork();
         String result = nativeIndexWork(action, id, body);
         if (result == null) throw new IllegalStateException("Go runtime is unavailable");
         return result;

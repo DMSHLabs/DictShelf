@@ -16,7 +16,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"runtime/debug"
 	"slices"
 	"sort"
@@ -30,7 +29,6 @@ import (
 	zimformat "github.com/DMSHLabs/DictShelf/internal/format/zim"
 	"github.com/DMSHLabs/DictShelf/internal/fsx"
 	"github.com/DMSHLabs/DictShelf/internal/htmlref"
-	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
 	"github.com/DMSHLabs/DictShelf/internal/resource"
 	"github.com/DMSHLabs/DictShelf/internal/store"
@@ -372,33 +370,6 @@ func (u *upgraded) Close() error {
 		links.Close()
 	}
 	return u.Store.Close() // Store.Close also closes its attached media.db
-}
-
-// Every operation that prepares or changes a dictionary index shares one
-// limiter sized from the machine's logical processors. Per-entry ingestMu
-// keeps operations for the same dictionary in sequence.
-var indexLimit = make(chan struct{}, indexconst.IndexDictionaryLimit(runtime.NumCPU()))
-var parallelDictionaryIndexLimit = make(chan struct{}, max(1, runtime.NumCPU()-1))
-
-func currentIndexLimit() chan struct{} {
-	if indexconst.CurrentMode() == indexconst.ModeParallelDictionariesSingleWorker {
-		return parallelDictionaryIndexLimit
-	}
-	return indexLimit
-}
-
-func indexLaneForContext(ctx context.Context) chan struct{} {
-	if indexconst.IsAutomaticMode(indexconst.CurrentMode()) && indexconst.IngestMode(ctx) == indexconst.ModeParallelDictionariesSingleWorker {
-		return parallelDictionaryIndexLimit
-	}
-	return currentIndexLimit()
-}
-
-// acquire blocks until a slot of sem is free and returns what frees it. The
-// release is bound to the channel the slot was taken from.
-func acquire(sem chan struct{}) (release func()) {
-	sem <- struct{}{}
-	return func() { <-sem }
 }
 
 // entry is one discovered dictionary, opened lazily.
@@ -2004,7 +1975,7 @@ func (e *entry) setFeatures(want features, progress store.Progress, force ...boo
 }
 
 func (e *entry) setFeaturesContext(ctx context.Context, want features, progress store.Progress, force ...bool) error {
-	defer acquire(indexLaneForContext(ctx))()
+	defer indexLaneForContext(ctx).Acquire()()
 	// The user ticked a box and is watching a progress bar: the longest
 	// user-visible operation the app has keeps every core it started with,
 	// and the Android shell keeps its foreground service up (power.go).
@@ -2087,7 +2058,7 @@ func (e *entry) demandIndex() {
 		return
 	}
 	go func() {
-		defer acquire(currentIndexLimit())()
+		defer currentIndexLimit().Acquire()()
 		defer HoldActiveProcs()()
 		if err := e.ensureBaseIndex(nil); err != nil {
 			logx.Warn("could not prepare %s: %v", filepath.Base(e.Path), err)
@@ -2123,7 +2094,7 @@ func (e *entry) setContainsIndex(action string, progress store.Progress) error {
 }
 
 func (e *entry) setContainsIndexContext(ctx context.Context, action string, progress store.Progress) error {
-	defer acquire(currentIndexLimit())()
+	defer currentIndexLimit().Acquire()()
 	defer HoldActiveProcs()()
 	if err := ctx.Err(); err != nil {
 		return err
@@ -2297,7 +2268,7 @@ func (r *Registry) upgradeAbbrev() {
 	}
 	go func() {
 		runIndexTasks(todo, func() bool { return CurrentPower() != PowerActive }, func(e *entry) {
-			release := acquire(currentIndexLimit())
+			release := currentIndexLimit().Acquire()
 			defer release()
 			// the queue is FIFO and an ingest takes minutes, so the state that
 			// permitted this may be long gone by the time the slot is ours

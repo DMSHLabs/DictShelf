@@ -93,16 +93,16 @@ func (e *entry) setIndexRemoved(removed bool) error {
 
 // restoreIndex rebuilds an index deliberately removed by the user, or finishes
 // the first index for a newly added dictionary.
-func (e *entry) restoreIndex(plan store.Plan, progress store.Progress, lane chan struct{}) error {
+func (e *entry) restoreIndex(plan store.Plan, progress store.Progress, lane *indexSemaphore) error {
 	return e.restoreIndexContext(context.Background(), plan, progress, lane)
 }
 
-func (e *entry) restoreIndexContext(ctx context.Context, plan store.Plan, progress store.Progress, lane chan struct{}) error {
+func (e *entry) restoreIndexContext(ctx context.Context, plan store.Plan, progress store.Progress, lane *indexSemaphore) error {
 	if nativeIndexOnly(e) {
 		store.IndexDiagnostic("skip restored index source=%q reason=native-index", e.Path)
 		return e.setIndexRemoved(false)
 	}
-	defer acquire(lane)()
+	defer lane.Acquire()()
 	defer HoldActiveProcs()()
 	if err := ctx.Err(); err != nil {
 		return err
