@@ -28,6 +28,9 @@ final class PowerSignal {
     static final String ACTIVE = "active";
     static final String BACKGROUND = "background";
     static final String RESTRICTED = "restricted";
+    static final String SAVING = "saving";
+    static final String THERMAL_MODERATE = "thermal-moderate";
+    static final String THERMAL_SEVERE = "thermal-severe";
 
     private static final int ATTEMPTS = 3;
     private static final long RETRY_MS = 800;

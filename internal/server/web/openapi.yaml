@@ -2883,7 +2883,7 @@ paths:
                 properties:
                   state:
                     type: string
-                    enum: [active, background, restricted]
+                    enum: [active, background, saving, restricted, thermal-moderate, thermal-severe]
                   busy:
                     type: boolean
         '403':
@@ -2898,10 +2898,11 @@ paths:
         onStop, onTrimMemory, thermal throttling, battery saver - which an
         exec'd server has no other way of learning.
 
-        `active` is normal. `background` stops all indexing and closes every
-        handle that can be reopened, while prepared databases stay open so
-        returning is instant. `restricted` closes those too, leaving the process
-        holding nothing but its listener.
+        `active` is normal. `background` stops automatic indexing and closes
+        reopenable handles while prepared databases stay open. `saving` lowers
+        the CPU ceiling for user-requested work. `thermal-moderate` lowers it
+        further, and `thermal-severe` or `restricted` limits execution to one
+        processor; thermal states also release prepared database handles.
 
         Loopback only, and POST because it changes state: a GET here would be
         followed by every link prefetcher on the network.
@@ -2911,7 +2912,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [active, background, restricted]
+            enum: [active, background, saving, restricted, thermal-moderate, thermal-severe]
       x-codeSamples:
         - lang: Shell
           label: curl
@@ -2929,7 +2930,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  state: { type: string, enum: [active, background, restricted] }
+                  state: { type: string, enum: [active, background, saving, restricted, thermal-moderate, thermal-severe] }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':

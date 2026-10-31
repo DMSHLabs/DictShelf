@@ -61,26 +61,20 @@ final class Power {
 
     private static String state(Context c) {
         PowerManager pm = c.getSystemService(PowerManager.class);
-        boolean hot = thermal >= PowerManager.THERMAL_STATUS_MODERATE;
         boolean saving = pm != null && pm.isPowerSaveMode();
 
-        String state;
-        if (hot) {
-            // Thermal throttling has already begun at MODERATE. Holding caches
-            // and threads through it is how an app earns a place on a vendor's
-            // battery-abuse list, and the user is holding a device that is
-            // getting warm.
-            return PowerSignal.RESTRICTED;
+        if (thermal >= PowerManager.THERMAL_STATUS_SEVERE) {
+            return PowerSignal.THERMAL_SEVERE;
+        } else if (thermal >= PowerManager.THERMAL_STATUS_MODERATE) {
+            return PowerSignal.THERMAL_MODERATE;
+        } else if (saving) {
+            return PowerSignal.SAVING;
         } else if (windows == 0) {
             // Charging is the one case where staying active off-screen is
             // defensible: preparing a dictionary is the only real work this
             // app has, it is what the user is waiting for, and a plugged-in
             // device is not spending the user's battery on it.
             return charging(c) ? PowerSignal.ACTIVE : PowerSignal.BACKGROUND;
-        } else if (saving) {
-            // Visible, but the user has asked the whole system to conserve.
-            // Serve lookups, on one thread, holding nothing extra.
-            return PowerSignal.BACKGROUND;
         } else {
             return PowerSignal.ACTIVE;
         }

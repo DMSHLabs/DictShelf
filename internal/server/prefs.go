@@ -396,6 +396,7 @@ func (p *Prefs) recordAppVersion(version string) error {
 		return nil
 	}
 	f.AppVersion = version
+	f.IndexingMode = "parallel-dictionaries-single-worker"
 	if f.UI == nil {
 		f.UI = &UIPrefs{}
 	}

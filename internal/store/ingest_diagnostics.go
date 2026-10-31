@@ -91,10 +91,21 @@ func (p *ingestPool) snapshot() ingestParallelismSnapshot {
 	}
 	if s.activeProcs > 0 {
 		s.powerLimitReason = "active_power_limit"
-		if s.power != "active" && s.demandHolds == 0 {
-			s.powerLimitReason = s.power + "_power_cap"
-		} else if s.power != "active" && s.demandHolds > 0 {
-			s.powerLimitReason = "user_waited_work_holds_active_limit"
+		switch s.power {
+		case "background":
+			if s.demandHolds == 0 {
+				s.powerLimitReason = "background_power_cap"
+			} else {
+				s.powerLimitReason = "user_waited_work_holds_active_limit"
+			}
+		case "saving":
+			if s.demandHolds == 0 {
+				s.powerLimitReason = "saving_power_cap_idle"
+			} else {
+				s.powerLimitReason = "saving_power_cap"
+			}
+		case "thermal-moderate", "thermal-severe", "restricted":
+			s.powerLimitReason = s.power + "_cap"
 		}
 	}
 	s.workerLimit = p.workerLimit(0)
