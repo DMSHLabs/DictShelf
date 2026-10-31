@@ -13,7 +13,7 @@ let groupActivePanel=null;
 let newGroupSelectedFilter=null,groupFilterMode="",groupFilterShowAll=false,groupFilterCollapsed=new Set();
 let groupEditorMode="",groupDraftMembers=new Set(),groupDraftFilter=null,groupDraftLinked=false,groupSavedEditPreference=false,groupDraftChooseForLink=false;
 let groupMemberDraft=null;
-let groupOrderSelection=null,groupOrderLongPress=null,groupOrderSuppressClick=false;
+let groupOrderSelection=null;
 let groupPinEditing=null,groupPinCutoff=null;
 const groupOrderActions=document.createElement('div');groupOrderActions.id='groupOrderActions';
 for(const [id,label,text] of [['groupOrderAlpha','dictUI.sortAlphabetically',window.wudictI18n.language==='ru'?'А→Я':'A→Z'],['groupPinStart','dictUI.pinTop','📌']]){
@@ -383,7 +383,7 @@ function updateGroupOrderToolbar(group,inside,filtering,nameMode){
   const visible=!filtering&&!nameMode&&inside.length>0;
   const selecting=visible&&!!groupOrderSelection;
   $('groupOrderToolbar').hidden=!visible;
-  $('groupOrderHint').hidden=selecting||groupPinEditing;
+  $('groupOrderMulti').hidden=!visible||selecting||!!groupPinEditing;
   $('groupOrderActions').hidden=selecting||!!groupPinEditing;
   $('groupOrderAlpha').disabled=groupSaving||!(groupMemberDraft?.groupId===group.id?groupMemberDraft.customOrder:group.readonly?prefCustomOrder:group.customOrder);
   $('groupPinStart').hidden=false;
@@ -473,9 +473,10 @@ function renderGroupRows(){
   $('groupEmptyHint').hidden=!showEmptyHint;
   $('groupEmptyHintText').textContent=showEmptyHint?tx('dictUI.emptyGroup'):'';
   for(const d of filtering?inside.concat(filteredOutside):inside){
-    const label=document.createElement(selecting||(!locked&&showAll.checked)?"label":"div");label.className="group-row";
+    const label=document.createElement(selecting||groupPinEditing?"div":(!locked&&showAll.checked?"label":"div"));label.className="group-row";
     label.dataset.dict=d.id;label.dataset.search=dictLabel(d).toLocaleLowerCase();
     const name=document.createElement("span");name.className='group-dictionary-name';
+    name.classList.add('dict-info-name');name.dataset.dict=d.id;
     const title=document.createElement('span');title.className='group-dictionary-title';title.textContent=dictLabel(d);
     if(d.entries!==undefined&&d.entries!==null&&Number.isFinite(Number(d.entries))){
       const count=document.createElement('span');count.className='group-dictionary-count';
@@ -498,6 +499,10 @@ function renderGroupRows(){
       checkbox.addEventListener('change',()=>{
         if(checkbox.checked)groupOrderSelection.ids.add(d.id);else groupOrderSelection.ids.delete(d.id);
         updateGroupOrderToolbar(group,inside,false,false);
+      });
+      name.addEventListener('click',event=>{
+        if(event.target.closest('button'))return;
+        checkbox.checked=!checkbox.checked;checkbox.dispatchEvent(new Event('change',{bubbles:true}));
       });
       label.append(checkbox,name);rows.append(label);continue;
     }
@@ -629,40 +634,14 @@ $("groupRows").addEventListener("keydown",event=>{
   if(from<0||to<0||to>=ids.length)return;
   event.preventDefault();ids.splice(from,1);ids.splice(to,0,id);saveGroupOrder(ids,id,pinsAfterMove(ids,[id],groupMemberDraft?.groupId===group.id?groupMemberDraft.pinned:groupPinnedIds(group)));
 });
-function cancelGroupOrderLongPress(){
-  if(groupOrderLongPress)clearTimeout(groupOrderLongPress.timer);
-  groupOrderLongPress=null;
+function beginGroupOrderSelection(){
+  const group=userGroups.find(g=>g.id===selectedGroup);
+  if(!group||groupSaving||groupPinEditing||!visibleGroupOrder(group).length)return;
+  const rows=$('groupRows'),top=rows.scrollTop;
+  groupOrderSelection={groupId:group.id,ids:new Set()};
+  renderGroupRows();rows.scrollTop=top;
 }
-$('groupRows').addEventListener('pointerdown',event=>{
-  if(groupOrderSelection)groupOrderSuppressClick=false;
-  const name=event.target.closest('.group-dictionary-name');
-  if(!name||event.button!==0||groupSaving||groupOrderSelection||groupPinEditing||$('groupOrderToolbar').hidden)return;
-  const row=name.closest('.group-row');if(!row)return;
-  cancelGroupOrderLongPress();
-  const press={pointerId:event.pointerId,x:event.clientX,y:event.clientY,timer:null};
-  press.timer=setTimeout(()=>{
-    if(groupOrderLongPress!==press)return;
-    groupOrderLongPress=null;
-    const group=userGroups.find(g=>g.id===selectedGroup);
-    if(!group||groupSaving||!visibleGroupOrder(group).includes(row.dataset.dict))return;
-    groupOrderSelection={groupId:group.id,ids:new Set([row.dataset.dict])};
-    groupOrderSuppressClick=true;
-    const rows=$('groupRows'),top=rows.scrollTop;
-    renderGroupRows();rows.scrollTop=top;
-  },550);
-  groupOrderLongPress=press;
-});
-$('groupRows').addEventListener('pointermove',event=>{
-  const press=groupOrderLongPress;
-  if(press&&event.pointerId===press.pointerId&&Math.hypot(event.clientX-press.x,event.clientY-press.y)>10)cancelGroupOrderLongPress();
-});
-for(const type of ['pointerup','pointercancel','pointerleave'])$('groupRows').addEventListener(type,cancelGroupOrderLongPress);
-$('groupRows').addEventListener('contextmenu',event=>{
-  if(!$('groupOrderToolbar').hidden&&event.target.closest('.group-dictionary-name'))event.preventDefault();
-});
-$('groupRows').addEventListener('click',event=>{
-  if(groupOrderSuppressClick){event.preventDefault();event.stopPropagation();groupOrderSuppressClick=false}
-},true);
+$('groupOrderMulti').addEventListener('click',beginGroupOrderSelection);
 for(const [id,direction] of [['groupOrderTop','top'],['groupOrderUp','up'],['groupOrderDown','down'],['groupOrderBottom','bottom']]){
   $(id).addEventListener('click',()=>{
     const group=userGroups.find(g=>g.id===selectedGroup);
@@ -725,7 +704,7 @@ function matchGroupFontsToSettings(){
 }
 $("editGroups").addEventListener("click",async()=>{
   matchGroupFontsToSettings();
-  cancelGroupOrderLongPress();groupOrderSelection=null;groupOrderSuppressClick=false;groupPinEditing=null;groupPinCutoff=null;
+  groupOrderSelection=null;groupPinEditing=null;groupPinCutoff=null;
   groupAvailableFilter="all";
   groupActivePanel=null;$('groupControls').classList.remove('active');$('groupMembers').classList.remove('active');$('groupAvailable').classList.remove('active');
   const button=$("editGroups");button.disabled=true;
@@ -749,7 +728,7 @@ $("closeGroups").onclick=()=>{
   groupMemberDraft=null;$("groupEditor").close();
 };
 $("groupEditor").addEventListener("close",()=>{
-  cancelGroupOrderLongPress();groupOrderSelection=null;groupOrderSuppressClick=false;groupPinEditing=null;groupPinCutoff=null;
+  groupOrderSelection=null;groupPinEditing=null;groupPinCutoff=null;
   if(groupEditorMode){groupEditorMode='';groupShowAllPreferred=groupSavedEditPreference;groupDraftMembers.clear();groupDraftFilter=null;groupDraftLinked=false;$('groupNameInline').value='';}
   $('editGroups').focus();
 });
@@ -946,7 +925,7 @@ $('groupSelect').onchange=()=>{
 };
 function groupSelectChanged(){
   window.wudictThemedSelects?.group?.sync();
-  cancelGroupOrderLongPress();groupOrderSelection=null;groupOrderSuppressClick=false;groupPinEditing=null;groupPinCutoff=null;
+  groupOrderSelection=null;groupPinEditing=null;groupPinCutoff=null;
   groupShowAllPreferred=false;groupActivePanel=null;
   $('groupControls').classList.remove('active');$('groupMembers').classList.remove('active');$('groupAvailable').classList.remove('active');
   groupAvailableListSearch.clear();groupMemberListSearch.clear();$('groupError').textContent='';renderGroupRows();
