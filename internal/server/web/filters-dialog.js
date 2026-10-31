@@ -26,7 +26,7 @@ async function unmatched(changed){
   const have=new Set();
   try{
     if(window.wudictAndroidGo){
-      const id=window.wudictAndroidGo.startDictStream();
+      const id=window.wudictAndroidGo.startDictStream(false);
       if(id<=0)throw new Error("Dictionary list unavailable");
       try{
         for(;;){
