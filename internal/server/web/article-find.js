@@ -9,10 +9,29 @@
 const $ = id => document.getElementById(id), t = window.wudictI18n.t;
 const dialog = $("articleFindDialog"), strip = $("articleFindStrip");
 const wordChar = /[\p{L}\p{M}\p{N}_]/u;
+const findHistoryKey = "wudict_article_find_history_v1";
 const skip = "script,style,noscript,template,button,input,select,textarea,audio,video,svg";
 const block = "p,div,li,dt,dd,td,th,h1,h2,h3,h4,h5,h6,blockquote,pre,.wu-m";
 let options = {query:"", mode:"contains", matchCase:false, all:true, examples:false, blocks:true};
 try { Object.assign(options, JSON.parse(localStorage.getItem("wudict_article_find") || "{}")); } catch (_) {}
+function findHistoryLimit(){
+  try { const raw=localStorage.getItem("wudict_history_length"); if(raw===null)return 20; const n=Number(raw); return Number.isInteger(n)&&n>=0&&n<=1000?n:20; }
+  catch (_) { return 20; }
+}
+function loadFindHistory(){
+  try {
+    const rows=JSON.parse(localStorage.getItem(findHistoryKey)||"[]"),seen=new Set(),out=[];
+    if(Array.isArray(rows))for(const value of rows){
+      if(typeof value!=="string"||!value.trim())continue;
+      const query=value.trim(),key=query.normalize("NFC").toLocaleLowerCase();
+      if(seen.has(key))continue;
+      seen.add(key);out.push(query);
+      if(out.length>=1000)break;
+    }
+    return out.slice(0,findHistoryLimit());
+  } catch (_) { return []; }
+}
+let findHistory=loadFindHistory(),suppressFindHistoryFocus=false;
 let matches = [], index = -1, active = false, restored = [], docs = new Set(), timer, fullTextNavigation = null, fullTextGeneration = null, searchAnchor = null;
 const examinedBlocks = new Map();
 function resetCounts(){examinedBlocks.clear()}
@@ -81,6 +100,42 @@ function rootFor(host) {
 function save() {
   try { localStorage.setItem("wudict_article_find", JSON.stringify(options)); } catch (_) {}
 }
+function saveFindHistory(){
+  try { localStorage.setItem(findHistoryKey,JSON.stringify(findHistory.slice(0,findHistoryLimit()))); } catch (_) {}
+}
+function recordFindHistory(query=options.query){
+  const value=String(query||"").trim(),max=findHistoryLimit();
+  if(!value||!max)return;
+  const key=value.normalize("NFC").toLocaleLowerCase();
+  findHistory=[value,...findHistory.filter(row=>row.normalize("NFC").toLocaleLowerCase()!==key)].slice(0,max);
+  saveFindHistory();
+}
+function hideFindHistory(){
+  const list=$("articleFindHistory");list.hidden=true;list.replaceChildren();
+  $("articleFindQuery").setAttribute("aria-expanded","false");
+}
+function sizeFindHistory(){
+  const list=$("articleFindHistory"),viewport=window.visualViewport;
+  const viewportBottom=viewport?viewport.offsetTop+viewport.height:document.documentElement.clientHeight;
+  const popupTop=$("articleFindQueryBox").getBoundingClientRect().bottom+4;
+  list.style.maxHeight=Math.max(0,viewportBottom-popupTop-4)+"px";
+}
+function renderFindHistory(filter=$("articleFindQuery").value){
+  const list=$("articleFindHistory"),query=String(filter||"").trim().normalize("NFC").toLocaleLowerCase();
+  list.replaceChildren();
+  if(!dialog.open||$("articleFindMode").value==="fts"||!findHistoryLimit()){hideFindHistory();return}
+  const rows=findHistory.slice(0,findHistoryLimit()).filter(value=>!query||value.normalize("NFC").toLocaleLowerCase().includes(query));
+  for(const value of rows){
+    const button=document.createElement("button");button.type="button";button.setAttribute("role","option");button.textContent=value;
+    button.addEventListener("click",()=>{
+      const input=$("articleFindQuery");input.value=value;hideFindHistory();readOptions();index=-1;active=!!options.query;
+      rebuild();recordFindHistory(value);suppressFindHistoryFocus=true;input.focus();suppressFindHistoryFocus=false;hideFindHistory();
+    });
+    list.appendChild(button);
+  }
+  sizeFindHistory();list.hidden=!rows.length;
+  $("articleFindQuery").setAttribute("aria-expanded",String(!list.hidden));
+}
 function readOptions() {
   const previous=options;
   options = {query:$("articleFindQuery").value.trim(), mode:$("articleFindMode").value,
@@ -116,6 +171,7 @@ function syncControls() {
   const ftsOption=select.querySelector('option[value="fts"]');
   ftsOption.disabled=!hasFTS;ftsOption.hidden=!hasFTS;
   let fts = select.value === "fts";
+  if(fts)hideFindHistory();
   if(fts&&!hasFTS){
     options={...options,mode:"contains"};select.value="contains";fts=false;save();
     if(dialog.open){active=!!options.query;if(active)rebuild()}
@@ -460,6 +516,7 @@ function go(step) {
     return;
   }
   if (dialog.open || !active) { clearTimeout(timer); readOptions(); active = !!options.query; rebuild(); }
+  if(options.mode!=="fts")recordFindHistory(options.query);
   if (!active) return;
   if (!matches.length) {
     const sections=[...$("out").querySelectorAll("details.dict")];
@@ -628,9 +685,23 @@ $("articleFindMode").onchange = () => {
 };
 for (const id of ["articleFindCase","articleFindAll","articleFindExamples"]) $(id).onchange = () => { readOptions(); index = -1; active = !!options.query; rebuild(); };
 $("articleFindBlocks").onchange=()=>{readOptions();if(options.mode!=="fts"){index=-1;active=!!options.query;rebuild()}else{fullTextNavigation?.refresh?.();syncControls()}};
-$("articleFindQuery").oninput = () => { if ($("articleFindMode").value === "fts") return; readOptions(); index = -1; active = !!options.query; schedule(); };
-dialog.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.tagName !== "BUTTON") { e.preventDefault(); go(e.shiftKey ? -1 : 1); } });
+$("articleFindQuery").onfocus = () => { if(!suppressFindHistoryFocus)renderFindHistory(); };
+$("articleFindQuery").oninput = () => { if ($("articleFindMode").value === "fts") { hideFindHistory(); return; } readOptions(); renderFindHistory(); index = -1; active = !!options.query; schedule(); };
+ dialog.addEventListener("keydown", e => {
+  const list=$("articleFindHistory"),input=$("articleFindQuery");
+  if(e.key==="Escape"&&!list.hidden){e.preventDefault();e.stopPropagation();hideFindHistory();input.focus();return}
+  if(e.key==="ArrowDown"&&e.target===input&&!list.hidden){e.preventDefault();list.firstElementChild?.focus();return}
+  if((e.key==="ArrowDown"||e.key==="ArrowUp")&&e.target.matches?.('#articleFindHistory [role="option"]')){
+    e.preventDefault();const rows=[...list.querySelectorAll('[role="option"]')],at=rows.indexOf(e.target),next=at+(e.key==="ArrowDown"?1:-1);
+    if(rows[next])rows[next].focus();else if(e.key==="ArrowUp")input.focus();return;
+  }
+  if (e.key === "Enter" && e.target.tagName !== "BUTTON") { e.preventDefault(); go(e.shiftKey ? -1 : 1); }
+});
+dialog.addEventListener("cancel",e=>{if(!$("articleFindHistory").hidden){e.preventDefault();hideFindHistory();$("articleFindQuery").focus()}});
+document.addEventListener("pointerdown",e=>{if(!$("articleFindQueryBox").contains(e.target))hideFindHistory()});
 dialog.addEventListener("close", () => {
+  if($("articleFindMode").value!=="fts"){readOptions();recordFindHistory(options.query)}
+  hideFindHistory();
   if (active) strip.hidden = false;
   else if (fullTextNavigation) strip.hidden = !fullTextNavigation.visible;
   measure();
@@ -644,7 +715,9 @@ $("out").addEventListener("load", schedule, true);
 new MutationObserver(schedule).observe($("out"),{childList:true,subtree:true});
 new ResizeObserver(measure).observe(strip);
 new MutationObserver(() => { measure(); if (active) schedule(); }).observe($("sbar"),{attributes:true,attributeFilter:["hidden"]});
+window.addEventListener("resize",()=>{if(!$("articleFindHistory").hidden)sizeFindHistory()});
+if(window.visualViewport){window.visualViewport.addEventListener("resize",()=>{if(!$("articleFindHistory").hidden)sizeFindHistory()});window.visualViewport.addEventListener("scroll",()=>{if(!$("articleFindHistory").hidden)sizeFindHistory()})}
 $("sbarExamples").addEventListener("click",schedule);
 $("examplesRow")?.addEventListener("click",schedule);
-window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation, fullTextModeActive:()=>options.mode === "fts", isActive:()=>active&&!!options.query, searchAcrossBlocks:()=>options.blocks!==false, searchFrom, goto};
+window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation, setHistoryLimit:n=>{findHistory=findHistory.slice(0,Math.max(0,Math.min(1000,Number(n)||0)));saveFindHistory();renderFindHistory()}, fullTextModeActive:()=>options.mode === "fts", isActive:()=>active&&!!options.query, searchAcrossBlocks:()=>options.blocks!==false, searchFrom, goto};
 })();

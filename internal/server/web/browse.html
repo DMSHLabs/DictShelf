@@ -299,6 +299,7 @@ footer .browse-search-dock{width:100%;max-width:54rem}
 .picks a{display:flex;align-items:center;gap:.4em;font-size:calc(var(--ui-font-base) * 1rem)}
 .picks span{flex:none;margin-left:auto;font-size:calc(var(--ui-hint-font-size) * 1rem)}
 .picks .pick-name{flex:1;min-width:0;margin:0;font-size:inherit;overflow-wrap:anywhere}
+.picks .pick-headword-count{flex:none;margin:0;color:var(--label-quiet);font-size:.9em;white-space:nowrap}
 .msg.chooser-list{box-sizing:border-box;display:flex;flex-direction:column;
   min-height:0;margin:1rem auto;max-height:calc(100dvh - 2rem)}
 .chooser-list .chooser-head,.chooser-list .chooser-hint{flex:none}
@@ -2025,7 +2026,7 @@ async function chooser(){
     '</p><p><a href="/">'+tx("browse.openApp")+"</a></p>");
   card(heading+"<div class='picks'>"+
     ds.map(d=>'<a href="?dict='+encodeURIComponent(d.id)+'&chooser=1">'+browseDictIconHTML(d.id)+'<span class="pick-name">'+esc(label(d))+'</span>'+
-      (d.entries?'<span class="pick-count">'+tx("browse.entries",{count:d.entries,number:num(d.entries)})+"</span>":"")+"</a>").join("")+"</div>"+
+      (d.entries!==undefined&&d.entries!==null&&Number.isFinite(Number(d.entries))?'<span class="pick-headword-count" title="'+esc(tx("dictUI.headwordsCount",{number:num(Number(d.entries))}))+'">('+num(Number(d.entries))+')</span>':"")+"</a>").join("")+"</div>"+
     '<div class="list-search-dock" role="search"></div>',true);
   requestAnimationFrame(()=>requestAnimationFrame(()=>logBrowseNavigation("chooser_ready",performance.now()-chooserStarted,{words:ds.length})));
   const picks=$("msg").querySelector(".picks");

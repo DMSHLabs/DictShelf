@@ -32,23 +32,24 @@ html[data-shell-image] .workspace-dialog{background-image:var(--paper-bk-image);
 #dictSettingsOrderHint{margin:.35em 0 .8em;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.35;color:var(--label)}
 #dictSettingsGroupsLink{color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 #dictSettingsGroupsLink:hover{color:var(--link-hover)}
-#sysSettings,#desktopSysSettings{height:calc(100dvh - var(--wd-inset-top,0px) - var(--wd-inset-bottom,0px));max-height:none;min-height:0;display:flex;flex-direction:column;overflow:hidden}
-dialog#sysSettings:not([open]),dialog#desktopSysSettings:not([open]){display:none}
-#sysScroll,#desktopSysBody{flex:1 1 auto;min-height:0;overflow:auto}
-#desktopSysSettings .panel-scroll{overflow-wrap:anywhere}
-#desktopSysSettings h3{font-size:calc(var(--ui-font-section) * 1rem);color:var(--label)}
-#desktopSysSettings .sys-hint{margin:0;font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label)}
-#desktopSysSettings .sys-desktop-values{display:grid;margin-top:calc(var(--ui-row-gap) * 1em)}
-#desktopSysSettings .sys-desktop-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:1em;
+#systemSettingsDialog{height:calc(100dvh - var(--wd-inset-top,0px) - var(--wd-inset-bottom,0px));max-height:none;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+dialog#systemSettingsDialog:not([open]){display:none}
+
+#sysScroll,#systemSettingsBody{flex:1 1 auto;min-height:0;overflow:auto}
+#systemSettingsDialog .panel-scroll{overflow-wrap:anywhere}
+#systemSettingsDialog h3{font-size:calc(var(--ui-font-section) * 1rem);color:var(--label)}
+#systemSettingsDialog .sys-hint{margin:0;font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label)}
+#systemSettingsDialog .sys-desktop-values{display:grid;margin-top:calc(var(--ui-row-gap) * 1em)}
+#systemSettingsDialog .sys-desktop-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:1em;
   padding:.55em 0;border-bottom:1px solid var(--line)}
-#desktopSysSettings .sys-desktop-label{display:block;color:var(--label);font-size:calc(var(--ui-font-base) * 1rem)}
-#desktopSysSettings .sys-desktop-row code{display:block;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem);
+#systemSettingsDialog .sys-desktop-label{display:block;color:var(--label);font-size:calc(var(--ui-font-base) * 1rem)}
+#systemSettingsDialog .sys-desktop-row code{display:block;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem);
   font-weight:400;overflow-wrap:anywhere}
-#desktopSysSettings .sys-desktop-value{font-size:calc(var(--ui-font-base) * 1rem);text-align:right;overflow-wrap:anywhere}
-#desktopSysSettings .sys-desktop-worker-select{box-sizing:border-box;min-width:5em;height:calc(var(--ui-control-height) * 1em);font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:0 .35em}
-#desktopSysSettings .sys-desktop-row .sys-hint{margin:.25em 0 0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.5;color:var(--label)}
-#desktopSysSettings .sys-action-spaced{margin-top:calc(var(--ui-control-height) * .5em)}
-#desktopSysSettings #sysSaveLog{box-sizing:border-box;min-height:calc(var(--ui-control-height) * 1em);text-decoration:none}
+#systemSettingsDialog .sys-desktop-value{font-size:calc(var(--ui-font-base) * 1rem);text-align:right;overflow-wrap:anywhere}
+#systemSettingsDialog .sys-desktop-worker-select{box-sizing:border-box;min-width:5em;height:calc(var(--ui-control-height) * 1em);font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:0 .35em}
+#systemSettingsDialog .sys-desktop-row .sys-hint{margin:.25em 0 0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.5;color:var(--label)}
+#systemSettingsDialog .sys-action-spaced{margin-top:calc(var(--ui-control-height) * .5em)}
+#systemSettingsDialog #sysSaveLog{box-sizing:border-box;min-height:calc(var(--ui-control-height) * 1em);text-decoration:none}
 #webDictionaryPicker.group-dialog.panel-card{display:none;flex-direction:column;gap:0;
   width:min(480px,calc(100vw - 32px));height:min(650px,calc(100dvh - 32px));padding:12px;overflow:hidden}
 #webDictionaryPicker.group-dialog.panel-card[open]{display:flex}
@@ -59,12 +60,14 @@ dialog#sysSettings:not([open]),dialog#desktopSysSettings:not([open]){display:non
 .web-picker-head .themed-select-btn{width:100%;min-width:0}
 .web-picker-head .btn{display:grid;place-items:center;justify-self:end;width:40px;height:40px;padding:0}
 .web-picker-rows{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:6px 0}
-.web-picker-row{display:block;width:100%;padding:.7em .5em;border:0;border-radius:8px;
+.web-picker-row{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);width:100%;padding:.7em .5em;border:0;border-radius:8px;
   background:transparent;color:var(--fg);font:inherit;text-align:left;cursor:pointer}
 .wildcards-picker .web-picker-row{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);min-width:0}
 .wildcards-picker .web-picker-row[aria-current="true"]::before{content:"✓";flex:none;width:1em;color:var(--accent)}
 .wildcards-picker .web-picker-name{display:block;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.web-picker-row>.dict-icon{margin-right:.35em;vertical-align:middle}
+.web-picker-row>.dict-icon{flex:none;margin:0;vertical-align:middle}
+.web-picker-name{flex:1 1 auto;min-width:0}
+.web-picker-meta{flex:none;color:var(--label-quiet);font-size:.9em;white-space:nowrap}
 .wildcards-picker .web-picker-row>.dict-icon{margin:0}
 .wildcards-picker .web-picker-meta{flex:none;white-space:nowrap}
 .web-picker-row:hover,.web-picker-row:focus-visible{background:var(--bg-card);outline:2px solid var(--accent);outline-offset:-2px}
@@ -142,7 +145,7 @@ dialog.group-dialog[open]{display:flex;flex-direction:column;gap:calc(var(--ui-r
    sheets still cover the reader with the host's paper and optional wallpaper. */
 .group-dialog::backdrop,html[data-shell-image] .group-dialog::backdrop{
   background:rgba(0,0,0,.42);background-image:none}
-#groupEditor::backdrop,#dictSettings::backdrop,#sysSettings::backdrop{
+#groupEditor::backdrop,#dictSettings::backdrop,#systemSettingsDialog::backdrop{
   background:var(--paper-bg,var(--bg))}
 #clearDatabaseDialog::backdrop{background:var(--paper-bg,var(--bg))}
 /* A preset such as Warm paints --bg without changing the reader's own
@@ -150,12 +153,12 @@ dialog.group-dialog[open]{display:flex;flex-direction:column;gap:calc(var(--ui-r
    full-screen dialogs reveal that preset paper instead of the cold shell. */
 html:not([data-shell-sepia]):not([data-shell-image]) #groupEditor::backdrop,
 html:not([data-shell-sepia]):not([data-shell-image]) #dictSettings::backdrop,
-html:not([data-shell-sepia]):not([data-shell-image]) #sysSettings::backdrop,
+html:not([data-shell-sepia]):not([data-shell-image]) #systemSettingsDialog::backdrop,
 html:not([data-shell-sepia]):not([data-shell-image]) #clearDatabaseDialog::backdrop{
   background:var(--bg)}
 html[data-shell-image] #groupEditor::backdrop,
 html[data-shell-image] #dictSettings::backdrop,
-html[data-shell-image] #sysSettings::backdrop{
+html[data-shell-image] #systemSettingsDialog::backdrop{
   background-color:var(--paper-bg,var(--bg));
   background-image:var(--paper-bk-image);
   background-size:100% 100%;
@@ -348,6 +351,7 @@ html[data-shell-image] dialog#groupEditor.group-dialog.panel-card{background-ima
 #groupAvailableSearch::placeholder,#groupMembersSearch::placeholder{color:var(--label)}
 .group-row{display:flex;align-items:center;gap:.7em;min-height:44px;padding:.25em 0;overflow-wrap:anywhere}
 .group-dictionary-name{font-size:calc(var(--ui-font-base) * 1rem);display:inline-flex;align-items:center;gap:.35em}
+.group-dictionary-count{color:var(--label-quiet);font-size:.9em;white-space:nowrap}
 .group-row.list-search-match{position:relative;outline:none}
 .group-row.list-search-match::before{content:"";position:absolute;inset:1px 0;border:2px solid var(--accent);border-radius:16px;pointer-events:none}
 .group-row.list-search-current{border-radius:16px}

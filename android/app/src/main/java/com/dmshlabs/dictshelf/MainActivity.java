@@ -75,6 +75,7 @@ public class MainActivity extends Activity {
             finishAndRemoveTask();
             return;
         }
+        LauncherIcon.apply(this);
         Shell.clearWebCacheAfterUpdate(this);
 
         // Paint before setContentView, including the optional Sepia override.
@@ -698,6 +699,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        LauncherIcon.apply(this);
         androidUpdate.onResume(this);
     }
 

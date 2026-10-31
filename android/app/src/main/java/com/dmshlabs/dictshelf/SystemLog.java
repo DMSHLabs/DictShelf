@@ -24,6 +24,7 @@ final class SystemLog {
     private static volatile boolean enabled = true;
     private static volatile boolean baseEvents = true;
     private static volatile boolean detailedEvents;
+    private static volatile boolean systemSettingsDiagnostics;
 
     static void initialize(Context app) {
         synchronized (LOCK) {
@@ -33,6 +34,7 @@ final class SystemLog {
             enabled = prefs.getBoolean("enabled", true);
             baseEvents = prefs.getBoolean("base-events", true);
             detailedEvents = prefs.getBoolean("detailed-events", false);
+            systemSettingsDiagnostics = prefs.getBoolean("system-settings-diagnostics", false);
         }
         record("application start build=" + BuildConfig.VERSION_NAME
                 + " android_release=" + Build.VERSION.RELEASE
@@ -67,6 +69,23 @@ final class SystemLog {
 
     static void recordDetailed(String message) {
         if (enabled && detailedEvents) write(message);
+    }
+
+    static void recordSystemSettingsDiagnostic(String stage, String detail) {
+        if (!enabled || !systemSettingsDiagnostics) return;
+        String safeStage = stage == null ? "unknown" : stage.replaceAll("[^A-Za-z0-9_-]", "");
+        String safeDetail = detail == null ? "" : detail.replaceAll("[\\r\\n\\t]", " ").trim();
+        if (safeDetail.length() > 320) safeDetail = safeDetail.substring(0, 320) + " [truncated]";
+        recordFailure("system-settings " + safeStage + (safeDetail.isEmpty() ? "" : " detail=" + safeDetail));
+    }
+
+    static boolean systemSettingsDiagnostics() { return systemSettingsDiagnostics; }
+
+    static void setSystemSettingsDiagnostics(Context app, boolean value) {
+        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putBoolean("system-settings-diagnostics", value).apply();
+        systemSettingsDiagnostics = value;
+        if (value) recordSystemSettingsDiagnostic("enabled", "");
     }
 
     /** Records timings explicitly enabled by a diagnostic switch in the page. */

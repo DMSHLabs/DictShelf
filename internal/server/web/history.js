@@ -10,10 +10,121 @@
 (function () {
   "use strict";
   const $ = id => document.getElementById(id);
-  const MAX = 100;
+  const MAX = 1000;
   const searchStorageKey = "wudict_search_history_v2";
   const wildcardsStorageKey = "wudict_wildcards_history_v2";
   const key = s => s.normalize("NFC").toLocaleLowerCase();
+  const suggestionCollator = new Intl.Collator(undefined, {sensitivity: "base", numeric: false});
+  const caseFold = s => String(s).normalize("NFC").toLocaleLowerCase();
+  const accentFold = s => String(s).normalize("NFD").replace(/\p{M}/gu, "").normalize("NFC").toLocaleLowerCase();
+  const punctuationFold = s => accentFold(s).replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/gu, " ").trim();
+  const whitespaceFold = s => punctuationFold(s).replace(/\s/gu, "");
+  const tokens = s => accentFold(s).match(/[\p{L}\p{N}]+/gu) || [];
+  const compareRank = (a, b) => {
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      const av = a[i] ?? 0, bv = b[i] ?? 0;
+      if (av !== bv) return av - bv;
+    }
+    return 0;
+  };
+  function formRank(word, query) {
+    if (word === query) return 0;
+    if (caseFold(word) === caseFold(query)) return 1;
+    if (accentFold(word) === accentFold(query)) return 2;
+    if (punctuationFold(word) === punctuationFold(query)) return 3;
+    if (whitespaceFold(word) === whitespaceFold(query)) return 4;
+    return 5;
+  }
+  function phrasePosition(haystack, needle, fromEnd = false) {
+    if (!needle.length || needle.length > haystack.length) return -1;
+    const start = fromEnd ? haystack.length - needle.length : 0;
+    const end = fromEnd ? -1 : haystack.length - needle.length + 1;
+    const step = fromEnd ? -1 : 1;
+    for (let i = start; i !== end; i += step) {
+      if (needle.every((token, j) => haystack[i + j] === token)) return i;
+    }
+    return -1;
+  }
+  function tokenMatchRank(headTokens, queryTokens, relation) {
+    if (!queryTokens.length) return [9, 0, 0];
+    let total = 0, worst = 0, earliest = Infinity;
+    for (const queryToken of queryTokens) {
+      let best = null;
+      for (let i = 0; i < headTokens.length; i++) {
+        const token = headTokens[i], grade = relation(token, queryToken);
+        if (grade < 0) continue;
+        const candidate = [grade, i];
+        if (!best || compareRank(candidate, best) < 0) best = candidate;
+      }
+      if (!best) return [9, 0, 0];
+      worst = Math.max(worst, best[0]);
+      total += best[0];
+      earliest = Math.min(earliest, best[1]);
+    }
+    return [worst, total, earliest];
+  }
+  function wildcardExpansion(word, query) {
+    let source = "^", wildcards = 0;
+    for (const char of accentFold(query)) {
+      if (char === "*") { source += "([\\s\\S]*)"; wildcards++; }
+      else if (char === "?") { source += "([\\s\\S])"; wildcards++; }
+      else source += char.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+    try {
+      const match = new RegExp(source + "$", "u").exec(accentFold(word));
+      if (!match) return [9, 0];
+      let expanded = 0;
+      for (let i = 1; i <= wildcards; i++) expanded += Array.from(match[i] || "").length;
+      return [0, expanded];
+    } catch (_) { return [9, 0]; }
+  }
+  function suggestionRank(word, query, mode, alternatives) {
+    const quality = [formRank(word, query)];
+    let modeRank = [0, 0, 0];
+    const headTokens = tokens(word), queryTokens = tokens(query);
+    const exactPhrase = phrasePosition(headTokens, queryTokens);
+    switch (mode) {
+      case "prefix": {
+        if (exactPhrase >= 0) modeRank = [0, exactPhrase, 0];
+        else if (caseFold(word).startsWith(caseFold(query))) modeRank = [1, 0, 0];
+        else modeRank = [2, ...tokenMatchRank(headTokens, queryTokens,
+          (token, part) => token === part ? 0 : token.startsWith(part) ? 1 : -1)];
+        break;
+      }
+      case "suffix": {
+        const suffixPhrase = phrasePosition(headTokens, queryTokens, true);
+        const tokenRank = tokenMatchRank(headTokens, queryTokens,
+          (token, part) => token === part ? 0 : token.endsWith(part) ? 1 : -1);
+        if (suffixPhrase >= 0) modeRank = [0, headTokens.length - suffixPhrase - queryTokens.length];
+        else if (tokenRank[0] < 9) modeRank = [tokenRank[0], tokenRank[2]];
+        else if (caseFold(word).endsWith(caseFold(query))) modeRank = [1, 0];
+        else modeRank = [9, 0];
+        break;
+      }
+      case "contains": {
+        if (exactPhrase >= 0) modeRank = [0, exactPhrase, 0];
+        else modeRank = [1, ...tokenMatchRank(headTokens, queryTokens,
+          (token, part) => token === part ? 0 : token.startsWith(part) ? 1 : token.includes(part) ? 2 : -1)];
+        break;
+      }
+      case "word": case "wordLemma": case "exactLemma": {
+        const candidates = [query, ...(alternatives || []).filter(value => value && value !== query)];
+        modeRank = candidates.map((value, i) => {
+          const position = phrasePosition(headTokens, tokens(value));
+          return position < 0 ? [9, i, 0] : [i, position, 0];
+        }).sort(compareRank)[0] || [9, 0, 0];
+        break;
+      }
+      case "wildcards":
+        modeRank = wildcardExpansion(word, query);
+        break;
+      default:
+        if (exactPhrase >= 0) modeRank = [0, exactPhrase, 0];
+    }
+    const queryLength = Array.from(whitespaceFold(query)).length;
+    const wordLength = Array.from(whitespaceFold(word)).length;
+    return [...quality, modeRank[0] ?? 0, headTokens.length, ...modeRank.slice(1), Math.max(0, wordLength - queryLength)];
+  }
   const limit = () => {
     const raw = localStorage.getItem("wudict_history_length");
     if (raw === null) return 20;
@@ -80,10 +191,22 @@
   function hide() { stopSuggest(); open = false; $("searchHistory").hidden = true; }
   function size() {
     const box = $("searchHistory");
-    if (!matchMedia("(max-width:600px)").matches) { box.style.right = ""; return; }
-    const pill = document.querySelector("#frm>.pill");
-    const extra = pill.getBoundingClientRect().right - $("qbox").getBoundingClientRect().right;
-    box.style.right = -Math.max(0, extra - 1) + "px";
+    if (matchMedia("(max-width:600px)").matches) {
+      const pill = document.querySelector("#frm>.pill");
+      const extra = pill.getBoundingClientRect().right - $("qbox").getBoundingClientRect().right;
+      box.style.right = -Math.max(0, extra - 1) + "px";
+    } else {
+      box.style.right = "";
+    }
+    const viewport = window.visualViewport;
+    const viewportBottom = viewport ? viewport.offsetTop + viewport.height : document.documentElement.clientHeight;
+    const dock = $("bottomDock");
+    const dockVisible = dock && !dock.hidden;
+    const availableBottom = dockVisible
+      ? Math.min(viewportBottom, dock.getBoundingClientRect().top)
+      : viewportBottom;
+    const popupTop = $("qbox").getBoundingClientRect().bottom + 4;
+    box.style.maxHeight = Math.max(0, availableBottom - popupTop - (dockVisible ? 10 : 4)) + "px";
   }
   function render(filter = "") {
     if (!open) return;
@@ -142,19 +265,24 @@
   function suggestionListLimit() {
     return Math.max(1, Math.min(500, Number(window.wudictSuggestionListLimit) || 500));
   }
-  function addResults(q, results, mode, dict) {
+  function addResults(q, results, mode, dict, term) {
     if (mode === "fts" || !open || $("q").value.trim() !== q || !results?.length) return;
     const id = String(dict || "");
     if (!id) return;
-    headsByDict.set(id, results.map(result => String(result.Headword || "").trim()).filter(Boolean));
-    const collator = new Intl.Collator(undefined, {sensitivity: "base", numeric: false});
-    const all = [], seen = new Set();
-    for (const words of headsByDict.values()) for (const word of words) {
-      const folded = key(word);
-      if (!seen.has(folded)) { seen.add(folded); all.push(word); }
+    const alternatives = String(term || q).split("\x1f").filter(Boolean);
+    const ranked = results.map(result => String(result.Headword || "").trim()).filter(Boolean)
+      .map(word => ({word, rank:suggestionRank(word, q, mode, alternatives)}));
+    ranked.sort((a, b) => compareRank(a.rank, b.rank) || suggestionCollator.compare(a.word, b.word) || a.word.localeCompare(b.word));
+    const perDictionary = Math.max(1, Math.min(500, Number(window.wudictSuggestionPerDictionary) || 40));
+    headsByDict.set(id, ranked.slice(0, perDictionary));
+    const best = new Map();
+    for (const rows of headsByDict.values()) for (const row of rows) {
+      const folded = key(row.word), previous = best.get(folded);
+      if (!previous || compareRank(row.rank, previous.rank) < 0) best.set(folded, row);
     }
-    all.sort((a, b) => collator.compare(a, b) || a.localeCompare(b));
-    heads = all.slice(0, suggestionListLimit());
+    const all = [...best.values()];
+    all.sort((a, b) => compareRank(a.rank, b.rank) || suggestionCollator.compare(a.word, b.word) || a.word.localeCompare(b.word));
+    heads = all.slice(0, suggestionListLimit()).map(row => row.word);
     render(q);
   }
 
@@ -173,6 +301,7 @@
     saved = saved.slice(0, n);
     wildcardsSaved = wildcardsSaved.slice(0, n);
     persist();
+    window.wudictArticleFind?.setHistoryLimit?.(n);
     if (!n) hide();
   });
   $("q").addEventListener("focus", () => { if (!open) refreshSuggestions(); });
@@ -198,6 +327,21 @@
   const sizer = new ResizeObserver(() => { if (open) size(); });
   sizer.observe(document.querySelector("#frm>.pill"));
   sizer.observe($("qbox"));
+  // The bottom dock changes height as its status and progress rows appear.
+  // Keep an open list above its current upper edge.
+  const observeDock = () => {
+    const dock = $("bottomDock");
+    if (dock) sizer.observe(dock);
+  };
+  if (document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", observeDock, {once:true});
+  else observeDock();
+  window.addEventListener("resize", () => { if (open) size(); });
+  window.addEventListener("scroll", () => { if (open) size(); }, true);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", () => { if (open) size(); });
+    window.visualViewport.addEventListener("scroll", () => { if (open) size(); });
+  }
 
   window.wuSearchHistory = { setSearch(fn) { search = fn; }, setSuggest(fn) { suggest = fn; }, record, recordFor,
     getFor(kind) { return [...(kind === "wildcards" ? wildcardsSaved : saved)]; },

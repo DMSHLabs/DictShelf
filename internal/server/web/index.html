@@ -588,6 +588,7 @@ window.wudictFontScale=(function(){
       </span>
     </div>
   </div>
+  <p class="font-scale-hint">{{T:panel.suggestionLimitsHint}}</p>
 </details>
 
 <details class="sect" data-panel-section="appearance" open>
@@ -730,7 +731,7 @@ window.wudictFontScale=(function(){
   <div class="facts">
     <span class="history-controls">
       <label class="history-setting">{{T:panel.historyLength}}
-        <input id="historyLength" type="number" min="0" max="100" step="1" inputmode="numeric" value="20" aria-label="{{T:panel.historyLengthLabel}}">
+        <input id="historyLength" type="number" min="0" max="1000" step="1" inputmode="numeric" value="20" aria-label="{{T:panel.historyLengthLabel}}">
       </label>
       <button type="button" class="act" id="clearHistory" disabled>{{T:panel.clear}}</button>
     </span>
@@ -956,7 +957,7 @@ window.wudictFontScale=(function(){
 </div>
 <dialog id="articleFindDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="articleFindTitle">
   <h2 id="articleFindTitle">{{T:articleFind.title}}<button type="button" class="btn" id="articleFindClose" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
-  <div class="article-find-query-row"><label for="articleFindQuery">{{T:articleFind.query}}</label><input type="text" id="articleFindQuery" autocomplete="off" spellcheck="false"></div>
+  <div class="article-find-query-row"><label for="articleFindQuery">{{T:articleFind.query}}</label><div id="articleFindQueryBox" class="article-find-query-box"><input type="text" id="articleFindQuery" autocomplete="off" spellcheck="false" aria-haspopup="listbox" aria-controls="articleFindHistory" aria-expanded="false"><div id="articleFindHistory" class="search-history article-find-history" role="listbox" aria-label="{{T:search.history}}" hidden></div></div></div>
   <label class="article-find-mode" for="articleFindMode">{{T:articleFind.mode}}<select id="articleFindMode" aria-label="{{T:articleFind.mode}}">
     <option value="prefix">{{T:search.prefix}}</option><option value="suffix">{{T:search.suffix}}</option><option value="contains" selected>{{T:dictUI.contains}}</option><option value="word">{{T:browse.findModeWord}}</option><option value="wordLemma">{{T:browse.findModeWordLemma}}</option><option value="fts" hidden>{{T:articleFind.fullText}}</option>
   </select></label>
@@ -1099,31 +1100,14 @@ window.wudictFontScale=(function(){
   <div class="system-log-saved-actions"><button type="button" class="btn" id="clearSystemLogConfirm">{{T:panel.clear}}</button><button type="button" class="btn" id="clearSystemLogCancel">{{T:panel.cancel}}</button></div>
 </dialog>
 
-<!-- System: the shell's own settings, drawn by the page. It is the second view
-     of one set of values the SHELL owns - the screen the launcher icon's
-     long-press menu opens is the other - so nothing here is stored twice: the
-     window asks over the wudict:system bridge (Shell.systemState) and writes
-     through the same prompt, and the answer to every call is the whole state,
-     which is what it repaints from.
-     Two kinds of row, and the difference is which side knows the words. The
-     three lookups, the messages and the access key read the same everywhere, so
-     they are spelled here, the way the Appearance sheet spells the Screen rows
-     it took over from the same screen. The Advanced rows are cut from a table
-     the shell holds - the flavour without a listen-address row contributes
-     none, the labels and bounds are its own - so each one arrives with its
-     words, and the page only draws what it is given.
-     NO Close button, deliberately: the ✕ in this window's corner is the way
-     out, and a second control meaning the same thing was the reader's
-     complaint about the screen this replaces.
-     Clear browser cache stands ABOVE Advanced (the reader's order): it is
-     about this window's own copies of the page, not about the server whose
-     limits are below it - and those limits are the rows that need a restart
-     before they are true.
-     A browser has no such bridge, so the door that opens this window is not
-     drawn there; the window itself is only reachable through that door. -->
-<dialog id="sysSettings" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="sysSettingsTitle">
-  <h2 id="sysSettingsTitle">{{T:system.title}} <button type="button" class="btn" id="closeSysSettings" aria-label="{{T:system.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
+<!-- Hidden source for settings controls whose IDs and bridge handlers are
+     shared with systemSettingsDialog. The visible dialog moves only the rows
+     supported by the current platform into its own collapsible sections. -->
+<div id="sysSettings" hidden>
   <div class="panel-scroll" id="sysScroll">
+    <!-- This closed dialog is a source for the shared controls that are moved
+         into #systemSettingsDialog. It is never shown; keeping the controls
+         here preserves their existing native bridge bindings and state IDs. -->
     <h3 class="sys-head">{{T:system.lookup}}</h3>
     <p class="sys-hint">{{T:system.lookupHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysToolbar"><span class="sys-label">{{T:system.selection}}</span></label>
@@ -1213,10 +1197,10 @@ window.wudictFontScale=(function(){
     <p class="sys-note" id="sysStale" hidden></p>
     <p class="sys-note" id="sysNote" aria-live="polite"></p>
   </div>
-</dialog>
-<dialog id="desktopSysSettings" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="desktopSysTitle">
-  <h2 id="desktopSysTitle">{{T:system.title}} <button type="button" class="btn" id="desktopSysClose" aria-label="{{T:system.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
-  <div id="desktopSysBody" class="panel-scroll"></div>
+</div>
+<dialog id="systemSettingsDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="systemSettingsTitle">
+  <h2 id="systemSettingsTitle">{{T:system.title}} <button type="button" class="btn" id="systemSettingsClose" aria-label="{{T:system.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
+  <div id="systemSettingsBody" class="panel-scroll"></div>
 </dialog>
 
 <!-- Hidden until asked for, and #styler is outside #panel deliberately: opening
@@ -1433,6 +1417,7 @@ function updateArticleCacheCard(state){
       (state.error?" · "+tx("search.fullListUnavailable"):"");
   }
   if(state.done&&!state.error)det.querySelector(":scope>summary .priority-index")?.remove();
+  refreshLivePickerCounts();
 }
 function queueArticleResultCache(msg,mode,displayQuery,seq){
   if(!msg.dict||!msg.results?.length||articleResultCaches.has(msg.dict))return;
@@ -1627,7 +1612,7 @@ function systemLogClick(event){
   if(!window.wudictNativeShell)return;
   event.preventDefault();
   if(window.wudictAndroidGo){
-    const result=window.prompt("wudict:save-article",JSON.stringify({filename,content:doc}));
+    const result=window.prompt("wudict:system-log","");
     if(result&&result!=="ok")alert(result);
     return;
   }
@@ -1681,10 +1666,11 @@ window.wuSearchHistory.setSuggest((q,onHit,signal,mode)=>{
   if(mode==="fts")return;
   const ids=sel==="all"?activeUserGroupIds():sel.startsWith("g:")?groupIds(sel):null;
   if(ids&&!ids.length)return;
-  const dict=ids?ids.join(","):sel,n=window.wudictSuggestionPerDictionary||40;
+  const dict=ids?ids.join(","):sel,perDictionary=window.wudictSuggestionPerDictionary||40;
+  const n=Math.min(501,Math.max(perDictionary,perDictionary*4));
   return fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+
     "&hl=0"+diacriticsSearchParam()+"&dict="+encodeURIComponent(dict)+"&n="+n,msg=>{
-      if(msg.t==="hit")onHit(msg.results,mode,msg.dict);
+      if(msg.t==="hit")onHit(msg.results,mode,msg.dict,msg.term);
     },signal);
 });
 const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
@@ -2966,9 +2952,27 @@ function livePickerRows(){
     const label=Array.from(summary.childNodes).filter(n=>n.nodeType===Node.TEXT_NODE)
       .map(n=>n.textContent).join("").trim();
     const id=article.dataset.dict,d=dicts.find(item=>item.id===id);
-    rows.push({id,label:d?dictLabel(d):(label||id)});
+    rows.push({id,label:d?dictLabel(d):(label||id),meta:livePickerResultCount(det,d)});
   }
   return rows;
+}
+function livePickerResultCount(det,d){
+  const total=Number(d?.entries);
+  if(d?.entries===undefined||d.entries===null||!Number.isFinite(total))return "";
+  const visible=det.querySelectorAll(":scope > dl > dt").length;
+  const cache=articleResultCaches.get(det.dataset.searchDict||"");
+  let found=visible,exact=false;
+  if(cache&&cache.displayQuery===det.dataset.searchQuery&&cache.mode===det.dataset.searchMode){
+    found=cache.done?cache.total:Math.max(visible,cache.initial||5);exact=cache.done;
+  }else if(det.dataset.searchExact==="true"){
+    found=Number(det.dataset.searchTotal)||0;exact=true;
+  }else if(det.dataset.searchTotal!==undefined){
+    found=Math.max(visible,Number(det.dataset.searchLowerBound)||Number(det.dataset.searchTotal)||0);
+  }else{
+    exact=visible<(Number(det.dataset.searchInitial)||5)&&!det.querySelector(":scope>summary .priority-index");
+  }
+  const foundText=window.wudictI18n.number(Math.max(0,found))+(exact?"":"+");
+  return tx("search.dictionaryFoundCount",{found:foundText,total:window.wudictI18n.number(total)});
 }
 /* The dictionary the current ANSWER is scoped to, when it is scoped to one: the
    standing scope (`#dict`) if the reader picked one, else the one-shot scope a
@@ -3091,7 +3095,7 @@ function paintWebDictionaryPicker(){
     button.append(document.createRange().createContextualFragment(dictIconHTML(row.id)),name);
     if(row.meta){const meta=document.createElement('span');meta.className='web-picker-meta';meta.textContent=row.meta;button.append(meta)}
     if(maskContext)button.setAttribute('aria-current',String(row.id===maskRows[maskCurrent]?.id));
-    button.title=row.label;
+    button.title=row.meta?(row.name||row.label)+" · "+row.meta:row.label;
     button.onclick=()=>{
       $('webDictionaryPicker').close();
       if(maskContext){maskSelect(maskRows.findIndex(item=>item.id===row.id));return}
@@ -3107,6 +3111,17 @@ function paintWebDictionaryPicker(){
   }
   webPickerSearch?.refresh();
   return rows.length;
+}
+function refreshLivePickerCounts(){
+  if(!$('webDictionaryPicker').open||webPickerContext!=="search")return;
+  const rows=new Map(livePickerRows().map(row=>[row.id,row]));
+  for(const button of $('webPickerRows').querySelectorAll('.web-picker-row')){
+    const row=rows.get(button.dataset.dict);if(!row)continue;
+    let meta=button.querySelector('.web-picker-meta');
+    if(row.meta){if(!meta){meta=document.createElement('span');meta.className='web-picker-meta';button.append(meta)}meta.textContent=row.meta}
+    else meta?.remove();
+    button.title=row.meta?(row.name||row.label)+" · "+row.meta:row.label;
+  }
 }
 let webPickerOpening=false;
 async function openWebDictionaryPicker(context="search"){
@@ -4253,7 +4268,7 @@ document.querySelector('[data-styler="screen"]').hidden=!window.wudictAndroidShe
   // Android injects its shell flag after this script runs. The Windows server
   // reports its local Exit capability in /api/config, read by loadFolders.
   if(window.wudictWindowsShell){$("hotkeysSection").hidden=false;}
-  if(window.wudictNativeShell){$("sysSection").hidden=false;$("exitSection").hidden=false;}
+  if(window.wudictNativeShell||window.wudictAndroidGo){$("sysSection").hidden=false;$("exitSection").hidden=false;}
   // Another window can switch a layer; the panel's layer rows are repainted
   // from the registry in hand whenever the drawer opens, the way the Presets
   // row is re-asked whether the screen still matches the look in force.
@@ -4460,6 +4475,12 @@ function sysRequest(request){
     return answer===null?null:JSON.parse(answer);
   }catch(e){console.warn("system bridge:",e);return null}
 }
+function androidLauncherIconChanged(){
+  try{
+    const answer=window.prompt("wudict:launcher-icon",JSON.stringify({family:localStorage.getItem("wudict_android_icon_choice")||"icon2_transparent",automatic:localStorage.getItem("wudict_android_icon_auto")!=="0"}));
+    if(answer!=="ok")console.warn("Could not change launcher icon");
+  }catch(e){console.warn("Could not change launcher icon",e)}
+}
 /* The server's own answer, asked fresh every time the window opens: the window
    exists partly to say whether the server is BEHIND, and a remembered answer
    is the one thing that note must never quote. Nothing is fetched twice on
@@ -4472,8 +4493,9 @@ async function sysConfigRead(){
     const r=await apiFetch("/api/config");
     if(!r.ok)throw new Error("HTTP "+r.status);
     sysCfg=await r.json();
+    systemSettingsDiagnostic("shell_config_read_ok");
     return true;
-  }catch(e){sysCfg=null;return false}
+  }catch(e){sysCfg=null;systemSettingsDiagnostic("shell_config_read_error",e);return false}
 }
 function sysRead(){
   const state=sysRequest({action:"get"});
@@ -4795,23 +4817,11 @@ function sysCommitNumber(row,field){
   sysSet({action:"set",field:"override",key:row.key,value:String(n)});
 }
 function sysNote(text){
-  const note=$("desktopSysSettings")?.open?$("desktopSysNote"):$("sysNote");
+  const note=$("systemSettingsDialog")?.open?$("systemSettingsNote"):$("sysNote");
   if(note)note.textContent=text||"";
 }
 
-function showSysSettings(){
-  // Advanced starts folded EVERY time the window opens, which is what "folded
-  // by default" has to mean for a surface that is not rebuilt between visits:
-  // the element keeps whatever state it was left in, so a window reopened onto
-  // an open group would be a window that looks different every time.
-  const hideAdvanced=!!window.wudictAndroidShell;
-  $("sysAdvBody").hidden=true;
-  $("sysAdvBar").hidden=hideAdvanced;
-  $("sysRestore").hidden=hideAdvanced;
-  $("sysAdvBar").setAttribute("aria-expanded","false");
-  $("sysSettings").showModal();
-  sysRead();
-}
+function showSysSettings(){return showSystemSettings()}
 /* The Advanced group folds, and starts folded: its rows are the server's own
    limits, not anything about reading, and they are the longest part of this
    window. The state is not remembered - a window opened twice should look the
@@ -4822,7 +4832,8 @@ $("sysAdvBar").onclick=()=>{
   $("sysAdvBar").setAttribute("aria-expanded",open?"true":"false");
   if(open)syncSystemSettingSwitches($("sysSettings"));
 };
-let desktopSystemNodes=null;
+let systemSettingsNodes=null;
+let systemSettingsRenderToken=0;
 async function desktopHotkeysLoad(){
   const show=$("hotkeyShowWindow"),translate=$("hotkeyTranslateClipboard");
   if(!show||!translate)return;
@@ -4888,12 +4899,12 @@ window.wudictHotkeyLookup=function(text){
   $("q").focus();
   doSearch();
 };
-function desktopSysFoldSections(body){
+function systemSettingsFoldSections(body){
   const headings=[...body.querySelectorAll(":scope > h3.sys-head")];
   for(let i=0;i<headings.length;i++){
     const heading=headings[i],fold=document.createElement("button");
     fold.type="button";fold.className="sys-fold";fold.textContent=heading.textContent;
-    fold.dataset.foldIndex=String(i);fold.setAttribute("aria-controls","desktopSysFoldBody"+i);
+    fold.dataset.foldIndex=String(i);fold.setAttribute("aria-controls","systemSettingsFoldBody"+i);
     let expanded=true;
     try{const saved=localStorage.getItem("wudict_desktop_sys_fold_"+i);if(saved!==null)expanded=saved==="1"}catch(_){}
     fold.setAttribute("aria-expanded",String(expanded));heading.replaceWith(fold);
@@ -4910,14 +4921,61 @@ function desktopSysFoldSections(body){
   }
 }
 
-async function showDesktopSysSettings(){
-  const dialog=$("desktopSysSettings"),body=$("desktopSysBody");
+function systemSettingsDiagnosticsRequest(request){
+  if(!window.wudictAndroidShell)return null;
+  try{
+    const answer=window.prompt("wudict:system-settings-diagnostic",JSON.stringify(request));
+    return answer===null?null:answer;
+  }catch(error){return null}
+}
+function systemSettingsDiagnostic(stage,error){
+  const detail=error?((error.name||"Error")+": "+(error.message||String(error))):"";
+  systemSettingsDiagnosticsRequest({action:"record",stage,detail});
+}
+function systemSettingsDiagnosticsControl(enabled){
+  const row=document.createElement("label");row.className="sys-row";
+  const check=document.createElement("input");check.type="checkbox";check.className="panel-checkbox";check.checked=!!enabled;
+  check.addEventListener("change",()=>{
+    if(systemSettingsDiagnosticsRequest({action:"set",enabled:check.checked})!=="ok")check.checked=!check.checked;
+  });
+  const label=document.createElement("span");label.className="sys-label";label.textContent=tx("system.logSystemSettings");
+  row.append(check,label);
+  const hint=document.createElement("p");hint.className="sys-hint";hint.textContent=tx("system.logSystemSettingsHint");
+  return {row,hint};
+}
+
+async function showSystemSettings(){
+  const dialog=$("systemSettingsDialog"),body=$("systemSettingsBody");
+  const renderToken=++systemSettingsRenderToken;
+  let diagnosticControl=null;
+  try{
+  if(!dialog.open)dialog.showModal();
+  const systemSettingsSource=$("sysSettings");
+  if(systemSettingsNodes&&systemSettingsSource){
+    for(const node of Object.values(systemSettingsNodes)){
+      if(node&&!systemSettingsSource.contains(node))systemSettingsSource.append(node);
+    }
+  }
+  body.replaceChildren();
+  body.scrollTop=0;
+  if(window.wudictAndroidShell){
+    systemSettingsDiagnostic("open_start");
+    const diagnosticState=systemSettingsDiagnosticsRequest({action:"get"});
+    let enabled=false;
+    try{enabled=!!JSON.parse(diagnosticState||"{}").enabled}catch(_){}
+    diagnosticControl=systemSettingsDiagnosticsControl(enabled);
+    body.append(diagnosticControl.row,diagnosticControl.hint);
+  }
   // Normalize the checkbox rows before caching their containers below. The
   // first normalization replaces label rows with div rows; caching their old
   // parents first leaves empty labels to be reused the next time this dialog
   // opens.
   syncSystemSettingSwitches($("sysSettings"));
-  if(!desktopSystemNodes)desktopSystemNodes={
+  if(!systemSettingsNodes)systemSettingsNodes={
+    toolbar:$("sysToolbar").parentElement,
+    share:$("sysShare").parentElement,
+    link:$("sysLink").parentElement,
+    reader:$("sysReader").parentElement,
     info:$("sysInfo").parentElement,
     resultCacheHeading:$("sysResultCacheHeading"),
     resultCacheHint:$("sysResultCacheHint"),
@@ -4937,13 +4995,54 @@ async function showDesktopSysSettings(){
     searchArticleDiagnostics:$("sysSearchArticleDiagnostics").parentElement,
     articlePageCacheDiagnostics:$("sysArticlePageCacheDiagnostics").parentElement
   };
-  dialog.showModal();
-  body.replaceChildren();
-  body.scrollTop=0;
-  const c=await loadConfig();
-  if(!c){body.textContent=tx("system.desktopLoadFailed");return}
+  if(window.wudictAndroidShell){
+    systemSettingsDiagnostic("shell_state_start");
+    const state=sysRead();
+    systemSettingsDiagnostic(state?"shell_state_ok":"shell_state_empty");
+  }
+  systemSettingsDiagnostic("application_config_start");
+  const c=await loadConfig(error=>systemSettingsDiagnostic("application_config_error",error));
+  if(renderToken!==systemSettingsRenderToken||!dialog.open)return;
+  if(!c){
+    systemSettingsDiagnostic("application_config_empty");
+    const failure=document.createElement("p");failure.className="sys-hint";failure.textContent=tx("system.desktopLoadFailed");body.append(failure);return;
+  }
+  if(diagnosticControl){diagnosticControl.hint.remove();diagnosticControl.row.remove()}
   const hint=document.createElement("p");hint.className="sys-hint";
   hint.textContent=tx("system.desktopHint");body.append(hint);
+  if(window.wudictAndroidShell){
+    const lookupHeading=document.createElement("h3");lookupHeading.className="sys-head";lookupHeading.textContent=tx("system.lookup");body.append(lookupHeading);
+    const lookupHint=document.createElement("p");lookupHint.className="sys-hint";lookupHint.textContent=tx("system.lookupHint");body.append(lookupHint);
+    body.append(systemSettingsNodes.toolbar,systemSettingsNodes.share,systemSettingsNodes.link,systemSettingsNodes.reader);
+    const iconHeading=document.createElement("h3");iconHeading.className="sys-head";iconHeading.textContent=tx("system.appIcon");body.append(iconHeading);
+    const iconPicker=document.createElement("div");iconPicker.className="icon-choice-grid android-icon-choice-grid";iconPicker.setAttribute("role","group");iconPicker.setAttribute("aria-label",tx("system.appIcon"));
+    let family=localStorage.getItem("wudict_android_icon_choice");
+    if(!family){
+      const legacy=localStorage.getItem("wudict_android_icon_family");
+      family=legacy==="light"?"icon2_transparent_light":"icon2_transparent";
+      localStorage.setItem("wudict_android_icon_choice",family);
+    }
+    if(family!=="icon2_transparent_light")family="icon2_transparent";
+    localStorage.setItem("wudict_android_icon_choice",family);
+    const iconChoices=[["icon2_transparent","system.icon2Transparent","android_icon2_transparent"],["icon2_transparent_light","system.icon2Light","android_icon2_transparent_light"]];
+    for(const [value,labelKey,preview] of iconChoices){
+      const option=document.createElement("button");option.type="button";option.className="icon-choice";option.setAttribute("aria-pressed",String(value===family));option.setAttribute("aria-label",tx(labelKey));option.title=tx(labelKey);
+      const img=document.createElement("img");img.src="/assets/icon-previews/"+preview+".svg";img.alt="";img.width=48;img.height=48;option.append(img);
+      option.addEventListener("click",()=>{family=value;localStorage.setItem("wudict_android_icon_choice",family);for(const item of iconPicker.children)item.setAttribute("aria-pressed",String(item===option));paintIconAutoOption();androidLauncherIconChanged()});iconPicker.append(option);
+    }
+    const iconRow=document.createElement("div");iconRow.className="sys-icon-setting";iconRow.append(iconPicker);body.append(iconRow);
+    const autoRow=document.createElement("label");autoRow.className="sys-row";
+    const autoCheck=document.createElement("input");autoCheck.type="checkbox";autoCheck.className="panel-checkbox";
+    autoCheck.addEventListener("change",()=>{localStorage.setItem("wudict_android_icon_auto",autoCheck.checked?"1":"0");androidLauncherIconChanged()});
+    const autoLabel=document.createElement("span");autoLabel.className="sys-label";autoLabel.textContent=tx("system.appIconAuto");autoRow.append(autoCheck,autoLabel);body.append(autoRow);
+    const iconHint=document.createElement("p");iconHint.className="sys-hint";body.append(iconHint);
+    function paintIconAutoOption(){
+      const autoAvailable=family==="icon2_transparent";
+      autoCheck.disabled=!autoAvailable;autoCheck.checked=autoAvailable&&localStorage.getItem("wudict_android_icon_auto")!=="0";
+      iconHint.textContent=tx(autoAvailable?"system.appIconAutoHint":"system.appIconFixedHint");
+    }
+    paintIconAutoOption();
+  }
   if(window.wudictWindowsShell===true){
     const trayHeading=document.createElement("h3");trayHeading.className="sys-head";trayHeading.textContent=tx("system.closeToTrayHeading");body.append(trayHeading);
     const trayRow=document.createElement("label");trayRow.className="sys-row";
@@ -4981,20 +5080,20 @@ async function showDesktopSysSettings(){
   messagesHeading.textContent=tx("system.messages");body.append(messagesHeading);
   const messagesHint=document.createElement("p");messagesHint.className="sys-hint";
   messagesHint.textContent=tx("system.messagesHint");body.append(messagesHint);
-  body.append(desktopSystemNodes.info);
-  $("sysInfo").checked=!quietMessages;
+  body.append(systemSettingsNodes.info);
+  if(!window.wudictAndroidShell)$("sysInfo").checked=!quietMessages;
   const cacheHeading=document.createElement("h3");cacheHeading.className="sys-head";
   cacheHeading.textContent=tx("system.cache");body.append(cacheHeading);
   const cacheHint=document.createElement("p");cacheHint.className="sys-hint";
   cacheHint.textContent=tx("system.cacheHint");body.append(cacheHint);
-  body.append(desktopSystemNodes.clearCache,desktopSystemNodes.resultCacheHeading,desktopSystemNodes.resultCacheHint,
-    desktopSystemNodes.resultCacheRow,desktopSystemNodes.returnCacheStorage,desktopSystemNodes.returnCacheHint,
-    desktopSystemNodes.combinedLimit,desktopSystemNodes.combinedLimitHint);
+  body.append(systemSettingsNodes.clearCache,systemSettingsNodes.resultCacheHeading,systemSettingsNodes.resultCacheHint,
+    systemSettingsNodes.resultCacheRow,systemSettingsNodes.returnCacheStorage,systemSettingsNodes.returnCacheHint,
+    systemSettingsNodes.combinedLimit,systemSettingsNodes.combinedLimitHint);
   syncSearchReturnCacheUI();
   syncResultCacheLimitUI();
   syncCombinedDictionaryLimitUI();
-  body.append(desktopSystemNodes.searchHeading,desktopSystemNodes.searchHint,
-    desktopSystemNodes.searchFTS,desktopSystemNodes.searchTrigram);
+  body.append(systemSettingsNodes.searchHeading,systemSettingsNodes.searchHint,
+    systemSettingsNodes.searchFTS,systemSettingsNodes.searchTrigram);
   $("sysMergedFTS").checked=wildcardSearchIndexEnabled("fts");
   $("sysMergedTrigram").checked=wildcardSearchIndexEnabled("trigram");
   const indexingHeading=document.createElement("h3");indexingHeading.className="sys-head";
@@ -5002,7 +5101,7 @@ async function showDesktopSysSettings(){
   const indexingModeLabel=document.createElement("label");indexingModeLabel.className="sys-row sys-num sys-indexing-mode";
   const indexingModeText=document.createElement("span");indexingModeText.className="sys-label";indexingModeText.textContent=tx("system.indexingMode");
   const indexingModeSelectWrap=document.createElement("span");indexingModeSelectWrap.className="panel-select-wrap panel-dropdown sys-indexing-mode-select";
-  const indexingModeSelect=document.createElement("select");indexingModeSelect.id="desktopSysIndexingMode";
+  const indexingModeSelect=document.createElement("select");indexingModeSelect.id="systemSettingsIndexingMode";
   for(const [value,key] of [["parallel-dictionaries-single-worker","system.indexingModeParallel"],["adaptive","system.indexingModeAdaptive"]]){
     const option=document.createElement("option");option.value=value;option.textContent=tx(key);indexingModeSelect.append(option);
   }
@@ -5013,14 +5112,17 @@ async function showDesktopSysSettings(){
   logHeading.textContent=tx("system.logFile");body.append(logHeading);
   const logHint=document.createElement("p");logHint.className="sys-hint";
   logHint.textContent=tx("system.logHint");body.append(logHint);
-  body.append(desktopSystemNodes.logEnabled,desktopSystemNodes.logBase,desktopSystemNodes.logWeb,
-    desktopSystemNodes.searchArticleDiagnostics,desktopSystemNodes.articlePageCacheDiagnostics);
+  body.append(systemSettingsNodes.logEnabled,systemSettingsNodes.logBase,systemSettingsNodes.logWeb,
+    systemSettingsNodes.searchArticleDiagnostics,systemSettingsNodes.articlePageCacheDiagnostics);
+  if(diagnosticControl)body.append(diagnosticControl.row,diagnosticControl.hint);
   const desktopLog=desktopSystemLogOptions();
-  $("sysLogEnabled").checked=desktopLog.enabled;
-  $("sysLogBase").checked=desktopLog.baseEvents;
-  $("sysLogWeb").checked=desktopLog.webEvents;
-  $("sysLogBase").disabled=!desktopLog.enabled;
-  $("sysLogWeb").disabled=!desktopLog.enabled;
+  if(!window.wudictAndroidShell){
+    $("sysLogEnabled").checked=desktopLog.enabled;
+    $("sysLogBase").checked=desktopLog.baseEvents;
+    $("sysLogWeb").checked=desktopLog.webEvents;
+    $("sysLogBase").disabled=!desktopLog.enabled;
+    $("sysLogWeb").disabled=!desktopLog.enabled;
+  }
   $("sysSearchArticleDiagnostics").checked=searchArticleDiagnosticsEnabled();
   $("sysArticlePageCacheDiagnostics").checked=articlePageCacheDiagnosticsEnabled();
   const diagnosticsLabel=document.createElement("label");diagnosticsLabel.className="sys-row";
@@ -5053,15 +5155,25 @@ async function showDesktopSysSettings(){
   folderDiagnostics.addEventListener("change",()=>setFolderDiagnostics(folderDiagnostics.checked));
   const folderText=document.createElement("span");folderText.className="sys-label";folderText.textContent=tx("system.folderDiagnostics");
   folderLabel.append(folderDiagnostics,folderText);body.append(folderLabel);
-  const desktopNote=document.createElement("p");desktopNote.className="sys-note";desktopNote.id="desktopSysNote";desktopNote.setAttribute("aria-live","polite");body.append(desktopNote);
-  desktopSysFoldSections(body);
+  const desktopNote=document.createElement("p");desktopNote.className="sys-note";desktopNote.id="systemSettingsNote";desktopNote.setAttribute("aria-live","polite");body.append(desktopNote);
+  systemSettingsFoldSections(body);
   syncSystemSettingSwitches(body);
+  systemSettingsDiagnostic("render_complete");
+  }catch(error){
+    console.error("Could not render System Settings",error);
+    systemSettingsDiagnostic("render_error",error);
+    if(renderToken===systemSettingsRenderToken&&dialog.open){
+      body.replaceChildren();
+      if(diagnosticControl)body.append(diagnosticControl.row,diagnosticControl.hint);
+      const failure=document.createElement("p");failure.className="sys-hint";
+      try{failure.textContent=tx("system.desktopLoadFailed")}catch(_){failure.textContent="Could not read the application settings."}
+      body.append(failure);
+    }
+  }
 }
-$("editSysSettings").onclick=()=>window.wudictAndroidShell?showSysSettings():showDesktopSysSettings();
-$("desktopSysClose").onclick=()=>$("desktopSysSettings").close();
-$("desktopSysSettings").addEventListener("close",()=>$("editSysSettings").focus());
-$("closeSysSettings").onclick=()=>$("sysSettings").close();
-$("sysSettings").addEventListener("close",()=>$("editSysSettings").focus());
+$("editSysSettings").onclick=()=>showSystemSettings();
+$("systemSettingsClose").onclick=()=>$("systemSettingsDialog").close();
+$("systemSettingsDialog").addEventListener("close",()=>{systemSettingsRenderToken++;$("editSysSettings").focus()});
 $("sysToolbar").addEventListener("change",e=>sysSwitch("toolbar",e.target.checked));
 $("sysShare").addEventListener("change",e=>sysSwitch("share",e.target.checked));
 $("sysLink").addEventListener("change",e=>sysSwitch("link",e.target.checked));
@@ -5676,7 +5788,7 @@ $("sysClearCache").onclick=()=>{
    is left, so it cannot resurrect a window the reader has since closed. */
 const OVERLAY_KEY="wudict_overlays";
 function rememberOverlays(){
-  const open=["panel","dictSettings","groupEditor","newGroupDialog","sysSettings"].filter(id=>{
+  const open=["panel","dictSettings","groupEditor","newGroupDialog","systemSettingsDialog"].filter(id=>{
     const el=$(id);
     return el&&(id==="panel"?el.classList.contains("show"):el.open);
   });
@@ -5690,13 +5802,13 @@ function reopenOverlays(){
   // window shows, and the panel's snapshot goes with them
   if(want.includes("panel"))showPanel();
   if(want.includes("dictSettings"))showDictSettings();
-  else if(want.includes("sysSettings"))showSysSettings();
+  else if(want.includes("systemSettingsDialog")||want.includes("sysSettings"))showSystemSettings();
   else if(want.includes("groupEditor"))$("editGroups").click();
 }
 window.addEventListener("pagehide",rememberOverlays);
 window.addEventListener("pageshow",e=>{
   if(e.persisted){
-    for(const id of["dictSettings","groupEditor","newGroupDialog","sysSettings"]){
+    for(const id of["dictSettings","groupEditor","newGroupDialog","systemSettingsDialog"]){
       const d=$(id);
       if(d&&d.open){d.close();d.showModal()}
     }
@@ -5744,8 +5856,8 @@ function pathHTML(p){
    short form appearing at an arbitrary later moment is worse than never
    having it. Errors are swallowed: no aliases means full paths, which is a
    correct fallback, not a failure. */
-async function loadConfig(){
-  try{ cfgInfo=await (await apiFetch("/api/config")).json() }catch(e){}
+async function loadConfig(onError){
+  try{ cfgInfo=await (await apiFetch("/api/config")).json() }catch(e){if(onError)onError(e)}
   if(cfgInfo&&cfgInfo.canExit&&!window.wudictNativeShell){
     window.wudictDesktopAppearance=true;
     appearanceRequest({action:"get"});
@@ -5755,9 +5867,9 @@ async function loadConfig(){
 async function loadFolders(){
   if(!await loadConfig())return;
   const c=cfgInfo,b=$("folderBody");
-  if(c.canExit){
+  if(c.canExit||window.wudictAndroidGo){
     $("sysSection").hidden=false;$("exitSection").hidden=false;
-    $("editSysSettings").title=tx("panel.desktopSystemHint");
+    if(c.canExit&&!window.wudictAndroidGo)$("editSysSettings").title=tx("panel.desktopSystemHint");
   }
   $("rescanBtn").disabled=!c.canDelete;
   const n=(c.roots||[]).length;
