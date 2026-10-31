@@ -985,7 +985,7 @@
   "search.progress": "Searched {done} of {total} dictionaries",
   "search.countingArticles": "Counting matching articles…",
   "search.dictionaryFoundCount": "{found} of {total}",
-  "search.dictionaryPickerGroupCount": "{name} {found} of {total}",
+  "search.dictionaryPickerGroupCount": "{name} {found} ({total})",
   "work.backgroundProgress": "Background task progress",
   "search.fullListUnavailable": "Complete list unavailable",
   "search.stop": "Stop",
