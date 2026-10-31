@@ -757,7 +757,7 @@ final class Shell {
                 if ("wudict:launcher-icon".equals(message)) {
                     try {
                         org.json.JSONObject request = new org.json.JSONObject(defaultValue);
-                        LauncherIcon.set(a, request.optString("family", "icon2"), request.optBoolean("automatic", true));
+                        LauncherIcon.set(a, request.optString("family", "icon2_transparent"));
                         result.confirm("ok");
                     } catch (Exception error) {
                         SystemLog.warn(TAG, "could not change launcher icon", error);
