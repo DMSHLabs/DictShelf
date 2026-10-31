@@ -184,8 +184,11 @@ public class MainActivity extends Activity {
             if (Build.VERSION.SDK_INT >= 31) {
                 RoundedCorner left = insets.getRoundedCorner(RoundedCorner.POSITION_BOTTOM_LEFT);
                 RoundedCorner right = insets.getRoundedCorner(RoundedCorner.POSITION_BOTTOM_RIGHT);
-                if (left != null) statusBarEdge = Math.max(statusBarEdge, left.getRadius());
-                if (right != null) statusBarEdge = Math.max(statusBarEdge, right.getRadius());
+                int radius = Math.max(left == null ? 0 : left.getRadius(),
+                        right == null ? 0 : right.getRadius());
+                // Keep the controls outside the curved glass, without using the
+                // full corner radius as a horizontal gutter.
+                statusBarEdge = Math.max(statusBarEdge, Math.min(dp(12), radius / 3));
             }
             publishStatusBarEdge(statusBarEdge);
             if (Build.VERSION.SDK_INT >= 30) {
