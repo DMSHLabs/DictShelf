@@ -103,8 +103,10 @@ func restoreAndFocusWindow(hwnd uintptr) {
 		swRestore             = 9
 		monitorDefaultNearest = 2
 		swpNoSize             = 0x0001
+		swpNoMove             = 0x0002
 		swpNoZOrder           = 0x0004
 		swpNoActivate         = 0x0010
+		swpShowWindow         = 0x0040
 	)
 	showWindow.Call(hwnd, swRestore)
 	desktopReapplyTaskbarIcon(hwnd)
@@ -136,6 +138,10 @@ func restoreAndFocusWindow(hwnd uintptr) {
 			}
 		}
 	}
+	// Put the restored window at the top of the normal Z order and activate it.
+	// This complements SetForegroundWindow for restores triggered by the global
+	// keyboard hook, which runs outside WebView2's UI thread.
+	setWindowPos.Call(hwnd, 0, 0, 0, 0, 0, swpNoMove|swpNoSize|swpShowWindow)
 	setForegroundWindow.Call(hwnd)
 }
 
