@@ -82,14 +82,28 @@ func refreshIndexParallelism() int {
 		if n := processAllowedCPUs(); n > 0 {
 			logical = n
 		}
-		active := min(logical, min(4, max(2, logical/2)))
-		SetActiveProcs(max(1, active))
+		indexLogicalCPUs.Store(int32(max(1, logical)))
+		store.SetIngestParallelismCPUCount(logical)
+		SetActiveProcs(max(1, logical-1)) // leave one allowed CPU for Android and the reader
+		return logical
 	}
 	indexLimit.SetLimit(indexconst.IndexDictionaryLimit(logical))
 	parallelDictionaryIndexLimit.SetLimit(max(1, logical-1))
 	indexLogicalCPUs.Store(int32(logical))
 	store.SetIngestParallelismCPUCount(logical)
 	return logical
+}
+
+// updateIndexParallelismLimits applies the current Go scheduler cap to the
+// dictionary queues. A thermal or power-save change can lower these while a
+// user-started indexing operation is already running.
+func updateIndexParallelismLimits(logical, gomaxprocs int) {
+	if logical < 1 || gomaxprocs < 1 {
+		return
+	}
+	effectiveLogical := min(logical, gomaxprocs+1) // GOMAXPROCS already reserves one CPU
+	indexLimit.SetLimit(indexconst.IndexDictionaryLimit(effectiveLogical))
+	parallelDictionaryIndexLimit.SetLimit(max(1, min(logical-1, gomaxprocs)))
 }
 
 func currentIndexCPUCount() int {

@@ -40,10 +40,16 @@ const (
 	// every reopenable handle is dropped - but prepared databases stay open,
 	// because they cost ~nothing and returning must be instant.
 	PowerBackground
-	// PowerRestricted: the platform is unhappy - memory pressure, a thermal
-	// warning, or battery saver. Everything closes, including prepared
-	// databases; the process keeps only its listener.
+	// PowerRestricted: Android reports critical memory pressure. Everything
+	// closes, including prepared databases; the process keeps only its listener.
 	PowerRestricted
+	// PowerSaving: Android's battery saver is enabled. User-requested work is
+	// permitted at a reduced CPU ceiling even while the screen remains visible.
+	PowerSaving
+	// PowerThermalModerate and PowerThermalSevere carry Android's thermal
+	// severity separately so active indexing can be throttled immediately.
+	PowerThermalModerate
+	PowerThermalSevere
 )
 
 func (p Power) String() string {
@@ -52,6 +58,12 @@ func (p Power) String() string {
 		return "background"
 	case PowerRestricted:
 		return "restricted"
+	case PowerSaving:
+		return "saving"
+	case PowerThermalModerate:
+		return "thermal-moderate"
+	case PowerThermalSevere:
+		return "thermal-severe"
 	default:
 		return "active"
 	}
@@ -66,6 +78,12 @@ func ParsePower(s string) (Power, bool) {
 		return PowerBackground, true
 	case "restricted", "critical":
 		return PowerRestricted, true
+	case "saving":
+		return PowerSaving, true
+	case "thermal-moderate":
+		return PowerThermalModerate, true
+	case "thermal-severe":
+		return PowerThermalSevere, true
 	}
 	return PowerActive, false
 }
@@ -87,15 +105,14 @@ func CurrentPower() Power { return Power(powerState.Load()) }
 // a performance regression nobody asked for.
 var activeProcs atomic.Int32
 
-// SetActiveProcs puts the process under power-managed parallelism: n cores
-// while active, one while not. Called at startup on the platforms that want it.
+// SetActiveProcs stores the active CPU ceiling and immediately reapplies the
+// current power and thermal state. Android refreshes it at indexing boundaries.
 func SetActiveProcs(n int) {
 	if n < 1 {
 		return
 	}
 	activeProcs.Store(int32(n))
-	runtime.GOMAXPROCS(n)
-	updateIngestParallelismPolicy(CurrentPower())
+	applyProcs(CurrentPower())
 }
 
 // demandHold counts operations a person is currently waiting on: an index
@@ -172,10 +189,24 @@ func applyProcs(p Power) {
 		updateIngestParallelismPolicy(p)
 		return
 	}
-	if p != PowerActive && demandHold.Load() == 0 {
-		n = 1 // a background process must never look like a busy one
+	switch p {
+	case PowerBackground, PowerRestricted:
+		if p == PowerRestricted || demandHold.Load() == 0 {
+			n = 1
+		}
+	case PowerSaving:
+		if demandHold.Load() == 0 {
+			n = 1
+		} else {
+			n = max(1, min(n, currentIndexCPUCount()/2))
+		}
+	case PowerThermalModerate:
+		n = max(1, (n+1)/2)
+	case PowerThermalSevere:
+		n = 1
 	}
 	runtime.GOMAXPROCS(n)
+	updateIndexParallelismLimits(currentIndexCPUCount(), n)
 	updateIngestParallelismPolicy(p)
 }
 
@@ -348,7 +379,7 @@ func (r *Registry) SetPower(p Power) {
 	// to be used. Prepared databases survive PowerBackground because reopening
 	// one costs milliseconds and holding it costs a page cache we bound
 	// elsewhere; under PowerRestricted even that is too much.
-	if freed := r.shed(p == PowerRestricted); freed > 0 {
+	if freed := r.shed(p == PowerRestricted || p == PowerThermalModerate || p == PowerThermalSevere); freed > 0 {
 		logx.V("power: released ~%d MB entering %s", freed>>20, p)
 	}
 }
@@ -390,7 +421,7 @@ func (s *Server) handlePower(w http.ResponseWriter, r *http.Request) {
 	}
 	p, ok := ParsePower(r.URL.Query().Get("state"))
 	if !ok {
-		httpErr(w, 400, "state must be active, background or restricted")
+		httpErr(w, 400, "state must be active, background, saving, restricted, thermal-moderate or thermal-severe")
 		return
 	}
 	s.reg.SetPower(p)
