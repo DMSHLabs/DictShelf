@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/htmlref"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 	"github.com/DMSHLabs/DictShelf/internal/lang"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
 	"github.com/DMSHLabs/DictShelf/internal/search"
@@ -126,8 +126,6 @@ type SearchEvent struct {
 	To   string `json:"to,omitempty"`
 	Lang string `json:"lang,omitempty"`
 }
-
-const demandSearchBudget = 5 * time.Minute
 
 // Search runs one lookup and serializes progressive events to emit. Both the
 // HTTP adapter and the native bridge use this method without a listener.
@@ -391,12 +389,12 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	}
 
 	// The ceiling exists to stop ONE slow dictionary from holding a wide
-	// fan-out open, and 30 s is right for that. It is the wrong shape for a
-	// search of a single named dictionary: there is nothing to fan out, the
-	// user chose this one, and an unprepared dictionary searched through its
-	// own format on a phone can legitimately take longer than that to answer.
-	// Cutting it off there produced a timeout instead of a result.
-	budget := 30 * time.Second
+	// fan-out open. It is the wrong shape for a search of a single named
+	// dictionary: there is nothing to fan out, the user chose this one, and an
+	// unprepared dictionary searched through its own format on a phone can
+	// legitimately take longer than that to answer. Cutting it off there
+	// produced a timeout instead of a result - see indexconst for both clocks.
+	budget := indexconst.SearchFanoutBudget
 	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	if request.Suggestions && mode == search.Wildcards {

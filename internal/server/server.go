@@ -1492,12 +1492,6 @@ func searchEventFromStream(event streamMsg) SearchEvent {
 	return SearchEvent{T: event.T, Slots: slots, I: event.I, Dict: event.Dict, Name: event.Name, Results: event.Results, Skipped: event.Skipped, Error: event.Error, Rung: event.Rung, Term: event.Term, CacheID: event.CacheID, Total: event.Total, Complete: event.Complete, Start: event.Start, HasNext: event.HasNext, Deferred: event.Deferred, Bytes: event.Bytes, Indexing: event.Indexing, From: event.From, To: event.To, Lang: event.Lang}
 }
 
-// singleSearchBudget is how long a search of ONE named dictionary may take
-// before it is cut off. Generous rather than unlimited: the request still holds
-// a goroutine and an open backend, so it needs an end, but the end is there to
-// catch a wedged backend, not to police a slow one.
-const singleSearchBudget = 5 * time.Minute
-
 // queryFlag reads a boolean query parameter, and is where every one of them is
 // read, so a spelling means the same thing on every route. sent reports that
 // the parameter was given at all, for a caller that keeps a state the request
@@ -1754,14 +1748,11 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return m
 	}
 
-	// The ceiling exists to stop ONE slow dictionary from holding a wide
-	// fan-out open, and 30 s is right for that. It is the wrong shape for a
-	// search of a single named dictionary: there is nothing to fan out, the
-	// user chose this one. A longer budget avoids timing out a slow but prepared
-	// database while it answers.
-	budget := 30 * time.Second
+	// A fan-out over the library and a search of one named dictionary answer
+	// different questions, so they get different clocks - see indexconst.
+	budget := indexconst.SearchFanoutBudget
 	if single {
-		budget = singleSearchBudget
+		budget = indexconst.SingleSearchBudget
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), budget)
 	defer cancel()
