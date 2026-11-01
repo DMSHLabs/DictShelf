@@ -13,7 +13,6 @@ package zim
 import (
 	"fmt"
 	"io"
-	"sort"
 	"strings"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
@@ -145,13 +144,10 @@ func (d *Dict) FullText(query string, limit int) ([]dict.Result, error) {
 	// be found back in the archive's own directory. A path the archive does not
 	// hold is skipped: the index can name an article that has since been
 	// dropped, and one stale entry is not a failed search.
-	hits := append([]glass.Hit(nil), res.Hits...)
-	sort.SliceStable(hits, func(i, j int) bool {
-		if hits[i].WDF != hits[j].WDF {
-			return hits[i].WDF > hits[j].WDF // the closest thing to relevance here
-		}
-		return hits[i].DocID < hits[j].DocID
-	})
+	// No sorting here: the reader ranks by Xapian's own BM25, so its order is
+	// the order (glass/bm25.go). Re-sorting by how often the words occur is
+	// what put a German list article above the Jazzmusiker article itself.
+	hits := res.Hits
 	// Only the most frequent hits are worth resolving: a common word has over a
 	// million of them, each one a B-tree descent into the directory, and the
 	// answer is the first few. The margin covers the paths that turn out to be

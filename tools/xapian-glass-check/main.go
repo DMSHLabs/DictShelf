@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/format/zim"
@@ -43,6 +44,10 @@ func main() {
 		db.FormatDate, db.Revision, db.BlockSize(), db.Stats.DocCount)
 
 	printMetadata(db)
+	if len(os.Args) > 2 && os.Args[2] == "-doclen" {
+		measureDoclen(db)
+		return
+	}
 	if len(os.Args) > 2 && os.Args[2] == "-chunks" {
 		dumpChunks(db, os.Args[3])
 		return
@@ -116,6 +121,39 @@ func dumpDoc(db *glass.DB, docid uint32) {
 	}
 	fmt.Printf("  [dbg] doc %d элемент: % x\n        размер=%d флаги=%02x ключДлина=%d ключ=% x\n",
 		docid, raw, size, flags, kl, raw[3:3+kl])
+}
+
+// measureDoclen times the read of the document-length list, which is the one
+// extra pass Xapian's own ranking needs: it is stored as a postlist with an
+// empty term name, so the same reader gets it.
+func measureDoclen(db *glass.DB) {
+	if raw, size, flags, kl, err := db.RawItem(glass.TablePostlist, []byte(glass.DocLenTerm)); err == nil && raw != nil {
+		fmt.Printf("  dummy item: % x size=%d flags=%02x keylen=%d\n", raw, size, flags, kl)
+	}
+	raws, keys, rerr := db.RawChunks(glass.DocLenTerm, 3)
+	if rerr != nil {
+		fmt.Println("  chunks:", rerr)
+	}
+	for i := range raws {
+		fmt.Printf("  key=% x tag=% x\n", keys[i], raws[i])
+	}
+	start := time.Now()
+	docids, lens, err := db.DocLengths()
+	if err != nil {
+		fmt.Println("  doclen: ", err)
+		return
+	}
+	var total uint64
+	for _, n := range lens {
+		total += uint64(n)
+	}
+	fmt.Printf("  doclen: %d entries in %v, sum %d, version file says %d\n",
+		len(docids), time.Since(start).Round(time.Millisecond), total, db.Stats.TotalDocLen)
+	if len(docids) > 0 {
+		fmt.Printf("      first %d=%d, last %d=%d, documents %d\n",
+			docids[0], lens[0], docids[len(docids)-1], lens[len(lens)-1], db.Stats.DocCount)
+	}
+
 }
 
 // dumpChunks prints the raw items that continue a term's posting list.

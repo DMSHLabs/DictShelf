@@ -24,12 +24,23 @@ var ErrNoStemmer = errors.New("glass: the index is stemmed for a language this r
 // Hit is one article that contains every word of a query.
 type Hit struct {
 	DocID uint32
-	// WDF is how many times the query's terms occur in the document, which is
-	// enough to order results without reimplementing Xapian's ranking.
+	// WDF is how many times the query's terms occur in the document, added up
+	// over them. It is not what orders results - Score is - but it is the cheap
+	// "how often" behind them, and the one number that survives from a list read
+	// without ranking.
 	WDF uint32
+	// DocLen is the document's length as the index records it, filled while
+	// scoring and zero when the length list could not be read.
+	DocLen uint32
+	// Score is Xapian's own BM25 for this document and this query (bm25.go).
+	// Larger is better. Two hits with the same score are ordered by DocID, so
+	// the answer is stable.
+	Score float64
 }
 
-// Result is a search's answer.
+// Result is a search's answer. Hits are ranked, best first (bm25.go), and
+// callers should keep that order: Score is Xapian's own BM25, and re-sorting by
+// document id or by how often a word occurs throws away the ranking.
 type Result struct {
 	Hits []Hit
 	// Terms are the index terms the query was asked for, after stemming. They
@@ -65,6 +76,10 @@ type indexMeta struct {
 // runs with OP_AND (src/search.cpp). This index stores no positions, so phrases
 // and proximity are not available here; a caller wanting them has to look at
 // the article text.
+//
+// Hits come back ranked, best first, by Xapian's own BM25 (bm25.go) - the
+// ranking the index was built for, and the one that keeps a long article that
+// merely repeats a word from outranking the article that is about it.
 func (db *DB) Search(query string) (Result, error) {
 	words := FoldTerms(query)
 	if len(words) == 0 {
@@ -114,9 +129,10 @@ func (db *DB) Search(query string) (Result, error) {
 		return res, nil // nothing can contain them all
 	}
 
-	// Rarest term first: the accumulator stays as small as the query allows,
-	// and each later list is intersected against it.
+	// Rarest word first: the accumulator stays as small as the query allows, and
+	// each later list is intersected against it.
 	sort.SliceStable(asked, func(i, j int) bool { return asked[i].freq < asked[j].freq })
+	lists := make([][]Hit, len(asked))
 	var acc []Hit
 	for i, w := range asked {
 		hits, empty, err := db.wordHits(w.terms)
@@ -126,8 +142,11 @@ func (db *DB) Search(query string) (Result, error) {
 		if !empty {
 			res.Complete = false
 		}
+		lists[i] = hits
 		if i == 0 {
-			acc = hits
+			// A copy, not the list itself: the intersection writes through its first
+			// argument, and every word's list is needed again for scoring.
+			acc = append([]Hit(nil), hits...)
 		} else {
 			acc = intersect(acc, hits)
 		}
@@ -136,7 +155,34 @@ func (db *DB) Search(query string) (Result, error) {
 			return res, nil
 		}
 	}
-	sort.Slice(acc, func(i, j int) bool { return acc[i].DocID < acc[j].DocID })
+	// Rank by Xapian's own BM25, which needs every document's length - the one
+	// extra pass, walked in step with the hits (bm25.go, rank.go).
+	if err := db.assignDocLengths(acc); err != nil {
+		return Result{}, err
+	}
+	lenFactor := bm25LengthFactor(db.Stats.DocCount, db.Stats.TotalDocLen)
+	for i := range asked {
+		weight := bm25TermWeight(db.Stats.DocCount, asked[i].freq)
+		// A merge, not a lookup per hit: both sides are ascending, so the whole
+		// pass is O(hits + candidates) with nothing allocated.
+		j := 0
+		for k := range acc {
+			for j < len(lists[i]) && lists[i][j].DocID < acc[k].DocID {
+				j++
+			}
+			if j < len(lists[i]) && lists[i][j].DocID == acc[k].DocID {
+				acc[k].Score += bm25Part(weight, lists[i][j].WDF, acc[k].DocLen, lenFactor)
+			}
+		}
+	}
+	// Best first, and by document id within a tie so the answer is stable.
+	sort.SliceStable(acc, func(i, j int) bool {
+		if acc[i].Score != acc[j].Score {
+			return acc[i].Score > acc[j].Score
+		}
+		return acc[i].DocID < acc[j].DocID
+	})
+
 	res.Hits = acc
 	return res, nil
 }
