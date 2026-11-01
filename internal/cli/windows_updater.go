@@ -25,8 +25,8 @@ import (
 	"syscall"
 	"time"
 
-	webview "github.com/jchv/go-webview2"
 	"github.com/DMSHLabs/DictShelf/internal/tray"
+	webview "github.com/jchv/go-webview2"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )

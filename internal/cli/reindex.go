@@ -184,6 +184,12 @@ func reindexOne(f store.Folder, force bool) error {
 		if !headwords {
 			t.Rebuild = store.Always
 		}
+		// An archive with its own full-text index is rebuilt as the title index
+		// even if it holds the read-through form: this is also how the old form
+		// becomes the new one (ownIndexAnswersFullText, dmsh_own_index.go).
+		if full && ownIndexAnswersFullText(f.Source) {
+			full = false
+		}
 	}
 	var title string // the folder is what this command names, not the title
 	hooks := cliHooks(f.Source, &title, full)

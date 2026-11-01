@@ -1898,6 +1898,14 @@ func (e *entry) reconcileLockedContext(ctx context.Context, name string, t store
 		if t.FullText != nil {
 			full = *t.FullText
 		}
+		// An archive that carries its own full-text index is never built in the
+		// read-through form: full text is answered from the archive, so copying
+		// article text into the database to index it there would spend tens of
+		// gigabytes on an index nothing reads (dmsh_own_index.go).
+		if full && archiveAnswersFullText(e.Path) {
+			store.IndexDiagnostic("skip zim read-through source=%q reason=archive-has-its-own-index", e.Path)
+			full = false
+		}
 		if full {
 			// The read-through form: article clusters are decompressed and the
 			// bodies are stored and indexed, which is the only way article text

@@ -34,6 +34,12 @@ func main() {
 	}
 	fmt.Println(path)
 	fmt.Println("  fulltext/xapian, байт:", size)
+	// What the ingest asks before choosing a form.
+	if own, err := zim.HasOwnFullTextIndex(path); err != nil {
+		fmt.Println("  HasOwnFullTextIndex:", err)
+	} else {
+		fmt.Printf("  HasOwnFullTextIndex: %v (title index is what an ingest would build)\n", own)
+	}
 
 	db, err := glass.OpenSource(window, size)
 	if err != nil {

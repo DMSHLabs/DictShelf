@@ -28,6 +28,7 @@ import (
 	"context"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	zimformat "github.com/DMSHLabs/DictShelf/internal/format/zim"
 )
 
 // Caps advertises full text for a prepared database whose archive answers it.
@@ -75,4 +76,18 @@ func (u *upgraded) archiveFullText(ctx context.Context, query string, limit int)
 	}
 	res, err = searcher.FullText(query, limit)
 	return res, true, err
+}
+
+// archiveAnswersFullText reports whether the archive itself carries the
+// full-text index, which is what decides the form of the prepared database the
+// ingest builds: the read-through form exists so that article text can reach an
+// index of ours, and an archive like this needs no such index (see the comment
+// on the decision in registry.go).
+//
+// It opens the archive's container - the header, the MIME list and a directory
+// lookup - and nothing else: no article is decompressed, and the index itself
+// is not read.
+func archiveAnswersFullText(path string) bool {
+	own, err := zimformat.HasOwnFullTextIndex(path)
+	return err == nil && own
 }

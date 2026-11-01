@@ -1059,6 +1059,12 @@ func ingestOne(srcPath, out string, full bool, pf planFlags) error {
 // it states one, otherwise the form the folder already holds, so a plain
 // rebuild cannot silently drop a read-through index that is already there.
 func ingestArticles(src string, want *bool) bool {
+	if dir, ok := store.LookupDir(src); ok {
+		if _, articles := store.ZIMForm(store.Inspect(store.TextDBPath(dir)).Meta); articles && ownIndexAnswersFullText(src) {
+			fmt.Printf("  %s carries its own full-text index: the title index is what will be built\n", filepath.Base(src))
+			return false
+		}
+	}
 	if want != nil {
 		return *want
 	}
@@ -1067,6 +1073,14 @@ func ingestArticles(src string, want *bool) bool {
 		return articles
 	}
 	return false
+}
+
+// ownIndexAnswersFullText reports whether the archive carries the full-text
+// index itself, which is what makes the read-through form pointless: full text
+// is answered from the archive (dmsh_own_index.go, and internal/format/zim).
+func ownIndexAnswersFullText(path string) bool {
+	own, err := zimformat.HasOwnFullTextIndex(path)
+	return err == nil && own
 }
 
 // cliHooks reports progress on the terminal and, when the source is read,
