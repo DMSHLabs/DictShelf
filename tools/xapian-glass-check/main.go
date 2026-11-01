@@ -1,6 +1,7 @@
 // Temporary diagnostic: read Kiwix's own full-text index (X/fulltext/xapian)
-// from a ZIM archive with internal/format/zim/glass - the byte range part is
-// local to this tool until the container grows an API for it.
+// from a ZIM archive with internal/format/zim/glass, and check what it says
+// against the archive itself. The byte-range part is local to this tool until
+// the container grows an API for it.
 package main
 
 import (
@@ -9,7 +10,9 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
+	"github.com/DMSHLabs/DictShelf/internal/format/zim"
 	"github.com/DMSHLabs/DictShelf/internal/format/zim/glass"
 )
 
@@ -24,42 +27,76 @@ func main() {
 		fmt.Println("blob:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("%s\n  fulltext/xapian: %d байт\n", path, len(blob))
+	fmt.Println(path)
+	fmt.Println("  fulltext/xapian, байт:", len(blob))
 
 	db, err := glass.Open(blob)
 	if err != nil {
 		fmt.Println("glass.Open:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("  формат=%d ревизия=%d uuid=%x блок=%d\n",
-		db.FormatDate, db.Revision, db.UUID[:4], db.BlockSize())
-	fmt.Printf("  документов=%d последний id=%d суммарная длина=%d\n",
-		db.Stats.DocCount, db.Stats.LastDocID, db.Stats.TotalDocLen)
-	for i, r := range db.Roots {
-		fmt.Printf("  таблица %d: корень=%d уровень=%d записей=%d\n", i, r.Block, r.Level, r.Entries)
+	fmt.Printf("  формат=%d ревизия=%d блок=%d документов=%d\n",
+		db.FormatDate, db.Revision, db.BlockSize(), db.Stats.DocCount)
+
+	article, err := zim.Open(path)
+	if err != nil {
+		fmt.Println("zim.Open:", err)
+		os.Exit(1)
 	}
+	defer article.Close()
 
 	terms := os.Args[2:]
 	if len(terms) == 0 {
-		terms = []string{"Zджаз", "джаз", "Zкларнетист", "кларнетист"}
+		terms = []string{"кларнетист", "джаз"}
 	}
 	for _, term := range terms {
-		tag, found, err := db.Find(glass.TablePostlist, []byte(term))
-		switch {
-		case err != nil:
-			fmt.Printf("  %-14q ошибка: %v\n", term, err)
-		case !found:
-			fmt.Printf("  %-14q нет такого терма\n", term)
-		case len(tag) == 0:
-			fmt.Printf("  %-14q найден, тег пустой\n", term)
-		default:
-			n := len(tag)
-			if n > 12 {
-				n = 12
+		if raw, size, flags, kl, err := db.RawItem(glass.TablePostlist, []byte(term)); err == nil && raw != nil {
+			fmt.Printf("  [dbg] %q элемент: % x размер=%d флаги=%02x ключДлина=%d\n", term, raw, size, flags, kl)
+		}
+		t, err := db.Lookup(term)
+		if err != nil {
+			fmt.Printf("  %q: %v\n", term, err)
+			continue
+		}
+		if t.DocFreq == 0 {
+			fmt.Printf("  %q: нет такого терма\n", term)
+			continue
+		}
+		note := ""
+		if !t.Complete {
+			note = " (первый кусок из нескольких)"
+		}
+		fmt.Printf("  %q: документов %d, вхождений %d, прочитано %d%s\n",
+			term, t.DocFreq, t.CollFreq, len(t.Postings), note)
+		for i, p := range t.Postings {
+			if i >= 3 {
+				break
 			}
-			fmt.Printf("  %-14q найден, тег %d байт, начало % x\n", term, len(tag), tag[:n])
+			apath, err := db.DocPath(p.DocID)
+			if err != nil {
+				fmt.Printf("      doc %d: %v\n", p.DocID, err)
+				continue
+			}
+			fmt.Printf("      doc %-8d wdf=%-4d путь=%q", p.DocID, p.WDF, apath)
+			if body, err := articleText(article, apath); err != nil {
+				fmt.Printf("  (статью не открыть: %v)\n", err)
+			} else if strings.Contains(strings.ToLower(body), strings.ToLower(term)) {
+				fmt.Printf("  ← слово есть в статье (%d байт)\n", len(body))
+			} else {
+				fmt.Printf("  ← СЛОВА В СТАТЬЕ НЕТ (%d байт)\n", len(body))
+			}
 		}
 	}
+}
+
+// articleText fetches an article by the path the index gave us.
+func articleText(d *zim.Dict, path string) (string, error) {
+	name := strings.TrimPrefix(path, "C/")
+	res, err := d.Exact(name, 1)
+	if err != nil || len(res) == 0 {
+		return "", fmt.Errorf("нет статьи по пути %q", path)
+	}
+	return string(res[0].Body), nil
 }
 
 // entryBlob returns the bytes of one X/ entry, parsing the ZIM header, the
@@ -112,12 +149,12 @@ func entryBlob(path, want string) ([]byte, error) {
 		if p < 0 || string(rest[:p]) != want {
 			continue
 		}
-		return readBlob(f, size, sorted, starts[cluster], blobIdx)
+		return readBlob(f, size, starts[cluster], blobIdx)
 	}
 	return nil, fmt.Errorf("записи %q в архиве нет", want)
 }
 
-func readBlob(f *os.File, size uint64, sorted []uint64, start uint64, want uint32) ([]byte, error) {
+func readBlob(f *os.File, size uint64, start uint64, want uint32) ([]byte, error) {
 	info := make([]byte, 1)
 	if _, err := f.ReadAt(info, int64(start)); err != nil {
 		return nil, err
