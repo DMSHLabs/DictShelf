@@ -402,6 +402,55 @@ multi-file shape. If we take this path the code belongs in our own package besid
 a byte range rather than a `[]byte`, with Xapian built **locally as a test oracle** and never shipped,
 because a reader of our own makes compatibility our burden and its failures silent.
 
+## The glass format, as read off Xapian 1.4.32 (written down before the code)
+
+Everything below is from `D:/Projects/Android/xapian-core` and was checked byte by byte against the
+`fulltext/xapian` blob of the Russian Wiktionary, so a reader can be written from this section alone.
+
+**Integers.** `pack_uint` is LEB128 (7 bits per byte, high bit continues). `pack_string` is a packed
+length then the bytes. All values *inside blocks* are **big-endian** (`aligned_read4`, `unaligned_read2`).
+
+**Version file, at the start of the blob** (`glass_version.cc`): magic `0f 0d "Xapian Glass"` (14 bytes),
+then the format version (2 bytes, big-endian, `GLASS_FORMAT_VERSION`), then the database uuid (16 bytes),
+then `pack_uint(revision)`, then **six** `RootInfo` records in table order (postlist, docdata, termlist,
+position, spelling, synonym), then the statistics. A `RootInfo` is: `pack_uint(root)`, `pack_uint(level << 2
+| sequential << 1 | root_is_fake)`, `pack_uint(num_entries)`, `pack_uint(blocksize >> 11)`,
+`pack_uint(compress_min)`, `pack_string(free_list)`. The statistics are eight packed integers: doccount,
+last_docid - doccount, doclen_lbound, wdf_ubound, doclen_ubound - wdf_ubound, oldest_changeset,
+total_doclen, spelling_wordfreq_ubound. Each `RootInfo` carries the block size, so the version file needs
+no separate field.
+
+**Blocks** (`glass_table.cc`): `read_block(n)` reads at `offset + n * block_size`, where `offset` is the
+descriptor position when the database was opened - for libzim that is the blob's offset inside the ZIM
+(`src/tools.cpp:320` seeks and hands the fd to `Xapian::Database(fd)`), and for our own reader it is 0 at
+the blob's first byte. **Block numbers are global to the file** and shared by all six tables: that is the
+single-file layout, and it is exactly what a multi-file-shaped reader gets wrong (gozim's
+"root block 571 not found"). Block 0 is unused (`blockNone`), so block 1 starts at `block_size`.
+A block's header is 11 bytes: revision (4, BE), level (1 - 254 means freelist), MAX_FREE (2, BE),
+TOTAL_FREE (2, BE), DIR_END (2, BE). The directory follows the header: 2-byte big-endian item offsets at
+11, 13, 15, ... below `DIR_END`, ascending by key, each giving the item's offset in the block. Items are
+packed downward from the end of the block.
+
+**Items.** A *leaf* item (level 0) is `I2 K1 key [X2] tag`: `I2` is the item size in 2 bytes whose top
+three bits are flags (`0x80` tag is compressed, `0x40` last component, `0x20` first component); a
+component other than the first carries `X2`, its 2-byte counter. A *branch* item (level > 0) is
+`block(4, BE) K1 key X2` where the leading four bytes are the child's block number and `size() = key_len +
+1 + 2 + 4`. The compression flag means the tag is zlib-deflated above `compress_min`.
+
+**Checked on the real file**: block 571 of the postlist table (at 571 * 8192 bytes into the blob) has
+revision 1, level 2, directory from 11 to 323 (156 items) with item offsets 8185, 8172, 8159, ... spaced
+by 13 bytes, and block 1 has level 0 with eight 13-byte leaf items - all consistent with the layout above.
+So the addressing model is confirmed, not guessed.
+
+**What is still to implement** (in `internal/format/zim/glass`, our own package): the version parser and
+this block/table layer first (that is the fix gozim never had), then the postlist chunk decoding
+(`glass_postlist.cc`: termfreq, collfreq and the docid deltas; no positions exist, libzim indexed with
+`index_text_without_positions`), then the docdata table for docid -> article path, then the query side:
+unaccent (ICU-equivalent - libzim's own step, see `src/tools.cpp`), tokenize, drop stopwords, stem with
+snowball for the archive's language, and intersect the posting lists (`OP_AND`). The corpus to check
+against is the user's four archives; the oracle to check *correctness* against is Xapian 1.4.32 built
+locally, never shipped.
+
 - With the local MinGW GCC 13.1.0, `go test -tags sqlite_fts5 -trimpath ./... -count=1`, `go vet -tags sqlite_fts5 -trimpath ./...`, and `go build -tags sqlite_fts5 -trimpath ./...` pass after removing the duplicate LSD implementation. Real-dictionary integration and Windows/Android UI checks remain unverified.
 - Android runs Go through JNI without an HTTP listener; Windows listenerless desktop uses WebView2 and a native bridge. Build recipes are in `docs/WINDOWS-VERIFY.md`; Android uses `build-android.cmd debug intel`. Do not install APKs or commit unless requested.
 - Windows/Android search, index maintenance and visual checks remain pending. Other open items include portable Windows write-path gaps (`docs/PORTABLE-WRITES-AUDIT.md`), Edit Folders verification, icon visibility and MDX ad-slot reindex/display.
