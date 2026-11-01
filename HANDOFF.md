@@ -378,10 +378,30 @@ not a window. The ZIM skip and its `dictUI.bulkZimSkipped` string are now dead o
 
 Not verified: the dialog has never been rendered - this machine has no browser automation (see the
 Playwright note above), so the JS is only checked by `tools/i18n-test.cjs` (syntax + keys) and the
-layout by eye in the source. Also unverified on a real archive: that removing full text really drops a
-ZIM's bodies (by the code the reader is chosen by the request, so it rebuilds title-only and frees
-them - the page's promise of freed space rests on that) and that the CSS block scoped inside the
-dialog is the right place for those rules rather than app.css.
+layout by eye in the source, and that the CSS block scoped inside the dialog is the right place for
+those rules rather than app.css.
+
+**What removing full text frees, measured without removing anything** (2026-11-01). SQLite's own page
+accounting (`dbstat`, read-only) gives the sizes inside the four prepared ZIM databases, and the article
+index is exactly the space a removal frees - `ClearSearchIndexesContext` drops `article_fts` and
+vacuums:
+
+| archive | text.db | our article_fts | headword fts | trigram | bodies (entry + its indexes) |
+| --- | --- | --- | --- | --- | --- |
+| wiktionary_ru 2026-09 | 9 645 MB | **1 291 MB** | 20 MB | 22 MB | 8 018 MB |
+| wikipedia_ru 2026-10 | 33 439 MB | **7 414 MB** | 33 MB | 61 MB | 24 830 MB |
+| wiktionary_en 2026-08 | 25 265 MB | **4 556 MB** | 101 MB | 128 MB | 19 946 MB |
+| wikipedia_de 2026-10 | 35 044 MB | **9 213 MB** | 44 MB | 82 MB | 25 059 MB |
+
+The first three match the figures the earlier measurement passes recorded (1.29, 7.41 and 9.21 - GB,
+not GiB as that note said), so the estimate the window shows for a ZIM is anchored to measurements that
+a second, independent method reproduces. Two things that paragraph above had wrong, both worth knowing
+before trusting the button: the **bodies are NOT freed** by removing full text - 8-25 GB of stored
+articles stay, and they go only when the request asks for a rebuild (`index: true`, which re-ingests the
+archive in its headwords-only form, `internal/server/clear_database.go` takes the `ClearSearchIndexes`
+branch for `fullText` alone and the `reconcile` branch only for `index`) - and the archive's own Kiwix
+index (0.52-3.18 GB, already inside the ZIM) is 2.5-2.9x smaller than the one we build, which is what
+makes it worth reading instead of building.
 
 ## Reading Kiwix's own full-text index (spike findings)
 
