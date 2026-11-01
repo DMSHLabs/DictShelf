@@ -202,9 +202,12 @@ func (u *upgraded) FullTextContext(ctx context.Context, query string, limit int)
 
 func (u *upgraded) FullTextMatch(ctx context.Context, match string, limit int) ([]dict.Result, error) {
 	// The same archive has no FTS5 expression language, so this reading does
-	// not exist for it; the search asks FullTextContext instead
-	// (search.ArchiveFullText).
-	if u.Store.OwnFullText() {
+	// not exist for a database that only has the archive's index; the search
+	// asks FullTextContext or ArchivePhrase instead (search.ArchiveFullText).
+	// A database that also holds an index of ours answers here as any prepared
+	// one does - that is the index the strict readings were routed to
+	// (StreamArticleIDs, search.archiveAnswersMode).
+	if u.Store.OwnFullText() && !u.Store.HasArticleIndex() {
 		return nil, nil
 	}
 	r, err := u.Store.FullTextMatch(ctx, match, limit)
@@ -220,7 +223,15 @@ func (u *upgraded) StreamArticleIDs(ctx context.Context, query, mode, fullTextMa
 	// The whole answer, when the archive is the one that has it: a database
 	// built from an archive has no article index for SQLite to page through
 	// (dmsh_own_index.go, archiveArticleIDs).
-	if (mode == "fts" || mode == "phrase" || mode == "near") && u.Store.OwnFullText() {
+	//
+	// "Words" keeps the archive's own answer even when an index of ours is
+	// there beside it - that reading is what the archive's ranking was built
+	// for. The strict readings go to ours instead, because the archive's index
+	// has no positions and can only verify a phrase by scanning article text,
+	// bounded. The same split is search.archiveAnswersMode, which is the path
+	// the API and the tests take.
+	if (mode == "fts" || mode == "phrase" || mode == "near") && u.Store.OwnFullText() &&
+		(mode == "fts" || !u.Store.HasArticleIndex()) {
 		return u.archiveArticleIDs(ctx, query, mode, emit)
 	}
 	return u.Store.StreamArticleIDs(ctx, query, mode, fullTextMatch, emit)

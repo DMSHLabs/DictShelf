@@ -467,6 +467,34 @@ func rungFor(mode Mode, term string) (ftsq.Rung, bool) {
 	return ftsq.Rung{}, false
 }
 
+// articleIndexer is implemented by a source that holds an article index of its
+// own, built from the article text. A prepared database always may; what makes
+// it interesting here is a source that answers full text by itself as well - a
+// Kiwix archive - because then the question "which of the two answers this
+// reading" has an answer that differs by mode (archiveAnswersMode).
+type articleIndexer interface{ HasArticleIndex() bool }
+
+// archiveAnswersMode says whether the source's own index is the one to ask for
+// this reading.
+//
+// It answers "words" natively and that is the reading its ranking was built
+// for, so it keeps it even when an index of ours exists beside it. The strict
+// readings are a different matter: the archive's index stores no positions, so
+// a phrase or a proximity search there means scanning article text for
+// candidates, bounded and reported as incomplete when the bound is reached
+// (server.archiveStrictCheck). An index of ours has positions, so when it is
+// there it answers those two - exactly, quickly, and with the ranking of a
+// phrase index rather than of a scan.
+func archiveAnswersMode(d dict.Dictionary, mode Mode) bool {
+	if mode == FullText {
+		return true
+	}
+	if ai, ok := d.(articleIndexer); ok && ai.HasArticleIndex() {
+		return false
+	}
+	return true
+}
+
 // query runs one dictionary's lookup, converting a parser panic into that
 // dictionary's error.
 //
@@ -542,7 +570,7 @@ func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, rung 
 		// the article text instead: the same promise, a slower way to keep it,
 		// with a bounded number of candidates checked and the count reported so
 		// the reader can see what the reading cost (ArchiveStrict).
-		if af, ok := d.(ArchiveStrict); ok && af.FullTextFromArchive() {
+		if af, ok := d.(ArchiveStrict); ok && af.FullTextFromArchive() && archiveAnswersMode(d, mode) {
 			switch mode {
 			case Phrase:
 				h.Results, h.Err = af.ArchivePhrase(ctx, term, perDict, archiveCheckCandidates(perDict))

@@ -1050,15 +1050,19 @@ type dictInfo struct {
 	Entries     int       `json:"entries"`
 	Headwords   int       `json:"headwords,omitempty"`
 	Caps        dict.Caps `json:"caps"`
-	// OwnFullText: the archive carries its own full-text index, so full text is
-	// answered from it and there is no index of ours to build, remove or
-	// estimate. Caps.FTS is true either way; this says who answers.
-	OwnFullText bool `json:"ownFullText,omitempty"`
+	// ArchiveIndex: the ARCHIVE carries its own full-text index, so full text is
+	// answered from it whether or not this database has one of ours.
+	ArchiveIndex bool `json:"archiveIndex,omitempty"`
+
+	// OurFullText: THIS database carries an article index of ours - what a ZIM
+	// gets when someone asks for it, in the form that indexes the text and keeps
+	// no bodies. Caps.FTS means "full text works", either of the two can be why.
+	OurFullText bool `json:"ourFullText,omitempty"`
 
 	// ArchiveFullText: the archive carries its own full-text index while this
 	// database still holds one of ours - the form this fork no longer builds,
 	// which the full-text window offers to convert. False for every other
-	// dictionary, including a converted one, where OwnFullText says the same
+	// dictionary, including a converted one, where ArchiveIndex says the same
 	// thing about a database that needs nothing.
 	ArchiveFullText bool   `json:"archiveFullText,omitempty"`
 	DBPath          string `json:"dbPath,omitempty"` // exposed per D7: users share these files
@@ -1262,7 +1266,8 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 			Headwords:         sourceHeadwordCount(e.Path, meta),
 			SelfIndexed:       formatHasSelfIndex(meta["format"]),
 			Caps:              dict.Caps{Exact: true, Prefix: true, Contains: p.Plan.Contains, FTS: p.Plan.FullText || store.OwnFullText(meta)},
-			OwnFullText:       store.OwnFullText(meta),
+			ArchiveIndex:      store.OwnFullText(meta),
+			OurFullText:       p.Plan.FullText,
 			DBPath:            p.TextDB,
 			ContainsStale:     p.Plan.Contains && store.FoldStale(meta),
 			Outdated:          rebuildable(e.Path) && (!formatHasSelfIndex(meta["format"]) || isZIMPath(e.Path)) && len(p.Stale(e.Path)) > 0,

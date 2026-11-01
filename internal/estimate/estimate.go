@@ -73,6 +73,18 @@ const (
 	zimFamilyBytesPerArticle                = 1500
 )
 
+// An archive that carries its own full-text index needs none of ours unless
+// someone asks for one - and what is asked for then is the form that indexes
+// the text and keeps no bodies, so the whole body cost above disappears and
+// only the index is added. Measured across the four archives converted here:
+// 501 and 845 bytes per article for the two Wiktionaries, 2809 and 3369 for
+// the two Wikipedias. The families are told apart by the same compressed bytes
+// per article, so the same split answers both questions.
+const (
+	zimIndexEncyclopediaLow, zimIndexEncyclopediaHigh = 2500, 4000 // bytes per article
+	zimIndexDictionaryLow, zimIndexDictionaryHigh     = 350, 1200
+)
+
 // Inputs are what a prepared dictionary says about itself and its source. Zero
 // means "not measured", never zero bytes: a caller that has no measurement
 // gets BasisUnknown rather than a confident nothing.
@@ -94,6 +106,10 @@ type Inputs struct {
 	ZIMArticles  int64
 	ZIMTextBytes int64 // compressed bytes of clusters holding article text
 
+	// ArchiveIndex says the archive answers full text by itself, which is what
+	// makes a build of ours optional rather than the only way to have it.
+	ArchiveIndex bool
+
 	HasContains, HasFullText bool
 }
 
@@ -102,12 +118,13 @@ type Inputs struct {
 type Basis string
 
 const (
-	BasisBuilt    Basis = "built"    // the index is already in the database
-	BasisEntries  Basis = "entries"  // per headword
-	BasisDatabase Basis = "database" // a share of the current file
-	BasisBodies   Basis = "bodies"   // a share of the bodies stored in the file
-	BasisZIMText  Basis = "zim_text" // a multiple of the archive's compressed article text
-	BasisUnknown  Basis = "unknown"  // nothing to base it on
+	BasisBuilt     Basis = "built"      // the index is already in the database
+	BasisEntries   Basis = "entries"    // per headword
+	BasisDatabase  Basis = "database"   // a share of the current file
+	BasisBodies    Basis = "bodies"     // a share of the bodies stored in the file
+	BasisZIMText   Basis = "zim_text"   // a multiple of the archive's compressed article text
+	BasisIndexOnly Basis = "index_only" // our index alone, over an archive that already answers
+	BasisUnknown   Basis = "unknown"    // nothing to base it on
 )
 
 // Result is the band an index is expected to add, in bytes. Low == High == 0
@@ -165,7 +182,21 @@ func (in Inputs) FullText() Result {
 			Basis: BasisBodies,
 		}
 	}
-	if in.ZIMArticles <= 0 || in.ZIMTextBytes <= 0 {
+	if in.ZIMArticles <= 0 {
+		return Result{Basis: BasisUnknown}
+	}
+	if in.ArchiveIndex {
+		low, high := zimIndexDictionaryLow, zimIndexDictionaryHigh
+		if in.ZIMTextBytes > 0 && in.ZIMTextBytes/in.ZIMArticles >= zimFamilyBytesPerArticle {
+			low, high = zimIndexEncyclopediaLow, zimIndexEncyclopediaHigh
+		}
+		return Result{
+			Low:   in.ZIMArticles * int64(low),
+			High:  in.ZIMArticles * int64(high),
+			Basis: BasisIndexOnly,
+		}
+	}
+	if in.ZIMTextBytes <= 0 {
 		return Result{Basis: BasisUnknown}
 	}
 	low, high := zimDictionaryLow, zimDictionaryHigh

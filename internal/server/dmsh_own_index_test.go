@@ -76,7 +76,8 @@ func recordedOwnFullText(t *testing.T, textDB string) {
 
 // A prepared database whose archive carries its own full-text index advertises
 // full text even though nothing in the database holds article text: Caps.FTS and
-// the new OwnFullText both come from the meta the database was built with.
+// the new ArchiveIndex both come from the meta the database was built with -
+// while OurFullText, which is about an index of ours, stays false.
 func TestOwnFullTextRowAndCaps(t *testing.T) {
 	s := newTestServer(t)
 	preparedDSL(t, s)
@@ -92,11 +93,14 @@ func TestOwnFullTextRowAndCaps(t *testing.T) {
 	if row.ID != id {
 		t.Fatalf("row for %q came back as %q", id, row.ID)
 	}
-	if !row.OwnFullText {
+	if !row.ArchiveIndex {
 		t.Error("a database recording its archive's own index did not report it")
 	}
 	if !row.Caps.FTS {
 		t.Error("full text was not advertised, although the archive answers it")
+	}
+	if row.OurFullText {
+		t.Error("this database holds no article index of ours, but claimed one")
 	}
 }
 

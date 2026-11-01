@@ -180,3 +180,34 @@ func TestBuiltAndUnknown(t *testing.T) {
 		t.Errorf("zim index without stored bodies = %+v, want unknown", got)
 	}
 }
+
+// The index-only band is quoted in bytes per article, and the four archives
+// this fork converted are what it was measured from: 501 and 845 bytes per
+// article for the two Wiktionaries, 2809 and 3369 for the two Wikipedias. All
+// four have to fall inside the band their family selects - a band that misses
+// the measurements it was taken from is a decimal point in the wrong place,
+// which is exactly what the first version of this had.
+func TestIndexOnlyBandContainsItsMeasurements(t *testing.T) {
+	rows := []struct {
+		name            string
+		articles, textB int64
+		perArticle      int64
+		encyclopedia    bool
+	}{
+		{"en-wiktionary", 9087932, 3_100_000_000, 501, false},
+		{"ru-wiktionary", 1528188, 480_000_000, 845, false},
+		{"ru-wikipedia", 2199370, 5_700_000_000, 3369, true},
+		{"de-wikipedia", 3275250, 7_400_000_000, 2809, true},
+	}
+	for _, row := range rows {
+		got := (Inputs{ZIM: true, ArchiveIndex: true, ZIMArticles: row.articles, ZIMTextBytes: row.textB}).FullText()
+		if got.Basis != BasisIndexOnly {
+			t.Fatalf("%s: basis = %s, want %s", row.name, got.Basis, BasisIndexOnly)
+		}
+		real := row.articles * row.perArticle
+		if real < got.Low || real > got.High {
+			t.Errorf("%s: measured %d bytes per article is outside %d..%d",
+				row.name, real, got.Low, got.High)
+		}
+	}
+}

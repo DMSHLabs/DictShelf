@@ -680,6 +680,49 @@ text.db (articles + search index)" for a database that holds no articles (the wo
 two forms for what the READER emitted, not for what was kept), and a database that now has BOTH indexes -
 its archive's and ours - needs the chip and the window to say so as one state rather than two.
 
+## Two chips, and who answers which reading (2026-11-02)
+
+Done, and verified on the live library (44 dictionaries, 6 ZIM archives, one of them the converted
+Russian Wiktionary with an index of ours). The row carries two separate facts instead of one overloaded
+one: `archiveIndex` (the ARCHIVE carries its own full-text index - from the meta, no container opened)
+and `ourFullText` (THIS database holds an article index of ours - the plan). `Caps.FTS` keeps its
+meaning, "full text works", and either fact can be why.
+
+The chips say exactly that. On a ZIM whose archive answers but which holds no index of ours: `our FTS`
+(off, tooltip "full text already works through the archive's index; ours adds exact phrases and
+proximity") beside `in the archive` (filled, locked - a fact, and locked because the index is not ours
+to remove). With our index built as well, the first chip becomes `our FTS 1.3 GB` and a click removes it,
+which is the switch it has always been for every other dictionary. Non-ZIM dictionaries are untouched
+(`full-text`), and the pair is only shown when there IS a pair.
+
+The window follows: `built` now means our index, so an archive that answers full text by itself gets a
+checkbox and a band instead of a "✓" that claimed credit for a file Kiwix shipped - "ours not needed: the
+archive answers", with the estimate. And it needed a new estimate basis, because what is built on request
+is NOT the read-through form the `zim_text` band prices (2.4-9x the compressed article text): it is our
+index alone, bodies dropped. `BasisIndexOnly` = 2500-4000 bytes per article for the encyclopedias and
+350-1200 for the dictionaries, split by the same compressed-bytes-per-article discriminator as the other
+band, measured from the four archives converted here (501 and 845 B/article for the Wiktionaries, 2809
+and 3369 for the Wikipedias - all four inside their band, pinned by a test). First version of this
+divided by 1000 and quoted 8 MB for a Wikipedia; the live check on the real rows is what caught it.
+
+**Which source answers which reading**, now explicit and mode-aware (`search.archiveAnswersMode`, and the
+same rule in `upgraded.StreamArticleIDs`): "words" keeps the archive's own answer even when an index of
+ours exists beside it - that reading is what the archive's ranking was built for - while "phrase" and
+"near" go to ours when it exists, because the archive's index stores no positions and can only verify a
+phrase by scanning article text, bounded (archiveStrictCheck). Without an index of ours, both strict
+readings stay with the archive exactly as before. This needed `Store.HasArticleIndex()` (`ftsOK`, "an
+article index of ours is here") to be threaded through the three places that used to ask `OwnFullText`
+alone: `FullTextMatch` returned nil for such a dictionary, which would have silently emptied a phrase
+search that the router had just sent there.
+
+Verified live: the API returns the two facts and the band per row; the panel shows `our FTS` + `in the
+archive` on five archives and `our FTS 1.3 GB` + `in the archive` on the converted one; the full-text
+window lists six ZIM rows with a checkbox each and "ours not needed: the archive answers", the converted
+one with "built over the archive's index", and the count line reads "Built: 39 of 44 (6 from the
+archive itself)". What is NOT verified: an actual on-request build from the window on a second archive
+(hours of work), and the Russian rendering of the new strings (the catalogs are key-matched and pass
+`tools/i18n-test.cjs`; the test server came up in English).
+
 ## The article index in a file of its own: writer done, reader pending (2026-11-02)
 
 Half of the split is in, and the half that is missing is a design point rather than a detail, so it is

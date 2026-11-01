@@ -34,3 +34,10 @@ func OwnFullText(meta map[string]string) bool { return meta[OwnFullTextKey] == "
 // full-text query goes, and it costs nothing: the value came from the meta the
 // database was opened with.
 func (s *Store) OwnFullText() bool { return s.ownFullText }
+
+// HasArticleIndex reports whether THIS database holds an article index of its
+// own - the article_fts built from the article text, bodies or no bodies. It is
+// what tells the two situations apart for a source that answers full text by
+// itself: with one of ours beside the archive's, the strict readings ask ours,
+// because the archive's index stores no positions (search.articleIndexer).
+func (s *Store) HasArticleIndex() bool { return s.ftsOK }

@@ -4067,7 +4067,13 @@ function renderPanel(){
     const canToggle=!!d.source;
     const feats=[
       ["contains",tx("dictUI.contains"),d.caps?.Contains,d.containsSize||0],
-      ["fts",tx("dictUI.fts"),d.caps?.FTS,d.fullTextSize||0],
+      /* The full-text chip is about OUR index and nothing else: what a click
+         here builds or removes is our article index, in this database. For a
+         ZIM whose archive carries one of its own there is a second chip beside
+         it saying so, and then this one is named to be told from it - full
+         text works either way; what differs is who answers and what a click
+         touches (the archive's index is not ours to remove). */
+      ["fts",d.archiveIndex?tx("dictUI.ftsOurs"):tx("dictUI.fts"),d.ourFullText,d.fullTextSize||0],
     ];
     /* The index itself, first in the run of chips. Two states: "🚀 index"
        while there is none, and the size once
@@ -4113,21 +4119,23 @@ function renderPanel(){
       /* A stale index still works — it was built with older text-folding
          rules, so it can only miss words whose folding changed. So it is
          marked, not disabled, and the click rebuilds instead of removing. */
-      /* A ZIM whose archive carries its own full-text index: full text works
-         and there is nothing here to build or to remove - the index belongs to
-         the archive. Locked like the other facts, and it says so, rather than
-         offering a switch whose "off" would clear an index that is not ours. */
-      const archive=key==="fts"&&!!d.ownFullText;
-      const stale=!archive&&key==="contains"&&on&&d.containsStale;
+      const stale=key==="contains"&&on&&d.containsStale;
       const what=FEAT_NAME[key];
-      const tip=archive?tx("dictUI.ftsArchiveHint"):
+      /* An archive whose own index answers means our full-text index is a
+         choice rather than a need, so an absent chip says what it adds instead
+         of promising what the archive already gives. */
+      const tip=key==="fts"&&d.archiveIndex&&!on?tx("dictUI.ftsOursHint"):
         !canToggle?tx("dictUI.onlyCopy"):
         stale?tx("dictUI.stale",{what}):
         on?tx("dictUI.removeHint",{what}):tx("dictUI.addHint",{what});
-      caps+=`<span class="feat${on?" on":""}${stale?" stale":""}${canToggle&&!archive?"":" locked"}"`+
+      caps+=`<span class="feat${on?" on":""}${stale?" stale":""}${canToggle?"":" locked"}"`+
         ` data-feat="${key}" data-on="${on?1:0}"${stale?' data-stale="1"':""}`+
-        ` title="${escAttr(tip)}">${esc(archive?tx("dictUI.ftsArchive"):label)}${archive?"":size}${stale?" ⟳":""}</span>`;
+        ` title="${escAttr(tip)}">${esc(label)}${size}${stale?" ⟳":""}</span>`;
     }
+    /* The archive's own full-text index, beside ours: a fact about the source,
+       not a switch. Locked, because there is nothing here to turn off - the
+       index belongs to the archive and travels with it. */
+    if(d.archiveIndex)caps+=`<span class="feat on locked" title="${escAttr(tx("dictUI.ftsArchiveHint"))}">${esc(tx("dictUI.ftsArchive"))}</span>`;
     // Contains and full-text are both built only after an explicit action.
     // "pack media" is offered only when the dictionary actually has packable
     // media, a source to pack it from, and it isn't already packed.
@@ -4143,7 +4151,7 @@ function renderPanel(){
        say this - it is "on" for the index we are about to stop keeping - so the
        card carries the action, and it opens the window that shows the number and
        does the work (the window is where the conversion is explained). */
-    if(d.archiveFullText&&!d.ownFullText&&!d.unavailable&&!d.dsl){
+    if(d.archiveFullText&&!d.archiveIndex&&!d.unavailable&&!d.dsl){
       acts+=`<a class="act btn" href="#" title="${escAttr(tx("fullText.convertHintUnknown",{db:mb(d.dbSize||0)}))}">${esc(tx("fullText.convert"))}…</a>`;
     }
     if(d.unavailable||d.dsl&&!d.error)acts="";
@@ -6445,7 +6453,7 @@ $("panelList").addEventListener("click",e=>{
     if(feat.dataset.feat==="fts"){
       const id=feat.dataset.target||feat.closest(".pd").dataset.id;
       const row=(dicts||[]).find(d=>d.id===id);
-      if(!on||(row&&row.archiveFullText&&!row.ownFullText)){openFullTextPicker(id);return;}
+      if(!on||(row&&row.archiveFullText&&!row.archiveIndex)){openFullTextPicker(id);return;}
     }
     runIngest(feat.dataset.target||feat.closest(".pd").dataset.id,{[feat.dataset.feat]:on?0:1},feat);
     return;
@@ -13285,7 +13293,12 @@ var libraryFreeBytes=0, libraryVolume="";
 function fullTextRows(){
   return (dicts||[]).filter(d=>d&&!d.unavailable&&d.dbPath).map(d=>({
     id:d.id,name:d.name||d.id,zim:String(d.format||"").toLowerCase()==="zim",
-    built:!!d.caps?.FTS,own:!!d.ownFullText,archive:!!d.archiveFullText,
+    /* built is OUR index, and only ours: a ZIM whose archive answers full text
+       yet holds no article index of ours has a checkbox here, because a build
+       of ours is exactly what this page can offer it. archiveIndex says the
+       source answers by itself - which is why the row is optional, not why it
+       is done - and convert marks the database this fork no longer builds. */
+    built:!!d.ourFullText,archiveIndex:!!d.archiveIndex,convert:!!d.archiveFullText,
     fullSize:d.fullTextSize||0,dbSize:d.dbSize||0,est:d.estimate||null
   })).sort((a,b)=>String(a.name).localeCompare(String(b.name),undefined,{sensitivity:"base"}));
 }
@@ -13333,8 +13346,8 @@ function updateFullTextSummary(){
      own index has full text and nothing to build, so counting it as built
      would claim credit for a file somebody else shipped - it is counted
      separately, and only when there is one. */
-  const rows=fullTextRows(),built=rows.filter(r=>r.built&&!r.own&&!r.archive).length,
-    archive=rows.filter(r=>r.own).length,stale=rows.filter(r=>!r.own&&r.archive).length;
+  const rows=fullTextRows(),built=rows.filter(r=>r.built).length,
+    archive=rows.filter(r=>r.archiveIndex).length,stale=rows.filter(r=>r.convert).length;
   $("ftCount").textContent=tx("fullText.count",{built:window.wudictI18n.number(built),total:window.wudictI18n.number(rows.length)})
     +(archive?" "+tx("fullText.countArchive",{count:window.wudictI18n.number(archive)}):"")
     +(stale?" "+tx("fullText.countConvert",{count:window.wudictI18n.number(stale)}):"");
@@ -13350,11 +13363,9 @@ function renderFullTextPicker(){
     const choice=document.createElement("td");
     if(row.built||!row.est){
       // Nothing to build, or nothing known yet: no checkbox, so a click cannot
-      // promise work that would not happen. An archive that carries its own
-      // index is the one case where "built" is true without anything here
-      // having been built, and the title says which of the two it is.
+      // promise work that would not happen.
       choice.textContent=row.built?"✓":"⏳";
-      choice.title=row.own?tx("fullText.stateArchive"):row.built?tx("fullText.stateBuilt"):tx("fullText.stateCalculating");
+      choice.title=row.built?tx("fullText.stateBuilt"):tx("fullText.stateCalculating");
     }else{
       const cb=document.createElement("input");
       cb.type="checkbox";
@@ -13373,7 +13384,7 @@ function renderFullTextPicker(){
        copied for. That is not a build to offer in the same list as the others -
        nothing more would be built, less would be kept - so the row carries its
        own action, and the tooltip says what the conversion frees. */
-    const convert=row.archive&&!row.own;
+    const convert=row.convert&&!row.archiveIndex;
     if(convert){
       choice.textContent="⟳";
       choice.title=convertHint(row);
@@ -13392,7 +13403,14 @@ function renderFullTextPicker(){
       });
       state.append(btn);
     }else{
-      state.textContent=row.own?tx("fullText.stateArchive"):row.built?tx("fullText.stateBuilt"):row.est?tx("fullText.stateAvailable"):"";
+      /* Three states, and none of them is a lie about the other source: ours
+         built (with or without the archive's beside it), ours not built while
+         the archive answers (which is why it is a choice), ours not built and
+         nothing else answering (which is when the row is the only way). */
+      state.textContent=row.built
+        ?tx(row.archiveIndex?"fullText.stateArchiveBoth":"fullText.stateBuilt")
+        :row.archiveIndex?tx("fullText.stateArchiveOptional")
+        :row.est?tx("fullText.stateAvailable"):"";
     }
     tr.append(choice,name,size,state);
     return tr;
@@ -13405,9 +13423,11 @@ function openFullTextPicker(preselect){
     const tr=$("ftRows").querySelector('tr[data-id="'+CSS.escape(preselect)+'"]');
     const cb=tr&&tr.querySelector("input[type=checkbox]");
     if(cb)cb.checked=true;
-    /* A row with no checkbox - one the archive answers, or one to convert - has
-       nothing to tick, so the window has to show the reader where it is: the
-       list is 42 rows long and the dictionary they came from is one of them. */
+    /* A row with no checkbox - one that is already built, or one to convert -
+       has nothing to tick, so the window has to show the reader where it is:
+       the list is 42 rows long and the dictionary they came from is one of
+       them. */
+
     if(tr&&!cb){
       tr.scrollIntoView({block:"center"});
       tr.style.outline="2px solid var(--accent)";

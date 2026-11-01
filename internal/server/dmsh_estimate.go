@@ -37,7 +37,7 @@ type estimateView struct {
 // the plan the database was prepared with) decide whether a row is offered at
 // all, and the build itself re-checks the real tables before it writes.
 func (s *Server) attachEstimate(info *dictInfo) {
-	if info == nil || info.Error != "" || info.DBPath == "" || info.Caps.FTS || info.Job != nil {
+	if info == nil || info.Error != "" || info.DBPath == "" || info.OurFullText || info.Job != nil {
 		return
 	}
 	fi, err := os.Stat(info.DBPath)
@@ -56,7 +56,8 @@ func (s *Server) attachEstimate(info *dictInfo) {
 		DBBytes:         fi.Size(),
 		ZIMArticles:     stats.ZIMArticles,
 		ZIMTextBytes:    stats.ZIMTextBytes,
-		HasFullText:     info.Caps.FTS,
+		ArchiveIndex:    info.ArchiveIndex,
+		HasFullText:     info.OurFullText,
 	}
 	got := in.FullText()
 	if got.Basis == estimate.BasisUnknown || got.Basis == estimate.BasisBuilt {

@@ -89,7 +89,7 @@ func (u *upgraded) archiveFullText(ctx context.Context, query string, limit int)
 // once a database has been converted, own_ft_index is in its meta and the row
 // knows without opening anything. The row cache absorbs the rest.
 func noteArchiveFullText(info *dictInfo) {
-	if info == nil || info.OwnFullText || info.Error != "" || !strings.EqualFold(info.Format, "zim") {
+	if info == nil || info.ArchiveIndex || info.Error != "" || !strings.EqualFold(info.Format, "zim") {
 		return
 	}
 	info.ArchiveFullText = archiveAnswersFullText(info.Path)
