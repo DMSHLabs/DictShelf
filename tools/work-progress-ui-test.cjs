@@ -66,6 +66,28 @@ const {chromium} = require('playwright');
       await page.evaluate(()=>window.startResult);
       await page.close();
     }
+    // A dictionary job must show its rows and the Show tasks control whatever
+    // the state does or does not carry: the row list is rebuilt from the state
+    // on every render, so a job whose event never carried children can no
+    // longer collapse into the one-line shape of the old progress bar.
+    {
+      const page = await browser.newPage({viewport:{width:1100,height:800}});
+      await page.setContent('<main>Dictionary article</main>');
+      await page.evaluate(() => {
+        window.wudictI18n={t:k=>k,number:n=>n.toLocaleString('en-US')};
+        // Stands in for index.html's own row builder.
+        window.wudictTaskRows=state=>state.running?[{label:'Wiktionary',done:1,total:2,active:true}]:undefined;
+        window.work={id:'single-index:fb1c556f5740',running:true,exclusive:true,current:'wiktionary_en_all_nopic.zim',action:'update',indexes:['fullText'],currentDone:1765000,currentTotal:9130006,dictionaryDone:0,dictionaryTotal:1,elapsedMs:434000,busyDicts:['fb1c556f5740','61501cc7a5de'],busyProgress:[{id:'fb1c556f5740',name:'Wiktionary',feature:'fullText',action:'update',active:true,done:1765000,total:9130006,elapsedMs:434000}]};
+        window.fetch=async()=>({ok:true,json:async()=>window.work});
+      });
+      await page.addScriptTag({content:fs.readFileSync('internal/server/web/work-progress.js','utf8')});
+      await page.waitForSelector('#serverWorkNotice:not([hidden])');
+      assert(await page.locator('#serverWorkNotice .work-toggle').isVisible(), 'an indexing job with rows must offer Show tasks');
+      await page.locator('#serverWorkNotice .work-toggle').click();
+      assert(await page.waitForFunction(()=>document.querySelectorAll('#serverWorkNotice .work-task-row').length===1), 'expanding must list the job\'s dictionary');
+      assert(await page.evaluate(()=>document.querySelector('#serverWorkNotice .work-task-name').textContent==='Wiktionary'), 'the row names the dictionary being indexed');
+      await page.close();
+    }
     console.log('Global progress remains visible and Stop usable over nested modal dialogs, desktop and mobile.');
   } finally {await browser.close();}
 })().catch(err=>{console.error(err);process.exitCode=1;});

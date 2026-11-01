@@ -172,14 +172,19 @@ func Fingerprint(textDB string) (string, error) {
 }
 
 // volatileMeta names the meta keys that differ between two builds of the same
-// content: identity, time, where the source sat on disk, and the version
-// stamps (which the golden records separately, so a bump is a deliberate edit
-// of the golden rather than an accident of the hash).
+// content: identity, time, where the source sat on disk, the version stamps
+// (which the golden records separately, so a bump is a deliberate edit of the
+// golden rather than an accident of the hash), and the size measurements an
+// estimate reads - those describe the source too, and nothing a reader queries
+// depends on them.
 func volatileMeta(k string) bool {
 	switch k {
 	case "dict_uuid", "created", "source_path", "source_size", "source_mtime",
 		"source_sha256_1M", "source_revision", "body_encoding",
-		"ingest_version", "reader_version", "markup_version", "fold_version":
+		"ingest_version", "reader_version", "markup_version", "fold_version",
+		"body_bytes", "headword_bytes", "stats_version",
+		"zim_articles", "zim_redirects", "zim_media", "zim_other", "zim_clusters",
+		"zim_text_bytes", "zim_mixed_bytes", "zim_other_bytes":
 		return true
 	}
 	return strings.HasSuffix(k, "_path") || strings.HasSuffix(k, "_mtime")

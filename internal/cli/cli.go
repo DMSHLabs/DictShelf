@@ -1032,7 +1032,7 @@ func ingestOne(srcPath, out string, full bool, pf planFlags) error {
 	if full {
 		t.Media = store.MediaOn
 	}
-	hooks := cliHooks(srcPath, &name)
+	hooks := cliHooks(srcPath, &name, ingestArticles(srcPath, pf.fullText))
 	res, err := store.Reconcile(srcPath, t, hooks)
 	logx.ClearLine()
 	dir := filepath.Dir(res.TextDB)
@@ -1055,17 +1055,37 @@ func ingestOne(srcPath, out string, full bool, pf planFlags) error {
 	return nil
 }
 
+// ingestArticles decides which ZIM form an ingest should build: the flag when
+// it states one, otherwise the form the folder already holds, so a plain
+// rebuild cannot silently drop a read-through index that is already there.
+func ingestArticles(src string, want *bool) bool {
+	if want != nil {
+		return *want
+	}
+	if dir, ok := store.LookupDir(src); ok {
+		_, articles := store.ZIMForm(store.Inspect(store.TextDBPath(dir)).Meta)
+		return articles
+	}
+	return false
+}
+
 // cliHooks reports progress on the terminal and, when the source is read,
 // takes the dictionary's own title for the lines that follow. done closes the
-// reader, if one was opened.
-func cliHooks(srcPath string, name *string) store.Hooks {
+// reader, if one was opened. articles picks the ZIM form: the read-through
+// reader, which decompresses article clusters and so can index their text, or
+// the title-only one that leaves them in the file.
+func cliHooks(srcPath string, name *string, articles bool) store.Hooks {
 	var r dict.Reader
 	return store.Hooks{
 		Reader: func() (dict.Reader, error) {
 			var rd dict.Reader
 			var err error
 			if strings.EqualFold(filepath.Ext(srcPath), ".zim") {
-				rd, err = zimformat.NewHeadwordReader(srcPath)
+				if articles {
+					rd, err = zimformat.NewReader(srcPath)
+				} else {
+					rd, err = zimformat.NewHeadwordReader(srcPath)
+				}
 			} else {
 				rd, err = dict.OpenReader(srcPath)
 			}

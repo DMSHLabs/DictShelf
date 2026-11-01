@@ -173,6 +173,7 @@ func Open(path string) (*Store, error) {
 	// from the source dictionary's header at ingest time, and a library
 	// prepared before that leniency existed still holds whatever escaping the
 	// dictionary shipped. Decoding here repairs those without a re-ingest.
+	zimHeadwords, zimArticles := ZIMForm(m)
 	s.meta = dict.Meta{
 		Name:          dict.DisplayText(m["name"]),
 		Format:        "wudict:" + m["format"],
@@ -180,7 +181,8 @@ func Open(path string) (*Store, error) {
 		Description:   dict.DisplayText(m["description"]),
 		IndexLang:     m["index_lang"],    // declared at ingest; "" for most formats
 		ContentsLang:  m["contents_lang"], // DSL and BGL only, and absent from older libraries
-		HeadwordsOnly: m["index_kind"] == "headwords",
+		HeadwordsOnly: zimHeadwords,
+		Articles:      zimArticles,
 		Header:        headerOf(m),
 	}
 	s.ftsOK = PlanFromMeta(m).FullText

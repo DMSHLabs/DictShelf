@@ -700,6 +700,7 @@
   "dictUI.bulkCreateConfirm": "Create {feature} for {number} dictionaries ({scope})?",
   "dictUI.bulkDeleteConfirm": "Delete {feature} for {number} dictionaries ({scope})? Deleting an index also removes its contains index, full-text index and media pack. Dictionary files stay.",
   "dictUI.bulkFinished": "Completed {number} index operations.",
+  "dictUI.bulkZimSkipped": "Left {number} ZIM dictionaries out of the bulk action: their full-text index reads every article and is built one dictionary at a time, from Dictionary Settings.",
   "pages.indexDefaultsHint": "A headword index is always created for new dictionaries. The selected optional indexes are created too. Existing dictionaries will not be changed.",
   "pages.containsRecommendation": "The Contains index can make searches for part of a headword several times faster. Building it may add 40–70% to the initial indexing time, but this extra work is done when the dictionary is first indexed. We recommend keeping Contains enabled.",
   "pages.indexDefaultsFailed": "Could not save index settings: {error}",

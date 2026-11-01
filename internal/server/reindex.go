@@ -130,7 +130,7 @@ func entryOutdated(path string) bool {
 		return false
 	}
 	stale := prepared.Stale(path)
-	selected := len(stale) > 0 || isZIMPath(path) && (prepared.Meta == nil || prepared.Meta["index_kind"] != "headwords")
+	selected := len(stale) > 0 || isZIMPath(path) && !zimPreparedHeadwords(prepared)
 	store.IndexDiagnostic("rebuild selection source=%q selected=%v format=%q contains=%v fulltext=%v stale=%v", path, selected, prepared.Meta["format"], prepared.Plan.Contains, prepared.Plan.FullText, stale)
 	return selected
 }

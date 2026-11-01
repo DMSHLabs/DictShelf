@@ -242,14 +242,22 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	}
 
 	metaKV := map[string]string{
-		"dict_uuid":        uuid,
-		"name":             srcMeta.Name,
-		"format":           srcMeta.Format,
-		"source_path":      srcMeta.Path,
-		"description":      srcMeta.Description,
-		"entry_count":      fmt.Sprint(id - int64(subEntries)),
-		"headword_count":   fmt.Sprint(total),
-		"sub_entries":      fmt.Sprint(subEntries), // @-prefixed, hidden from browsing
+		"dict_uuid":      uuid,
+		"name":           srcMeta.Name,
+		"format":         srcMeta.Format,
+		"source_path":    srcMeta.Path,
+		"description":    srcMeta.Description,
+		"entry_count":    fmt.Sprint(id - int64(subEntries)),
+		"headword_count": fmt.Sprint(total),
+		"sub_entries":    fmt.Sprint(subEntries), // @-prefixed, hidden from browsing
+		// What the indexes of this dictionary would cost, measured while the
+		// only pass that sees the bodies runs. body_bytes is before deflate
+		// because that is the text an article index covers; headword_bytes is
+		// what the headword indexes scale with. Volatile: a prediction reads
+		// them, prepared content does not.
+		"body_bytes":       fmt.Sprint(rows.bodyBytes),
+		"headword_bytes":   fmt.Sprint(rows.headwordBytes),
+		"stats_version":    fmt.Sprint(StatsVersion),
 		"ingest_level":     ingestLevel(plan),
 		"has_trigram":      boolMeta(plan.Contains),      // cheap-list flag; Open feature-detects the table
 		"fold_version":     fmt.Sprint(dict.FoldVersion), // which text folding built the trigram index

@@ -968,11 +968,22 @@ func (s *Server) currentFeatures(e *entry) features {
 		return features{}
 	}
 	p, ok := preparedInfo(e.Path)
-	if !ok || p.Meta == nil || isZIMPath(e.Path) && p.Meta["index_kind"] != "headwords" {
+	if !ok || p.Meta == nil {
 		return features{}
 	}
+	full, contains := p.Plan.FullText, p.Plan.Contains
+	if isZIMPath(e.Path) {
+		// A ZIM's own receipt cannot be believed about full text: a title-only
+		// database records the level it was ASKED for, so the form is consulted
+		// instead - only a read-through one holds article text.
+		headwords, articles := zimPreparedForm(p)
+		if !headwords {
+			return features{}
+		}
+		full = articles
+	}
 	// an unpaired media.db serves nothing, so it does not count as packed
-	return features{FullText: p.Plan.FullText, Contains: p.Plan.Contains, Media: p.MediaPaired()}
+	return features{FullText: full, Contains: contains, Media: p.MediaPaired()}
 }
 
 // ZIM's path-pointer list is mandatory for a valid file and parse validates
@@ -981,6 +992,23 @@ func (s *Server) currentFeatures(e *entry) features {
 func formatHasSelfIndex(format string) bool { return format == "zim" }
 
 func isZIMPath(path string) bool { return strings.EqualFold(filepath.Ext(path), ".zim") }
+
+// A prepared ZIM database comes in two forms, and index_kind says which:
+// "headwords" is the title-only index (SPEC §24), "articles" is a read-through
+// one that also carries article bodies and so can satisfy a full-text request.
+// store.ZIMForm reads the marker; these two name the questions the server asks
+// of it, so no caller compares the raw string again.
+func zimPreparedForm(p store.Prepared) (headwords, articles bool) {
+	return store.ZIMForm(p.Meta)
+}
+
+// zimPreparedHeadwords is the common question: does this database carry the ZIM
+// headword list? Both forms do, and Browse, masks and ordinary search need no
+// more than that.
+func zimPreparedHeadwords(p store.Prepared) bool {
+	headwords, _ := zimPreparedForm(p)
+	return headwords
+}
 
 func dictionaryHasSelfIndex(d dict.Dictionary) bool {
 	si, ok := d.(selfIndexed)
@@ -1004,7 +1032,10 @@ func hasBrowseIndex(path string) bool {
 	if !ok || p.Meta == nil {
 		return false
 	}
-	return !strings.EqualFold(p.Meta["format"], "zim") || p.Meta["index_kind"] == "headwords"
+	if !strings.EqualFold(p.Meta["format"], "zim") {
+		return true
+	}
+	return zimPreparedHeadwords(p)
 }
 
 // dictInfo is the /api/dicts row.
@@ -1180,7 +1211,10 @@ func (s *Server) diskDictInfo(e *entry) dictInfo {
 			p := store.Inspect(store.TextDBPath(dir))
 			info.DiacriticsPending = p.Meta != nil && needsFoldedReindex(p.Meta)
 			if isZIMPath(e.Path) {
-				info.Outdated = p.Meta == nil || p.Meta["index_kind"] != "headwords" || len(p.Stale(e.Path)) > 0
+				// Both forms are current: the title-only index and the
+				// read-through one the reader asked for explicitly. Only a
+				// database without either marker is not.
+				info.Outdated = !zimPreparedHeadwords(p) || len(p.Stale(e.Path)) > 0
 			} else if !info.SelfIndexed {
 				info.Outdated = true
 			}
@@ -1195,7 +1229,7 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 	// probing or opening the source. ZIM uses a prepared row only for the
 	// explicitly requested headword-only database.
 	// The library folder is located from the source path.
-	if p, ok := preparedInfo(e.Path); ok && p.Meta != nil && (!entryHasSelfIndex(e) || isZIMPath(e.Path) && p.Meta["index_kind"] == "headwords") {
+	if p, ok := preparedInfo(e.Path); ok && p.Meta != nil && (!entryHasSelfIndex(e) || isZIMPath(e.Path) && zimPreparedHeadwords(p)) {
 		meta := p.Meta
 		ec, _ := strconv.Atoi(meta["entry_count"])
 		info := dictInfo{
@@ -1362,7 +1396,7 @@ func addProvenance(info *dictInfo, entryPath string) {
 	textDB := info.DBPath
 	if textDB == "" {
 		if p, ok := validPrepared(entryPath); ok {
-			if !isZIMPath(entryPath) || store.Inspect(p).Meta["index_kind"] == "headwords" {
+			if !isZIMPath(entryPath) || zimPreparedHeadwords(store.Inspect(p)) {
 				textDB = p
 			}
 		}

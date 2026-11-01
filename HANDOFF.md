@@ -201,7 +201,164 @@ its value field. Runtime visual verification remains pending.
 - The Dim background and Fade text switches share a measured label column so their On/Off controls align; the measurement follows the visible text size and updates when the panel is laid out.
 - Search-return snapshots and Browse find/filter results are bounded SQLite caches shared by the native and HTTP paths. Browse links retain the originating query and dictionary through article navigation.
 
-## Verification and remaining checks
+## Search parallelism and the fan-out timeout (open)
+
+Settings → System settings → Search indexes gained a **Максимум потоков поиска** field. Empty means
+automatic: 5, then clamped to `min(cores-1, GOMAXPROCS, platform baseline)` — a desktop gets 5, a phone
+keeps the `MaxProcs` policy (≤4), and battery-saver/thermal demotions follow GOMAXPROCS through
+`applyProcs`. The same value bounds the client's Wildcards build (`maskWorkerCount`, ceiling `cores-1`).
+The neighbouring Log file switch **Записывать длительность поиска по словарям** gates `search_fanout`
+(per dictionary, `internal/search`) and `wildcards_append` (cache lock wait vs work, `wildcard_cache.go`).
+Measurements on 42-, 110- and 388-dictionary lists show the setting changes nothing measurable past ~5:
+the run is set by the slowest dictionary and by how the work distributes, not by the cap. The two search
+clocks now live in `internal/indexconst/constants.go` (`SearchFanoutBudget`, `SingleSearchBudget`); the
+dead `demandSearchBudget` was removed.
+
+Open: a user's `contains` search over 388 dictionaries returned 0 results with every row saying
+"timed out — index this dictionary to search it" (388 `search failure … mode="contains"`, all 30 s after
+the search began). The message is wrong for this case: his verbose log opens the same library as
+`entries contains=true (2ms)`, so the dictionaries are prepared with the trigram index. Most likely the
+shared `SearchFanoutBudget` against 388 dictionaries at `dictionary_worker_limit=7` on an ordinary HDD —
+~540 ms per dictionary does not fit an open plus `entry_trigram MATCH` from a cold disk. Which stage
+dominates is unconfirmed: needs `system.searchArticleDiagnostics` ("Record search results and article
+opening" — the only switch that sends `searchDiagnostics=1`), plus the same query on ONE dictionary as a
+control (no fan-out, `SingleSearchBudget` = 5 min).
+
+Separate bug found on the way: `internal/server/dmsh_search_service.go` (v2 — bridge and desktop) opens
+unprepared dictionaries, while the legacy `handleSearch` declines them first (`validPrepared` →
+"dictionary index is not ready"). Port it, mode-aware: Contains/FTS decline, Exact/Prefix keep the
+preview path.
+
+## ZIM prepared databases now have two forms (read-through full text)
+
+A ZIM's prepared database was always title-only (SPEC §24), so an `article_fts` built over it could
+only ever hold titles: a full-text search on a ZIM returned title matches and nothing from article
+bodies, while the receipt still said `index = full text` and meta recorded `ingest_level = text`.
+Verified on disk against the user's own libraries: the DSL Urban Dictionary's `article_fts` answers
+`"for example"` with 8 089 articles against 1 headword, while the Wikipedia ZIM's `article_fts` gives
+exactly the same count as `entry_fts` for every query (`"в том числе"` → 0, `"кларнетист"` → 8 titles).
+
+Now the form is explicit and self-described: `index_kind = headwords` (title-only, unchanged) or
+`articles` (read-through - article clusters decompressed, bodies stored and indexed, articles served
+from the database). `store.ZIMForm` is the one reader of the marker; `dict.Meta` gained `Articles`
+beside `HeadwordsOnly`; the nine places that compared the raw string now ask which form they actually
+need. Reading is chosen by the request in `registry.go` (nil FullText keeps the form that is there),
+so an ordinary rebuild cannot drop a read-through index, and only a database with neither marker is
+converted. The bulk "add full text" action skips ZIM dictionaries - a read-through build decompresses
+the whole corpus (tens of GB, hours on a mechanical disk) and stays a per-dictionary click, made on the
+chip in Dictionary Settings.
+
+Both ZIMs on this machine were then built read-through, and the cost is now measured rather than
+guessed: `wiktionary_ru_all_nopic` (2.15 GB source, 1 528 188 entries) → 9.0 GiB in about nine minutes,
+and `wikipedia_ru_all_maxi` (37.1 GB source, 2 199 370 entries) → **31.1 GiB** (33 439 162 368 bytes).
+The `7.9 M entries` seen in the build log is a stage counter, not the database: the finished Wikipedia
+holds exactly the 2.2 M entries the title-only build held. The honest-index test passes on both -
+`"см. также"` answers 136 053 Wiktionary articles against 0 headwords, `"таким образом"` 91 356
+Wikipedia articles, and the reader's original complaint is closed: `"джазовый кларнетист"` now answers
+73 articles in 2 ms, `Беше` and `Беше, Сидней` among them. A phrase in 192 797 articles (`"в том
+числе"`) takes 207 ms, a selective one ~0 ms - the user's verdict is that the size is significant but
+not catastrophic, and article-text search is instant.
+
+A gate that had to be added after the first real build: the automatic first-run queue began read-through
+builds for every ZIM, because the old title-only databases record `Plan.FullText=true` (the level they
+were ASKED for, not what they hold) and the queue inherits it. `preparedHasIndexes` now treats a ZIM's
+headwords as the whole question, so no unattended pass ever upgrades a ZIM; only the chip does.
+
+## The work panel's rows are a function of the job state, not of an event
+
+An indexing task's per-dictionary rows and its "Show tasks" control appear only while the task carries
+children, and children used to be attached by a `wudict-work` listener that required the event to carry
+a `busyProgress` array. Whenever that attachment was missed - the array absent, or a page that restored
+its banner before the dictionary list had loaded - the panel fell back to its one-line form: message,
+progress bar and Stop, with no rows and no disclosure. That is the old progress bar's shape, and it is
+what the user reported while two ZIMs were building (`notice_text` in the live system log recorded it
+with and without the toggle minutes apart). `window.wudictTaskRows` in `index.html` now rebuilds the
+rows on every render from the state the panel was handed, so the list cannot depend on which event
+arrived; only this job's dictionaries are rows, because `busyDicts` is a library-wide lock list and the
+header's "active operations" count is deliberately wider than the task (it can read 2 while the job
+indexes 1). `tools/work-progress-ui-test.cjs` covers layout and locking but needs Playwright, which is
+not installed on this machine.
+
+## What a read-through ZIM costs, measured on the user's four archives
+
+Measured 2026-10-31 by walking only the ZIM directory (header, MIME list, cluster pointers, dirents -
+never a cluster payload) and, for the prepared databases, `sum(length(entry.m))` plus `dbstat` per
+table. The directory walk agrees with the prepared database's entry count to a handful of rows on all
+four (the readers drop articles whose body is empty, which is the difference), so the parse is checked
+against the library, not assumed. All figures bytes.
+
+| archive | source | text clusters | articles | redirects | media entries | text db | stored markup | article FTS |
+|---|---|---|---|---|---|---|---|---|
+| wiktionary_ru nopic | 2.15 G | 1.079 G | 1 528 188 | 999 439 | 182 | 9.64 G | 6.90 G | 1.29 G |
+| wiktionary_en nopic | 9.16 G | 4.363 G | 9 087 944 | 42 006 | 56 | 25.26 G | 15.64 G | 4.56 G |
+| wikipedia_ru maxi | 37.1 G | 13.775 G | 2 199 375 | 2 825 093 | 2.88 M | 33.44 G | 22.78 G | 7.41 G |
+| wikipedia_de maxi | 48.6 G | 13.624 G | 3 275 258 | 1 878 526 | 4.84 M | 35.04 G | 22.29 G | 9.21 G |
+
+Three things the numbers settle. **Bodies dominate, the FTS does not**: the article index is 19, 29,
+33 and 41 % of the stored markup, so the body copy is 69-97 % of everything a read-through build adds
+and the searchable text is the smaller part of the bill. **The container is mostly not text**: Kiwix's
+own Xapian index sits in namespace X as three blobs and is 8-48 % of the file (0.91 G, 4.13 G, 3.48 G,
+3.76 G), and in the maxi Wikipedias the images are another half - so estimating from the source file
+size is wrong twice over. **Expansion is a family constant, not a number**: compressed text clusters
+become 1.65x stored markup on both Wikipedias (1.653 and 1.636 - the two agree to 1 %) but 3.58x on
+the English and 6.39x on the Russian Wiktionary, so one coefficient cannot serve both families. The
+free classifier is compressed bytes per article: 480 B and 706 B for the wiktionaries, 4.2 KB and
+6.3 KB for the Wikipedias, which matches the observed split.
+
+## What each index costs on the non-ZIM library, measured in three passes
+
+Same 38 dictionaries (dz/mdx), measured 2026-10-31/11-01 with `text.db` size, `sum(length(entry.m))`
+and a full `dbstat` breakdown after each step; entries were unchanged at every step.
+
+| step | text.db | delta | what it was |
+|---|---|---|---|
+| base (index only) | 2 988 MiB | - | 38 dictionaries, 4 010 535 entries, bodies 2 126 MiB (deflate, 69 % of the db) |
+| + contains | 3 058 MiB | +2.3 MiB | `entry_fts` + `entry_trigram`: 88.6 MiB total = 2.9 % of the db = **23 bytes per entry** |
+| + full text | 4 565 MiB | +1 507 MiB | `article_fts`: 1 353 MiB, the rest free pages left by the rebuild |
+
+So **contains is priced per headword and full text per body byte**: contains is flat at ~23 B per
+entry whatever the dictionary weighs, while full text added 71 % on top of the stored bodies, i.e.
+0.49x the database that existed before it. The spread across dictionaries is 36-156 % of stored
+bodies, because the index is built over `StripHTML` of the *uncompressed* body while the body sits in
+the file deflate-compressed: a small dictionary whose markup compressed badly (Universal Phrasal
+Verbs) pays more for the index than the bodies themselves take. The per-dictionary table, and the
+`before-fulltext.tsv` sizes to diff against, stay in `D:\Temp` (logs `dscan2.log`,
+`snap_contains.log`, `snap_fulltext.log`); the `entry` table itself was byte-identical before and
+after every step, which is the control that the bodies were not re-encoded. VACUUM would return the
+150 MiB of free pages. ZIMs were not part of this series - their full text is the read-through form
+above, not an index.
+
+## Size estimates: the measurements exist now, the dialog does not
+
+Stage 1 and 2 of the size-estimate work are in the tree. The ingest records `body_bytes` (bodies
+before deflate), `headword_bytes` and `stats_version` in the meta of every dictionary, and a ZIM
+reader additionally records what its directory held: `zim_articles`, `zim_redirects`, `zim_media`,
+`zim_other`, `zim_clusters`, `zim_text_bytes`, `zim_mixed_bytes`, `zim_other_bytes`
+(`internal/format/zim/dmsh_stats.go`, also usable on its own as `zim.MeasureDirectory(path)`).
+Every one of those keys is in `volatileMeta`, so recording them moved no fingerprint and the golden
+tests still pass on the unchanged content; `TestStatsMetaIsVolatile` keeps it that way.
+
+Verified against the four archives and the databases built from them: `zim_articles` equals the
+prepared `entry_count` plus the handful of articles dropped for empty bodies (1 528 188 exactly,
+9 087 944 / 2 199 375 / 3 275 258 against 9 087 932 / 2 199 370 / 3 275 250), and `zim_text_bytes`
+matches the earlier cluster measurement byte for byte (1 078 917 793 / 4 363 231 833 / 13 775 113 880
+/ 13 624 003 973). One deliberate difference from the first hand-made pass: a cluster holding an
+article and a stylesheet is now "mixed", not "text only" - the earlier classifier counted css/js as
+text, which moved 182 907 bytes on wiktionary_en and changes nothing at this scale.
+
+Cost of the measurement: about 12 s for a 9 GB archive and 25 s for the 48 GB one, because it walks
+through the reader's own `ptrWalk` (4 KiB reads) rather than a private sequential scan; that is on
+top of a build that takes minutes, and it is the only price the on-demand path pays. What is NOT
+measured for a ZIM is the article text itself: a title-only build never decompresses a cluster, so
+the estimate for ZIM stays "compressed text bytes x a family coefficient" (2.5 for encyclopedias,
+6-9 for wiktionaries) while dz/mdx can be predicted from `body_bytes`.
+
+Still to do: `internal/estimate` (coefficients as versioned data, a table test over the 38 + 4
+measured dictionaries), the `stats.cache` sidecar beside `info.txt`/`icon.cache` keyed by
+`index_uuid` + source fingerprint, then the dialog itself (alphabetical list, "Calculating" rows
+filled by a background job in the existing work panel, increment with a range, separate totals for
+the two families).
+
 
 - With the local MinGW GCC 13.1.0, `go test -tags sqlite_fts5 -trimpath ./... -count=1`, `go vet -tags sqlite_fts5 -trimpath ./...`, and `go build -tags sqlite_fts5 -trimpath ./...` pass after removing the duplicate LSD implementation. Real-dictionary integration and Windows/Android UI checks remain unverified.
 - Android runs Go through JNI without an HTTP listener; Windows listenerless desktop uses WebView2 and a native bridge. Build recipes are in `docs/WINDOWS-VERIFY.md`; Android uses `build-android.cmd debug intel`. Do not install APKs or commit unless requested.

@@ -296,8 +296,14 @@
       if(s.id==='rescan-indexes' && s.stage!=='dictionary')message=t(s.stage==='cleanup'?'database.cleaning':'database.working');
       if((s.busyDicts||[]).length>1)message=t('dictUI.activeJobs',{number:s.busyDicts.length})+' · '+message;
       const taskType=s.id==='folder-setup'?'setup':s.id==='rescan-indexes'?'rescan':'indexing';
-      if(!indexTaskID)indexTaskID=taskStart(taskType,message,{stop});
-      taskUpdate(indexTaskID,{type:taskType,message,done:s.currentDone||0,total:s.currentTotal||0,dictionaryDone:s.dictionaryDone||0,dictionaryTotal:s.dictionaryTotal||0,elapsedMs:s.elapsedMs||0,stopRequested:!!s.stopRequested,stop:s.id==='starting'?null:stop});
+      // The page owns the row list (it is the only place that knows the
+      // dictionary names) and rebuilds it from this state; asking on every
+      // render keeps a task from staying collapsed for want of an event that
+      // carried the rows.
+      const rows=typeof window.wudictTaskRows==='function'?window.wudictTaskRows(s):undefined;
+      const withRows=rows===undefined?{}:{children:rows};
+      if(!indexTaskID)indexTaskID=taskStart(taskType,message,{stop,...withRows});
+      taskUpdate(indexTaskID,{type:taskType,message,done:s.currentDone||0,total:s.currentTotal||0,dictionaryDone:s.dictionaryDone||0,dictionaryTotal:s.dictionaryTotal||0,elapsedMs:s.elapsedMs||0,stopRequested:!!s.stopRequested,stop:s.id==='starting'?null:stop,...withRows});
     } else if(indexTaskID) {
       taskFinish(indexTaskID);indexTaskID=0;
     }

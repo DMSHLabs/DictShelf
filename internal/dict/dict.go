@@ -43,6 +43,12 @@ type Meta struct {
 	// from the original source after a headword match.
 	HeadwordsOnly bool
 
+	// Articles is its opposite number: this prepared database carries the
+	// article bodies itself, so nothing has to be reopened from the source.
+	// Today only the read-through ZIM form sets it (index_kind "articles"); a
+	// database with neither flag is the native source, not a prepared index.
+	Articles bool
+
 	// IndexLang is the ISO 639-1 code of the language the HEADWORDS are in,
 	// as the dictionary itself declares it (Lingvo's #INDEX_LANGUAGE, Babylon's
 	// source language), normalised by internal/lang. "" when the format

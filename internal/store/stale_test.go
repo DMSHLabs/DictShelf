@@ -233,6 +233,49 @@ func TestFingerprint(t *testing.T) {
 	}
 }
 
+// The size measurements an estimate reads describe the SOURCE, not the prepared
+// content: recording them, and rewriting them later, must not move the
+// fingerprint - otherwise the day they are added every library is asked to
+// rebuild for a number no query depends on.
+func TestStatsMetaIsVolatile(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), TextDBName)
+	r := &fakeReader{meta: dict.Meta{Name: "F", Format: "mdx", Path: "/x/y.mdx"},
+		entries: []dict.Entry{
+			h("alpha", "<p>one <b>two</b></p>"),
+			{Headwords: []string{"beta"}, Body: "<p>three four five</p>", Kind: dict.BodyHTML},
+		}}
+	if _, err := IngestPlan(r, dbPath, Plan{FullText: true, Contains: true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	meta, err := ReadMeta(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"body_bytes", "headword_bytes", "stats_version"} {
+		if meta[k] == "" {
+			t.Errorf("%s was not recorded at ingest", k)
+		}
+	}
+	if meta["body_bytes"] == "0" || meta["headword_bytes"] == "0" {
+		t.Errorf("measurements recorded as zero: body_bytes=%q headword_bytes=%q",
+			meta["body_bytes"], meta["headword_bytes"])
+	}
+	before, err := Fingerprint(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setMeta(t, dbPath, "body_bytes", "1")
+	setMeta(t, dbPath, "headword_bytes", "2")
+	setMeta(t, dbPath, "stats_version", "99")
+	after, err := Fingerprint(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before != after {
+		t.Error("the recorded measurements entered the fingerprint: a library would be asked to rebuild for them")
+	}
+}
+
 // Folders lists every library folder holding a text.db - an unreadable one
 // included, since that is the one most in need of a rebuild - with the source
 // its claim names; a folder without a text.db and a stray file are not listed.

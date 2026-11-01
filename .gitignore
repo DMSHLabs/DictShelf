@@ -81,3 +81,4 @@ DictShelf.exe.bak
 # packaging/windows/dictshelf.rc is the committed source for the icons.
 /dictshelf_windows_amd64.syso
 /.dictshelf-version-*.rc
+DictShelf.zip

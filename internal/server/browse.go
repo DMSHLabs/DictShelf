@@ -1202,11 +1202,12 @@ func (s *Server) browsePage(q url.Values) (result browseResp, retErr error) {
 		return browseResp{}, &browsePageFailure{status: http.StatusConflict,
 			message: "This dictionary has no index. Create one in Dictionary Settings.", entry: e, unprepared: true}
 	}
-	// The client already has the completed strip on a strip=0 request. For
-	// ZIM, building it walks the native index and can take minutes, so a page
-	// return must not wait for Alphabet merely to discard its answer.
+	// The client already has the completed strip on a strip=0 request. For ZIM,
+	// building it walks the native index and can take minutes, so a page return
+	// must not wait for Alphabet merely to discard its answer. A prepared ZIM
+	// database answers the strip from its own headword index, in either form.
 	meta := d.Meta()
-	zimNative := entryHasSelfIndex(e) && !meta.HeadwordsOnly
+	zimNative := entryHasSelfIndex(e) && !meta.HeadwordsOnly && !meta.Articles
 	var alphabet []dict.Letter
 	stage = "alphabet"
 	stageStarted = time.Now()

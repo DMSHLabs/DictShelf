@@ -7,6 +7,7 @@ package zim
 import (
 	"io"
 	"sort"
+	"strconv"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
@@ -26,6 +27,10 @@ type Reader struct {
 	headwordsOnly bool
 	scanPos       int
 	walk          *ptrWalk
+
+	// what the directory said when the reader was opened; nil when it refused
+	// to walk, which costs the reader its measurements and nothing else.
+	stats *DirectoryStats
 
 	articles  []articleRef
 	pos       int
@@ -56,6 +61,11 @@ func newReader(path string, headwordsOnly bool) (*Reader, error) {
 		return nil, err
 	}
 	r := &Reader{d: d, headwordsOnly: headwordsOnly}
+	// One walk of the dirent region, no cluster reads: it is what tells a later
+	// estimate what this archive holds before anything is built from it.
+	if stats, err := d.contentStats(); err == nil {
+		r.stats = &stats
+	}
 	if headwordsOnly {
 		// The path-pointer list is already sorted and the title index needs no
 		// cluster reads. Walk it in place instead of retaining millions of
@@ -91,13 +101,34 @@ func newReader(path string, headwordsOnly bool) (*Reader, error) {
 
 func (r *Reader) Meta() dict.Meta { return r.d.Meta() }
 
-// ExtraMeta marks the prepared database as a title-only ZIM index. The server
-// uses this to reopen the native source for article bodies after searching it.
+// ExtraMeta records which form this prepared database is: a title-only index
+// ("headwords", SPEC §24) or a read-through one that also carries article
+// bodies ("articles"). The server reads it to know whether article text is
+// available from the database itself or must be reopened from the source, and
+// to tell a deliberate read-through build from a database that predates the
+// distinction.
+//
+// It also carries what the directory said about the archive when this database
+// was built (dmsh_stats.go). A measurement must never be the reason a
+// dictionary cannot be read, so an archive whose directory refused to walk is
+// built without them; an estimate then reads the ones it needs from the
+// container instead.
 func (r *Reader) ExtraMeta() map[string]string {
+	m := map[string]string{"index_kind": "articles"}
 	if r.headwordsOnly {
-		return map[string]string{"index_kind": "headwords"}
+		m["index_kind"] = "headwords"
 	}
-	return nil
+	if s := r.stats; s != nil {
+		m["zim_articles"] = strconv.Itoa(s.Articles)
+		m["zim_redirects"] = strconv.Itoa(s.Redirects)
+		m["zim_media"] = strconv.Itoa(s.Media)
+		m["zim_other"] = strconv.Itoa(s.Other)
+		m["zim_clusters"] = strconv.Itoa(s.Clusters)
+		m["zim_text_bytes"] = strconv.FormatUint(s.TextBytes, 10)
+		m["zim_mixed_bytes"] = strconv.FormatUint(s.MixedBytes, 10)
+		m["zim_other_bytes"] = strconv.FormatUint(s.OtherBytes, 10)
+	}
+	return m
 }
 
 func (r *Reader) Next() (dict.Entry, error) {

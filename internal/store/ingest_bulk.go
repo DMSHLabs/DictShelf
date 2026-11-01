@@ -76,6 +76,12 @@ func (b *ingestBulk) close() {
 type ingestRowWriter struct {
 	entry, fts, article, trigram, wref, alias, link *ingestBulk
 	batchBytes                                      int64
+	// bodyBytes and headwordBytes are the two measured drivers of the
+	// dictionary's indexes: the first is what their searchable text weighs
+	// BEFORE deflate (that is what an article index is built over), the second
+	// is what the headword indexes scale with. Both describe the source, not
+	// the prepared content, and are recorded as volatile meta.
+	bodyBytes, headwordBytes int64
 }
 
 func newIngestRowWriter(ctx context.Context, tx *sql.Tx, plan Plan) *ingestRowWriter {
@@ -98,6 +104,8 @@ func newIngestRowWriter(ctx context.Context, tx *sql.Tx, plan Plan) *ingestRowWr
 func (w *ingestRowWriter) write(id int64, e preparedIngestEntry) error {
 	w.entry.add(id, e.headword, e.folded, e.caseKey, e.body)
 	w.wref.add(e.headword, e.lower, id)
+	w.bodyBytes += e.bodyBytes
+	w.headwordBytes += int64(len(e.headword))
 	w.batchBytes += int64(len(e.headword))*4 + int64(len(e.folded)+len(e.caseKey)+len(e.lower)+len(e.body))
 	if w.fts != nil {
 		w.fts.add(id, e.headword)

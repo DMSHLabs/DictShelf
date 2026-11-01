@@ -34,11 +34,14 @@ type ingestAlias struct {
 type preparedIngestEntry struct {
 	headword, folded, caseKey, lower string
 	body                             []byte
-	text                             string
-	aliases                          []ingestAlias
-	subEntry                         bool
-	err                              error
-	panicValue                       any
+	// bodyBytes is the body as it came out of the reader, before deflate: the
+	// article index is built over that text, not over the compressing copy.
+	bodyBytes  int64
+	text       string
+	aliases    []ingestAlias
+	subEntry   bool
+	err        error
+	panicValue any
 }
 
 type ingestWork struct {
@@ -370,6 +373,7 @@ func prepareIngestEntry(e dict.Entry, plan Plan, ctx context.Context) (result pr
 	result.caseKey = dict.CaseKey(result.headword)
 	result.lower = strings.ToLower(result.headword)
 	result.body = encodeBody(body)
+	result.bodyBytes = int64(len(body))
 	if plan.FullText {
 		result.text = StripHTML(body)
 	}

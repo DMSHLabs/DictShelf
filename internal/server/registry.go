@@ -134,7 +134,9 @@ func (u *upgraded) Meta() dict.Meta {
 }
 
 // ZIM title indexes deliberately store no article bodies. Search their local
-// headword database, then fetch only the matched articles from the source.
+// headword database, then fetch only the matched articles from the source. The
+// read-through form holds the bodies itself, so its rows are returned
+// untouched - the same test tells the two apart, which is the point of it.
 func (u *upgraded) titleResults(ctx context.Context, rows []dict.Result, err error) ([]dict.Result, error) {
 	if err != nil || len(rows) == 0 || !u.Store.Meta().HeadwordsOnly {
 		return rows, err
@@ -804,13 +806,15 @@ func openUpgradedOrDirect(path string) (dict.Dictionary, error) {
 		}
 		return &native{Store: s, path: path}, nil
 	}
-	// ZIM's own path list remains the default. An explicitly requested
-	// headword-only database may serve search and browsing, with article bodies
-	// still resolved from the source.
+	// ZIM's own path list remains the default. Either prepared form may serve
+	// search and browsing when it was explicitly asked for: the title-only one
+	// resolves article bodies from the source, the read-through one already
+	// holds them (titleResults asks which), and both keep the source as the
+	// resource fallback for an unpacked ZIM's images.
 	if strings.EqualFold(filepath.Ext(path), ".zim") {
 		if textDB, ok := store.PreparedFor(path); ok {
 			if prepared, err := store.Open(textDB); err == nil {
-				if prepared.Meta().HeadwordsOnly {
+				if meta := prepared.Meta(); meta.HeadwordsOnly || meta.Articles {
 					return &upgraded{Store: prepared, srcPath: path}, nil
 				}
 				prepared.Close()
@@ -1864,15 +1868,32 @@ func (e *entry) reconcileLockedContext(ctx context.Context, name string, t store
 		MediaProgress: progress,
 	}
 	if zim {
-		hooks.Reader = func() (dict.Reader, error) { return zimformat.NewHeadwordReader(e.Path) }
-		// A previous build may have left a conventional ZIM ingest in the
-		// library. The explicit Index action replaces it with the title-only
-		// form, even when source and ordinary plan stamps look current.
 		prepared := store.Prepared{}
 		if dir, ok := store.LookupDir(e.Path); ok {
 			prepared = store.Inspect(store.TextDBPath(dir))
 		}
-		if prepared.Meta == nil || prepared.Meta["index_kind"] != "headwords" {
+		headwords, articles := store.ZIMForm(prepared.Meta)
+		// A nil FullText means "keep what is built", so the form follows the
+		// database that is already there: that is what stops an ordinary Index
+		// rebuild from quietly dropping article text the reader paid for.
+		full := articles
+		if t.FullText != nil {
+			full = *t.FullText
+		}
+		if full {
+			// The read-through form: article clusters are decompressed and the
+			// bodies are stored and indexed, which is the only way article text
+			// can reach article_fts (SPEC §24).
+			hooks.Reader = func() (dict.Reader, error) { return zimformat.NewReader(e.Path) }
+		} else {
+			// The title-only form: the cheap default, and the whole reason
+			// SelfIndexed exists.
+			hooks.Reader = func() (dict.Reader, error) { return zimformat.NewHeadwordReader(e.Path) }
+		}
+		// Convert when the request names the other form, or when there is no
+		// usable ZIM index yet (a database from before the two forms existed);
+		// an ordinary rebuild keeps the form it already has.
+		if !headwords || (t.FullText != nil && articles != *t.FullText) {
 			t.Rebuild = store.Always
 		}
 	}

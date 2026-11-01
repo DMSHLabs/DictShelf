@@ -41,6 +41,14 @@ import (
 // golden tests in the format packages fail on such a change and say so.
 const IngestVersion = 7
 
+// StatsVersion identifies how the size measurements recorded at ingest
+// (body_bytes, headword_chars) were taken. They are volatile meta - the
+// estimate that reads them is a prediction about a build, not prepared
+// content - so a change here invalidates them without asking anyone to
+// rebuild; a reader that finds a version it does not know treats the
+// measurements as absent rather than misread.
+const StatsVersion = 1
+
 // MediaVersion identifies IngestMedia's behaviour, bumped the same way.
 const MediaVersion = 1
 
@@ -111,6 +119,21 @@ type Prepared struct {
 	// Optional search-index sizes, measured from SQLite's dbstat virtual table.
 	ContainsSize int64
 	FullTextSize int64
+}
+
+// ZIMForm reports the form of a prepared ZIM database from its meta: whether it
+// carries the headword list, and whether it also carries article bodies.
+// index_kind says which - "headwords" is the title-only index (SPEC §24) and
+// "articles" the read-through one. A database with neither marker predates the
+// distinction, and is trusted for neither until it is rebuilt.
+func ZIMForm(meta map[string]string) (headwords, articles bool) {
+	switch meta["index_kind"] {
+	case "headwords":
+		return true, false
+	case "articles":
+		return true, true
+	}
+	return false, false
 }
 
 // Inspect reads textDB's meta table and notes whether a media.db lies beside

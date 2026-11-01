@@ -411,8 +411,17 @@ func (r *Registry) queueNewDictionaries() error {
 // contains every requested index; an incomplete plan remains queued.
 func preparedHasIndexes(path string, wanted indexOptions) bool {
 	prepared, ok := preparedInfo(path)
-	if !ok || prepared.Meta == nil || isZIMPath(path) && prepared.Meta["index_kind"] != "headwords" {
+	if !ok || prepared.Meta == nil {
 		return false
+	}
+	if isZIMPath(path) {
+		// A ZIM's full text is a per-dictionary decision and never something
+		// this queue starts: the read-through build decompresses the whole
+		// corpus (tens of gigabytes, hours), so an unattended pass must not
+		// begin one. The headwords are the whole question here; the article
+		// text is added by the chip in Dictionary Settings, by hand.
+		headwords, _ := store.ZIMForm(prepared.Meta)
+		return headwords
 	}
 	return (!wanted.Contains || prepared.Plan.Contains) &&
 		(!wanted.FullText || prepared.Plan.FullText)

@@ -108,7 +108,8 @@ func cmdReindex(args []string) error {
 func folderNeedsReindex(f store.Folder) bool {
 	if strings.EqualFold(filepath.Ext(f.Source), ".zim") {
 		p := store.Inspect(store.TextDBPath(f.Dir))
-		return p.Meta == nil || p.Meta["index_kind"] != "headwords" || len(p.Stale(f.Source)) > 0
+		headwords, _ := store.ZIMForm(p.Meta)
+		return !headwords || len(p.Stale(f.Source)) > 0
 	}
 	return len(store.Stale(store.TextDBPath(f.Dir), f.Source)) > 0
 }
@@ -175,14 +176,17 @@ func reindexOne(f store.Folder, force bool) error {
 	if force {
 		t.Rebuild, t.Media = store.Always, store.MediaRepack
 	}
+	var full bool // rebuild the ZIM form this folder already holds, never another
 	if strings.EqualFold(filepath.Ext(f.Source), ".zim") {
 		p := store.Inspect(store.TextDBPath(f.Dir))
-		if p.Meta == nil || p.Meta["index_kind"] != "headwords" {
+		var headwords bool
+		headwords, full = store.ZIMForm(p.Meta)
+		if !headwords {
 			t.Rebuild = store.Always
 		}
 	}
 	var title string // the folder is what this command names, not the title
-	hooks := cliHooks(f.Source, &title)
+	hooks := cliHooks(f.Source, &title, full)
 	res, err := store.Reconcile(f.Source, t, hooks)
 	logx.ClearLine()
 	if err != nil {
