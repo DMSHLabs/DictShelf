@@ -137,7 +137,10 @@ func ReadStats(textDB string) (Stats, bool) {
 	// the read-through form to the title index went on being measured as if it
 	// still stored article bodies - the window would price it against bodies
 	// that are not there. Found by rebuilding one and reading the result.
-	if form := ZIMFormOf(meta); form != s.ZIMForm {
+	//
+	// Only a database that DECLARES a form is compared: a non-ZIM never has one,
+	// and neither does a database from before the two forms existed.
+	if form := ZIMFormOf(meta); form != "" && form != s.ZIMForm {
 		return Stats{}, false
 	}
 	return s, true

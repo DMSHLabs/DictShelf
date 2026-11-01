@@ -264,7 +264,12 @@ them are in `docs/handoff-archive.md`.
     and TestSearchBudgetRefusesUnpreparedDictionariesOnceSpent ("a dictionary
     priced above the remaining budget must be refused, got <nil>" — the budget
     refusal is timing/heap sensitive; passed 3/3 in isolation in the same tree
-    where a loaded full-suite run dropped it once).
+    where a loaded full-suite run dropped it once), and
+    TestDictionaryListSharedByHTTPAndNativeWithoutRouter (seen once in a
+    full-suite run on 2026-11-01, with the three transports' rows differing by
+    the estimate a background stats pass had just written; passed alone, with
+    two neighbours, and in the two full runs either side of it - the fixture's
+    "let self-preparing fixtures settle" first call is what it races).
   - `internal/intake`: TestJobDisposesSource and
     TestSpooledSourceIsAlwaysRemoved USED to fail here (dispose ran before
     the archive reader closed, so Windows kept the "delete the source"
