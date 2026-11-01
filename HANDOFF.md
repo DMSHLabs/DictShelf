@@ -484,6 +484,27 @@ sort-preserving encoding (implemented, wants a test against a known document id 
 container needs the byte-range API so a reader works from a mapped archive instead of the copied blob the
 tool uses today.
 
+**The item framing is the last unknown, with the bytes recorded.** The payload formats are now
+confirmed from Xapian's *writer*, not inferred: a postlist chunk is the first document's frequency
+followed by (gap, frequency) pairs, and the chunk flag is the character `'0'` or `'1'`, not the byte 0
+or 1 (`pack_bool` in `common/pack.h` writes `'0' | value`); a docdata item's tag is simply the article
+path, and its key is the document id in sort-preserving form - both checked against the file
+(`83 d1 0a` decodes to 250 122, `49 a8` to 2 472, which is what the index said). What does not fit is
+the *item* itself: every tag comes out one to three bytes short, by an amount that varies with the
+item, so the size/prefix arithmetic is wrong rather than the content. Raw examples, straight from the
+archive, for whoever picks this up: document 250 122 is `60 1d | 03 | 83 d1 0a | 43 2f d0 ba d0 bb d0 b0
+d1 80 d0 bd d0 b5 d1 82 d0 b8 d1 81 d1 82 d0 ba d0 b0` (the path wants to read "C/кларнетистка"), and
+document 2 472 is `60 0a | 02 | 49 a8 | 43 2f 61 6e 6c 65 74 65` followed by the next item's `60 0d`. The
+postlist tag for "кларнетист" is the same story one document from the end: 47 bytes, 11 documents and 32
+occurrences in the header, 10 documents decoded.
+
+Also worth knowing for the next session: building Xapian 1.4.32 locally needs paths that both the MSYS
+shell and MinGW's native make understand - `configure` run through Git Bash with a `/d/...` source path
+leaves a Makefile that native make cannot stat (its recipes then try to regenerate everything and die on
+an unquoted `C:/Program Files/Git/...`), and a `D:/...` path breaks configure's own lookups. The
+untouched tarball ships the autotools aux files; the git clone does not, so a clone needs `bootstrap`
+and an autotools install qed.
+
 - With the local MinGW GCC 13.1.0, `go test -tags sqlite_fts5 -trimpath ./... -count=1`, `go vet -tags sqlite_fts5 -trimpath ./...`, and `go build -tags sqlite_fts5 -trimpath ./...` pass after removing the duplicate LSD implementation. Real-dictionary integration and Windows/Android UI checks remain unverified.
 - Android runs Go through JNI without an HTTP listener; Windows listenerless desktop uses WebView2 and a native bridge. Build recipes are in `docs/WINDOWS-VERIFY.md`; Android uses `build-android.cmd debug intel`. Do not install APKs or commit unless requested.
 - Windows/Android search, index maintenance and visual checks remain pending. Other open items include portable Windows write-path gaps (`docs/PORTABLE-WRITES-AUDIT.md`), Edit Folders verification, icon visibility and MDX ad-slot reindex/display.

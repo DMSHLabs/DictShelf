@@ -43,3 +43,8 @@ func unpackPreservingSort(b []byte, p int) (uint32, int, error) {
 	}
 	return v, p + n, nil
 }
+
+// DocKey is the key the docdata table stores a document under: the id in
+// sort-preserving form, so the keys sort the way the ids do. Exported because a
+// test or a diagnostic has to name a document's key without guessing.
+func DocKey(docid uint32) []byte { return packPreservingSort(docid) }

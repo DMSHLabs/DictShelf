@@ -49,6 +49,8 @@ func main() {
 	if len(terms) == 0 {
 		terms = []string{"кларнетист", "джаз"}
 	}
+	dumpDoc(db, 250122)
+	dumpDoc(db, 2472)
 	for _, term := range terms {
 		if raw, size, flags, kl, err := db.RawItem(glass.TablePostlist, []byte(term)); err == nil && raw != nil {
 			fmt.Printf("  [dbg] %q элемент: % x размер=%d флаги=%02x ключДлина=%d\n", term, raw, size, flags, kl)
@@ -191,4 +193,15 @@ func readBlob(f *os.File, size uint64, start uint64, want uint32) ([]byte, error
 		return nil, err
 	}
 	return out, nil
+}
+
+// dumpDoc prints the raw item the docdata table holds for a document id.
+func dumpDoc(db *glass.DB, docid uint32) {
+	raw, size, flags, kl, err := db.RawItem(glass.TableDocdata, glass.DocKey(docid))
+	if err != nil {
+		fmt.Printf("  [dbg] doc %d: %v\n", docid, err)
+		return
+	}
+	fmt.Printf("  [dbg] doc %d элемент: % x\n        размер=%d флаги=%02x ключДлина=%d ключ=% x\n",
+		docid, raw, size, flags, kl, raw[3:3+kl])
 }
