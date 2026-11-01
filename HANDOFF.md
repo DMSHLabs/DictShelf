@@ -723,6 +723,21 @@ archive itself)". What is NOT verified: an actual on-request build from the wind
 (hours of work), and the Russian rendering of the new strings (the catalogs are key-matched and pass
 `tools/i18n-test.cjs`; the test server came up in English).
 
+**The three readings are drawn marks now** (the user's design, 2026-11-02): two word bars with the one
+thing that differs between the readings drawn between them - nothing for a phrase, a double arrow with the
+bound over it for "near", fading dots for "anywhere". SVG rather than typed glyphs because the same mark
+has to sit in the menu's 3.1em icon column and on the mode button, and the bound has to hang above the
+arrow; `currentColor`, so a selected row tints its mark the way it tints its text. The bound is not
+decoration, so it is not copied: the page's `NEAR_WORDS` is compared with `ftsq.NearDefault` (now exported,
+and `search.archiveNearDistance` reads it too) by `TestModeMarksQuoteTheNearRule`, which also fails when a
+reading the menu offers loses its mark.
+
+That test exists because the work found a real defect: `setSearchMode` gated on `MODE_SHORT`, a table of
+the FALLBACK MARKS, and the three readings were absent from it - so choosing "Phrase" and reloading
+dropped the reader back to the first option in silence, while the menu kept offering the mode. The gate
+is now derived from the select's own options (`searchModeExists`), which cannot drift from the control it
+describes. Verified by driving the page: all three readings survive a reload, each wearing its own mark.
+
 ## The article index in a file of its own: writer done, reader pending (2026-11-02)
 
 Half of the split is in, and the half that is missing is a design point rather than a detail, so it is
