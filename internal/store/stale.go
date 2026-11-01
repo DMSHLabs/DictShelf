@@ -152,6 +152,13 @@ func Inspect(textDB string) Prepared {
 					if p.Plan.Contains || p.Plan.FullText {
 						p.ContainsSize, p.FullTextSize = searchIndexSizes(db, p.Plan)
 					}
+					// A split index is its own file: that is the whole point of
+					// splitting it, and its size needs no page accounting.
+					if art, ok := ArticlesSibling(textDB); ok {
+						if fi, err := os.Stat(art); err == nil {
+							p.FullTextSize = fi.Size()
+						}
+					}
 				}
 			}
 		}
@@ -279,6 +286,10 @@ func PlanFromMeta(m map[string]string) Plan {
 	return Plan{
 		FullText: m["ingest_level"] != levelHeadwords,
 		Contains: m["has_trigram"] == "1",
+		// Only a database that HAS a text index can be split: one whose index was
+		// removed keeps the key, and reading it as a split would ask a rebuild for
+		// articles that are not there.
+		SplitArticles: m["ingest_level"] != levelHeadwords && m["articles_split"] == "1",
 	}
 }
 

@@ -193,6 +193,12 @@ func Open(path string) (*Store, error) {
 	} else {
 		s.articleFTSTable = "entry_fts"
 	}
+	// A split database keeps its article index in a file of its own. Reading it
+	// needs the file ATTACHed on EVERY connection of this pool, and ATTACH is a
+	// per-connection statement - so the read side waits for a connector that
+	// attaches as each connection opens, rather than being done with one call
+	// that happens to land on one connection (dmsh_articles_split.go). Until
+	// then nothing may ask for the split: no caller sets SplitArticles.
 	var headFTS int
 	db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type='table' AND name='entry_fts'`).Scan(&headFTS)
 	s.hasHeadwordFTS = headFTS > 0

@@ -57,6 +57,11 @@ type Report struct {
 type Plan struct {
 	FullText bool // index article text (the largest index)
 	Contains bool // trigram and token FTS over headwords
+	// SplitArticles keeps the article index in its own articles.db beside the
+	// database instead of inside it (dmsh_articles_split.go). Only meaningful
+	// with FullText, and false for every database built before it existed, which
+	// is why an old database compares equal to the intent "no split".
+	SplitArticles bool
 }
 
 // IngestPlan scans r into a new text database at dbPath (atomically: written
@@ -103,6 +108,16 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	}
 	tmp := tempDBName(dbPath)
 	_ = os.Remove(tmp)
+	// The article index of a split database is built in a file of its own,
+	// attached to this connection (dmsh_articles_split.go): one write path, two
+	// files, renamed together at the end.
+	articlesTmp := ""
+	articleTable := "article_fts"
+	if plan.FullText && plan.SplitArticles {
+		articlesTmp = tmp + "-articles"
+		articleTable = "articles.article_fts"
+		_ = os.Remove(articlesTmp)
+	}
 	var db *sql.DB
 	defer func() {
 		panicValue := recover()
@@ -112,6 +127,9 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 			}
 		}
 		if err != nil || panicValue != nil {
+			if articlesTmp != "" {
+				_ = os.Remove(articlesTmp)
+			}
 			if cleanupErr := removeIngestTemp(tmp); cleanupErr != nil {
 				if panicValue == nil {
 					err = errors.Join(err, fmt.Errorf("%w: %v", ErrIngestTempCleanup, cleanupErr))
@@ -164,9 +182,22 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 			return rep, err
 		}
 	}
+	if articlesTmp != "" {
+		if err = createArticlesDB(db, articlesTmp, uuid); err != nil {
+			return rep, err
+		}
+	}
 	if plan.FullText {
-		if _, err = db.ExecContext(ctx, `CREATE VIRTUAL TABLE article_fts USING fts5(
+		if _, err = db.ExecContext(ctx, `CREATE VIRTUAL TABLE `+articleTable+` USING fts5(
 			w, txt, content='', columnsize=0, tokenize='unicode61 remove_diacritics 2')`); err != nil {
+			return rep, err
+		}
+	}
+
+	if plan.FullText && plan.SplitArticles {
+		// Recorded only when it is true, so a database that is not split - every
+		// one built before this existed - keeps exactly the meta it had.
+		if _, err = db.ExecContext(ctx, `INSERT OR REPLACE INTO meta(key, value) VALUES('articles_split', '1')`); err != nil {
 			return rep, err
 		}
 	}
@@ -362,7 +393,9 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	}
 	if plan.FullText {
 		trace.phase("optimize fulltext index")
-		if _, err = db.ExecContext(ctx, "INSERT INTO article_fts(article_fts) VALUES('optimize')"); err != nil {
+		// The FTS5 command takes the table's own name in the parens, so only the
+		// target of the INSERT is qualified with the schema.
+		if _, err = db.ExecContext(ctx, "INSERT INTO "+articleTable+"(article_fts) VALUES('optimize')"); err != nil {
 			return rep, err
 		}
 	}
@@ -378,6 +411,12 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	trace.phase("optimize database")
 	if _, err = db.ExecContext(ctx, "ANALYZE; PRAGMA optimize;"); err != nil {
 		return rep, err
+	}
+	if articlesTmp != "" {
+		// The index is written and committed; let go of the file so the rename
+		// below can move it (Windows will not rename an attached database), while
+		// the connection is still open to detach it.
+		detachArticles(db)
 	}
 	if err = db.Close(); err != nil {
 		return rep, err
@@ -399,6 +438,15 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	syncFile(tmp)
 	if err = ctx.Err(); err != nil {
 		return rep, err
+	}
+	if articlesTmp != "" {
+		// An attached file cannot be renamed on Windows, and the pair has to
+		// arrive together: it was detached above (while the connection was still
+		// open), so here it is only synced and put in place.
+		syncFile(articlesTmp)
+		if err = os.Rename(articlesTmp, ArticlesFilePath(dbPath)); err != nil {
+			return rep, err
+		}
 	}
 	if err = os.Rename(tmp, dbPath); err != nil {
 		return rep, err

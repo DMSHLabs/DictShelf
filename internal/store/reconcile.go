@@ -48,6 +48,10 @@ const (
 // missing or unusable database, or one built from an older edition of the
 // source, and nothing else.
 type Target struct {
+	// SplitArticles keeps the article index in a file of its own; nil keeps the
+	// shape the database already has, so a rebuild never moves it by accident
+	// (dmsh_articles_split.go).
+	SplitArticles *bool
 	// FullText and Contains set one index each; nil keeps what is built. A
 	// dictionary never prepared - or whose database cannot be read - has
 	// nothing to keep and starts from headwords only (D24).
@@ -224,6 +228,9 @@ func reconcileText(src string, t Target, h Hooks, out *Outcome) (p Prepared, dir
 	}
 	if t.FullText != nil {
 		plan.FullText = *t.FullText
+	}
+	if t.SplitArticles != nil {
+		plan.SplitArticles = *t.SplitArticles
 	}
 	if t.Contains != nil {
 		plan.Contains = *t.Contains

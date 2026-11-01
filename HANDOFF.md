@@ -658,6 +658,35 @@ Two things the live run taught, both now recorded in the code:
   no banner at all and is killed at 40 s). The offer therefore quotes the folder size, and the index
   figure appears only where a build can measure it (the pure-Go modernc build can; this one cannot).
 
+## The article index in a file of its own: writer done, reader pending (2026-11-02)
+
+Half of the split is in, and the half that is missing is a design point rather than a detail, so it is
+written down before anything turns it on.
+
+What is in place: `Plan.SplitArticles` (recorded as `articles_split=1` ONLY when true, so every database
+built before this keeps exactly the meta it had - the reader golden test caught that on the first try);
+the ingest writes the article index into a `<text.db>.tmp-articles` file at the same time as the rest,
+inside the same transaction (SQLite commits across attached databases atomically), detaches it while the
+connection is still open - Windows will not rename an attached file - and renames the pair into place
+together; `ClearSearchIndexes` removes the FILE and skips the VACUUM, which is the point of the split
+(no rewriting 35 GB to return 9); the sibling's size is its file size, so the estimate needs no page
+accounting for it; and a test builds one and checks that the file holds a working index of the same
+articles, that removing it leaves the headword side whole and full text unadvertised.
+
+**What is missing, and why it is not a detail:** reading the article index from the sibling needs the
+file ATTACHed on EVERY connection of the pool. `ATTACH` is per-connection and `sql.DB` is a pool, so the
+first attempt - one `ATTACH` in `store.Open` - left a database whose queries say
+`no such column: articles.article_fts`: the statement ran on a connection that had never attached it.
+The fix is a `driver.Connector` wrapper that attaches as each connection opens
+(`sql.OpenDB(attachingConnector{...})` in `openRO` and in the ingest), which is a change to how the store
+opens databases and deserves its own pass with its own tests.
+
+**Until then nothing may turn the split on.** No caller sets `SplitArticles` - not the server's ZIM path,
+not the CLI - so the option is inert: a database that asks for it would build correctly and then be
+unsearchable in full text, which is worse than not having the split at all. The order is: the connector,
+then the callers (the index-only ZIM form is the one that wants it), then the receipt and the window's
+wording.
+
 ## A ZIM without its own index gets ours, without the bodies (2026-11-02)
 
 The third form a prepared ZIM database can take, and the one the user asked for: the article text is

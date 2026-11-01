@@ -100,7 +100,11 @@ func newIngestRowWriter(ctx context.Context, tx *sql.Tx, plan Plan) *ingestRowWr
 		w.trigram = newIngestBulk(ctx, tx, "INSERT INTO entry_trigram(rowid, w) VALUES", 2)
 	}
 	if plan.FullText {
-		w.article = newIngestBulk(ctx, tx, "INSERT INTO article_fts(rowid, w, txt) VALUES", 3)
+		table := "article_fts"
+		if plan.SplitArticles {
+			table = "articles.article_fts"
+		}
+		w.article = newIngestBulk(ctx, tx, "INSERT INTO "+table+"(rowid, w, txt) VALUES", 3)
 	}
 	return w
 }

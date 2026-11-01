@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
@@ -209,6 +210,22 @@ func ClearSearchIndexesContext(ctx context.Context, path string, contains, fullT
 	}
 	if err := tx.Commit(); err != nil {
 		return err
+	}
+	// A split database keeps the article index in its own file: removing it is
+	// removing that file, and the database beside it has nothing to reclaim, so
+	// the VACUUM below is skipped rather than rewriting tens of gigabytes to
+	// return nothing (dmsh_articles_split.go).
+	splitArticles := false
+	if fullText {
+		if art, ok := ArticlesSibling(path); ok {
+			splitArticles = true
+			if err := os.Remove(art); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+		}
+	}
+	if splitArticles {
+		return nil
 	}
 	_, err = db.ExecContext(ctx, "VACUUM")
 	if ctx.Err() != nil {
