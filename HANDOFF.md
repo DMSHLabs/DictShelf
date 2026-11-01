@@ -658,6 +658,40 @@ Two things the live run taught, both now recorded in the code:
   no banner at all and is killed at 40 s). The offer therefore quotes the folder size, and the index
   figure appears only where a build can measure it (the pure-Go modernc build can; this one cannot).
 
+## A ZIM without its own index gets ours, without the bodies (2026-11-02)
+
+The third form a prepared ZIM database can take, and the one the user asked for: the article text is
+read and INDEXED, and the bodies are not kept. Storing them buys nothing - reading an article out of the
+archive and out of the database are the same (tools/zimtime: medians 0.52-0.66 ms either way) - while
+they are four to five times the size of the index copied for: on the English Wiktionary 19.9 GB of
+bodies and headwords against 4.6 GB of index. So an archive that has no index of its own now gets one of
+ours at about the index's price, and the articles keep coming from the archive.
+
+How it is expressed, with no new meta key: a reader that says so. `zimformat.NewIndexReader` wraps the
+read-through reader (the body it yields is exactly what the index needs to see) and answers
+`DropBodies() bool`; the ingest asks any reader that implements it, indexes the text anyway and writes an
+EMPTY `entry.m` (the column is NOT NULL, and an empty body is what "this database does not carry it"
+looks like). The form is then derivable from what is already recorded: `index_kind=headwords` (no
+bodies) with `ingest_level=text` (a text index) - a combination that did not exist before, which is why
+nothing else had to change to describe it.
+
+The three places that choose the reader ask for the TEXT rather than for the old form: a rebuild must
+keep the index of an index-only database, so the test is `index_kind == "articles" || ingest_level ==
+"text"` (registry.go, cli.go's ingestArticles, reindex.go). An existing read-through database - which no
+longer exists in the user's library - is rebuilt into the new form by the same rule, since the bodies
+are what the rule says not to keep.
+
+Verified by a store test: a reader that drops bodies produces a database that answers a full-text query,
+holds no body at all, and reads back as the title form with a text index, so a later rebuild keeps the
+index. NOT verified live: no archive in the library lacks its own index, so this form has never been
+built from a real ZIM - the first one that arrives (or a copy with its index removed) is the test.
+
+**Still to do, and it is the other half of the plan:** the split of the article index into its own
+`articles.db`. It is worth doing for the reason the user named - instant removal instead of a VACUUM
+over the whole file, and a header file that stays small - and it is additive now that old formats keep
+working: new builds would write the pair, old ones would read as they do. It is filing rather than
+capability, which is why the form above came first.
+
 ## Three readings, chosen by the reader, not by the program (2026-11-02)
 
 The search menu now offers the full-text readings as three modes - **Фраза** (the words adjacent, in

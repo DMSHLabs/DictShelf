@@ -1897,10 +1897,15 @@ func (e *entry) reconcileLockedContext(ctx context.Context, name string, t store
 			prepared = store.Inspect(store.TextDBPath(dir))
 		}
 		headwords, articles := store.ZIMForm(prepared.Meta)
+		// Whether the ARTICLE TEXT is indexed, which is what chose the reader:
+		// index_kind says the old read-through form kept the bodies while it did
+		// it, and ingest_level alone says the index exists (the index-only form
+		// new builds make - the bodies stay in the archive).
+		text := articles || prepared.Plan.FullText
 		// A nil FullText means "keep what is built", so the form follows the
 		// database that is already there: that is what stops an ordinary Index
 		// rebuild from quietly dropping article text the reader paid for.
-		full := articles
+		full := text
 		if t.FullText != nil {
 			full = *t.FullText
 		}
@@ -1926,10 +1931,11 @@ func (e *entry) reconcileLockedContext(ctx context.Context, name string, t store
 		// means for such an archive now.
 		t.FullText = &full
 		if full {
-			// The read-through form: article clusters are decompressed and the
-			// bodies are stored and indexed, which is the only way article text
-			// can reach article_fts (SPEC §24).
-			hooks.Reader = func() (dict.Reader, error) { return zimformat.NewReader(e.Path) }
+			// The text is indexed and the bodies are NOT kept: reading them out
+			// of the archive costs the same as reading them out of a database,
+			// and they are several times the size of the index they were copied
+			// for (SPEC §24, internal/format/zim/dmsh_index_reader.go).
+			hooks.Reader = func() (dict.Reader, error) { return zimformat.NewIndexReader(e.Path) }
 		} else {
 			// The title-only form: the cheap default, and the whole reason
 			// SelfIndexed exists.
@@ -1938,7 +1944,7 @@ func (e *entry) reconcileLockedContext(ctx context.Context, name string, t store
 		// Convert when the request names the other form, or when there is no
 		// usable ZIM index yet (a database from before the two forms existed);
 		// an ordinary rebuild keeps the form it already has.
-		if !headwords || (t.FullText != nil && articles != *t.FullText) {
+		if !headwords || (t.FullText != nil && text != *t.FullText) {
 			t.Rebuild = store.Always
 		}
 	}

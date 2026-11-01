@@ -48,7 +48,10 @@ type ingestWork struct {
 	sequence, weight int64
 	entries          []dict.Entry
 	plan             Plan
-	ctx              context.Context
+	// dropBodies is the reader's word on whether what it yields is for the index
+	// and not for the database (see prepareIngestEntry).
+	dropBodies bool
+	ctx        context.Context
 }
 
 type preparedIngestBatch struct {
@@ -348,12 +351,12 @@ func (p *ingestPool) workerWake() <-chan struct{} {
 func prepareIngestBatch(item *ingestWork) preparedIngestBatch {
 	result := preparedIngestBatch{sequence: item.sequence, weight: item.weight, entries: make([]preparedIngestEntry, 0, len(item.entries))}
 	for _, entry := range item.entries {
-		result.entries = append(result.entries, prepareIngestEntry(entry, item.plan, item.ctx))
+		result.entries = append(result.entries, prepareIngestEntry(entry, item.plan, item.dropBodies, item.ctx))
 	}
 	return result
 }
 
-func prepareIngestEntry(e dict.Entry, plan Plan, ctx context.Context) (result preparedIngestEntry) {
+func prepareIngestEntry(e dict.Entry, plan Plan, dropBodies bool, ctx context.Context) (result preparedIngestEntry) {
 	defer func() {
 		if value := recover(); value != nil {
 			result.panicValue = value
@@ -372,8 +375,16 @@ func prepareIngestEntry(e dict.Entry, plan Plan, ctx context.Context) (result pr
 	result.folded = dict.Fold(result.headword)
 	result.caseKey = dict.CaseKey(result.headword)
 	result.lower = strings.ToLower(result.headword)
-	result.body = encodeBody(body)
 	result.bodyBytes = int64(len(body))
+	if dropBodies {
+		// A reader that says the body is for the index only: the text below is
+		// still extracted, and the column holds an EMPTY body rather than a NULL
+		// one, because the schema asks for a body and an empty one is what "the
+		// database does not carry it" looks like (internal/format/zim, dmsh_index_reader.go).
+		result.body = []byte{}
+	} else {
+		result.body = encodeBody(body)
+	}
 	if plan.FullText {
 		result.text = StripHTML(body)
 	}
@@ -414,7 +425,16 @@ type ingestReaderResult struct {
 	panicValue any
 }
 
+// bodyDropper is a reader whose bodies exist to be indexed and not to be kept.
+// The store asks; the reader answers; nothing about the entry changes, because a
+// body is still exactly what the index needs to see.
+type bodyDropper interface{ DropBodies() bool }
+
 func readIngestEntries(s *ingestSession, r dict.Reader, plan Plan, redirects chan<- ingestRedirect, done chan<- ingestReaderResult) {
+	dropBodies := false
+	if d, ok := r.(bodyDropper); ok {
+		dropBodies = d.DropBodies()
+	}
 	var outcome ingestReaderResult
 	defer func() {
 		if value := recover(); value != nil {
@@ -430,7 +450,7 @@ func readIngestEntries(s *ingestSession, r dict.Reader, plan Plan, redirects cha
 		if len(entries) == 0 {
 			return nil
 		}
-		item := &ingestWork{sequence: sequence - int64(len(entries)) + 1, weight: weight, entries: entries, plan: plan, ctx: s.ctx}
+		item := &ingestWork{sequence: sequence - int64(len(entries)) + 1, weight: weight, entries: entries, plan: plan, ctx: s.ctx, dropBodies: dropBodies}
 		if err := sharedIngestPool.submit(s, item); err != nil {
 			return err
 		}
@@ -652,7 +672,7 @@ func scanIngestEntriesSequential(ctx context.Context, r dict.Reader, plan Plan, 
 			continue
 		}
 		nextID := id + 1
-		prepared := prepareIngestEntry(e, plan, ctx)
+		prepared := prepareIngestEntry(e, plan, false, ctx)
 		if prepared.panicValue != nil {
 			panic(prepared.panicValue)
 		}

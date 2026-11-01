@@ -181,6 +181,10 @@ func reindexOne(f store.Folder, force bool) error {
 		p := store.Inspect(store.TextDBPath(f.Dir))
 		var headwords bool
 		headwords, full = store.ZIMForm(p.Meta)
+		// An index-only database (the form new builds make) carries no bodies,
+		// so index_kind is the title form and only ingest_level says its article
+		// text is indexed: rebuilding has to keep that index.
+		full = full || p.Plan.FullText
 		if !headwords {
 			t.Rebuild = store.Always
 		}

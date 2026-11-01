@@ -1077,8 +1077,12 @@ func ingestArticles(src string, want *bool) bool {
 		return *want
 	}
 	if dir, ok := store.LookupDir(src); ok {
-		_, articles := store.ZIMForm(store.Inspect(store.TextDBPath(dir)).Meta)
-		return articles
+		p := store.Inspect(store.TextDBPath(dir))
+		_, articles := store.ZIMForm(p.Meta)
+		// The article TEXT, whether or not the bodies were kept with it: an
+		// index-only database (the form new builds make) says so in ingest_level
+		// alone (internal/format/zim/dmsh_index_reader.go).
+		return articles || p.Plan.FullText
 	}
 	return false
 }
@@ -1104,7 +1108,9 @@ func cliHooks(srcPath string, name *string, articles bool) store.Hooks {
 			var err error
 			if strings.EqualFold(filepath.Ext(srcPath), ".zim") {
 				if articles {
-					rd, err = zimformat.NewReader(srcPath)
+					// The text is indexed; the bodies stay in the archive
+					// (internal/format/zim/dmsh_index_reader.go).
+					rd, err = zimformat.NewIndexReader(srcPath)
 				} else {
 					rd, err = zimformat.NewHeadwordReader(srcPath)
 				}
