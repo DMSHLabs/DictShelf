@@ -56,9 +56,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/DMSHLabs/DictShelf/internal/resource"
 	"github.com/klauspost/compress/zstd"
 	"github.com/ulikunitz/xz"
-	"github.com/DMSHLabs/DictShelf/internal/resource"
 )
 
 const (

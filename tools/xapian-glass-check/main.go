@@ -52,6 +52,7 @@ func main() {
 		terms = []string{"джазовый кларнетист", "джаз", "кларнетист"}
 	}
 	runQueries(db, article, terms)
+	runFullText(article, terms)
 	dumpDoc(db, 250122)
 	dumpDoc(db, 2472)
 	for _, term := range terms {
@@ -218,6 +219,23 @@ func runQueries(db *glass.DB, article *zim.Dict, queries []string) {
 		}
 		if checked > 0 && bad == 0 {
 			fmt.Println("      → все проверенные статьи содержат все термы запроса")
+		}
+	}
+}
+
+// runFullText exercises the bridge the product would use: the archive answers a
+// query from its own index, and the answer comes back as ordinary results -
+// headword and article - which is the shape Exact returns.
+func runFullText(article *zim.Dict, queries []string) {
+	for _, query := range queries {
+		found, err := article.FullText(query, 5)
+		if err != nil {
+			fmt.Printf("  FullText %q: %v\n", query, err)
+			continue
+		}
+		fmt.Printf("  FullText %q: статей %d\n", query, len(found))
+		for _, r := range found {
+			fmt.Printf("      %-40s статья %d байт\n", r.Headword, len(r.Body))
 		}
 	}
 }

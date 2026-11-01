@@ -510,17 +510,34 @@ Three more things only the bytes settled, each of which the code got wrong first
   key-tag pair), so the tag ends three bytes past the size. Reading the size as the whole item cut every
   tag three bytes short, which showed up as paths truncated inside a character.
 
-**What is still to do**, in order: wiring the product to use the archive's own index where it has one
-(`Dict.XapianIndex`, which reports `dict.ErrNotFound` when the archive carries none - a ZIM built without
-`--indexing` - and then our own index is what to build) and threading a Kiwix search result back to our
-own entries, since the index names article paths like `C/бассетгорн` while a result has to become a
-dictionary entry; ranking, because what exists now is AND-intersection ordered by summed wdf and not
-Xapian's weighting; and `skip_to`, so a rare term's postings drive the intersection without first
-decoding a common term's 1.4 M entries. The estimate window's ZIM rows also change meaning once the
-archive's own index is used: "this is what a build would cost" becomes "nothing is needed", and the
-window has to say so. The oracle for correctness used to be "build Xapian 1.4.32 locally and diff"; the
-archive itself turned out to be a stronger one, since the terms, their frequencies and the article text
-are all independently checkable.
+**A query is answered as ordinary results** (`internal/format/zim/dmsh_xapian.go`, ours, beside
+upstream's `zim.go` for the usual reason). `Dict.FullText(query, limit)` searches the archive's own index
+and returns `[]dict.Result` - headword and article, converted by this package's own article pipeline - so
+a caller cannot tell a Kiwix hit from a headword hit. Verified on the Russian Wiktionary:
+`"джаз"` comes back as джаз, jazz, джаз-фестиваль, джаз-группа, кул-джаз, which is a sensible order for
+nothing but summed wdf as a ranking; `"кларнетист"` as кларнетист, кларнетистка, Klarinettist, кларнет,
+слёзный. `dict.ErrNotFound` means the archive has no index at all, `dict.ErrUnsupported` (wrapping
+`ErrNoStemmer`) that it has one in a language this reader cannot stem - the two answers a caller needs to
+decide whether to build an index of its own.
+
+**The product wiring is a decision, not a remaining task** (2026-11-01): a Kiwix archive's index is
+2.4-2.9x smaller than one of ours and already built, so a ZIM with one needs no `article_fts` of ours at
+all. What it does NOT give: headwords (the index knows paths, and `FullText` resolves them back through
+the archive's directory), positions (no phrases), Xapian's real ranking, or anything for an archive built
+without `--indexing` - so our own index stays the fallback either way, as the user put it. The parts that
+would change if we take it up: `Caps.FTS` would have to be advertised by something that is not
+`article_fts` (the searcher holds the prepared database, not the archive), the ZIM ingest would stop
+building `article_fts` (and the "remove full text" button would mean something different for these), and
+the estimate window's ZIM rows - "this is what a build would cost" - would become "nothing is needed".
+Each of those is a user-visible behaviour and disk-usage change, which is why it is written down here
+rather than done.
+
+Smaller, still open: `skip_to`, so a rare term's postings drive the intersection instead of first decoding
+a common term's 1.4 M entries (measured: reading such a list whole is tens of milliseconds, so this is a
+comfort, not a blocker); ranking, since what exists is AND-intersection ordered by summed wdf; and
+scale - the intersection is materialised in memory, which 1.4 M hits makes a ~20 MB slice. The oracle for
+correctness used to be "build Xapian 1.4.32 locally and diff"; the archive itself turned out to be a
+stronger one, since the terms, their frequencies and the article text are all independently checkable.
 
 - With the local MinGW GCC 13.1.0, `go test -tags sqlite_fts5 -trimpath ./... -count=1`, `go vet -tags sqlite_fts5 -trimpath ./...`, and `go build -tags sqlite_fts5 -trimpath ./...` pass after removing the duplicate LSD implementation. Real-dictionary integration and Windows/Android UI checks remain unverified.
 - Android runs Go through JNI without an HTTP listener; Windows listenerless desktop uses WebView2 and a native bridge. Build recipes are in `docs/WINDOWS-VERIFY.md`; Android uses `build-android.cmd debug intel`. Do not install APKs or commit unless requested.

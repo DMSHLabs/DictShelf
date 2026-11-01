@@ -485,40 +485,6 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 	return nil, "", dict.ErrNotFound
 }
 
-// XapianIndex returns the archive's own full-text index - the X/fulltext/xapian
-// entry - as a seekable window onto the archive file, with its length, so a
-// search reads the 518 MB (or 3.18 GB) index in place instead of copying it.
-// Kiwix writes this entry uncompressed for exactly that reason; a compressed
-// cluster is refused rather than decompressed whole, because the point of a
-// window is that the bytes are already addressable.
-//
-// dict.ErrNotFound reports an archive that carries no index at all - a ZIM
-// built without --indexing - which is what tells a caller it has to build one
-// of its own. Note that the reverse is also true: what this returns is Kiwix's
-// index, built with its own stemmer and stopwords, so it is only usable by a
-// reader that reproduces them (see internal/format/zim/glass).
-func (d *Dict) XapianIndex() (io.ReaderAt, int64, error) {
-	i, de, ok := d.c.find('X', "fulltext/xapian")
-	if !ok {
-		return nil, 0, dict.ErrNotFound
-	}
-	if de.isRedirect() {
-		var err error
-		if _, de, err = d.c.resolve(i); err != nil {
-			return nil, 0, err
-		}
-	}
-	cd, lo, hi, err := d.c.blobSpan(de.cluster, de.blob)
-	if err != nil {
-		return nil, 0, err
-	}
-	if !cd.direct {
-		return nil, 0, fmt.Errorf("fulltext/xapian is stored in a compressed cluster, so it cannot be read in place")
-	}
-	n := int64(hi - lo)
-	return io.NewSectionReader(d.c.f, cd.body+int64(lo), n), n, nil
-}
-
 // Resources lists the non-article blobs, for media packing. This walks the
 // content namespace's dirents - one pread each, no decompression - which is
 // the same shape of scan the other formats' Resources does.
