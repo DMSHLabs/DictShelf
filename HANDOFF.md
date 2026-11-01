@@ -484,26 +484,30 @@ sort-preserving encoding (implemented, wants a test against a known document id 
 container needs the byte-range API so a reader works from a mapped archive instead of the copied blob the
 tool uses today.
 
-**The item framing is the last unknown, with the bytes recorded.** The payload formats are now
-confirmed from Xapian's *writer*, not inferred: a postlist chunk is the first document's frequency
-followed by (gap, frequency) pairs, and the chunk flag is the character `'0'` or `'1'`, not the byte 0
-or 1 (`pack_bool` in `common/pack.h` writes `'0' | value`); a docdata item's tag is simply the article
-path, and its key is the document id in sort-preserving form - both checked against the file
-(`83 d1 0a` decodes to 250 122, `49 a8` to 2 472, which is what the index said). What does not fit is
-the *item* itself: every tag comes out one to three bytes short, by an amount that varies with the
-item, so the size/prefix arithmetic is wrong rather than the content. Raw examples, straight from the
-archive, for whoever picks this up: document 250 122 is `60 1d | 03 | 83 d1 0a | 43 2f d0 ba d0 bb d0 b0
-d1 80 d0 bd d0 b5 d1 82 d0 b8 d1 81 d1 82 d0 ba d0 b0` (the path wants to read "C/кларнетистка"), and
-document 2 472 is `60 0a | 02 | 49 a8 | 43 2f 61 6e 6c 65 74 65` followed by the next item's `60 0d`. The
-postlist tag for "кларнетист" is the same story one document from the end: 47 bytes, 11 documents and 32
-occurrences in the header, 10 documents decoded.
+**The glass reader works, in pure Go, on a real archive.** A term now resolves to its complete posting
+list, the document ids map to article paths, and the articles really contain the term:
+`"кларнетист"` gives 11 documents and 32 occurrences (matching the index's own header), the first three
+being `C/кларнетистка`, `C/кларнетист` and `C/Klarinettist`, each verified by opening the article and
+finding the word in it; `"джаз"` gives 162 documents and 715 occurrences, all 162 decoded. Two bugs stood
+in the way, and both were invisible in the code and only visible in the bytes:
 
-Also worth knowing for the next session: building Xapian 1.4.32 locally needs paths that both the MSYS
-shell and MinGW's native make understand - `configure` run through Git Bash with a `/d/...` source path
-leaves a Makefile that native make cannot stat (its recipes then try to regenerate everything and die on
-an unquoted `C:/Program Files/Git/...`), and a `D:/...` path breaks configure's own lookups. The
-untouched tarball ships the autotools aux files; the git clone does not, so a clone needs `bootstrap`
-and an autotools install qed.
+- **An item's size field covers the key AND the tag**, not the whole item (Xapian's diagram is
+  `I K key X tag` with I the length of the key-tag pair), so the tag ends three bytes past the size:
+  the 2-byte size field and the key length byte are in front of it. Reading the size as the whole item
+  cut every tag three bytes short, which looked like article paths truncated inside a character and a
+  posting list ending one document before its header said.
+- **Xapian 1.4.32's own decoder for the sort-preserving key encoding adds one to the count of bytes in
+  the key**, which would make the keys of a real archive one byte longer than the bytes in the file. The
+  archive is the authority here: our encoder reproduced `83 d1 0a` for document 250 122 by itself, which
+  the file holds, so the decoder follows the data. Both facts are pinned by tests that carry the real
+  bytes (`internal/format/zim/glass/item_test.go`).
+
+What that buys, and what is still to do. An archive that ships `X/fulltext/xapian` can now be searched
+from our own code with no C++ toolchain at all and no index build of our own - and that index is 2.4-2.9x
+smaller than the one we would build. Still to do, in order: the query side (unaccent and case folding as
+libzim does, intersect the terms with AND, map the paths back to our entries), the container's byte-range
+API so a reader works from a mapped archive instead of a copied blob, and then the product decision -
+using the archive's index where it exists and building ours only where it does not.
 
 - With the local MinGW GCC 13.1.0, `go test -tags sqlite_fts5 -trimpath ./... -count=1`, `go vet -tags sqlite_fts5 -trimpath ./...`, and `go build -tags sqlite_fts5 -trimpath ./...` pass after removing the duplicate LSD implementation. Real-dictionary integration and Windows/Android UI checks remain unverified.
 - Android runs Go through JNI without an HTTP listener; Windows listenerless desktop uses WebView2 and a native bridge. Build recipes are in `docs/WINDOWS-VERIFY.md`; Android uses `build-android.cmd debug intel`. Do not install APKs or commit unless requested.

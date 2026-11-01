@@ -311,7 +311,11 @@ func leafTag(db *DB, b []byte, off int) ([]byte, bool, error) {
 	}
 	// The first component's tag ends at the item's end: the flags that would say
 	// where further components begin belong to them, not to us.
-	end := off + size
+	// The item's size covers the key and the tag, not the 2-byte size field
+	// or the key length byte in front of them (Xapian's "I K key X tag", where
+	// I is the length of the key-tag pair). Reading it as the whole item cut
+	// every tag three bytes short.
+	end := off + 3 + size
 	if end > len(b) || p > end {
 		return nil, false, fmt.Errorf("item at %d has a broken size %d", off, size)
 	}

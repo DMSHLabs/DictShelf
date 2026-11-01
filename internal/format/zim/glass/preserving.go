@@ -33,7 +33,11 @@ func unpackPreservingSort(b []byte, p int) (uint32, int, error) {
 	}
 	first := b[p]
 	p++
-	n := int(first>>6) + 1
+	// The two high bits hold the number of bytes that follow the first one. The
+	// decoder in Xapian 1.4.32 adds one to this count, which would make the keys
+	// of a real archive one byte longer than they are - the bytes in the archive
+	// agree with the plain reading, so that is what is used here.
+	n := int(first >> 6)
 	if n > 4 || p+n > len(b) {
 		return 0, p, fmt.Errorf("glass: a sort-preserving integer of %d extra bytes does not fit", n)
 	}
