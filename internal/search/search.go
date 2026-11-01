@@ -634,4 +634,4 @@ func archiveCheckCandidates(perDict int) int {
 // in the "near" reading, for both kinds of dictionary: it is the FTS5 default
 // (NEAR(...) with no distance is 10) and the number the mode's own label
 // states, so the two answers agree by construction rather than by luck.
-const archiveNearDistance = 10
+const archiveNearDistance = ftsq.NearDefault

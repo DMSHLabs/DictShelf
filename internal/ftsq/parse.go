@@ -391,7 +391,7 @@ func (p *parser) near() (node, bool) {
 	if len(ps) == 0 {
 		return nil, false
 	}
-	n := nearDefault
+	n := NearDefault
 	if p.take(tkComma) {
 		t, ok := p.peek()
 		if !ok || t.kind != tkWord {

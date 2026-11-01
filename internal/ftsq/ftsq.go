@@ -65,10 +65,16 @@ import (
 )
 
 const (
-	// nearDefault matches FTS5's own default for NEAR with the distance
+	// NearDefault matches FTS5's own default for NEAR with the distance
 	// omitted, and is the rung-2 window: close enough that the words belong to
 	// one thought, wide enough to survive an inserted clause.
-	nearDefault = 10
+	//
+	// It is exported because a reader can see this number: the "near" mode's
+	// mark in the search control draws it over the arrow between the two words
+	// (web/index.html, NEAR_WORDS), and a mark that quotes a rule has to quote
+	// the rule that runs - TestModeMarksQuoteTheNearRule fails if the two
+	// spellings drift apart.
+	NearDefault = 10
 
 	// maxTokens bounds a hostile query. Every token costs a phrase slot in the
 	// highlighter and a term in the FTS5 expression tree; a thousand-word paste
@@ -150,7 +156,7 @@ func (q *Query) Rungs() []Rung {
 	bagMatch, bagMarks := bag(q.words)
 	return []Rung{
 		{Name: "phrase", Match: quote(q.words) + "*", Marks: []hilite.Phrase{ph}},
-		{Name: "near", Match: "NEAR(" + bagMatch + ", " + strconv.Itoa(nearDefault) + ")", Marks: bagMarks},
+		{Name: "near", Match: "NEAR(" + bagMatch + ", " + strconv.Itoa(NearDefault) + ")", Marks: bagMarks},
 		{Name: "words", Match: bagMatch, Marks: bagMarks},
 	}
 }

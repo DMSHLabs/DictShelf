@@ -3764,10 +3764,42 @@ const MODE_SHORT={prefix:"ab→",suffix:"→ab",contains:"ab",word:"·ab·",word
    following the row, because a selected row is accent-coloured and the band
    would merge into its own outline. */
 const MODE_GLYPHS={prefix:"ab→",suffix:"→ab",contains:"ab",word:"·ab·",wordLemma:"·ab·+",exact:"=",exactLemma:"=+",wildcards:"*?"};
-const MODE_SVG_ICONS={
-  fts:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--fg)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5h7.5l5 5v14H6z" stroke-width=".8"/><path d="M9.2 9.4h6" stroke-width="1.2"/><rect x="8.3" y="12.2" width="7.9" height="4.6" rx=".6" fill="var(--accent)" stroke="none"/><path d="M9.7 14.5h5.1" stroke="var(--bg)" stroke-width="1.2"/><path d="M8.6 18.8h7.3" stroke-width="1.2"/></svg>'
-};
-function modeMark(el,mode){
+/* The number the "near" reading uses. It is the rule, not decoration, so it is
+   written once here and pinned to the Go constant FTS5's own NEAR default is
+   read from (internal/ftsq, NearDefault) by TestModeMarksQuoteTheNearRule - a
+   mark that quotes a rule has to quote the rule that runs. */
+const NEAR_WORDS=10;
+const MODE_SVG_ICONS=(()=>{
+  /* The article readings are a family of three drawn marks: two word bars, and
+     the one thing that differs between the readings drawn in the middle -
+     nothing for a phrase, the bounded distance for "near", dots for "anywhere".
+     Drawn rather than typed because the same mark has to sit in the menu's
+     3.1em icon column and in the search field's chip at once, and the distance
+     has to hang above the arrow; SVG follows the interface font size, while a
+     nested-flex glyph pinned to 14px would not. currentColor, so a selected row
+     tints its mark the way it tints its text. */
+  const bars=(x,w)=>`<rect x="${x}" y="10.3" width="${w}" height="4" rx="1.15" fill="currentColor" stroke="none"/>`;
+  const head=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">`;
+  return {
+    // Adjacent, in this order: nothing between them.
+    phrase:head+bars(2.4,8.6)+bars(13,8.6)+`</svg>`,
+    // Within a bounded distance, either order: a double arrow with the bound
+    // written over it - the rule itself, not a metaphor for it.
+    near:head+bars(1.4,6.2)+bars(16.4,6.2)
+      +`<path d="M9.1 12.3h5.8" stroke-width="1.4"/>`
+      +`<path d="M8.5 12.3l2.6-2v4z" fill="currentColor" stroke="none"/>`
+      +`<path d="M15.7 12.3l-2.6-2v4z" fill="currentColor" stroke="none"/>`
+      +`<text x="12" y="8.8" text-anchor="middle" font-size="9" font-weight="600" fill="currentColor" stroke="none">${NEAR_WORDS}</text>`
+      +`</svg>`,
+    // Anywhere: no bound to draw, so the space between them is only dots, and
+    // they fade towards the second word because the distance is unbounded.
+    fts:head+bars(1.4,6.2)+bars(16.4,6.2)
+      +`<circle cx="9.6" cy="12.3" r="1.05" fill="currentColor" stroke="none"/>`
+      +`<circle cx="12" cy="12.3" r="1.05" fill="currentColor" stroke="none" opacity=".6"/>`
+      +`<circle cx="14.4" cy="12.3" r="1.05" fill="currentColor" stroke="none" opacity=".32"/>`
+      +`</svg>`
+  };
+})();function modeMark(el,mode){
   const glyph=MODE_GLYPHS[mode];
   if(glyph){el.textContent=glyph;return true}
   const svg=MODE_SVG_ICONS[mode];
@@ -3776,9 +3808,19 @@ function modeMark(el,mode){
 }
 const SEARCH_MODE_KEY="wudict_search_mode";
 const canonicalSearchMode=mode=>mode==="mask"?"wildcards":mode;
+/* Which modes exist is read from the control itself, never from a second list
+   here: the gate used to be MODE_SHORT, which is a table of the marks to fall
+   back on, and the three article readings were absent from it - so choosing
+   "Phrase" and reloading dropped the reader back to the first option, silently,
+   while the menu still offered the mode. A list beside the select is one more
+   thing to forget; the select is the one thing there is. */
+function searchModeExists(mode){
+  for(const option of $("mode").options)if(option.value===mode)return true;
+  return false;
+}
 function setSearchMode(mode,viewMode=mode){
 	mode=canonicalSearchMode(mode);
-  if(!Object.prototype.hasOwnProperty.call(MODE_SHORT,mode))return;
+  if(!searchModeExists(mode))return;
   $("mode").value=mode;
   const showMaskView=canonicalSearchMode(viewMode)==="wildcards";
   $("maskSubmit").hidden=mode!=="wildcards";
