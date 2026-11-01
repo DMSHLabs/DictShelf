@@ -4118,7 +4118,7 @@ function renderPanel(){
       const archive=key==="fts"&&!!d.ownFullText;
       const stale=!archive&&key==="contains"&&on&&d.containsStale;
       const what=FEAT_NAME[key];
-      const tip=archive?tx("dictUI.ftsArchive"):
+      const tip=archive?tx("dictUI.ftsArchiveHint"):
         !canToggle?tx("dictUI.onlyCopy"):
         stale?tx("dictUI.stale",{what}):
         on?tx("dictUI.removeHint",{what}):tx("dictUI.addHint",{what});
