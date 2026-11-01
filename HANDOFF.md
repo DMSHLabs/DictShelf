@@ -224,10 +224,18 @@ dominates is unconfirmed: needs `system.searchArticleDiagnostics` ("Record searc
 opening" — the only switch that sends `searchDiagnostics=1`), plus the same query on ONE dictionary as a
 control (no fan-out, `SingleSearchBudget` = 5 min).
 
-Separate bug found on the way: `internal/server/dmsh_search_service.go` (v2 — bridge and desktop) opens
-unprepared dictionaries, while the legacy `handleSearch` declines them first (`validPrepared` →
-"dictionary index is not ready"). Port it, mode-aware: Contains/FTS decline, Exact/Prefix keep the
-preview path.
+Separate difference found on the way, and it is a BEHAVIOUR DECISION, not a pending fix (re-read and
+left alone, 2026-11-01): `internal/server/dmsh_search_service.go` (v2 - the desktop bridge and the native
+path) opens a dictionary that has no prepared database, while the legacy streaming `handleSearch`
+declines it first (`validPrepared` -> "dictionary index is not ready"). Both sides look deliberate rather
+than accidental: v2 opens through `openWithin(fan)` under the fan-out budget and spells out why a
+single named dictionary is deliberately uncapped, and its render path even words the timeout as
+"index this dictionary to search it"; the legacy side has a test pinning its rule ("Search does not open
+or index a source when its prepared index is absent", `TestSearchDoesNotIndexOnFirstUse` - note it passes
+in PREFIX mode too, so legacy is not mode-aware and an earlier note here claiming "port it, mode-aware"
+had it backwards). Neither path indexes on first use, so the shared rule is safe; what differs is whether
+a keystroke may open an unprepared source at all. Making them agree means choosing, which is the user's
+call. The self-indexed formats (ZIM, `entryHasSelfIndex`) are exempt on both sides.
 
 ## ZIM prepared databases now have two forms (read-through full text)
 
