@@ -383,6 +383,25 @@ ZIM's bodies (by the code the reader is chosen by the request, so it rebuilds ti
 them - the page's promise of freed space rests on that) and that the CSS block scoped inside the
 dialog is the right place for those rules rather than app.css.
 
+## Reading Kiwix's own full-text index (spike findings)
+
+`X/fulltext/xapian` is stored **uncompressed**, one blob per cluster, starting with the Xapian magic
+`0f 0d "Xapian Glass"`, so it can be read in place from a mapped archive - no copying. Sizes 518 MB,
+2.52 GB, 3.18 GB for three of the four archives, against our own built article index of 1.29 GiB,
+7.41 GiB, 9.21 GiB (**2.4-2.9x larger**); `X/title/xapian` and the title listing are uncompressed too.
+libzim (cloned at `D:/Projects/Android/libzim`) documents the whole scheme: the query is unaccented
+first - via **ICU**, in libzim, not Xapian - then parsed with `OP_AND`, the stemmer and stopwords taken
+from the index metadata, `STEM_ALL`, `FLAG_CJK_NGRAM` (`src/search.cpp`); the index side wrote
+`index_text_without_positions` with `STOP_ALL`, so **no positions exist and only stemmed forms do**.
+libzim opens the index by seeking the archive and handing the fd to `Xapian::Database(fd)`.
+The pure-Go reader (gozim, MIT) parses that real version header correctly - `DocCount` = 1 528 188,
+exactly our entry count - but fails on every table access with `root block 571 not found`. Not the block
+size (both sides use 8192); the likely cause is the single-file layout, where all six tables are opened
+at `version_file.get_offset()` and block numbers are global to the area, while gozim assumes the
+multi-file shape. If we take this path the code belongs in our own package beside the container, reading
+a byte range rather than a `[]byte`, with Xapian built **locally as a test oracle** and never shipped,
+because a reader of our own makes compatibility our burden and its failures silent.
+
 - With the local MinGW GCC 13.1.0, `go test -tags sqlite_fts5 -trimpath ./... -count=1`, `go vet -tags sqlite_fts5 -trimpath ./...`, and `go build -tags sqlite_fts5 -trimpath ./...` pass after removing the duplicate LSD implementation. Real-dictionary integration and Windows/Android UI checks remain unverified.
 - Android runs Go through JNI without an HTTP listener; Windows listenerless desktop uses WebView2 and a native bridge. Build recipes are in `docs/WINDOWS-VERIFY.md`; Android uses `build-android.cmd debug intel`. Do not install APKs or commit unless requested.
 - Windows/Android search, index maintenance and visual checks remain pending. Other open items include portable Windows write-path gaps (`docs/PORTABLE-WRITES-AUDIT.md`), Edit Folders verification, icon visibility and MDX ad-slot reindex/display.
