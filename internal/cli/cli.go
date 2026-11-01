@@ -1034,10 +1034,11 @@ func ingestOne(srcPath, out string, full bool, pf planFlags) error {
 	}
 	articles := ingestArticles(srcPath, pf.fullText)
 	// Where this fork overrides the form - an archive that carries its own
-	// full-text index is never built read-through - the plan has to be pinned to
-	// the same answer. A reader that yields no bodies under a plan that indexes
-	// article text builds an empty article_fts and a receipt claiming full text.
-	if ownIndexAnswersFullText(srcPath) {
+	// full-text index is not built read-through unless the flag asked for it -
+	// the plan has to be pinned to the same answer. A reader that yields no
+	// bodies under a plan that indexes article text builds an empty article_fts
+	// and a receipt claiming full text.
+	if ownIndexAnswersFullText(srcPath) && pf.fullText == nil {
 		t.FullText = &articles
 	}
 	hooks := cliHooks(srcPath, &name, articles)

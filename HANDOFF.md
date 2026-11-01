@@ -658,6 +658,28 @@ Two things the live run taught, both now recorded in the code:
   no banner at all and is killed at 40 s). The offer therefore quotes the folder size, and the index
   figure appears only where a build can measure it (the pure-Go modernc build can; this one cannot).
 
+## Our index on request, for an archive that has its own (2026-11-02)
+
+The rule "an archive with its own index never gets one of ours" is now "not by DEFAULT": a caller that
+names full text explicitly gets it, in the index-without-bodies form. Two reasons, and the user gave
+both: it is what makes the strict readings (phrase, near) native on such an archive - positions in our
+index instead of a text scan over the candidates theirs returns, with the fast SQL paging that comes
+with it - and it is the only way to build and test the index-only form today, since no archive in the
+library lacks an index. The override in the server's reconcile and in the CLI's ingest now fires only
+when the request left FullText nil; the rebuild paths keep the form a database already has.
+
+Built this way on the converted Russian Wiktionary, with `wudict ingest -fulltext <archive>`: 1 528 188
+entries in 458 seconds, and the result is the form, exactly - `index_kind=headwords` with
+`ingest_level=text`, `stored_body_bytes=0`, `article_fts` present, 1.76 GB (426 MB of headwords plus the
+1.29 GB index, which is what the article index of this archive measured). 26.8 GB of article text was
+read and indexed and none of it was kept: the whole point of the form, on a real archive, for the first
+time.
+
+Two consequences to finish, both cosmetic and both to do with the window: `info.txt` still reads "files:
+text.db (articles + search index)" for a database that holds no articles (the wording distinguishes the
+two forms for what the READER emitted, not for what was kept), and a database that now has BOTH indexes -
+its archive's and ours - needs the chip and the window to say so as one state rather than two.
+
 ## The article index in a file of its own: writer done, reader pending (2026-11-02)
 
 Half of the split is in, and the half that is missing is a design point rather than a detail, so it is

@@ -1913,7 +1913,11 @@ func (e *entry) reconcileLockedContext(ctx context.Context, name string, t store
 		// read-through form: full text is answered from the archive, so copying
 		// article text into the database to index it there would spend tens of
 		// gigabytes on an index nothing reads (dmsh_own_index.go).
-		if full && archiveAnswersFullText(e.Path) {
+		// ...unless the caller NAMED full text: the archive answering for itself
+		// is the default, and building our index on request is what makes the
+		// strict readings (phrase, near) native instead of a text scan over the
+		// articles the archive's index returns. A request is a request.
+		if full && t.FullText == nil && archiveAnswersFullText(e.Path) {
 			store.IndexDiagnostic("skip zim read-through source=%q reason=archive-has-its-own-index", e.Path)
 			full = false
 		}
