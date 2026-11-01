@@ -1,15 +1,12 @@
 // Temporary diagnostic: read Kiwix's own full-text index (X/fulltext/xapian)
 // from a ZIM archive with internal/format/zim/glass, and check what it says
-// against the archive itself. The byte-range part is local to this tool until
-// the container grows an API for it.
+// against the archive itself. The index is read through the container's own
+// seekable window, so nothing is copied; nothing here writes.
 package main
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 
 	"github.com/DMSHLabs/DictShelf/internal/format/zim"
@@ -18,21 +15,27 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("usage: xapian-glass-check <archive.zim> [term ...]")
+		fmt.Println("usage: xapian-glass-check <archive.zim> [query | -chunks term] ...")
 		os.Exit(2)
 	}
 	path := os.Args[1]
-	blob, err := entryBlob(path, "fulltext/xapian")
+	article, err := zim.Open(path)
 	if err != nil {
-		fmt.Println("blob:", err)
+		fmt.Println("zim.Open:", err)
+		os.Exit(1)
+	}
+	defer article.Close()
+	window, size, err := article.XapianIndex()
+	if err != nil {
+		fmt.Println("XapianIndex:", err)
 		os.Exit(1)
 	}
 	fmt.Println(path)
-	fmt.Println("  fulltext/xapian, байт:", len(blob))
+	fmt.Println("  fulltext/xapian, байт:", size)
 
-	db, err := glass.Open(blob)
+	db, err := glass.OpenSource(window, size)
 	if err != nil {
-		fmt.Println("glass.Open:", err)
+		fmt.Println("glass.OpenSource:", err)
 		os.Exit(1)
 	}
 	fmt.Printf("  формат=%d ревизия=%d блок=%d документов=%d\n",
@@ -43,13 +46,6 @@ func main() {
 		dumpChunks(db, os.Args[3])
 		return
 	}
-
-	article, err := zim.Open(path)
-	if err != nil {
-		fmt.Println("zim.Open:", err)
-		os.Exit(1)
-	}
-	defer article.Close()
 
 	terms := os.Args[2:]
 	if len(terms) == 0 {
@@ -106,100 +102,6 @@ func articleText(d *zim.Dict, path string) (string, error) {
 		return "", fmt.Errorf("нет статьи по пути %q", path)
 	}
 	return string(res[0].Body), nil
-}
-
-// entryBlob returns the bytes of one X/ entry, parsing the ZIM header, the
-// directory and the cluster pointer list.
-func entryBlob(path, want string) ([]byte, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-	size := uint64(fi.Size())
-	h := make([]byte, 80)
-	if _, err := f.ReadAt(h, 0); err != nil {
-		return nil, err
-	}
-	entryCount := int(binary.LittleEndian.Uint32(h[24:]))
-	clusterCount := int(binary.LittleEndian.Uint32(h[28:]))
-	pathPtrPos := binary.LittleEndian.Uint64(h[32:])
-	clusterPtrPos := binary.LittleEndian.Uint64(h[48:])
-	read := func(off uint64, n int) []byte {
-		b := make([]byte, n)
-		if _, err := f.ReadAt(b, int64(off)); err != nil {
-			return nil
-		}
-		return b
-	}
-	cp := read(clusterPtrPos, clusterCount*8)
-	starts := make([]uint64, clusterCount)
-	for i := range starts {
-		starts[i] = binary.LittleEndian.Uint64(cp[i*8:])
-	}
-	sorted := append([]uint64(nil), starts...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
-
-	buf := read(pathPtrPos, entryCount*8)
-	for i := 0; i < entryCount; i++ {
-		off := binary.LittleEndian.Uint64(buf[i*8:])
-		d := read(off, 512)
-		if len(d) < 16 {
-			continue
-		}
-		cluster := binary.LittleEndian.Uint32(d[8:])
-		blobIdx := binary.LittleEndian.Uint32(d[12:])
-		rest := d[16:]
-		p := bytes.IndexByte(rest, 0)
-		if p < 0 || string(rest[:p]) != want {
-			continue
-		}
-		return readBlob(f, size, starts[cluster], blobIdx)
-	}
-	return nil, fmt.Errorf("записи %q в архиве нет", want)
-}
-
-func readBlob(f *os.File, size uint64, start uint64, want uint32) ([]byte, error) {
-	info := make([]byte, 1)
-	if _, err := f.ReadAt(info, int64(start)); err != nil {
-		return nil, err
-	}
-	codec := info[0] & 0x0f
-	if codec != 0 && codec != 1 {
-		return nil, fmt.Errorf("кластер сжат (кодек %d)", codec)
-	}
-	w := 4
-	if info[0]&0x10 != 0 {
-		w = 8
-	}
-	dataStart := start + 1
-	head := make([]byte, w*(int(want)+2))
-	if _, err := f.ReadAt(head, int64(dataStart)); err != nil {
-		return nil, err
-	}
-	at := func(i int) uint64 {
-		if w == 8 {
-			return binary.LittleEndian.Uint64(head[i*8:])
-		}
-		return uint64(binary.LittleEndian.Uint32(head[i*4:]))
-	}
-	count := int(at(0))/w - 1
-	if int(want) >= count {
-		return nil, fmt.Errorf("блоба %d нет (их %d)", want, count)
-	}
-	lo, hi := at(int(want)), at(int(want)+1)
-	if hi <= lo || dataStart+hi > size {
-		return nil, fmt.Errorf("диапазон блоба выходит за файл")
-	}
-	out := make([]byte, hi-lo)
-	if _, err := f.ReadAt(out, int64(dataStart+lo)); err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 // dumpDoc prints the raw item the docdata table holds for a document id.

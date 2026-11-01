@@ -453,11 +453,27 @@ blob once, and the package takes a `[]byte` (the byte-range API is still to do).
 `tools/xapian-glass-check <archive.zim> [query ...]` is the check: it prints the index's metadata, runs
 each query, and opens every article a query returns to verify that a word of that article stems to each
 term asked for - which is the index's own criterion, so index and reader agreeing is the whole result.
-Numbers from it: `"кларнетист"` 11 documents / 32 occurrences, `"джаз"` 162 / 715, `"год"` 41 037 /
-59 574, `"слов"` 1 449 345 / 5 081 953. The last two are the interesting ones: their lists are split
-across **42** and **1 448** table entries, and every entry is read, equal to the termfreq in the first
-chunk's header. Multi-word AND behaves: `"духовой инструмент"` gives бассетгорн, бомбарда,
-альт-саксофон; `"музыкальный инструмент"` gives фортепиано, укулеле, ионика.
+Numbers from it, on the Russian Wiktionary: `"кларнетист"` 11 documents / 32 occurrences, `"джаз"` 162 /
+715, `"год"` 41 037 / 59 574, `"слов"` 1 449 345 / 5 081 953. The last two are the interesting ones:
+their lists are split across **42** and **1 448** table entries, and every entry is read, equal to the
+termfreq in the first chunk's header. Multi-word AND behaves: `"духовой инструмент"` gives бассетгорн,
+бомбарда, альт-саксофон; `"музыкальный инструмент"` gives фортепиано, укулеле, ионика.
+
+**It reads all four archives in place, in three languages** - `Dict.XapianIndex()` hands out a seekable
+window onto the archive file (`io.NewSectionReader` over the container's own handle), and
+`glass.OpenSource` reads blocks through it, so nothing is copied and the tool runs in well under a
+second instead of copying 518 MB - 3.18 GB first:
+
+| archive | index | documents | language | example |
+| --- | --- | --- | --- | --- |
+| wiktionary_ru 2026-09 | 518 MB | 1 528 188 | `rus` | `"духовой инструмент"` → 169 |
+| wikipedia_ru 2026-10 | 2.52 GB | 2 199 375 | `rus` | `"духовой инструмент"` → 774 |
+| wiktionary_en 2026-08 | 3.11 GB | 9 087 944 | `eng` | `"musical instrument"` → 7 197 (Porter2: *musical* → *music*) |
+| wikipedia_de 2026-10 | 3.18 GB | 3 275 258 | `deu` | `"Jazzmusiker"` → 18 973 (*-iker* off, so the stem is `jazzmus`) |
+
+Each row's query was checked the same way - every returned article opened and every term found in it.
+The English row is the clearest sighting of the stemmer being the archive's own: no English index holds
+"musical" as a term, and the query works anyway because both sides reduce it to "music".
 
 **Terms are stemmed, and the query has to stem too** - an earlier note here said the opposite
 ("a query needs unaccenting and case folding but no snowball stemmer") and it was wrong, on evidence
@@ -494,16 +510,17 @@ Three more things only the bytes settled, each of which the code got wrong first
   key-tag pair), so the tag ends three bytes past the size. Reading the size as the whole item cut every
   tag three bytes short, which showed up as paths truncated inside a character.
 
-**What is still to do**, in order: the container's byte-range API so a reader works from a mapped archive
-instead of a copied blob (`internal/format/zim` has no such call today); wiring the product to use the
-archive's own index where it has one (`X/fulltext/xapian`, found by the reader itself, not by rebuilding)
-and building ours only where it does not - which is also where the estimate window's ZIM rows should
-change meaning from "this is what a build would cost" to "nothing is needed"; ranking, since what exists
-now is AND-intersection ordered by summed wdf, not Xapian's weighting; and `skip_to` for the very long
-lists, so a rare term's postings drive the intersection without decoding a common term's 1.4 M entries
-first. The oracle for correctness used to be "build Xapian 1.4.32 locally and diff"; the archive itself
-turned out to be a stronger one, since the terms, their frequencies and the article text are all
-independently checkable.
+**What is still to do**, in order: wiring the product to use the archive's own index where it has one
+(`Dict.XapianIndex`, which reports `dict.ErrNotFound` when the archive carries none - a ZIM built without
+`--indexing` - and then our own index is what to build) and threading a Kiwix search result back to our
+own entries, since the index names article paths like `C/бассетгорн` while a result has to become a
+dictionary entry; ranking, because what exists now is AND-intersection ordered by summed wdf and not
+Xapian's weighting; and `skip_to`, so a rare term's postings drive the intersection without first
+decoding a common term's 1.4 M entries. The estimate window's ZIM rows also change meaning once the
+archive's own index is used: "this is what a build would cost" becomes "nothing is needed", and the
+window has to say so. The oracle for correctness used to be "build Xapian 1.4.32 locally and diff"; the
+archive itself turned out to be a stronger one, since the terms, their frequencies and the article text
+are all independently checkable.
 
 - With the local MinGW GCC 13.1.0, `go test -tags sqlite_fts5 -trimpath ./... -count=1`, `go vet -tags sqlite_fts5 -trimpath ./...`, and `go build -tags sqlite_fts5 -trimpath ./...` pass after removing the duplicate LSD implementation. Real-dictionary integration and Windows/Android UI checks remain unverified.
 - Android runs Go through JNI without an HTTP listener; Windows listenerless desktop uses WebView2 and a native bridge. Build recipes are in `docs/WINDOWS-VERIFY.md`; Android uses `build-android.cmd debug intel`. Do not install APKs or commit unless requested.

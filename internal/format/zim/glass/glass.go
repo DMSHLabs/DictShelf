@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"sync"
 )
 
@@ -78,7 +79,9 @@ type Stats struct {
 // DB is an open database. It reads the bytes it was given and never writes: the
 // caller keeps the archive mapped (or the blob in memory) for its lifetime.
 type DB struct {
-	data         []byte
+	data         []byte // the whole blob, when it was handed over in one piece
+	src          io.ReaderAt
+	size         int64
 	FormatDate   uint16
 	UUID         [16]byte
 	Revision     uint32
@@ -94,93 +97,138 @@ type DB struct {
 }
 
 // Open parses the version file at the start of data. data must be exactly one
-// database, i.e. the X/fulltext/xapian blob and nothing else.
+// database, i.e. the X/fulltext/xapian blob and nothing else, and it stays the
+// caller's: blocks are read as views into it, so nothing is copied.
 func Open(data []byte) (*DB, error) {
-	if len(data) < versionMagicLen+2 {
-		return nil, fmt.Errorf("glass: %d bytes is too short for a database", len(data))
+	db := &DB{data: data, size: int64(len(data))}
+	if err := db.parseVersion(data); err != nil {
+		return nil, err
 	}
+	return db, nil
+}
+
+// OpenSource reads the same database through a ReaderAt, so a reader can work
+// from the archive file itself. That is what a Kiwix index wants: the
+// X/fulltext/xapian blob is stored uncompressed - 518 MB in one archive and
+// 3.18 GB in another - and copying it to search it is not a cost worth paying
+// when the file is already random-access. Offsets passed to ra are relative to
+// the start of THIS database, so a caller reading it out of a larger file wraps
+// that file in a section (io.NewSectionReader) rather than handing over the
+// file's own ReaderAt.
+//
+// Blocks are then read into a fresh buffer each time; Open, which has the array
+// to take views of, does not allocate per block.
+func OpenSource(ra io.ReaderAt, size int64) (*DB, error) {
+	if size < versionMagicLen+2 {
+		return nil, fmt.Errorf("glass: %d bytes is too short for a database", size)
+	}
+	db := &DB{src: ra, size: size}
+	// The version file is small - six root records and their free lists - so it
+	// is read in one piece rather than field by field. versionHeader is
+	// generous and the bounds are checked, so a database whose version file is
+	// larger than that is refused rather than misread.
+	n := int64(versionHeader)
+	if size < n {
+		n = size
+	}
+	head := make([]byte, n)
+	if _, err := ra.ReadAt(head, 0); err != nil {
+		return nil, fmt.Errorf("glass: reading the version file: %w", err)
+	}
+	if err := db.parseVersion(head); err != nil {
+		return nil, err
+	}
+	return db, nil
+}
+
+// versionHeader is how much of the start OpenSource reads to parse the version
+// file. A compacted database's free lists are a handful of block numbers.
+const versionHeader = 64 << 10
+
+// parseVersion reads the version file, which Open has wholly in memory and
+// OpenSource has as much of as versionHeader allows.
+func (db *DB) parseVersion(data []byte) error {
 	if !bytes.Equal(data[:versionMagicLen], magic) {
-		return nil, fmt.Errorf("glass: not a Xapian Glass database (magic % x)", data[:versionMagicLen])
+		return fmt.Errorf("glass: not a Xapian Glass database (magic % x)", data[:versionMagicLen])
 	}
-	db := &DB{data: data}
 	db.FormatDate = binary.BigEndian.Uint16(data[versionMagicLen:])
 	p := versionMagicLen + 2
 	copy(db.UUID[:], data[p:p+16])
 	p += 16
 	var err error
 	if db.Revision, p, err = unpackUint(data, p); err != nil {
-		return nil, err
+		return err
 	}
 	for i := 0; i < numTables; i++ {
 		r := Root{}
 		if r.Block, p, err = unpackUint(data, p); err != nil {
-			return nil, fmt.Errorf("glass: table %d root: %w", i, err)
+			return fmt.Errorf("glass: table %d root: %w", i, err)
 		}
 		var flags uint32
 		if flags, p, err = unpackUint(data, p); err != nil {
-			return nil, fmt.Errorf("glass: table %d level: %w", i, err)
+			return fmt.Errorf("glass: table %d level: %w", i, err)
 		}
 		r.Level = int(flags >> 2)
 		r.Sequential = flags&0x02 != 0
 		r.Fake = flags&0x01 != 0
 		if r.Entries, p, err = unpackUint(data, p); err != nil {
-			return nil, fmt.Errorf("glass: table %d entries: %w", i, err)
+			return fmt.Errorf("glass: table %d entries: %w", i, err)
 		}
 		var sizeShift uint32
 		if sizeShift, p, err = unpackUint(data, p); err != nil {
-			return nil, fmt.Errorf("glass: table %d block size: %w", i, err)
+			return fmt.Errorf("glass: table %d block size: %w", i, err)
 		}
 		r.BlockSize = sizeShift << 11
 		if r.BlockSize < 2048 || r.BlockSize > 65536 || r.BlockSize&(r.BlockSize-1) != 0 {
-			return nil, fmt.Errorf("glass: table %d: implausible block size %d", i, r.BlockSize)
+			return fmt.Errorf("glass: table %d: implausible block size %d", i, r.BlockSize)
 		}
 		if r.CompressAt, p, err = unpackUint(data, p); err != nil {
-			return nil, fmt.Errorf("glass: table %d compress_min: %w", i, err)
+			return fmt.Errorf("glass: table %d compress_min: %w", i, err)
 		}
 		// The free list is a string; we do not need it, only to skip it.
 		var freeLen uint32
 		if freeLen, p, err = unpackUint(data, p); err != nil {
-			return nil, fmt.Errorf("glass: table %d free list: %w", i, err)
+			return fmt.Errorf("glass: table %d free list: %w", i, err)
 		}
 		if p+int(freeLen) > len(data) {
-			return nil, fmt.Errorf("glass: table %d free list runs past the file", i)
+			return fmt.Errorf("glass: table %d free list runs past the %d bytes read", i, len(data))
 		}
 		p += int(freeLen)
 		db.Roots[i] = r
 	}
 	if db.Stats.DocCount, p, err = unpackUint(data, p); err != nil {
-		return nil, fmt.Errorf("glass: stats: %w", err)
+		return fmt.Errorf("glass: stats: %w", err)
 	}
 	// last_docid is stored as the difference from doccount, and doclen_ubound as
 	// the difference from wdf_ubound, both to pack smaller.
 	var d uint32
 	if d, p, err = unpackUint(data, p); err != nil {
-		return nil, fmt.Errorf("glass: stats: %w", err)
+		return fmt.Errorf("glass: stats: %w", err)
 	}
 	db.Stats.LastDocID = db.Stats.DocCount + d
 	if db.Stats.DocLenLow, p, err = unpackUint(data, p); err != nil {
-		return nil, err
+		return err
 	}
 	if db.Stats.WDFBound, p, err = unpackUint(data, p); err != nil {
-		return nil, err
+		return err
 	}
 	if d, p, err = unpackUint(data, p); err != nil {
-		return nil, err
+		return err
 	}
 	db.Stats.DocLenBound = db.Stats.WDFBound + d
 	if db.Stats.Oldest, p, err = unpackUint(data, p); err != nil {
-		return nil, err
+		return err
 	}
 	var total uint32
 	if total, p, err = unpackUint(data, p); err != nil {
-		return nil, err
+		return err
 	}
 	db.Stats.TotalDocLen = uint64(total)
 	if db.Stats.SpellingMax, p, err = unpackUint(data, p); err != nil {
-		return nil, err
+		return err
 	}
 	db.versionBytes = p
-	return db, nil
+	return nil
 }
 
 // BlockSize is the size of a block, which all six tables share in a single-file
@@ -197,18 +245,39 @@ func (db *DB) blockOffset(n uint32) (int64, error) {
 		return 0, fmt.Errorf("glass: block %d does not exist", n)
 	}
 	off := int64(db.versionBytes)/size*size + int64(n)*size
-	if off < 0 || off+size > int64(len(db.data)) {
-		return 0, fmt.Errorf("glass: block %d at %d is outside the database (%d bytes)", n, off, len(db.data))
+	if off < 0 || off+size > db.length() {
+		return 0, fmt.Errorf("glass: block %d at %d is outside the database (%d bytes)", n, off, db.length())
 	}
 	return off, nil
 }
 
+// length is how many bytes the database occupies, which is the blob's own size
+// when it is in memory and what the caller gave with the source otherwise.
+func (db *DB) length() int64 {
+	if db.data != nil {
+		return int64(len(db.data))
+	}
+	return db.size
+}
+
+// block returns one block, as a view into the blob when it is all in memory and
+// as a fresh buffer when it comes from a Source. Callers may hold several at
+// once - the table walk keeps one per level - which is why a Source cannot read
+// into one shared buffer.
 func (db *DB) block(n uint32) ([]byte, error) {
 	off, err := db.blockOffset(n)
 	if err != nil {
 		return nil, err
 	}
-	return db.data[off : off+int64(db.BlockSize())], nil
+	size := int64(db.BlockSize())
+	if db.data != nil {
+		return db.data[off : off+size], nil
+	}
+	b := make([]byte, size)
+	if _, err := db.src.ReadAt(b, off); err != nil {
+		return nil, fmt.Errorf("glass: reading block %d at %d: %w", n, off, err)
+	}
+	return b, nil
 }
 
 // level of a block, and its directory bounds.
