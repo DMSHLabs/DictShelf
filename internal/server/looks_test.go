@@ -85,7 +85,7 @@ func TestLooksStartWithWarmInForce(t *testing.T) {
 		"id": lookClean, "dry": true, "fontSize": 15, "fontWeight": 400,
 		"shell": map[string]any{
 			"light": map[string]any{"colorEnabled": true, "color": "#F4ECD8", "image": ""},
-			"dark": map[string]any{"colorEnabled": true, "color": "#1C1A17", "image": ""},
+			"dark":  map[string]any{"colorEnabled": true, "color": "#1C1A17", "image": ""},
 		},
 	}, 200)
 	var dry applyAnswer

@@ -252,20 +252,22 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 		"sub_entries":    fmt.Sprint(subEntries), // @-prefixed, hidden from browsing
 		// What the indexes of this dictionary would cost, measured while the
 		// only pass that sees the bodies runs. body_bytes is before deflate
-		// because that is the text an article index covers; headword_bytes is
-		// what the headword indexes scale with. Volatile: a prediction reads
-		// them, prepared content does not.
-		"body_bytes":       fmt.Sprint(rows.bodyBytes),
-		"headword_bytes":   fmt.Sprint(rows.headwordBytes),
-		"stats_version":    fmt.Sprint(StatsVersion),
-		"ingest_level":     ingestLevel(plan),
-		"has_trigram":      boolMeta(plan.Contains),      // cheap-list flag; Open feature-detects the table
-		"fold_version":     fmt.Sprint(dict.FoldVersion), // which text folding built the trigram index
-		"markup_version":   fmt.Sprint(artmark.Version),  // which role markup the articles were written with
-		"ingest_version":   fmt.Sprint(IngestVersion),    // which IngestPlan wrote this (stale.go)
-		"body_encoding":    bodyEncoding(),
-		"created":          time.Now().UTC().Format(time.RFC3339),
-		"source_sha256_1M": sourceHash(srcMeta.Path),
+		// because that is the text an article index covers, stored_body_bytes
+		// is what those bodies cost the file, and headword_bytes is what the
+		// headword indexes scale with. Volatile: a prediction reads them,
+		// prepared content does not.
+		"body_bytes":        fmt.Sprint(rows.bodyBytes),
+		"stored_body_bytes": fmt.Sprint(rows.storedBodyBytes),
+		"headword_bytes":    fmt.Sprint(rows.headwordBytes),
+		"stats_version":     fmt.Sprint(StatsVersion),
+		"ingest_level":      ingestLevel(plan),
+		"has_trigram":       boolMeta(plan.Contains),      // cheap-list flag; Open feature-detects the table
+		"fold_version":      fmt.Sprint(dict.FoldVersion), // which text folding built the trigram index
+		"markup_version":    fmt.Sprint(artmark.Version),  // which role markup the articles were written with
+		"ingest_version":    fmt.Sprint(IngestVersion),    // which IngestPlan wrote this (stale.go)
+		"body_encoding":     bodyEncoding(),
+		"created":           time.Now().UTC().Format(time.RFC3339),
+		"source_sha256_1M":  sourceHash(srcMeta.Path),
 	}
 	if revision, err := dict.SourceRevision(srcMeta.Path); err != nil {
 		return rep, err

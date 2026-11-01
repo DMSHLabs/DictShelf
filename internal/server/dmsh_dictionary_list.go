@@ -7,11 +7,14 @@ package server
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 
 	"github.com/DMSHLabs/DictShelf/internal/facet"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 	"github.com/DMSHLabs/DictShelf/internal/search"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 type dictionaryListResult struct {
@@ -94,6 +97,7 @@ func (s *Server) listDictionaries(parent context.Context, ifNoneMatch string, em
 				return
 			}
 			info, held := s.dictInfoFor(e, global, key)
+			s.attachEstimate(&info)
 			if !held || info.Error != "" || info.Job != nil {
 				keepable.Store(false)
 			}
@@ -109,6 +113,15 @@ func (s *Server) listDictionaries(parent context.Context, ifNoneMatch string, em
 	end := dictMsg{T: "end"}
 	if ctx.Err() == nil && keepable.Load() {
 		end.ETag = tag
+	}
+	// Free space rides on the list rather than on a route of its own: it is one
+	// number, the page that needs it already has this response in hand, and a
+	// separate call would only add a way for the two to disagree.
+	if dir := store.DefaultDBDir(); dir != "" {
+		if free, ok := fsx.FreeSpace(dir); ok {
+			end.FreeBytes = free
+			end.LibraryVolume = filepath.VolumeName(dir) + string(filepath.Separator)
+		}
 	}
 	if err := emit(end); err != nil {
 		emitErr = err

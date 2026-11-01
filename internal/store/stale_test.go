@@ -251,7 +251,7 @@ func TestStatsMetaIsVolatile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range []string{"body_bytes", "headword_bytes", "stats_version"} {
+	for _, k := range []string{"body_bytes", "stored_body_bytes", "headword_bytes", "stats_version"} {
 		if meta[k] == "" {
 			t.Errorf("%s was not recorded at ingest", k)
 		}
@@ -265,6 +265,7 @@ func TestStatsMetaIsVolatile(t *testing.T) {
 		t.Fatal(err)
 	}
 	setMeta(t, dbPath, "body_bytes", "1")
+	setMeta(t, dbPath, "stored_body_bytes", "3")
 	setMeta(t, dbPath, "headword_bytes", "2")
 	setMeta(t, dbPath, "stats_version", "99")
 	after, err := Fingerprint(dbPath)

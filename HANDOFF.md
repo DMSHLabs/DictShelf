@@ -305,60 +305,83 @@ the English and 6.39x on the Russian Wiktionary, so one coefficient cannot serve
 free classifier is compressed bytes per article: 480 B and 706 B for the wiktionaries, 4.2 KB and
 6.3 KB for the Wikipedias, which matches the observed split.
 
-## What each index costs on the non-ZIM library, measured in three passes
+## What each index costs on the non-ZIM library (three passes)
 
-Same 38 dictionaries (dz/mdx), measured 2026-10-31/11-01 with `text.db` size, `sum(length(entry.m))`
-and a full `dbstat` breakdown after each step; entries were unchanged at every step.
+38 dz/mdx dictionaries, measured with `text.db` size, `sum(length(entry.m))` and a full `dbstat`
+breakdown after each step; the entry count never moved, and `entry` was byte-identical before and
+after full text - the control that the bodies were not re-encoded.
 
 | step | text.db | delta | what it was |
 |---|---|---|---|
-| base (index only) | 2 988 MiB | - | 38 dictionaries, 4 010 535 entries, bodies 2 126 MiB (deflate, 69 % of the db) |
-| + contains | 3 058 MiB | +2.3 MiB | `entry_fts` + `entry_trigram`: 88.6 MiB total = 2.9 % of the db = **23 bytes per entry** |
-| + full text | 4 565 MiB | +1 507 MiB | `article_fts`: 1 353 MiB, the rest free pages left by the rebuild |
+| base (index only) | 2 988 MiB | - | 4 010 535 entries, bodies 2 126 MiB deflate (69 % of the db) |
+| + contains | 3 058 MiB | +2.3 MiB | `entry_fts` + `entry_trigram`: 88.6 MiB = 2.9 % = **23 bytes per entry** |
+| + full text | 4 565 MiB | +1 507 MiB | `article_fts`: 1 353 MiB, the rest free pages (VACUUM would return ~150 MiB) |
 
-So **contains is priced per headword and full text per body byte**: contains is flat at ~23 B per
-entry whatever the dictionary weighs, while full text added 71 % on top of the stored bodies, i.e.
-0.49x the database that existed before it. The spread across dictionaries is 36-156 % of stored
-bodies, because the index is built over `StripHTML` of the *uncompressed* body while the body sits in
-the file deflate-compressed: a small dictionary whose markup compressed badly (Universal Phrasal
-Verbs) pays more for the index than the bodies themselves take. The per-dictionary table, and the
-`before-fulltext.tsv` sizes to diff against, stay in `D:\Temp` (logs `dscan2.log`,
-`snap_contains.log`, `snap_fulltext.log`); the `entry` table itself was byte-identical before and
-after every step, which is the control that the bodies were not re-encoded. VACUUM would return the
-150 MiB of free pages. ZIMs were not part of this series - their full text is the read-through form
-above, not an index.
+So contains is priced per headword and full text per body byte: contains is flat at 19.8-42.4 B per
+entry (23.2 average) whatever the dictionary weighs, while full text added 16.5-117.6 % of the file
+before it (median 45 %), i.e. 0.49x the database that existed. The spread is deflate's: the index is
+built over `StripHTML` of the *uncompressed* body while the file holds it compressed, so a small
+dictionary whose markup compressed badly pays more for the index than the bodies take. ZIMs are not in
+this series - their full text is the read-through form above.
 
-## Size estimates: the measurements exist now, the dialog does not
+## Size estimates: measured, predicted, not yet shown
 
-Stage 1 and 2 of the size-estimate work are in the tree. The ingest records `body_bytes` (bodies
-before deflate), `headword_bytes` and `stats_version` in the meta of every dictionary, and a ZIM
-reader additionally records what its directory held: `zim_articles`, `zim_redirects`, `zim_media`,
-`zim_other`, `zim_clusters`, `zim_text_bytes`, `zim_mixed_bytes`, `zim_other_bytes`
-(`internal/format/zim/dmsh_stats.go`, also usable on its own as `zim.MeasureDirectory(path)`).
-Every one of those keys is in `volatileMeta`, so recording them moved no fingerprint and the golden
-tests still pass on the unchanged content; `TestStatsMetaIsVolatile` keeps it that way.
+Stages 1-4 are in the tree. The ingest records `body_bytes`, `stored_body_bytes`, `headword_bytes`
+and `stats_version` in the meta of every dictionary; a ZIM reader adds what its directory held
+(`zim_articles`, `zim_redirects`, `zim_media`, `zim_other`, `zim_clusters`, `zim_text_bytes`,
+`zim_mixed_bytes`, `zim_other_bytes`, from `internal/format/zim/dmsh_stats.go`, also usable alone as
+`zim.MeasureDirectory`). Every one of those keys is in `volatileMeta`, so recording them moved no
+fingerprint and the golden tests still pass; `TestStatsMetaIsVolatile` keeps it that way.
 
-Verified against the four archives and the databases built from them: `zim_articles` equals the
-prepared `entry_count` plus the handful of articles dropped for empty bodies (1 528 188 exactly,
-9 087 944 / 2 199 375 / 3 275 258 against 9 087 932 / 2 199 370 / 3 275 250), and `zim_text_bytes`
-matches the earlier cluster measurement byte for byte (1 078 917 793 / 4 363 231 833 / 13 775 113 880
-/ 13 624 003 973). One deliberate difference from the first hand-made pass: a cluster holding an
-article and a stylesheet is now "mixed", not "text only" - the earlier classifier counted css/js as
-text, which moved 182 907 bytes on wiktionary_en and changes nothing at this scale.
+`internal/estimate` holds the coefficients (`Version = 1`) and predicts a band: contains 18-45 bytes
+per entry; full text a share of the current file for dz/mdx (0.16-1.18, median 0.45), a share of the
+stored bodies for a ZIM that has them (0.18-0.42), or a multiple of the archive's compressed article
+text for a read-through build (2.4-2.6 encyclopedia, 5.7-9.0 dictionary, split at 1500 compressed
+bytes per article). `estimate_test.go` carries the measured corpus as a table - 38 dz/mdx rows with
+their real growth, four ZIM rows with their real builds - and asserts the measurement falls inside the
+predicted band. It earned its keep on the first run: three constants were set from rounded numbers and
+were wrong (contains 20 against 19.8, full-text 0.17 against 16.5 %, wiktionary 5.8 against 5.79).
 
-Cost of the measurement: about 12 s for a 9 GB archive and 25 s for the 48 GB one, because it walks
-through the reader's own `ptrWalk` (4 KiB reads) rather than a private sequential scan; that is on
-top of a build that takes minutes, and it is the only price the on-demand path pays. What is NOT
-measured for a ZIM is the article text itself: a title-only build never decompresses a cluster, so
-the estimate for ZIM stays "compressed text bytes x a family coefficient" (2.5 for encyclopedias,
-6-9 for wiktionaries) while dz/mdx can be predicted from `body_bytes`.
+`stats.cache` beside `text.db` (shape: `version`, `index_uuid`, source fingerprint, numbers) caches it.
+It is written in place rather than through a temporary - a cache whose reader validates its content
+needs no atomicity, and a stray temp file is something every listing of that folder would have to know
+about - and it is accepted only when `index_uuid` matches `dict_uuid`, the version is current and the
+source fingerprint still matches, while a source that is GONE is accepted (folders outlive sources).
+`Registry.warmStatsStart` fills it once per process from `Warm()`: two workers, one dictionary
+committed before the next, no prompt and no panel row, so a mid-flight close leaves the finished ones
+measured and the rest for the next start.
 
-Still to do: `internal/estimate` (coefficients as versioned data, a table test over the 38 + 4
-measured dictionaries), the `stats.cache` sidecar beside `info.txt`/`icon.cache` keyed by
-`index_uuid` + source fingerprint, then the dialog itself (alphabetical list, "Calculating" rows
-filled by a background job in the existing work panel, increment with a range, separate totals for
-the two families).
+The numbers now ride on each dictionary list row (`dictInfo.Estimate`, `internal/server/dmsh_estimate.go`),
+attached AFTER the row cache - the cache key knows nothing about the sidecar, and a cached row would
+otherwise keep saying "unknown" until something unrelated invalidated it. That means the page needs no
+new endpoint, no bridge method and no `openapi.yaml` entry: it reads what `/api/dicts` already sends.
+Two facts the first test run settled: a dz/mdx row gets its band from the file's own size and needs no
+measurement at all (`Basis: database`), so an old library is estimated out of the box; a ZIM row gets
+none until its directory has been measured (`Stats.ZIMForm`, which the sidecar now records beside the
+numbers), and that absence is exactly what the page shows as "Calculating".
 
+The window is in as `#fullTextPicker` (index.html), opened from a `full-text search` row in the
+Settings drawer - the owner's decision is that full text is its own door, not a chip beside three
+cheap ones. It lists every dictionary alphabetically with its band (or "already built", or
+"calculating" when nothing is measured yet), a checkbox only where there is something to build, a
+sticky summary with the selection's total and what the volume will have left, a warning when the high
+end does not fit, and the ZIM part of the total called out separately because that one is a rebuild
+that copies article texts. The build goes through the existing work API (`feature: "fts"`,
+`action: "create"`) so progress, Stop and the task panel are the ones already there. Free space rides
+on the list response's `end` message (`freeBytes`, `libraryVolume`, `fsx.FreeSpace` on the library
+volume) rather than on a route of its own.
+
+The build direction is gone from every other window: the dictionary chip keeps only "off" (removal is
+this dictionary's own state and cheap - the bodies are not decompressed again), and both the bulk
+button and the single "add full text" action open this window. CLI flags are untouched: a script is
+not a window. The ZIM skip and its `dictUI.bulkZimSkipped` string are now dead on that path.
+
+Not verified: the dialog has never been rendered - this machine has no browser automation (see the
+Playwright note above), so the JS is only checked by `tools/i18n-test.cjs` (syntax + keys) and the
+layout by eye in the source. Also unverified on a real archive: that removing full text really drops a
+ZIM's bodies (by the code the reader is chosen by the request, so it rebuilds title-only and frees
+them - the page's promise of freed space rests on that) and that the CSS block scoped inside the
+dialog is the right place for those rules rather than app.css.
 
 - With the local MinGW GCC 13.1.0, `go test -tags sqlite_fts5 -trimpath ./... -count=1`, `go vet -tags sqlite_fts5 -trimpath ./...`, and `go build -tags sqlite_fts5 -trimpath ./...` pass after removing the duplicate LSD implementation. Real-dictionary integration and Windows/Android UI checks remain unverified.
 - Android runs Go through JNI without an HTTP listener; Windows listenerless desktop uses WebView2 and a native bridge. Build recipes are in `docs/WINDOWS-VERIFY.md`; Android uses `build-android.cmd debug intel`. Do not install APKs or commit unless requested.

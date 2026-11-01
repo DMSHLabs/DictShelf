@@ -182,7 +182,7 @@ func volatileMeta(k string) bool {
 	case "dict_uuid", "created", "source_path", "source_size", "source_mtime",
 		"source_sha256_1M", "source_revision", "body_encoding",
 		"ingest_version", "reader_version", "markup_version", "fold_version",
-		"body_bytes", "headword_bytes", "stats_version",
+		"body_bytes", "stored_body_bytes", "headword_bytes", "stats_version",
 		"zim_articles", "zim_redirects", "zim_media", "zim_other", "zim_clusters",
 		"zim_text_bytes", "zim_mixed_bytes", "zim_other_bytes":
 		return true

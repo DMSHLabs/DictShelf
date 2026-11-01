@@ -849,6 +849,7 @@ func openUpgradedOrDirect(path string) (dict.Dictionary, error) {
 // setup page ("Use these dictionaries").
 type Registry struct {
 	jobs          jobTable
+	statsOnce     sync.Once // one measurement pass per process, however many warms
 	indexQueueMu  sync.Mutex
 	priorityMu    sync.Mutex
 	priorityQueue *priorityDictionaryQueue
@@ -1486,6 +1487,12 @@ func (r *Registry) Warm() {
 			}(e)
 		}
 		wg.Wait()
+		// Measurements for the estimate dialog ride along with the warm-up: the
+		// same conditions apply (something is worth doing in the background, the
+		// power state allows it), and it is the only moment a library that was
+		// prepared before the measurements existed can be filled in without
+		// anybody asking for anything.
+		r.warmStatsStart(entries)
 	}()
 }
 

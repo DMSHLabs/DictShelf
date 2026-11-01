@@ -671,6 +671,11 @@ func writeInfo(dir, source string) error {
 	if _, err := os.Stat(filepath.Join(dir, "icon.cache")); err == nil {
 		fmt.Fprintf(&b, ", icon.cache (dictionary icon)")
 	}
+	// Measured sizes for the size-estimate dialog. A cache: its absence is not
+	// a defect, it says the dialog will measure instead of reading.
+	if _, err := os.Stat(StatsPath(dir)); err == nil {
+		fmt.Fprintf(&b, ", %s (measured sizes)", StatsCacheName)
+	}
 	if _, err := os.Stat(MediaDBPath(dir)); err == nil {
 		fmt.Fprintf(&b, ", %s (images/audio)", MediaDBName)
 	}

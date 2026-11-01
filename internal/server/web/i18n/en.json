@@ -1250,5 +1250,21 @@
   "work.collapse": "Hide tasks",
   "work.stopAll": "Stop All",
   "panel.articleFont": "Fonts",
-  "panel.fontSystem": "System"
+  "panel.fontSystem": "System",
+  "panel.fullText": "Full-text search",
+  "fullText.title": "Full-text search over article bodies",
+  "fullText.colChoice": "Include",
+  "fullText.colDictionary": "Dictionary",
+  "fullText.colSize": "Estimated size",
+  "fullText.colState": "State",
+  "fullText.stateBuilt": "already built",
+  "fullText.stateCalculating": "calculating…",
+  "fullText.stateAvailable": "can be built",
+  "fullText.selected": "Selected: {count} — ≈{low}…{high}",
+  "fullText.none": "Nothing selected",
+  "fullText.free": "free {free} → ≈{after} left",
+  "fullText.warn": "May not fit: up to {high} with {free} free.",
+  "fullText.split": "Of those, ZIM archives: ≈{low}…{high} — a rebuild that copies article texts; the other rows need the index only.",
+  "fullText.note": "Full-text search over article bodies is the most expensive index: for ordinary dictionaries it lands on top of texts that are already prepared, while for a ZIM it rebuilds the database. Build it where it is needed: the build can be stopped, and the remaining dictionaries can be added later.",
+  "fullText.build": "Build for the selected"
 }

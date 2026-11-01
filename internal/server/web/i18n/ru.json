@@ -1262,5 +1262,21 @@
   "work.collapse": "Скрыть задачи",
   "work.stopAll": "Остановить все",
   "panel.articleFont": "Шрифт",
-  "panel.fontSystem": "Системный"
+  "panel.fontSystem": "Системный",
+  "panel.fullText": "Полнотекстовый поиск",
+  "fullText.title": "Полнотекстовый поиск по текстам статей",
+  "fullText.colChoice": "Включить",
+  "fullText.colDictionary": "Словарь",
+  "fullText.colSize": "Предполагаемый размер",
+  "fullText.colState": "Состояние",
+  "fullText.stateBuilt": "уже построен",
+  "fullText.stateCalculating": "считается…",
+  "fullText.stateAvailable": "можно построить",
+  "fullText.selected": "Отмечено: {count} — ≈{low}…{high}",
+  "fullText.none": "Ничего не отмечено",
+  "fullText.free": "свободно {free} → останется ≈{after}",
+  "fullText.warn": "Может не хватить места: до {high} при {free} свободных.",
+  "fullText.split": "Из них архивов ZIM: ≈{low}…{high} — это пересборка с копированием текстов статей, остальные строки — только индекс.",
+  "fullText.note": "Полнотекстовый поиск по телам статей — самый дорогой индекс: у словарей он ложится поверх уже подготовленных текстов, а у ZIM пересобирает базу целиком. Делайте его там, где он нужен: сборку можно остановить, а остальные словари можно добавить позже.",
+  "fullText.build": "Построить отмеченным"
 }

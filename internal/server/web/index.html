@@ -464,6 +464,7 @@ window.wudictFontScale=(function(){
   <div class="facts">
     <button type="button" class="mrow door" id="editDictSettings">{{T:panel.editDicts}}</button>
     <button type="button" class="mrow door" id="editGroups">{{T:panel.editGroups}}</button>
+    <button type="button" class="mrow door" id="editFullText">{{T:panel.fullText}}</button>
     <a class="mrow door" id="editFilters" href="/groups">{{T:panel.editFilters}}</a>
     <a class="mrow door" id="editFolders" href="/setup">{{T:panel.editFolders}}</a>
     <button type="button" class="mrow door" id="rescanBtn" title="{{T:panel.rescanHint}}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M13.3 8a5.3 5.3 0 1 1-1.7-3.9"/><path d="M13.6 2v3h-3"/></svg>{{T:panel.rescan}}</button>
@@ -3683,6 +3684,8 @@ async function loadDicts(rescan){
         }
       }else if(msg.t==="end"){
         sawEnd=true;
+        if(typeof msg.freeBytes==="number")libraryFreeBytes=msg.freeBytes;
+        if(typeof msg.libraryVolume==="string")libraryVolume=msg.libraryVolume;
       }
     },controller&&controller.signal);
     if(!sawBegin||!sawEnd||rows.length!==dictTotal)
@@ -6414,6 +6417,12 @@ $("panelList").addEventListener("click",e=>{
     // a stale index is re-requested, not removed: same switch, still "on",
     // which setFeatures reads as "rebuild this"
     const on=feat.dataset.on==="1"&&feat.dataset.stale!=="1";
+    /* The full-text switch is one-way now. Turning it off stays here: that is
+       this dictionary's own state, and it is cheap (the bodies are not
+       decompressed again). Turning it ON is the act that can cost tens of
+       gigabytes, so it goes to the page that shows a size for every dictionary
+       instead of being one click inside a list of four chips. */
+    if(feat.dataset.feat==="fts"&&!on){openFullTextPicker(feat.dataset.target||feat.closest(".pd").dataset.id);return;}
     runIngest(feat.dataset.target||feat.closest(".pd").dataset.id,{[feat.dataset.feat]:on?0:1},feat);
     return;
   }
@@ -6456,7 +6465,7 @@ $("panelList").addEventListener("click",e=>{
     return;
   }
   const act=e.target.closest(".act");if(!act)return;
-  runIngest(act.closest(".pd").dataset.id,{fts:1},act);
+  openFullTextPicker(act.closest(".pd").dataset.id);
 });
 /* It is a button, so it answers to Enter and Space like one. */
 $("panelList").addEventListener("keydown",e=>{
@@ -6578,13 +6587,12 @@ document.addEventListener("click",e=>{
     if(up.disabled)return;
     const section=up.closest("details.noindex"),items=[...section.querySelectorAll(".noidx .upgrade[data-id]")];
     const feat=items[0]?.dataset.feat||"fts";
-    /* A ZIM's full-text build is not the cheap headword pass: it decompresses
-       the whole corpus into the database - tens of gigabytes and hours on a
-       mechanical disk - so the bulk action never starts one. It stays a
-       per-dictionary decision, made on the chip in Dictionary Settings. */
-    const bulkable=items.filter(item=>feat!=="fts"||!isZimDict(item.dataset.id));
-    if(bulkable.length<items.length)setIndexStatus(esc(tx("dictUI.bulkZimSkipped",{number:window.wudictI18n.number(items.length-bulkable.length)})));
-    const operations=[...new Set(bulkable.map(item=>item.dataset.id).filter(Boolean))]
+    /* Full text is not a bulk act, for a ZIM least of all: a read-through build
+       decompresses the whole corpus into the database - tens of gigabytes and
+       hours on a mechanical disk. The bulk door opens the page that shows what
+       each dictionary would cost and lets the user choose there. */
+    if(feat==="fts"){openFullTextPicker("");return;}
+    const operations=[...new Set(items.map(item=>item.dataset.id).filter(Boolean))]
       .map(dict=>({dict,feature:feat,action:"create"}));
     if(!operations.length)return;
     up.disabled=true;
@@ -13165,6 +13173,156 @@ $("styler").addEventListener("keydown",e=>{
     <button type="button" class="btn" id="lookAskCancel">{{T:panel.cancel}}</button>
   </div>
 </dialog>
+<dialog id="fullTextPicker" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="fullTextTitle">
+  <style>
+    /* Scoped to this dialog: it is the one screen with a table wider than the
+       panel, and it must stay readable on a phone. A design pass can move these
+       into app.css with the rest of the panel's tokens. */
+    #fullTextPicker{max-width:min(46rem,96vw)}
+    #fullTextPicker .ft-summary{display:flex;flex-wrap:wrap;gap:.25rem .75rem;align-items:baseline;
+      padding:.5rem .25rem;border-bottom:1px solid var(--line);position:sticky;top:0;
+      background:var(--bg-card,var(--bg));z-index:1}
+    #fullTextPicker .ft-selected{font-weight:600}
+    #fullTextPicker .ft-free{opacity:.8;font-variant-numeric:tabular-nums}
+    #fullTextPicker .ft-split{flex-basis:100%;opacity:.8}
+    #fullTextPicker .ft-warn{color:var(--danger,#b3261e);padding:.25rem}
+    #fullTextPicker .ft-body{max-height:min(50vh,26rem);overflow:auto}
+    #fullTextPicker table{width:100%;border-collapse:collapse}
+    #fullTextPicker th{position:sticky;top:0;text-align:left;font-weight:600;background:var(--bg-card,var(--bg));
+      padding:.35rem .5rem;border-bottom:1px solid var(--line)}
+    #fullTextPicker td{padding:.3rem .5rem;border-bottom:1px solid color-mix(in srgb,var(--line) 55%,transparent)}
+    #fullTextPicker .ft-size,#fullTextPicker .ft-state{white-space:nowrap;font-variant-numeric:tabular-nums}
+    #fullTextPicker .ft-note{opacity:.8}
+    #fullTextPicker .ft-actions{display:flex;gap:.5em;justify-content:flex-end;align-items:center;flex-wrap:wrap}
+    #fullTextPicker .ft-actions .btn,.ft-actions .btn{flex:none}
+  </style>
+  <h2 id="fullTextTitle">{{T:fullText.title}}</h2>
+  <div class="ft-summary">
+    <span class="ft-selected" id="ftSelected"></span>
+    <span class="ft-free" id="ftFree"></span>
+    <span class="ft-split" id="ftSplit"></span>
+  </div>
+  <div class="ft-warn" id="ftWarn" role="alert" hidden></div>
+  <div class="ft-body">
+    <table>
+      <thead><tr>
+        <th><span class="visually-hidden">{{T:fullText.colChoice}}</span></th>
+        <th>{{T:fullText.colDictionary}}</th>
+        <th>{{T:fullText.colSize}}</th>
+        <th>{{T:fullText.colState}}</th>
+      </tr></thead>
+      <tbody id="ftRows"></tbody>
+    </table>
+  </div>
+  <p class="ft-note">{{T:fullText.note}}</p>
+  <div class="ft-actions">
+    <button type="button" class="btn" id="ftBuild" disabled>{{T:fullText.build}}</button>
+    <button type="button" class="btn" id="ftClose">{{T:panel.close}}</button>
+  </div>
+</dialog>
+<script>
+/* Full-text search over article bodies is the one index whose build can cost
+   tens of gigabytes, so it has its own door instead of being a chip beside
+   three cheap ones: a table of every dictionary with the size a build would
+   add, and one button that starts what the user ticked. The numbers come from
+   the list rows the server already sends (dictInfo.estimate); a row without one
+   says it is still being measured rather than guessing, and a row that has the
+   index already offers no checkbox at all. */
+var libraryFreeBytes=0, libraryVolume="";
+function fullTextRows(){
+  return (dicts||[]).filter(d=>d&&!d.unavailable&&d.dbPath).map(d=>({
+    id:d.id,name:d.name||d.id,zim:String(d.format||"").toLowerCase()==="zim",
+    built:!!d.caps?.FTS,est:d.estimate||null
+  })).sort((a,b)=>String(a.name).localeCompare(String(b.name),undefined,{sensitivity:"base"}));
+}
+function fullTextBandText(row){
+  if(row.built)return tx("fullText.stateBuilt");
+  if(!row.est)return tx("fullText.stateCalculating");
+  return "≈ "+mb(row.est.low)+" – "+mb(row.est.high);
+}
+function selectedFullText(){
+  const out=[];
+  for(const tr of $("ftRows").querySelectorAll("tr")){
+    const cb=tr.querySelector("input[type=checkbox]");
+    if(!cb||!cb.checked)continue;
+    out.push({id:tr.dataset.id,low:+(tr.dataset.low||0),high:+(tr.dataset.high||0),zim:tr.dataset.zim==="1"});
+  }
+  return out;
+}
+function updateFullTextSummary(){
+  const sel=selectedFullText();
+  const low=sel.reduce((sum,r)=>sum+r.low,0), high=sel.reduce((sum,r)=>sum+r.high,0);
+  const zlow=sel.filter(r=>r.zim).reduce((sum,r)=>sum+r.low,0);
+  const zhigh=sel.filter(r=>r.zim).reduce((sum,r)=>sum+r.high,0);
+  $("ftSelected").textContent=sel.length
+    ? tx("fullText.selected",{count:window.wudictI18n.number(sel.length),low:mb(low),high:mb(high)})
+    : tx("fullText.none");
+  const free=libraryFreeBytes||0;
+  $("ftFree").textContent=free?tx("fullText.free",{free:mb(free),after:mb(Math.max(0,free-high))}):"";
+  const warn=$("ftWarn"), over=free>0&&high>free;
+  warn.hidden=!over;
+  if(over)warn.textContent=tx("fullText.warn",{high:mb(high),free:mb(free)});
+  $("ftSplit").textContent=(zlow||zhigh)&&sel.length?tx("fullText.split",{low:mb(zlow),high:mb(zhigh)}):"";
+  $("ftBuild").disabled=!sel.length;
+}
+function renderFullTextPicker(){
+  const body=$("ftRows");
+  body.replaceChildren(...fullTextRows().map(row=>{
+    const tr=document.createElement("tr");
+    tr.dataset.id=row.id;
+    if(row.zim)tr.dataset.zim="1";
+    if(row.est){tr.dataset.low=String(row.est.low);tr.dataset.high=String(row.est.high);}
+    const choice=document.createElement("td");
+    if(row.built||!row.est){
+      // Nothing to build, or nothing known yet: no checkbox, so a click cannot
+      // promise work that would not happen.
+      choice.textContent=row.built?"✓":"⏳";
+      choice.title=row.built?tx("fullText.stateBuilt"):tx("fullText.stateCalculating");
+    }else{
+      const cb=document.createElement("input");
+      cb.type="checkbox";
+      cb.setAttribute("aria-label",tx("fullText.colChoice"));
+      choice.append(cb);
+    }
+    const name=document.createElement("td");
+    name.textContent=row.name;
+    const size=document.createElement("td");
+    size.className="ft-size";
+    size.textContent=fullTextBandText(row);
+    const state=document.createElement("td");
+    state.className="ft-state";
+    state.textContent=row.built?tx("fullText.stateBuilt"):row.est?tx("fullText.stateAvailable"):"";
+    tr.append(choice,name,size,state);
+    return tr;
+  }));
+  updateFullTextSummary();
+}
+function openFullTextPicker(preselect){
+  renderFullTextPicker();
+  if(preselect){
+    const tr=$("ftRows").querySelector('tr[data-id="'+CSS.escape(preselect)+'"]');
+    const cb=tr&&tr.querySelector("input[type=checkbox]");
+    if(cb)cb.checked=true;
+  }
+  updateFullTextSummary();
+  const dlg=$("fullTextPicker");
+  if(!dlg.open)dlg.showModal();
+}
+document.addEventListener("DOMContentLoaded",()=>{
+  $("ftRows").addEventListener("change",updateFullTextSummary);
+  $("ftClose").addEventListener("click",()=>$("fullTextPicker").close());
+  $("ftBuild").addEventListener("click",()=>{
+    const sel=selectedFullText();
+    if(!sel.length)return;
+    const button=$("ftBuild");
+    button.disabled=true;
+    window.wudictWork.start(sel.map(r=>({dict:r.id,feature:"fts",action:"create"})))
+      .catch(error=>setIndexStatus("⚠ "+esc(error.message||String(error))))
+      .finally(()=>$("fullTextPicker").close());
+  });
+  $("editFullText").addEventListener("click",()=>openFullTextPicker(""));
+});
+</script>
 <script src="/assets/list-search.js?v={{LISTSEARCHJS}}"></script>
 <script src="/assets/group-editor.js?v={{GROUPJS}}"></script>
 <script>window.wudictThemedSelects.group=themedSelectCreate(document.getElementById("groupSelect"));

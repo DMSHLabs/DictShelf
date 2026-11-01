@@ -1075,6 +1075,12 @@ type dictInfo struct {
 	Groups  []facet.Group `json:"groups,omitempty"`
 	Filters []facet.Group `json:"filters,omitempty"`
 
+	// Estimate: what building the full-text index over this dictionary's
+	// bodies would add, in bytes, as a band (internal/estimate). Present only
+	// when the index is missing AND a measurement could be found; the full-text
+	// page measures the rest on demand rather than showing nothing.
+	Estimate *estimateView `json:"estimate,omitempty"`
+
 	// Job is the change to this dictionary's indexes running now (an ingest
 	// job, jobs.go), so a page loaded mid-way shows it and follows it with
 	// /api/ingest; absent when none runs.
@@ -1123,6 +1129,14 @@ type dictMsg struct {
 	// answer must not be kept - a row carries an error or a running job, or
 	// what a row was derived from changed while it was derived.
 	ETag string `json:"etag,omitempty"`
+	// FreeBytes, on "end": what an unprivileged writer may still use on the
+	// volume the library sits on. The full-text page is the one screen where a
+	// user decides to spend tens of gigabytes, and the answer to "does it fit"
+	// is not something a browser can work out.
+	FreeBytes int64 `json:"freeBytes,omitempty"`
+	// LibraryVolume, on "end": which volume that is, for the page to name when
+	// it warns that a build may not fit.
+	LibraryVolume string `json:"libraryVolume,omitempty"`
 }
 
 // handleDicts streams the dictionary list as newline-delimited JSON, for the

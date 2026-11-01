@@ -82,6 +82,10 @@ type ingestRowWriter struct {
 	// is what the headword indexes scale with. Both describe the source, not
 	// the prepared content, and are recorded as volatile meta.
 	bodyBytes, headwordBytes int64
+	// storedBodyBytes is the same body after deflate: what it actually costs
+	// the file. Both are needed, because a database can hold bodies that no
+	// index covers, and then the index is priced against what is on disk.
+	storedBodyBytes int64
 }
 
 func newIngestRowWriter(ctx context.Context, tx *sql.Tx, plan Plan) *ingestRowWriter {
@@ -105,6 +109,7 @@ func (w *ingestRowWriter) write(id int64, e preparedIngestEntry) error {
 	w.entry.add(id, e.headword, e.folded, e.caseKey, e.body)
 	w.wref.add(e.headword, e.lower, id)
 	w.bodyBytes += e.bodyBytes
+	w.storedBodyBytes += int64(len(e.body))
 	w.headwordBytes += int64(len(e.headword))
 	w.batchBytes += int64(len(e.headword))*4 + int64(len(e.folded)+len(e.caseKey)+len(e.lower)+len(e.body))
 	if w.fts != nil {
