@@ -12274,16 +12274,18 @@ languageMenu.onkeydown=e=>{
    button too, so the control names the mode the same way the menu does. */
 const themedModeDescriptions={prefix:tx("browse.findModePrefix"),suffix:tx("browse.findModeSuffix"),contains:tx("browse.findModeContains"),
   word:tx("browse.findModeWord"),wordLemma:tx("browse.findModeWordLemma"),exact:tx("browse.findModeExact"),
-  exactLemma:tx("browse.findModeExactLemma"),wildcards:tx("browse.findModeWildcards"),fts:tx("search.fullTextDescription")};
+  exactLemma:tx("browse.findModeExactLemma"),wildcards:tx("browse.findModeWildcards"),
+  phrase:tx("search.modePhrase"),near:tx("search.modeNear"),fts:tx("search.modeWords")};
 const themedModeHints={prefix:tx("search.modeHintPrefix"),suffix:tx("search.modeHintSuffix"),contains:tx("search.modeHintContains"),
   word:tx("search.modeHintWord"),wordLemma:tx("search.modeHintWordLemma"),exact:tx("search.modeHintExact"),
-  exactLemma:tx("search.modeHintExactLemma"),wildcards:tx("search.modeHintWildcards"),fts:tx("search.modeHintFullText")};
+  exactLemma:tx("search.modeHintExactLemma"),wildcards:tx("search.modeHintWildcards"),
+  phrase:tx("search.modeHintPhrase"),near:tx("search.modeHintNear"),fts:tx("search.modeHintWords")};
 function themedSelect(select,button,menu){
   const ctl=sheetMenuNew(button,menu,()=>{
     const nodes=[];let group=null;
     for(const option of select.options){
       if(option.hidden)continue;
-      if(select.id==="mode"&&["prefix","exact","fts"].includes(option.value)){
+      if(select.id==="mode"&&["prefix","exact","phrase"].includes(option.value)){
         group=document.createElement("div");group.className="headword-control-find-group";
         const heading=document.createElement("div");heading.className="headword-control-find-group-title";
         heading.textContent=tx(option.value==="prefix"?"browse.findModesEachWord":option.value==="exact"?"browse.findModesWholeHeadword":"search.articles");
