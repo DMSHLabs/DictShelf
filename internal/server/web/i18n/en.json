@@ -1266,5 +1266,7 @@
   "fullText.warn": "May not fit: up to {high} with {free} free.",
   "fullText.split": "Of those, ZIM archives: ≈{low}…{high} — a rebuild that copies article texts; the other rows need the index only.",
   "fullText.note": "Full-text search over article bodies is the most expensive index: for ordinary dictionaries it lands on top of texts that are already prepared, while for a ZIM it rebuilds the database. Build it where it is needed: the build can be stopped, and the remaining dictionaries can be added later.",
-  "fullText.build": "Build for the selected"
+  "fullText.build": "Build for the selected",
+  "fullText.list": "Dictionaries",
+  "fullText.count": "Built: {built} of {total}"
 }

@@ -13178,7 +13178,18 @@ $("styler").addEventListener("keydown",e=>{
     /* Scoped to this dialog: it is the one screen with a table wider than the
        panel, and it must stay readable on a phone. A design pass can move these
        into app.css with the rest of the panel's tokens. */
-    #fullTextPicker{max-width:min(46rem,96vw)}
+    /* Full screen, like the lemmas page: this is a screen one makes a decision
+       on, not a card floating over the reader. */
+    #fullTextPicker{inset:0;width:100vw;height:100vh;max-width:none;max-height:none;margin:0;
+      border-radius:0;display:flex;flex-direction:column;box-sizing:border-box}
+    #fullTextPicker .ft-top{display:flex;align-items:center;gap:.5rem;flex:none}
+    #fullTextPicker .ft-top h1{flex:1 1 auto;margin:0;font-size:1.25rem}
+    #fullTextPicker .ft-x{flex:none;width:2.25rem;height:2.25rem;display:grid;place-items:center;
+      border:1px solid var(--line);border-radius:.5rem;background:var(--bg-card,var(--bg));cursor:pointer}
+    #fullTextPicker .ft-x svg{width:1.1rem;height:1.1rem}
+    #fullTextPicker .ft-head{display:flex;align-items:baseline;justify-content:space-between;gap:.75rem;flex:none}
+    #fullTextPicker .ft-head h2{margin:.25rem 0;font-size:1.05rem}
+    #fullTextPicker .ft-count{opacity:.8;font-variant-numeric:tabular-nums}
     #fullTextPicker .ft-summary{display:flex;flex-wrap:wrap;gap:.25rem .75rem;align-items:baseline;
       padding:.5rem .25rem;border-bottom:1px solid var(--line);position:sticky;top:0;
       background:var(--bg-card,var(--bg));z-index:1}
@@ -13186,7 +13197,7 @@ $("styler").addEventListener("keydown",e=>{
     #fullTextPicker .ft-free{opacity:.8;font-variant-numeric:tabular-nums}
     #fullTextPicker .ft-split{flex-basis:100%;opacity:.8}
     #fullTextPicker .ft-warn{color:var(--danger,#b3261e);padding:.25rem}
-    #fullTextPicker .ft-body{max-height:min(50vh,26rem);overflow:auto}
+    #fullTextPicker .ft-body{flex:1 1 auto;min-height:0;overflow:auto}
     #fullTextPicker table{width:100%;border-collapse:collapse}
     #fullTextPicker th{position:sticky;top:0;text-align:left;font-weight:600;background:var(--bg-card,var(--bg));
       padding:.35rem .5rem;border-bottom:1px solid var(--line)}
@@ -13196,13 +13207,17 @@ $("styler").addEventListener("keydown",e=>{
     #fullTextPicker .ft-actions{display:flex;gap:.5em;justify-content:flex-end;align-items:center;flex-wrap:wrap}
     #fullTextPicker .ft-actions .btn,.ft-actions .btn{flex:none}
   </style>
-  <h2 id="fullTextTitle">{{T:fullText.title}}</h2>
+  <div class="ft-top">
+    <h1 id="fullTextTitle">{{T:fullText.title}}</h1>
+    <button type="button" class="ft-x" id="ftCloseTop" aria-label="{{T:panel.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+  </div>
   <div class="ft-summary">
     <span class="ft-selected" id="ftSelected"></span>
     <span class="ft-free" id="ftFree"></span>
     <span class="ft-split" id="ftSplit"></span>
   </div>
   <div class="ft-warn" id="ftWarn" role="alert" hidden></div>
+  <div class="ft-head"><h2>{{T:fullText.list}}</h2><span class="ft-count" id="ftCount"></span></div>
   <div class="ft-body">
     <table>
       <thead><tr>
@@ -13236,7 +13251,9 @@ function fullTextRows(){
   })).sort((a,b)=>String(a.name).localeCompare(String(b.name),undefined,{sensitivity:"base"}));
 }
 function fullTextBandText(row){
-  if(row.built)return tx("fullText.stateBuilt");
+  // Nothing to estimate once the index is there: the state column says so, and
+  // repeating it in the size column reads as a number that failed to load.
+  if(row.built)return "—";
   if(!row.est)return tx("fullText.stateCalculating");
   return "≈ "+mb(row.est.low)+" – "+mb(row.est.high);
 }
@@ -13263,6 +13280,8 @@ function updateFullTextSummary(){
   warn.hidden=!over;
   if(over)warn.textContent=tx("fullText.warn",{high:mb(high),free:mb(free)});
   $("ftSplit").textContent=(zlow||zhigh)&&sel.length?tx("fullText.split",{low:mb(zlow),high:mb(zhigh)}):"";
+  const rows=fullTextRows(), built=rows.filter(r=>r.built).length;
+  $("ftCount").textContent=tx("fullText.count",{built:window.wudictI18n.number(built),total:window.wudictI18n.number(rows.length)});
   $("ftBuild").disabled=!sel.length;
 }
 function renderFullTextPicker(){
@@ -13311,6 +13330,7 @@ function openFullTextPicker(preselect){
 document.addEventListener("DOMContentLoaded",()=>{
   $("ftRows").addEventListener("change",updateFullTextSummary);
   $("ftClose").addEventListener("click",()=>$("fullTextPicker").close());
+  $("ftCloseTop").addEventListener("click",()=>$("fullTextPicker").close());
   $("ftBuild").addEventListener("click",()=>{
     const sel=selectedFullText();
     if(!sel.length)return;
