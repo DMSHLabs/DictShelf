@@ -190,6 +190,12 @@ func reindexOne(f store.Folder, force bool) error {
 		if full && ownIndexAnswersFullText(f.Source) {
 			full = false
 		}
+		// The form is decided HERE, so the plan has to be pinned to it: leaving
+		// FullText nil lets the KEPT plan override the reader, which is how a
+		// rebuild once produced a headword database claiming to hold full text.
+		// A non-ZIM keeps whatever it has - its plan must stay nil, or a plain
+		// reindex would drop full text (a test catches exactly that).
+		t.FullText = &full
 	}
 	var title string // the folder is what this command names, not the title
 	hooks := cliHooks(f.Source, &title, full)

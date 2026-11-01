@@ -1032,7 +1032,15 @@ func ingestOne(srcPath, out string, full bool, pf planFlags) error {
 	if full {
 		t.Media = store.MediaOn
 	}
-	hooks := cliHooks(srcPath, &name, ingestArticles(srcPath, pf.fullText))
+	articles := ingestArticles(srcPath, pf.fullText)
+	// Where this fork overrides the form - an archive that carries its own
+	// full-text index is never built read-through - the plan has to be pinned to
+	// the same answer. A reader that yields no bodies under a plan that indexes
+	// article text builds an empty article_fts and a receipt claiming full text.
+	if pf.fullText == nil && ownIndexAnswersFullText(srcPath) {
+		t.FullText = &articles
+	}
+	hooks := cliHooks(srcPath, &name, articles)
 	res, err := store.Reconcile(srcPath, t, hooks)
 	logx.ClearLine()
 	dir := filepath.Dir(res.TextDB)

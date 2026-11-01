@@ -667,7 +667,14 @@ func writeInfo(dir, source string) error {
 		fmt.Fprintf(&b, "\n%s%s = %s\n", keepComment, keepKey, keepValue)
 	}
 	fmt.Fprintf(&b, "\n# origin: %s\n", src)
-	fmt.Fprintf(&b, "# files: %s (articles + search index)", TextDBName)
+	// What the database actually holds. A title-only ZIM is "headwords + search
+	// index" and saying "articles" there would send a reader looking for article
+	// text in a file that deliberately has none (SPEC §24).
+	what := "articles + search index"
+	if levelHeadwords == ingestLevel(PlanFromMeta(meta)) {
+		what = "headwords + search index"
+	}
+	fmt.Fprintf(&b, "# files: %s (%s)", TextDBName, what)
 	if _, err := os.Stat(filepath.Join(dir, "icon.cache")); err == nil {
 		fmt.Fprintf(&b, ", icon.cache (dictionary icon)")
 	}

@@ -1906,6 +1906,15 @@ func (e *entry) reconcileLockedContext(ctx context.Context, name string, t store
 			store.IndexDiagnostic("skip zim read-through source=%q reason=archive-has-its-own-index", e.Path)
 			full = false
 		}
+		// The reader and the plan are two halves of ONE decision, and pinning
+		// only the reader is a real bug, not a hypothetical one: a rebuild then
+		// fed by the headword reader while the kept plan still said "index
+		// article text" produced an empty article_fts, an ingest_level of
+		// "text", and a receipt promising full text over a database that held
+		// none. It was found by rebuilding an archive and reading the result.
+		if t.FullText == nil {
+			t.FullText = &full
+		}
 		if full {
 			// The read-through form: article clusters are decompressed and the
 			// bodies are stored and indexed, which is the only way article text

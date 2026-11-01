@@ -607,6 +607,28 @@ the seam tests in the tree; `go build/vet/test` on every package touched. NOT ve
 changes have never been rendered (no Playwright here, as before), and no database has been rebuilt
 through the new rule yet.
 
+**What the first real rebuild found** (wiktionary_ru, run twice with the CLI, 2026-11-01). 9 644 MB
+became 426 MB in 34-40 s: `entry_fts` 20 MB, `entry_trigram` 22 MB, the headword list and its indexes
+the rest, `article_fts` absent, `info.txt` reading "index = headwords only". Three defects only a real
+run could show, all fixed here:
+
+- **The reader and the plan are two halves of one decision, and the first run pinned only the reader.**
+  The headword reader under the kept plan ("index article text") produced a database with an EMPTY
+  `article_fts`, `ingest_level = text` and a receipt promising full text - 9.6 GB down to 426 MB, but
+  inconsistent. The plan is now pinned where the form is decided: the server's reconcile (only when the
+  caller left it nil), the CLI's reindex (inside the ZIM branch - pinning it for every format dropped
+  full text on a non-ZIM reindex, which `TestReindexOneKeepsPlan` caught), and the CLI's ingest (only
+  where this fork overrides the form).
+- **A stale `stats.cache` stayed valid across the rebuild**, because everything it validates against -
+  the source's uuid, size and mtime - is unchanged by a rebuild: the window would have priced the
+  archive against article bodies that no longer exist. The form is now part of the validity check
+  (`ReadStats`, with a test), so the warm pass re-measures.
+- **`info.txt` said "text.db (articles + search index)"** for a database holding no articles; it now
+  distinguishes the two forms.
+
+The archive's own reader was unaffected throughout, and the re-run left the folder consistent: 426 MB,
+`index_kind = headwords`, `ingest_level = headwords`, `own_ft_index = 1`, no `article_fts`.
+
 **The migration of the four existing databases is a click, not a job.** They are in the read-through
 form; nothing rebuilds them by itself - no reconcile runs at startup, deliberately, because a silent
 25 GB rebuild is not something to start behind the user's back. Rescan → "пересоздать" for the base

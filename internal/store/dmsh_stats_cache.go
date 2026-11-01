@@ -131,6 +131,15 @@ func ReadStats(textDB string) (Stats, bool) {
 			}
 		}
 	}
+	// The FORM is a property of the database, not of the source, and a rebuild
+	// into the other form leaves every other check here passing: the uuid is the
+	// source's, and the source has not changed. Without this a ZIM rebuilt from
+	// the read-through form to the title index went on being measured as if it
+	// still stored article bodies - the window would price it against bodies
+	// that are not there. Found by rebuilding one and reading the result.
+	if form := ZIMFormOf(meta); form != s.ZIMForm {
+		return Stats{}, false
+	}
 	return s, true
 }
 
