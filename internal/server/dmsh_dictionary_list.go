@@ -97,6 +97,7 @@ func (s *Server) listDictionaries(parent context.Context, ifNoneMatch string, em
 				return
 			}
 			info, held := s.dictInfoFor(e, global, key)
+			noteArchiveFullText(&info)
 			s.attachEstimate(&info)
 			if !held || info.Error != "" || info.Job != nil {
 				keepable.Store(false)

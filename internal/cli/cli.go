@@ -1037,7 +1037,7 @@ func ingestOne(srcPath, out string, full bool, pf planFlags) error {
 	// full-text index is never built read-through - the plan has to be pinned to
 	// the same answer. A reader that yields no bodies under a plan that indexes
 	// article text builds an empty article_fts and a receipt claiming full text.
-	if pf.fullText == nil && ownIndexAnswersFullText(srcPath) {
+	if ownIndexAnswersFullText(srcPath) {
 		t.FullText = &articles
 	}
 	hooks := cliHooks(srcPath, &name, articles)

@@ -1260,6 +1260,9 @@
   "fullText.colState": "State",
   "fullText.stateBuilt": "already built",
   "fullText.stateArchive": "the archive carries it",
+  "fullText.convert": "Convert",
+  "fullText.convertHint": "Rebuild as the headword index. Full-text search stays - the archive's own index answers it - and this frees the article index ({index}) and the article bodies copied into the database (now {db}).",
+  "fullText.convertHintUnknown": "Rebuild as the headword index. Full-text search stays - the archive's own index answers it - and this frees the article index and the article bodies copied into the database (now {db}).",
   "fullText.stateCalculating": "calculating…",
   "fullText.stateAvailable": "can be built",
   "fullText.selected": "Selected: {count} — ≈{low}…{high}",
@@ -1271,5 +1274,6 @@
   "fullText.build": "Build for the selected",
   "fullText.list": "Dictionaries",
   "fullText.count": "Built: {built} of {total}",
-  "fullText.countArchive": "({count} from the archive itself)"
+  "fullText.countArchive": "({count} from the archive itself)",
+  "fullText.countConvert": "({count} to convert)"
 }

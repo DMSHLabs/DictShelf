@@ -26,6 +26,7 @@ package server
 
 import (
 	"context"
+	"strings"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	zimformat "github.com/DMSHLabs/DictShelf/internal/format/zim"
@@ -76,6 +77,21 @@ func (u *upgraded) archiveFullText(ctx context.Context, query string, limit int)
 	}
 	res, err = searcher.FullText(query, limit)
 	return res, true, err
+}
+
+// noteArchiveFullText fills the row's ArchiveFullText for a ZIM this fork would
+// now prepare as the title index: its archive answers full text and the database
+// still holds an index of ours.
+//
+// The probe opens the archive's container (a header read and a directory
+// lookup), which is why it is asked only where the answer can change anything:
+// once a database has been converted, own_ft_index is in its meta and the row
+// knows without opening anything. The row cache absorbs the rest.
+func noteArchiveFullText(info *dictInfo) {
+	if info == nil || info.OwnFullText || info.Error != "" || !strings.EqualFold(info.Format, "zim") {
+		return
+	}
+	info.ArchiveFullText = archiveAnswersFullText(info.Path)
 }
 
 // archiveAnswersFullText reports whether the archive itself carries the

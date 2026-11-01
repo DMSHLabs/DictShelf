@@ -1272,6 +1272,9 @@
   "fullText.colState": "Состояние",
   "fullText.stateBuilt": "уже построен",
   "fullText.stateArchive": "индекс внутри архива",
+  "fullText.convert": "Пересобрать",
+  "fullText.convertHint": "Пересобрать как индекс заголовков. Полнотекстовый поиск остаётся — его отвечает индекс архива; освободит индекс статей ({index}) и скопированные в базу тела статей (сейчас база {db}).",
+  "fullText.convertHintUnknown": "Пересобрать как индекс заголовков. Полнотекстовый поиск остаётся — его отвечает индекс архива; освободит индекс статей и скопированные в базу тела статей (сейчас база {db}).",
   "fullText.stateCalculating": "считается…",
   "fullText.stateAvailable": "можно построить",
   "fullText.selected": "Отмечено: {count} — ≈{low}…{high}",
@@ -1283,5 +1286,6 @@
   "fullText.build": "Построить отмеченным",
   "fullText.list": "Словари",
   "fullText.count": "Построено: {built} из {total}",
-  "fullText.countArchive": "({count} — из самого архива)"
+  "fullText.countArchive": "({count} — из самого архива)",
+  "fullText.countConvert": "({count} можно пересобрать)"
 }

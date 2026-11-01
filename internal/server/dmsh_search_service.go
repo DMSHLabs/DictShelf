@@ -97,13 +97,17 @@ type SearchEvent struct {
 	// tool that quietly answers a weaker question than the one asked is lying
 	// about its result. The UI says so only when the answer is NOT the phrase -
 	// the precise reading needs no announcement (D102).
-	Rung     string `json:"rung,omitempty"`
-	Term     string `json:"term,omitempty"`
-	CacheID  string `json:"cacheID,omitempty"`
-	Total    int    `json:"total,omitempty"`
-	Complete bool   `json:"complete,omitempty"`
-	Start    int    `json:"start,omitempty"`
-	HasNext  bool   `json:"hasNext,omitempty"`
+	Rung string `json:"rung,omitempty"`
+	// OneReading says the dictionary has a single reading and never tried
+	// another, so Rung is not a relaxation and must not be announced as one
+	// (an archive answering from its own index - see search.Hit.OneReading).
+	OneReading bool   `json:"oneReading,omitempty"`
+	Term       string `json:"term,omitempty"`
+	CacheID    string `json:"cacheID,omitempty"`
+	Total      int    `json:"total,omitempty"`
+	Complete   bool   `json:"complete,omitempty"`
+	Start      int    `json:"start,omitempty"`
+	HasNext    bool   `json:"hasNext,omitempty"`
 
 	// Deferred: this dictionary was not searched because the fan-out cap
 	// declined to materialise it (see fanout). It is NOT an error and must not
@@ -357,7 +361,8 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 		for j := range h.Results {
 			h.Results[j].Body = applyFormat(h.Results[j].Body, format, origin, st)
 		}
-		m := SearchEvent{T: "hit", I: i, Dict: id, Name: name, Results: h.Results, Skipped: h.Skipped, Rung: h.Rung, Term: h.Term}
+		m := SearchEvent{T: "hit", I: i, Dict: id, Name: name, Results: h.Results, Skipped: h.Skipped,
+			Rung: h.Rung, OneReading: h.OneReading, Term: h.Term}
 		if request.SearchDiagnostics {
 			logx.SystemDiagnostic("search result query=%q mode=%q dictionary=%q results=%d skipped=%t", q, mode, name, len(h.Results), h.Skipped)
 		}

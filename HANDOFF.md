@@ -629,6 +629,44 @@ run could show, all fixed here:
 The archive's own reader was unaffected throughout, and the re-run left the folder consistent: 426 MB,
 `index_kind = headwords`, `ingest_level = headwords`, `own_ft_index = 1`, no `article_fts`.
 
+**The conversion is in the window, and it was tested by using it** (2026-11-01). The full-text window
+now carries, for a ZIM whose archive answers full text while the database still holds an index of ours, a
+per-row "Convert" button instead of a checkbox: the choice column shows a cycle symbol, the state column
+the button, and its tooltip says what the conversion frees - the article index when this build can
+measure it, and the folder's own size always. The action is the base index re-created
+(`feature:"base", action:"recreate"`), which is exactly the conversion: for such an archive the ingest
+builds the title index, so a reconcile of the old form converts it. Tested by pressing it on the English
+Wiktionary: **25.26 GB to 1.20 GB in 100 seconds**, and the result is consistent -
+`index_kind=headwords`, `ingest_level=headwords`, `own_ft_index=1`, no `article_fts` - with full-text
+search still answering from the archive (Thesaurus:musical instrument, instrument musical, musical
+instrument). The Russian Wiktionary was converted earlier the same way by the CLI.
+
+Two things the live run taught, both now recorded in the code:
+
+- **The archive's single reading was reaching only one of the two search handlers.** `rung` was set, but
+  the page is served by the LEGACY `/api/search` (server.go, `streamMsg`) while the desktop bridge uses
+  `Server.Search` (dmsh_search_service.go, `SearchEvent`) - so the new `oneReading` flag has to be in
+  both, and the header still said "phrase not found · words anywhere" for a dictionary that never tried
+  a phrase. It is honest now: verified in a browser, the header reads just "5+ results", while a
+  dictionary with a real ladder still announces a relaxation when it makes one (the condition is
+  `!h.oneReading`, so nothing else changed).
+- **`sqlite_dbstat` is not the way to make the measured sizes real.** mattn's driver gates dbstat behind
+  that tag and the app's build does not set it, so `searchIndexSizes` has always returned zeros - but
+  enabling it HANGS startup: dbstat has no index of its own, so each query walks every page of the file
+  and the 42-dictionary discovery pass stalls for minutes on the four archives. Checked both ways
+  (measured size 9 213 132 800 bytes for wikipedia_de with the tag, zero without; a tagged build prints
+  no banner at all and is killed at 40 s). The offer therefore quotes the folder size, and the index
+  figure appears only where a build can measure it (the pure-Go modernc build can; this one cannot).
+
+**Still missing on this path: the complete list.** The window's own paging ("N+ results", then Browse)
+needs `StreamArticleIDs`, which streams every match's entry id from SQLite in display order into a page
+file - and for an archive-backed database there is no article index to stream from, so the header says
+"Complete list unavailable" and a search can only show the first page. The user asked about exactly
+this. The design is: a streaming ranked query in `glass` (the reader already walks postings, so it can
+yield hits in BM25 order without materialising them), `upgraded.StreamArticleIDs` answering from the
+archive for such a handle, and a batched path→entry-id lookup (one `IN (...)` per page of 500 rather
+than one query per hit) - worth doing, and deliberately not rushed.
+
 **The migration of the four existing databases is a click, not a job.** They are in the read-through
 form; nothing rebuilds them by itself - no reconcile runs at startup, deliberately, because a silent
 25 GB rebuild is not something to start behind the user's back. Rescan → "пересоздать" for the base

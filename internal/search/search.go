@@ -194,6 +194,14 @@ type Hit struct {
 	// DICTIONARY: one may answer the phrase while the next needs the words, so
 	// this belongs on the hit and not on the request.
 	Rung string
+
+	// OneReading says the dictionary has exactly one reading of a full-text
+	// query and never tried another, so the rung above is not a fallback and
+	// must not be reported as one. A source that answers full text itself - a
+	// Kiwix archive with its own index - is the case: it matches words, has no
+	// phrase query to fail at, and telling the reader "phrase not found" about
+	// a phrase nobody looked for is simply untrue.
+	OneReading bool
 }
 
 // workers bounds how many dictionaries are queried at once. Eight is right for
@@ -504,7 +512,7 @@ func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, plan 
 		if af, ok := d.(ArchiveFullText); ok && af.FullTextFromArchive() {
 			h.Results, h.Err = s.FullTextContext(ctx, term, perDict)
 			if h.Err == nil {
-				h.Rung = "words"
+				h.Rung, h.OneReading = "words", true
 			}
 			return h
 		}

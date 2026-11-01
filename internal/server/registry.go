@@ -1912,9 +1912,13 @@ func (e *entry) reconcileLockedContext(ctx context.Context, name string, t store
 		// article text" produced an empty article_fts, an ingest_level of
 		// "text", and a receipt promising full text over a database that held
 		// none. It was found by rebuilding an archive and reading the result.
-		if t.FullText == nil {
-			t.FullText = &full
-		}
+		//
+		// Unconditionally, because this is also how the conversion happens: a
+		// request to ADD full text to an archive that answers it itself is
+		// answered with the title index, and any reconcile of a database still
+		// in the old form converts it - which is what "recreate this index"
+		// means for such an archive now.
+		t.FullText = &full
 		if full {
 			// The read-through form: article clusters are decompressed and the
 			// bodies are stored and indexed, which is the only way article text

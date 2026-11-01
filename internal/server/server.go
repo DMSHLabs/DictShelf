@@ -1053,9 +1053,16 @@ type dictInfo struct {
 	// OwnFullText: the archive carries its own full-text index, so full text is
 	// answered from it and there is no index of ours to build, remove or
 	// estimate. Caps.FTS is true either way; this says who answers.
-	OwnFullText bool   `json:"ownFullText,omitempty"`
-	DBPath      string `json:"dbPath,omitempty"` // exposed per D7: users share these files
-	Error       string `json:"error,omitempty"`
+	OwnFullText bool `json:"ownFullText,omitempty"`
+
+	// ArchiveFullText: the archive carries its own full-text index while this
+	// database still holds one of ours - the form this fork no longer builds,
+	// which the full-text window offers to convert. False for every other
+	// dictionary, including a converted one, where OwnFullText says the same
+	// thing about a database that needs nothing.
+	ArchiveFullText bool   `json:"archiveFullText,omitempty"`
+	DBPath          string `json:"dbPath,omitempty"` // exposed per D7: users share these files
+	Error           string `json:"error,omitempty"`
 
 	// ContainsStale: the trigram index was built by an older text folding, so
 	// substring search may miss words whose folding changed. Reported, not
@@ -1499,13 +1506,18 @@ type streamMsg struct {
 	// tool that quietly answers a weaker question than the one asked is lying
 	// about its result. The UI says so only when the answer is NOT the phrase -
 	// the precise reading needs no announcement (D102).
-	Rung     string `json:"rung,omitempty"`
-	Term     string `json:"term,omitempty"`
-	CacheID  string `json:"cacheID,omitempty"`
-	Total    int    `json:"total,omitempty"`
-	Complete bool   `json:"complete,omitempty"`
-	Start    int    `json:"start,omitempty"`
-	HasNext  bool   `json:"hasNext,omitempty"`
+	Rung string `json:"rung,omitempty"`
+	// OneReading: this dictionary has a single reading of a full-text query and
+	// never tried another, so Rung is not a relaxation and the page must not
+	// announce one (search.Hit.OneReading; the shared page reads it from
+	// whichever of the two search handlers answered).
+	OneReading bool   `json:"oneReading,omitempty"`
+	Term       string `json:"term,omitempty"`
+	CacheID    string `json:"cacheID,omitempty"`
+	Total      int    `json:"total,omitempty"`
+	Complete   bool   `json:"complete,omitempty"`
+	Start      int    `json:"start,omitempty"`
+	HasNext    bool   `json:"hasNext,omitempty"`
 
 	// Deferred: this dictionary was not searched because the fan-out cap
 	// declined to materialise it (see fanout). It is NOT an error and must not
@@ -1772,7 +1784,8 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		for j := range h.Results {
 			h.Results[j].Body = applyFormat(h.Results[j].Body, format, origin, st)
 		}
-		m := streamMsg{T: "hit", I: i, Dict: id, Name: name, Results: h.Results, Skipped: h.Skipped, Rung: h.Rung, Term: h.Term}
+		m := streamMsg{T: "hit", I: i, Dict: id, Name: name, Results: h.Results, Skipped: h.Skipped,
+			Rung: h.Rung, OneReading: h.OneReading, Term: h.Term}
 		if searchDiagnostics {
 			logx.SystemDiagnostic("search result query=%q mode=%q dictionary=%q results=%d skipped=%t", q, mode, name, len(h.Results), h.Skipped)
 		}

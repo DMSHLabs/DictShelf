@@ -7737,8 +7737,11 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
   det.dataset.searchFirstPageSize=String(paging?.firstPageSize||0);det.dataset.searchGroup=String(!!group);
   if(paging){det.dataset.searchPageStart=String(paging.start||0);det.dataset.searchPageCount=String(h.results.length);det.dataset.searchHasNext=String(!!paging.hasNext);det.dataset.searchExact=String(!!paging.exact);det.dataset.searchTotal=String(paging.total||0);det.dataset.searchLowerBound=String(paging.lowerBound||0)}
   // Only for a multi-word full-text query: a single word has no phrase to fail
-  // at, and every other mode has no ladder at all.
-  const rung=mode==="fts"&&/\s/.test(q||"")&&(h.rung==="near"||h.rung==="words")
+  // at, and every other mode has no ladder at all. And only for a dictionary
+  // that HAS a ladder: one whose full text comes from an archive index matches
+  // words and never tried a phrase, so "phrase not found" would be a claim
+  // about a query nobody ran (h.oneReading, from search.Hit.OneReading).
+  const rung=!h.oneReading&&mode==="fts"&&/\s/.test(q||"")&&(h.rung==="near"||h.rung==="words")
     ?`<span class="rung">${esc(tx(h.rung==="near"?"search.phraseNear":"search.phraseWords"))} · </span>`:"";
   const countLabel=paging?(rung?`<span class="count">${rung}</span>`:``):more
     ?`<span class="count">${rung}${more} ${esc(tx("search.results",{count:perDict,number:""}).trim())}</span>`
@@ -13257,7 +13260,8 @@ var libraryFreeBytes=0, libraryVolume="";
 function fullTextRows(){
   return (dicts||[]).filter(d=>d&&!d.unavailable&&d.dbPath).map(d=>({
     id:d.id,name:d.name||d.id,zim:String(d.format||"").toLowerCase()==="zim",
-    built:!!d.caps?.FTS,own:!!d.ownFullText,est:d.estimate||null
+    built:!!d.caps?.FTS,own:!!d.ownFullText,archive:!!d.archiveFullText,
+    fullSize:d.fullTextSize||0,dbSize:d.dbSize||0,est:d.estimate||null
   })).sort((a,b)=>String(a.name).localeCompare(String(b.name),undefined,{sensitivity:"base"}));
 }
 function fullTextBandText(row){
@@ -13266,6 +13270,16 @@ function fullTextBandText(row){
   if(row.built)return "—";
   if(!row.est)return tx("fullText.stateCalculating");
   return "≈ "+mb(row.est.low)+" – "+mb(row.est.high);
+}
+function convertHint(row){
+  /* Both numbers are measurements: the article index from SQLite's page
+     accounting (dbstat) and the folder from the filesystem. The index figure is
+     missing when the build cannot measure it, and then the sentence drops the
+     parenthesis rather than printing a zero. */
+  const db=mb(row.dbSize||0);
+  return row.fullSize
+    ?tx("fullText.convertHint",{index:mb(row.fullSize),db})
+    :tx("fullText.convertHintUnknown",{db});
 }
 function selectedFullText(){
   const out=[];
@@ -13294,9 +13308,11 @@ function updateFullTextSummary(){
      own index has full text and nothing to build, so counting it as built
      would claim credit for a file somebody else shipped - it is counted
      separately, and only when there is one. */
-  const rows=fullTextRows(),built=rows.filter(r=>r.built&&!r.own).length,archive=rows.filter(r=>r.own).length;
+  const rows=fullTextRows(),built=rows.filter(r=>r.built&&!r.own&&!r.archive).length,
+    archive=rows.filter(r=>r.own).length,stale=rows.filter(r=>!r.own&&r.archive).length;
   $("ftCount").textContent=tx("fullText.count",{built:window.wudictI18n.number(built),total:window.wudictI18n.number(rows.length)})
-    +(archive?" "+tx("fullText.countArchive",{count:window.wudictI18n.number(archive)}):"");
+    +(archive?" "+tx("fullText.countArchive",{count:window.wudictI18n.number(archive)}):"")
+    +(stale?" "+tx("fullText.countConvert",{count:window.wudictI18n.number(stale)}):"");
   $("ftBuild").disabled=!sel.length;
 }
 function renderFullTextPicker(){
@@ -13327,7 +13343,32 @@ function renderFullTextPicker(){
     size.textContent=fullTextBandText(row);
     const state=document.createElement("td");
     state.className="ft-state";
-    state.textContent=row.own?tx("fullText.stateArchive"):row.built?tx("fullText.stateBuilt"):row.est?tx("fullText.stateAvailable"):"";
+    /* A database this fork no longer builds this way: the archive answers full
+       text and the database still holds an index of ours, plus the bodies it was
+       copied for. That is not a build to offer in the same list as the others -
+       nothing more would be built, less would be kept - so the row carries its
+       own action, and the tooltip says what the conversion frees. */
+    const convert=row.archive&&!row.own;
+    if(convert){
+      choice.textContent="⟳";
+      choice.title=convertHint(row);
+      const btn=document.createElement("button");
+      btn.type="button";
+      btn.className="btn ft-convert";
+      btn.textContent=tx("fullText.convert");
+      btn.title=convertHint(row);
+      btn.addEventListener("click",()=>{
+        /* The base index re-created is the conversion: for an archive that
+           answers full text itself the ingest builds the title index (SPEC §24),
+           which drops our article index and the copied bodies. */
+        window.wudictWork.start([{dict:row.id,feature:"base",action:"recreate"}]);
+        const dlg=$("fullTextPicker");
+        if(dlg.open)dlg.close();
+      });
+      state.append(btn);
+    }else{
+      state.textContent=row.own?tx("fullText.stateArchive"):row.built?tx("fullText.stateBuilt"):row.est?tx("fullText.stateAvailable"):"";
+    }
     tr.append(choice,name,size,state);
     return tr;
   }));
