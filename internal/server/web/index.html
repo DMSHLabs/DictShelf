@@ -4111,14 +4111,20 @@ function renderPanel(){
       /* A stale index still works — it was built with older text-folding
          rules, so it can only miss words whose folding changed. So it is
          marked, not disabled, and the click rebuilds instead of removing. */
-      const stale=key==="contains"&&on&&d.containsStale;
+      /* A ZIM whose archive carries its own full-text index: full text works
+         and there is nothing here to build or to remove - the index belongs to
+         the archive. Locked like the other facts, and it says so, rather than
+         offering a switch whose "off" would clear an index that is not ours. */
+      const archive=key==="fts"&&!!d.ownFullText;
+      const stale=!archive&&key==="contains"&&on&&d.containsStale;
       const what=FEAT_NAME[key];
-      const tip=!canToggle?tx("dictUI.onlyCopy"):
+      const tip=archive?tx("dictUI.ftsArchive"):
+        !canToggle?tx("dictUI.onlyCopy"):
         stale?tx("dictUI.stale",{what}):
         on?tx("dictUI.removeHint",{what}):tx("dictUI.addHint",{what});
-      caps+=`<span class="feat${on?" on":""}${stale?" stale":""}${canToggle?"":" locked"}"`+
+      caps+=`<span class="feat${on?" on":""}${stale?" stale":""}${canToggle&&!archive?"":" locked"}"`+
         ` data-feat="${key}" data-on="${on?1:0}"${stale?' data-stale="1"':""}`+
-        ` title="${escAttr(tip)}">${esc(label)}${size}${stale?" ⟳":""}</span>`;
+        ` title="${escAttr(tip)}">${esc(archive?tx("dictUI.ftsArchive"):label)}${archive?"":size}${stale?" ⟳":""}</span>`;
     }
     // Contains and full-text are both built only after an explicit action.
     // "pack media" is offered only when the dictionary actually has packable
@@ -13251,7 +13257,7 @@ var libraryFreeBytes=0, libraryVolume="";
 function fullTextRows(){
   return (dicts||[]).filter(d=>d&&!d.unavailable&&d.dbPath).map(d=>({
     id:d.id,name:d.name||d.id,zim:String(d.format||"").toLowerCase()==="zim",
-    built:!!d.caps?.FTS,est:d.estimate||null
+    built:!!d.caps?.FTS,own:!!d.ownFullText,est:d.estimate||null
   })).sort((a,b)=>String(a.name).localeCompare(String(b.name),undefined,{sensitivity:"base"}));
 }
 function fullTextBandText(row){
@@ -13284,8 +13290,13 @@ function updateFullTextSummary(){
   warn.hidden=!over;
   if(over)warn.textContent=tx("fullText.warn",{high:mb(high),free:mb(free)});
   $("ftSplit").textContent=(zlow||zhigh)&&sel.length?tx("fullText.split",{low:mb(zlow),high:mb(zhigh)}):"";
-  const rows=fullTextRows(), built=rows.filter(r=>r.built).length;
-  $("ftCount").textContent=tx("fullText.count",{built:window.wudictI18n.number(built),total:window.wudictI18n.number(rows.length)});
+  /* "Built" counts what this page can build. A ZIM whose archive carries its
+     own index has full text and nothing to build, so counting it as built
+     would claim credit for a file somebody else shipped - it is counted
+     separately, and only when there is one. */
+  const rows=fullTextRows(),built=rows.filter(r=>r.built&&!r.own).length,archive=rows.filter(r=>r.own).length;
+  $("ftCount").textContent=tx("fullText.count",{built:window.wudictI18n.number(built),total:window.wudictI18n.number(rows.length)})
+    +(archive?" "+tx("fullText.countArchive",{count:window.wudictI18n.number(archive)}):"");
   $("ftBuild").disabled=!sel.length;
 }
 function renderFullTextPicker(){
@@ -13298,9 +13309,11 @@ function renderFullTextPicker(){
     const choice=document.createElement("td");
     if(row.built||!row.est){
       // Nothing to build, or nothing known yet: no checkbox, so a click cannot
-      // promise work that would not happen.
+      // promise work that would not happen. An archive that carries its own
+      // index is the one case where "built" is true without anything here
+      // having been built, and the title says which of the two it is.
       choice.textContent=row.built?"✓":"⏳";
-      choice.title=row.built?tx("fullText.stateBuilt"):tx("fullText.stateCalculating");
+      choice.title=row.own?tx("fullText.stateArchive"):row.built?tx("fullText.stateBuilt"):tx("fullText.stateCalculating");
     }else{
       const cb=document.createElement("input");
       cb.type="checkbox";
@@ -13314,7 +13327,7 @@ function renderFullTextPicker(){
     size.textContent=fullTextBandText(row);
     const state=document.createElement("td");
     state.className="ft-state";
-    state.textContent=row.built?tx("fullText.stateBuilt"):row.est?tx("fullText.stateAvailable"):"";
+    state.textContent=row.own?tx("fullText.stateArchive"):row.built?tx("fullText.stateBuilt"):row.est?tx("fullText.stateAvailable"):"";
     tr.append(choice,name,size,state);
     return tr;
   }));

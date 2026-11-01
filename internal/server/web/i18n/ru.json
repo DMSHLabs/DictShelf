@@ -730,6 +730,7 @@
   "dictUI.dslUnavailable": "Недоступен для поиска",
   "errors.dslUnavailable": "Этот вариант словаря недоступен",
   "dictUI.ftsHint": "Необязательно. Поиск по заголовкам уже доступен. Полнотекстовый поиск ищет внутри статей и занимает заметно больше места.",
+  "dictUI.ftsArchive": "индекс уже внутри архива",
   "dictUI.closeGroups": "Закрыть группы словарей",
   "dictUI.group": "Группа словарей",
   "dictUI.showAll": "Показать все",
@@ -1270,6 +1271,7 @@
   "fullText.colSize": "Предполагаемый размер",
   "fullText.colState": "Состояние",
   "fullText.stateBuilt": "уже построен",
+  "fullText.stateArchive": "индекс внутри архива",
   "fullText.stateCalculating": "считается…",
   "fullText.stateAvailable": "можно построить",
   "fullText.selected": "Отмечено: {count} — ≈{low}…{high}",
@@ -1280,5 +1282,6 @@
   "fullText.note": "Полнотекстовый поиск по телам статей — самый дорогой индекс: у словарей он ложится поверх уже подготовленных текстов, а у ZIM пересобирает базу целиком. Делайте его там, где он нужен: сборку можно остановить, а остальные словари можно добавить позже.",
   "fullText.build": "Построить отмеченным",
   "fullText.list": "Словари",
-  "fullText.count": "Построено: {built} из {total}"
+  "fullText.count": "Построено: {built} из {total}",
+  "fullText.countArchive": "({count} — из самого архива)"
 }

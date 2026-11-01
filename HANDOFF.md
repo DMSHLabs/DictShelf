@@ -564,6 +564,57 @@ Three more things only the bytes settled, each of which the code got wrong first
   key-tag pair), so the tag ends three bytes past the size. Reading the size as the whole item cut every
   tag three bytes short, which showed up as paths truncated inside a character.
 
+## A ZIM with its own index answers full text itself (2026-11-01)
+
+The product decision, made after the reader, the routing and the ranking were verified: for an archive
+that carries its own Kiwix full-text index, full text is answered from the archive, no index of ours is
+built for it, and its prepared database is the title index - bodies are read through from the archive.
+The archive's index is 2.4-2.9x smaller than ours on the same text (518 MB against 1.29 GB on
+wiktionary_ru, 3.18 GB against 9.21 GB on wikipedia_de) and already built, and the stored bodies bought
+no read speed (tools/zimtime: medians 0.52-0.66 ms either way).
+
+What is in place, and what each piece rests on:
+
+- **The fact is recorded, not probed.** `zim.Dict.HasFullTextIndex` asks the container (a directory
+  lookup and one byte of the cluster info field, no decompression - and an index inside a COMPRESSED
+  cluster answers no, because reading it would mean decompressing 3 GB before the first term), and the
+  ZIM reader writes `own_ft_index=1` beside `index_kind`. So a dictionary row and a search both know
+  where full text comes from without opening a 48 GB container. A store test fails if the two packages
+  spell that key differently.
+- **Routing.** `upgraded.Caps()` advertises FTS when the archive answers it, and
+  `upgraded.archiveFullText` answers from the source; the search skips its FTS5 rungs for such a handle
+  and sets `Rung="words"`, which is also what turns the existing highlight marking back on (marker()
+  returns nothing without a rung). Worth naming: "full text" on a title-only ZIM used to mean full text
+  over TITLES, with the bodies fetched afterwards - this reaches the article text.
+- **Ranking.** Xapian's own BM25 (k1=1, k2=0, k3=1, b=0.5, min_normlen=0.5), which needed the document
+  lengths: a postlist named by an empty term, key `00 e0`, whose per-document "frequency" is the length.
+  It is the one list the term walk cannot read as-is - its chunk keys carry no zero separator, and its
+  first chunk is a placeholder whose entry counts are left at zero even when it holds 713 entries - so
+  the chunk logic became `walkPostings`, which takes the prefix. Verified against the version file: the
+  lengths sum to exactly the total document length for 1 528 188 and for 3 275 258 documents. Summed wdf
+  had put the 410 KB "Liste von Jazzmusikern in Deutschland" above the Jazzmusiker article; BM25 puts
+  the article first, and on the Russian Wiktionary the entry "духовой инструмент" above "инструмент".
+- **The ingest rule**, in the three places the form is chosen (the server's reconcile, the CLI's ingest,
+  the CLI's reindex - the mechanism is single-sourced as `HasOwnFullTextIndex`). An explicit `-fulltext`
+  does not override it, and the CLI says so instead of appearing to obey.
+- **The interface** says which it is: the chip reads "индекс уже внутри архива" and is locked (its "off"
+  would clear an index that is not ours), and the full-text window gives such a row no checkbox, the
+  state "индекс внутри архива", and counts it apart from what we built.
+
+**What is verified, and how.** The reader and the ranking on all four archives through
+`tools/xapian-glass-check` (also through `dict.Open`, which is the one assumption the routing makes);
+the seam tests in the tree; `go build/vet/test` on every package touched. NOT verified: the interface
+changes have never been rendered (no Playwright here, as before), and no database has been rebuilt
+through the new rule yet.
+
+**The migration of the four existing databases is a click, not a job.** They are in the read-through
+form; nothing rebuilds them by itself - no reconcile runs at startup, deliberately, because a silent
+25 GB rebuild is not something to start behind the user's back. Rescan → "пересоздать" for the base
+index rebuilds one in the title form (the plan difference is what makes the rebuild take the new form),
+which frees the article index and the bodies: 1.3-9.2 GB of index plus 8-25 GB of bodies per archive.
+The window does not yet offer that conversion with a size next to it; the chip and the window only stop
+offering the wrong action for a database that is already in the new form.
+
 **A query is answered as ordinary results** (`internal/format/zim/dmsh_xapian.go`, ours, beside
 upstream's `zim.go` for the usual reason). `Dict.FullText(query, limit)` searches the archive's own index
 and returns `[]dict.Result` - headword and article, converted by this package's own article pipeline - so
