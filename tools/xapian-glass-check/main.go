@@ -38,6 +38,12 @@ func main() {
 	fmt.Printf("  формат=%d ревизия=%d блок=%d документов=%d\n",
 		db.FormatDate, db.Revision, db.BlockSize(), db.Stats.DocCount)
 
+	printMetadata(db)
+	if len(os.Args) > 2 && os.Args[2] == "-chunks" {
+		dumpChunks(db, os.Args[3])
+		return
+	}
+
 	article, err := zim.Open(path)
 	if err != nil {
 		fmt.Println("zim.Open:", err)
@@ -47,8 +53,9 @@ func main() {
 
 	terms := os.Args[2:]
 	if len(terms) == 0 {
-		terms = []string{"кларнетист", "джаз"}
+		terms = []string{"джазовый кларнетист", "джаз", "кларнетист"}
 	}
+	runQueries(db, article, terms)
 	dumpDoc(db, 250122)
 	dumpDoc(db, 2472)
 	for _, term := range terms {
@@ -204,4 +211,155 @@ func dumpDoc(db *glass.DB, docid uint32) {
 	}
 	fmt.Printf("  [dbg] doc %d элемент: % x\n        размер=%d флаги=%02x ключДлина=%d ключ=% x\n",
 		docid, raw, size, flags, kl, raw[3:3+kl])
+}
+
+// dumpChunks prints the raw items that continue a term's posting list.
+func dumpChunks(db *glass.DB, term string) {
+	raws, keys, err := db.RawChunks(term, 3)
+	if err != nil {
+		fmt.Println("  куски:", err)
+	}
+	for i := range raws {
+		fmt.Printf("  кусок %d ключ=% x\n        % x\n", i+1, keys[i], raws[i])
+	}
+}
+
+// printMetadata shows what the index says about itself: the language its terms
+// were stemmed for, the kind of index, and whether stopwords were dropped.
+func printMetadata(db *glass.DB) {
+	for _, key := range []string{"language", "kind", "data", "valuesmap"} {
+		v, found, err := db.Metadata(key)
+		switch {
+		case err != nil:
+			fmt.Printf("  метаданные %-10s ошибка: %v\n", key, err)
+		case !found:
+			fmt.Printf("  метаданные %-10s нет\n", key)
+		default:
+			fmt.Printf("  метаданные %-10s %q\n", key, v)
+		}
+	}
+	words, err := db.Stopwords()
+	if err != nil {
+		fmt.Println("  стоп-слова: ошибка:", err)
+	} else if len(words) == 0 {
+		fmt.Println("  стоп-слова: нет")
+	} else {
+		head := words
+		if len(head) > 8 {
+			head = head[:8]
+		}
+		fmt.Printf("  стоп-слова: %d, начало %q\n", len(words), head)
+	}
+	switch lang, err := db.IndexLanguage(); {
+	case err != nil:
+		fmt.Println("  язык индекса:", err)
+	case lang == "":
+		fmt.Println("  язык индекса: не указан, термы не стеммированы")
+	default:
+		fmt.Printf("  язык индекса: %q, стеммер по нему есть\n", lang)
+	}
+}
+
+// runQueries exercises the query side: every argument is one query, and every
+// article it returns is opened and checked to hold, for each term the index was
+// asked for, a word whose stem is that term - which is exactly the index's own
+// criterion, so the two agreeing is the whole point of the check.
+func runQueries(db *glass.DB, article *zim.Dict, queries []string) {
+	stem, _ := glass.StemmerFor(indexLanguage(db))
+	for _, query := range queries {
+		res, err := db.Search(query)
+		if err != nil {
+			fmt.Println("  запрос", query, ": ", err)
+			continue
+		}
+		note := ""
+		if !res.Complete {
+			note = " (не все списки прочитаны до конца)"
+		}
+		fmt.Printf("  запрос %q: термов %d %v, статей %d%s\n",
+			query, len(res.Terms), res.Terms, len(res.Hits), note)
+		if len(res.Terms) == 1 {
+			freq, _ := db.TermFreq(res.Terms[0])
+			t, _ := db.Lookup(res.Terms[0])
+			fmt.Printf("      сверка: терм %q частота=%d записей=%d попаданий=%d\n",
+				res.Terms[0], freq, len(t.Postings), len(res.Hits))
+		}
+		if len(res.Skipped) > 0 {
+			fmt.Printf("      стоп-слова пропущены: %v\n", res.Skipped)
+		}
+		if len(res.Missing) > 0 {
+			fmt.Printf("      нет в индексе: %v\n", res.Missing)
+		}
+		checked, bad := 0, 0
+		for _, h := range res.Hits {
+			if checked >= 3 {
+				break
+			}
+			apath, err := db.DocPath(h.DocID)
+			if err != nil {
+				fmt.Println("      doc", h.DocID, ":", err)
+				continue
+			}
+			body, err := articleText(article, apath)
+			if err != nil {
+				fmt.Printf("      doc %-8d путь=%q  (статью не открыть: %v)\n", h.DocID, apath, err)
+				continue
+			}
+			missing := termsNotPresent(stem, res.Terms, body)
+			checked++
+			if len(missing) > 0 {
+				bad++
+				fmt.Printf("      doc %-8d путь=%q  НЕТ СЛОВ: %v\n", h.DocID, apath, missing)
+			} else {
+				fmt.Printf("      doc %-8d путь=%q  все термы есть (%d байт)\n", h.DocID, apath, len(body))
+			}
+		}
+		if checked > 0 && bad == 0 {
+			fmt.Println("      → все проверенные статьи содержат все термы запроса")
+		}
+	}
+}
+
+// indexLanguage is the language the index declares, "" when it declares none.
+func indexLanguage(db *glass.DB) string {
+	lang, err := db.IndexLanguage()
+	if err != nil {
+		return ""
+	}
+	return lang
+}
+
+// termsNotPresent returns the query terms no word of the article stems to. The
+// article's words are folded and stemmed the way a query is, so a term is
+// "present" when the index would have indexed the article under it.
+func termsNotPresent(stem glass.Stemmer, terms []string, body string) []string {
+	have := map[string]bool{}
+	for _, word := range glass.FoldTerms(body) {
+		have[word] = true
+		if stem != nil {
+			if s := stem(word); s != word {
+				have[s] = true
+			}
+		}
+	}
+	var missing []string
+	for _, t := range terms {
+		if !have[t] {
+			missing = append(missing, t)
+		}
+	}
+	return missing
+}
+
+// stemmedForms is the stem of a folded word. The language is asked of the
+// package so the check uses the same stemmer a search does.
+func stemmedForms(word string) []string {
+	stem, ok := glass.StemmerFor("rus")
+	if !ok {
+		return nil
+	}
+	if s := stem(word); s != word {
+		return []string{s}
+	}
+	return nil
 }

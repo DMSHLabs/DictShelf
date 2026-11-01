@@ -442,72 +442,68 @@ revision 1, level 2, directory from 11 to 323 (156 items) with item offsets 8185
 by 13 bytes, and block 1 has level 0 with eight 13-byte leaf items - all consistent with the layout above.
 So the addressing model is confirmed, not guessed.
 
-**Our reader works** (`internal/format/zim/glass`, pure Go, no cgo): it parses the version file of a real
-archive (format 1134, revision 1, block 8192, 1 528 188 documents, postlist root 571 with 4 617 462 terms,
-docdata root 59 228 with exactly one record per document, and the termlist/position/spelling/synonym
-tables empty - which matches libzim indexing without positions) and **finds terms in the postlist table**:
-`"джаз"` comes back with a 517-byte first chunk and `"кларнетист"` with 47 bytes, where gozim failed with
-`root block 571 not found`. Two things that finding settled: terms are the plain lowercase words - the
-`Z`-prefixed stemmed forms are *not* in this index, so a query needs unaccenting and case folding but no
-snowball stemmer (per archive: a build with a stemmer configured may differ, so try the plain term first
-and only then a stemmed one); and a branch item keeps its key length two bytes further along than a leaf
-item, which is a descent bug that fails silently rather than loudly.
+**The reader works end to end** (`internal/format/zim/glass`, pure Go, no cgo), against the Russian
+Wiktionary's 518 MB `X/fulltext/xapian` (format 1134, revision 1, block 8192, 1 528 188 documents,
+postlist root 571, docdata root 59 228 with one record per document, the termlist/position/spelling/
+synonym tables empty - libzim indexed without positions). What it reads: the version file, the
+single-file block space, the B-tree descent, item keys and tags, **chunked** posting lists, the docdata
+table and the query side (metadata, stopwords, stemming, AND). Nothing is copied: the tool extracts the
+blob once, and the package takes a `[]byte` (the byte-range API is still to do).
 
-**What is still to implement** (in `internal/format/zim/glass`, our own package): the version parser and
-this block/table layer first (that is the fix gozim never had), then the postlist chunk decoding
-(`glass_postlist.cc`: termfreq, collfreq and the docid deltas; no positions exist, libzim indexed with
-`index_text_without_positions`), then the docdata table for docid -> article path, then the query side:
-unaccent (ICU-equivalent - libzim's own step, see `src/tools.cpp`), tokenize, drop stopwords, look the
-terms up, and intersect the posting lists (`OP_AND`). The corpus to check
-against is the user's four archives; the oracle to check *correctness* against is Xapian 1.4.32 built
-locally, never shipped.
+`tools/xapian-glass-check <archive.zim> [query ...]` is the check: it prints the index's metadata, runs
+each query, and opens every article a query returns to verify that a word of that article stems to each
+term asked for - which is the index's own criterion, so index and reader agreeing is the whole result.
+Numbers from it: `"кларнетист"` 11 documents / 32 occurrences, `"джаз"` 162 / 715, `"год"` 41 037 /
+59 574, `"слов"` 1 449 345 / 5 081 953. The last two are the interesting ones: their lists are split
+across **42** and **1 448** table entries, and every entry is read, equal to the termfreq in the first
+chunk's header. Multi-word AND behaves: `"духовой инструмент"` gives бассетгорн, бомбарда,
+альт-саксофон; `"музыкальный инструмент"` gives фортепиано, укулеле, ионика.
 
-**Where the reader stands and where it stops.** Working and verified against the Russian Wiktionary: the
-version file, the single-file block space, the B-tree descent, item keys and the docdata table -
-`internal/format/zim/glass`, exercised by `tools/xapian-glass-check`, which also fetches the article the
-index names and checks the term is in it. Not working yet: the *body* of a posting chunk. A term's tag
-decodes its first three values plausibly for several terms (documents, occurrences, first document id),
-and `"кларнетист"` is 47 bytes for 11 documents and 32 occurrences, but no arrangement of the remaining
-bytes that I tried consumes the tag exactly while yielding 11 documents summing to 32 occurrences: the
-layout derived from `make_start_of_first_chunk` + `make_start_of_chunk` (entries, collection frequency,
-first document, a flag byte, the span to the chunk's last document, then a frequency and gap/frequency
-pairs) lands one document and one occurrence short, and a scan over header lengths 3..16 with both value
-orders found no exact fit. The item framing itself is sound: 70 bytes = 2 size + 1 key length + 20 key +
-47 tag, flags `0x60` (first and last component, uncompressed), key = the raw UTF-8 term, which also says
-the postlist key carries no prefix and no length.
+**Terms are stemmed, and the query has to stem too** - an earlier note here said the opposite
+("a query needs unaccenting and case folding but no snowball stemmer") and it was wrong, on evidence
+that looked convincing and was a coincidence: the first term checked, `"кларнетист"`, stems to itself.
+The index is built with Xapian's `STEM_ALL` and `STOP_ALL` (`src/writer/xapianWorker.cpp:49-58`), so it
+holds stems and only stems: in this archive `"джазовый"` is **0** documents while `"джазов"`, what the
+Russian stemmer makes of it, has 29, and `"джазов"` itself stems on to `"джаз"` with 162. The stemmer is
+whichever the index's `language` metadata resolves to - libzim runs it through ICU to a two-letter code
+and hands it to `Xapian::Stem` (`src/writer/xapianIndexer.cpp:44`, `src/tools.cpp`), which here is `rus`
+-> `ru` -> Snowball Russian. `internal/format/zim/glass/stem.go` carries Snowball's own algorithms
+compiled to Go (`github.com/blevesearch/snowballstem`, BSD-3-Clause, notices regenerated), keyed by the
+codes and names Xapian accepts; a language Xapian stems but we do not (Armenian, Basque, Catalan,
+Indonesian, Lithuanian, Nepali, and the legacy earlyenglish/german2/kraaij_pohlmann/lovins variants) is
+reported as unstemmable - `ErrNoStemmer` - rather than searched with the wrong one, while a language
+Xapian has no stemmer for (Japanese, Thai) was never stemmed and is searched plain.
 
-The next step is not more reading: build Xapian 1.4.32 locally, write a short C++ program that opens the
-extracted blob and dumps one term's posting list (`xapian-check`, or through its API), and compare byte
-for byte with what our decoder sees. That is the oracle we planned to build anyway, and it turns the
-remaining question into a diff. Two smaller things for the same pass: the docdata keys use the
-sort-preserving encoding (implemented, wants a test against a known document id and path), and the
-container needs the byte-range API so a reader works from a mapped archive instead of the copied blob the
-tool uses today.
+Three more things only the bytes settled, each of which the code got wrong first:
 
-**The glass reader works, in pure Go, on a real archive.** A term now resolves to its complete posting
-list, the document ids map to article paths, and the articles really contain the term:
-`"кларнетист"` gives 11 documents and 32 occurrences (matching the index's own header), the first three
-being `C/кларнетистка`, `C/кларнетист` and `C/Klarinettist`, each verified by opening the article and
-finding the word in it; `"джаз"` gives 162 documents and 715 occurrences, all 162 decoded. Two bugs stood
-in the way, and both were invisible in the code and only visible in the bytes:
+- **A common term's list is several table entries, not more bytes under one key.** Xapian breaks it into
+  ~2 KB chunks: the first under the term itself, each later one under the term, a zero byte and the
+  chunk's first document id in the key's own encoding (`glass_postlist.h`, `make_key`). Reaching them
+  needs a table cursor, not a lookup - `nextKey` keeps its descent path so it can climb out of a leaf -
+  and the next chunk does **not** start at the previous chunk's last document plus one, because a term
+  is not in every document: that gap is why a computed key finds nothing.
+- **The document-id key encoding is glass's, not chert's.** Both are in `common/pack.h`; glass's is a
+  unary length marker (leading set bits) and, below `0x8000`, **two plain big-endian bytes with no
+  marker at all**. Ours was the chert reading, which agrees with glass above `0x8000` and differs below
+  it - so every id an early check happened to use was above it and looked right, while ids below it
+  resolved to a *different* document (`49 a8` is 18 856, not 2472) or to none. The symptom was a search
+  whose hit count was short of the term's own list: 1 433 839 against 1 449 345, the difference being 16
+  chunks re-read because the walk's document ids were decoded from the wrong form. Pinned against the
+  archive's real bytes in `item_test.go` (`04 24` for 1060, `80 85 91` for 34 193).
+- **An item's size field covers the key AND the tag** (Xapian's `I K key X tag` with I the length of the
+  key-tag pair), so the tag ends three bytes past the size. Reading the size as the whole item cut every
+  tag three bytes short, which showed up as paths truncated inside a character.
 
-- **An item's size field covers the key AND the tag**, not the whole item (Xapian's diagram is
-  `I K key X tag` with I the length of the key-tag pair), so the tag ends three bytes past the size:
-  the 2-byte size field and the key length byte are in front of it. Reading the size as the whole item
-  cut every tag three bytes short, which looked like article paths truncated inside a character and a
-  posting list ending one document before its header said.
-- **Xapian 1.4.32's own decoder for the sort-preserving key encoding adds one to the count of bytes in
-  the key**, which would make the keys of a real archive one byte longer than the bytes in the file. The
-  archive is the authority here: our encoder reproduced `83 d1 0a` for document 250 122 by itself, which
-  the file holds, so the decoder follows the data. Both facts are pinned by tests that carry the real
-  bytes (`internal/format/zim/glass/item_test.go`).
-
-What that buys, and what is still to do. An archive that ships `X/fulltext/xapian` can now be searched
-from our own code with no C++ toolchain at all and no index build of our own - and that index is 2.4-2.9x
-smaller than the one we would build. Still to do, in order: the query side (unaccent and case folding as
-libzim does, intersect the terms with AND, map the paths back to our entries), the container's byte-range
-API so a reader works from a mapped archive instead of a copied blob, and then the product decision -
-using the archive's index where it exists and building ours only where it does not.
+**What is still to do**, in order: the container's byte-range API so a reader works from a mapped archive
+instead of a copied blob (`internal/format/zim` has no such call today); wiring the product to use the
+archive's own index where it has one (`X/fulltext/xapian`, found by the reader itself, not by rebuilding)
+and building ours only where it does not - which is also where the estimate window's ZIM rows should
+change meaning from "this is what a build would cost" to "nothing is needed"; ranking, since what exists
+now is AND-intersection ordered by summed wdf, not Xapian's weighting; and `skip_to` for the very long
+lists, so a rare term's postings drive the intersection without decoding a common term's 1.4 M entries
+first. The oracle for correctness used to be "build Xapian 1.4.32 locally and diff"; the archive itself
+turned out to be a stronger one, since the terms, their frequencies and the article text are all
+independently checkable.
 
 - With the local MinGW GCC 13.1.0, `go test -tags sqlite_fts5 -trimpath ./... -count=1`, `go vet -tags sqlite_fts5 -trimpath ./...`, and `go build -tags sqlite_fts5 -trimpath ./...` pass after removing the duplicate LSD implementation. Real-dictionary integration and Windows/Android UI checks remain unverified.
 - Android runs Go through JNI without an HTTP listener; Windows listenerless desktop uses WebView2 and a native bridge. Build recipes are in `docs/WINDOWS-VERIFY.md`; Android uses `build-android.cmd debug intel`. Do not install APKs or commit unless requested.

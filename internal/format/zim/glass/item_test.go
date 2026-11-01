@@ -57,6 +57,37 @@ func TestItemSizeCoversKeyAndTag(t *testing.T) {
 	}
 }
 
+// The keys a real archive holds, taken from the bytes of one: the second chunk
+// of the term "год" in a Kiwix index lives under "год", a zero byte and
+// 04 24, and the one after it under the same with 80 85 91. Reading them as
+// anything but the glass encoding gives document 4 and document 0 - which is
+// what a chert-style reading did, and why the walk over the chunks went wrong
+// only for the ids below 0x8000: above that, the two encodings agree by
+// accident, and every id an early check happened to use was above it.
+func TestPreservingSortMatchesTheArchiveKeys(t *testing.T) {
+	for _, c := range []struct {
+		id   uint32
+		want []byte
+	}{
+		{1060, []byte{0x04, 0x24}},
+		{34193, []byte{0x80, 0x85, 0x91}},
+		{250122, []byte{0x83, 0xd1, 0x0a}},
+		{0x7fff, []byte{0x7f, 0xff}},
+		{0x8000, []byte{0x80, 0x80, 0x00}},
+		{0x3fffff, []byte{0xbf, 0xff, 0xff}},
+		{0x400000, []byte{0xc0, 0x40, 0x00, 0x00}},
+	} {
+		got := packPreservingSort(c.id)
+		if string(got) != string(c.want) {
+			t.Errorf("%d encodes to % x, want % x", c.id, got, c.want)
+		}
+		back, n, err := unpackPreservingSort(got, 0)
+		if err != nil || back != c.id || n != len(got) {
+			t.Errorf("% x decodes to %d (%v), consuming %d of %d", got, back, err, n, len(got))
+		}
+	}
+}
+
 // DocKey has to produce keys that sort the way document ids do, because the
 // docdata table is walked in that order.
 func TestDocKeySortsLikeTheIDs(t *testing.T) {

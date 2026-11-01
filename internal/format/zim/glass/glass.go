@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"sync"
 )
 
 // Tables in the order the version file lists their roots (glass_defs.h).
@@ -84,6 +85,12 @@ type DB struct {
 	Roots        [numTables]Root
 	Stats        Stats
 	versionBytes int // where the version file ends
+
+	// The index's own description - its language and stopwords - read on first
+	// search and kept, because it decides how every query is stemmed.
+	metaOnce sync.Once
+	meta     *indexMeta
+	metaErr  error
 }
 
 // Open parses the version file at the start of data. data must be exactly one
@@ -350,4 +357,103 @@ func unpackUint(data []byte, p int) (uint32, int, error) {
 		}
 		shift += 7
 	}
+}
+
+// nextKey returns the key and tag of the item that follows after in a table,
+// which is how the later chunks of a posting list are reached: they are not
+// more bytes under one key but entries of their own, and the table's order is
+// the only thing that lists them (glass_postlist.cc, GlassPostList::next_chunk
+// walks the cursor; the number in the key is the document the next chunk starts
+// at, which is not the previous chunk's last document plus one - a term does not
+// occur in every document, so there is a gap to skip).
+//
+// found is false at the end of the table. The descent keeps its path so the walk
+// can climb back out of a leaf and into the item that follows it in the parent,
+// which is what makes this a cursor rather than a lookup.
+func (db *DB) nextKey(table int, after []byte) (key, tag []byte, found bool, err error) {
+	if table < 0 || table >= numTables {
+		return nil, nil, false, fmt.Errorf("glass: no table %d", table)
+	}
+	n := db.Roots[table].Block
+	if n == 0 {
+		return nil, nil, false, nil
+	}
+	type step struct {
+		block []byte
+		item  int // the item we went into
+	}
+	var path []step
+	depth := 0
+	for ; depth <= db.Roots[table].Level+1; depth++ {
+		b, err := db.block(n)
+		if err != nil {
+			return nil, nil, false, err
+		}
+		items, err := directoryItems(b)
+		if err != nil {
+			return nil, nil, false, fmt.Errorf("glass: block %d: %w", n, err)
+		}
+		if len(items) == 0 {
+			break // an empty block: nothing follows inside it
+		}
+		branch := blockLevel(b) > 0
+		if !branch {
+			// The leaf is where the answer is, or where the climb starts.
+			i := searchItems(b, items, after, false)
+			if i+1 < len(items) {
+				return db.itemAt(b, items[i+1])
+			}
+			break
+		}
+		i := searchItems(b, items, after, true)
+		if i < 0 {
+			i = 0
+		}
+		path = append(path, step{block: b, item: i})
+		n = binary.BigEndian.Uint32(b[items[i]:])
+	}
+	// Climb: the item after the last one we descended through leads to the
+	// subtree whose leftmost leaf follows everything in the one below it.
+	for k := len(path) - 1; k >= 0; k-- {
+		b := path[k].block
+		items, err := directoryItems(b)
+		if err != nil {
+			return nil, nil, false, err
+		}
+		next := path[k].item + 1
+		if next >= len(items) {
+			continue
+		}
+		child := binary.BigEndian.Uint32(b[items[next]:])
+		for {
+			leaf, err := db.block(child)
+			if err != nil {
+				return nil, nil, false, err
+			}
+			leafItems, err := directoryItems(leaf)
+			if err != nil {
+				return nil, nil, false, fmt.Errorf("glass: block %d: %w", child, err)
+			}
+			if len(leafItems) == 0 {
+				return nil, nil, false, fmt.Errorf("glass: block %d is empty below a branch", child)
+			}
+			if blockLevel(leaf) == 0 {
+				return db.itemAt(leaf, leafItems[0])
+			}
+			child = binary.BigEndian.Uint32(leaf[leafItems[0]:])
+		}
+	}
+	return nil, nil, false, nil
+}
+
+// itemAt returns a leaf item's key and tag. The key is copied because the
+// caller may keep it after the next block is read, and the tag is inflated when
+// the item says so.
+func (db *DB) itemAt(b []byte, off int) (key, tag []byte, found bool, err error) {
+	k := itemKey(b, off, false)
+	t, _, err := itemTag(b, off)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	return append([]byte(nil), k...), t, true, nil
 }
