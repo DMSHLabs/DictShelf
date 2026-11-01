@@ -26,6 +26,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
@@ -192,6 +193,14 @@ func (u *upgraded) archiveArticleIDs(ctx context.Context, query, mode string, em
 		}
 		return nil
 	})
+	// The bound was reached with candidates unread: everything found is
+	// emitted, and the last page goes out WITHOUT the "done" marker, which is
+	// the protocol's own word for "this list is a head of the answer". The
+	// alternative - finishing as if the scan had ended - is what a reader
+	// cannot see through, and it is the one thing this must not do.
+	if errors.Is(err, zimformat.ErrCheckBound) {
+		return flush(false)
+	}
 	if err != nil {
 		return err
 	}
@@ -222,18 +231,29 @@ func (u *upgraded) archiveReading(ctx context.Context, mode string, distance int
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	// The collecting form has nowhere to carry "and there is more", so a bounded
+	// answer comes back as results plus ErrCheckBound. It is not a failure - the
+	// walk found everything it reports - so the error is dropped here and the
+	// callers that must report the bound read the streaming form instead
+	// (StreamHeadwords, and the article cache's Complete flag).
+	drop := func(results []dict.Result, err error) ([]dict.Result, error) {
+		if errors.Is(err, zimformat.ErrCheckBound) {
+			return results, nil
+		}
+		return results, err
+	}
 	switch {
 	case mode == "phrase":
 		if s, ok := src.(interface {
 			FullTextPhrase(string, int, int) ([]dict.Result, error)
 		}); ok {
-			return s.FullTextPhrase(query, limit, maxCheck)
+			return drop(s.FullTextPhrase(query, limit, maxCheck))
 		}
 	case mode == "near":
 		if s, ok := src.(interface {
 			FullTextNear(int, string, int, int) ([]dict.Result, error)
 		}); ok {
-			return s.FullTextNear(distance, query, limit, maxCheck)
+			return drop(s.FullTextNear(distance, query, limit, maxCheck))
 		}
 	}
 	return nil, dict.ErrUnsupported

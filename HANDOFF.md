@@ -680,6 +680,40 @@ search index", and for this one "headwords + article index (article text stays i
 rule was two-way while there were two forms, and the third made both of the old answers wrong in opposite
 directions. Pinned by a test on the real fixture, not on the wording alone.
 
+## The strict readings were mostly blind, and one of them lied (2026-11-02)
+
+Reported by the user, with a live example: «ищу джазовый кларнетист, статья „Ниммонс, Фил" содержит эту
+фразу, а поиск не находит». Three defects, all of them in the archive's verifier
+(`internal/format/zim`), all of them silent - and only the first is why the user saw nothing.
+
+1. **`articleTokens` carried its own HTML stripper, and it counted every `</script>` as an OPENING tag.**
+   The skip it kept therefore never ended, and everything in the article after the first `<script>` or
+   `<style>` block was dropped: from a 65 KB article it produced two tokens, "ниммонс" and "фил" - the
+   title. So the strict readings were matching only what the head of the document holds, which is exactly
+   what the evidence showed once it was read properly: the four "hits" for `кларнетист` were all article
+   titles (Кэмпбелл, Джеймс (кларнетист)…), the fourteen for `джазовый` all started with «Джазовый…»,
+   and no phrase of two words could ever verify. The stripper is now `store.StripHTML`, the same function
+   the article index of our own databases is built with (`internal/format/dsl` already imports `store`,
+   so no cycle) - two implementations of "what does this article say" was the whole bug.
+2. **The text was folded with the QUERY folding.** `glass.FoldTerms` drops repeated words, because a query
+   is a set; the article was folded with it too, so a word's *second* occurrence vanished - and the second
+   occurrence is precisely what a phrase needs. «Ниммонс, Фил» names the profession «кларнетист» in its
+   infobox and again in the first sentence, so the one the phrase needed was the one dropped.
+   `glass.FoldText` is the sequence folding now, `FoldTerms` is defined in terms of it, and the strict
+   readings ask with the sequence.
+3. **The bound was not reported.** `StreamHeadwords` returned nil when it stopped at `maxCheck` with
+   candidates unread - indistinguishable from a finished walk - so a bounded list went out as the whole
+   answer. It returns `ErrCheckBound` now: the streaming path finishes without the "done" marker, which
+   the article cache turns into `Complete=false` / `HasNext=true`, the same affordance the reader already
+   uses to fetch more. The collecting form has nowhere to carry it, so `archiveReading` drops the error
+   there (the app streams; that path is the API's).
+
+Verified live on the ru-wikipedia through `/api/search`: phrase «джазовый кларнетист» went from **0
+results to 20**, «Ниммонс, Фил» among them; near likewise; words unchanged. And the cache build event
+carries `"complete":true` for a phrase whose scan ends (71 articles) while one that hits the bound (300
+articles, 12 s of reading) has no `complete` field at all, i.e. false. Both text defects are pinned by
+`dmsh_articles_test.go` on a body with the shape of the real article.
+
 ## Two chips, and who answers which reading (2026-11-02)
 
 Done, and verified on the live library (44 dictionaries, 6 ZIM archives, one of them the converted

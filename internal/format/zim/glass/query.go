@@ -292,12 +292,39 @@ func dropStopwords(words []string, stops map[string]bool) (kept, skipped []strin
 // (src/writer/xapianWorker.cpp:46), so what the index holds for a run of Chinese
 // or Japanese is n-grams, not words, and splitting a query into words cannot
 // match them. Nothing here handles that yet.
+// FoldText folds a document into the words the index holds for it: the same
+// folding FoldTerms applies to a query, but keeping every occurrence, in order.
+//
+// A document is a sequence and a query is a set, and the difference is not
+// cosmetic: a strict reading asks where the query's words stand relative to one
+// another, so a check that sees each word once cannot answer it. The article
+// below says "канадский джазовый кларнетист" in its first sentence and names
+// the profession "кларнетист" in its infobox a moment later - de-duplicated,
+// the word survives only where it stands earlier, and the phrase that is
+// plainly in the text verifies as absent (found on a live Wikipedia article,
+// 2026-11-02, after the same class of bug had already emptied the reading once).
+func FoldText(text string) []string {
+	var out []string
+	for _, word := range strings.FieldsFunc(dict.Fold(text), notWord) {
+		if word != "" {
+			out = append(out, word)
+		}
+	}
+	return out
+}
+
+// notWord is the split predicate both foldings share: everything that is not a
+// letter or a digit separates words.
+func notWord(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }
+
+// FoldTerms is FoldText as a SET, in first-appearance order: the terms a query
+// asks for. A query is a set, so a word written twice asks for it once - the
+// index is positionless and cannot tell the two apart anyway.
 func FoldTerms(query string) []string {
 	var out []string
 	seen := map[string]bool{}
-	split := func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }
-	for _, word := range strings.FieldsFunc(dict.Fold(query), split) {
-		if word == "" || seen[word] {
+	for _, word := range FoldText(query) {
+		if seen[word] {
 			continue
 		}
 		seen[word] = true

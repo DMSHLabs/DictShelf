@@ -32,18 +32,32 @@
 package zim
 
 import (
-	"bytes"
-	"html"
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/format/zim/glass"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
+
+// ErrCheckBound is returned by a strict reading that stopped at its bound with
+// candidates left unread. It is an answer and a limit at once: the walk has
+// already produced everything it found, and the caller decides what to say about
+// the part it did not look at. Reporting a bounded list as the whole answer is
+// the one thing this must not do - the bound is invisible to the reader
+// otherwise, and a phrase that is in an unread article would be called absent.
+var ErrCheckBound = errors.New("the strict reading reached its bound with candidates unread")
 
 // FullTextPhrase answers with the articles that hold the words of query
 // adjacently, in that order, best first.
+//
+// It returns ErrCheckBound, wrapped around the results it did find, when the
+// bound stopped the walk. The collecting result has nowhere to carry that, so
+// callers that must report it - the search's streaming path - read the
+// streaming form instead.
 func (d *Dict) FullTextPhrase(query string, limit, maxCheck int) ([]dict.Result, error) {
-	words := glass.FoldTerms(query)
+	words := glass.FoldText(query)
 	if len(words) == 0 {
 		return nil, nil
 	}
@@ -55,7 +69,7 @@ func (d *Dict) FullTextPhrase(query string, limit, maxCheck int) ([]dict.Result,
 // FullTextNear answers with the articles that hold the words of query within
 // distance other words of one another, in any order, best first.
 func (d *Dict) FullTextNear(distance int, query string, limit, maxCheck int) ([]dict.Result, error) {
-	words := glass.FoldTerms(query)
+	words := glass.FoldText(query)
 	if len(words) == 0 {
 		return nil, nil
 	}
@@ -87,8 +101,12 @@ func (d *Dict) verifiedFullText(query string, limit, maxCheck int, keep func(tok
 	}
 	var out []dict.Result
 	checked := 0
+	var bound error
 	for _, h := range res.Hits {
 		if checked >= maxCheck || len(out) >= limit {
+			if checked >= maxCheck && checked < len(res.Hits) {
+				bound = fmt.Errorf("%w: %d candidates, %d read", ErrCheckBound, len(res.Hits), checked)
+			}
 			break
 		}
 		path, err := db.DocPath(h.DocID)
@@ -119,46 +137,29 @@ func (d *Dict) verifiedFullText(query string, limit, maxCheck int, keep func(tok
 		}
 		out = append(out, dict.Result{Headword: src.headword(), Body: d.articleHTML(de, body)})
 	}
-	return out, nil
+	return out, bound
 }
 
 // articleTokens is the article as folded words, with markup treated as a
-// separator. Entities are decoded first, so "&nbsp;" separates words the way
-// the space it stands for does.
+// separator.
+//
+// The markup is stripped by store.StripHTML, which is the same function the
+// article index of OUR own databases is built with (the index column is
+// StripHTML(body)): the two answers to "what does this article say" have to
+// agree, or the reading verified here would disagree with the one a prepared
+// database gives for the same article. This package used to carry its own
+// stripper, and it was wrong in a way that made the strict readings almost
+// empty: it counted every </script> as an opening tag, so the skip it kept
+// never ended and the whole of the article after the first script or style
+// block was dropped. Phrase and near search then matched only what the head of
+// the document holds - the title - which is why single words worked and a real
+// phrase found nothing (found on a live Wikipedia article, 2026-11-02).
+//
+// The title is part of what this returns, because the archive's own index
+// indexes it too: a phrase whose words stand in the title has to verify here
+// the same way it verifies there.
 func articleTokens(body []byte) []string {
-	var text bytes.Buffer
-	text.Grow(len(body))
-	skip := 0
-	for i := 0; i < len(body); i++ {
-		switch c := body[i]; {
-		case c == '<':
-			// A tag, or a comment; find its end and read its name to drop the
-			// content of the two elements that hold no prose.
-			end := bytes.IndexByte(body[i:], '>')
-			if end < 0 {
-				i = len(body)
-				continue
-			}
-			tag := strings.ToLower(strings.TrimSpace(string(body[i+1 : i+end])))
-			name, _, _ := strings.Cut(tag, " ")
-			name = strings.Trim(name, "/")
-			switch {
-			case name == "script" || name == "style":
-				skip++
-			case strings.HasPrefix(tag, "/") && (name == "script" || name == "style"):
-				if skip > 0 {
-					skip--
-				}
-			}
-			text.WriteByte(' ')
-			i += end
-		case skip > 0:
-			// inside a script or a style
-		default:
-			text.WriteByte(c)
-		}
-	}
-	return glass.FoldTerms(html.UnescapeString(text.String()))
+	return glass.FoldText(store.StripHTML(string(body)))
 }
 
 // phraseIn reports whether the words appear consecutively, in that order.
@@ -269,7 +270,10 @@ func (d *Dict) StreamHeadwords(query string, reading Reading, maxCheck int, emit
 	if reading == ReadingWords {
 		return d.streamHeadwords(query, 0, nil, emit)
 	}
-	words := glass.FoldTerms(query)
+	// The query as a SEQUENCE, not as a set: these readings ask where the words
+	// stand relative to one another, and a word the reader typed twice is two
+	// words standing somewhere.
+	words := glass.FoldText(query)
 	if len(words) == 0 {
 		return nil
 	}
@@ -298,10 +302,11 @@ func (d *Dict) streamHeadwords(query string, maxCheck int, keep func(tokens []st
 	}
 	checked := 0
 	for _, h := range res.Hits {
-		if keep != nil {
-			if maxCheck > 0 && checked >= maxCheck {
-				return nil
-			}
+		if keep != nil && maxCheck > 0 && checked >= maxCheck {
+			// The bound, and the honest half of it: the caller is told that the
+			// list it received is a head of the answer. It used to return nil
+			// here, exactly like a finished walk.
+			return fmt.Errorf("%w: %d candidates, %d read", ErrCheckBound, len(res.Hits), checked)
 		}
 		path, err := db.DocPath(h.DocID)
 		if err != nil {
