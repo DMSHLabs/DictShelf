@@ -658,6 +658,37 @@ Two things the live run taught, both now recorded in the code:
   no banner at all and is killed at 40 s). The offer therefore quotes the folder size, and the index
   figure appears only where a build can measure it (the pure-Go modernc build can; this one cannot).
 
+## Three readings, chosen by the reader, not by the program (2026-11-02)
+
+The search menu now offers the full-text readings as three modes - **Фраза** (the words adjacent, in
+order), **Рядом** (within ten other words, any order) and **Слова** (anywhere) - and NO mode walks a
+ladder. The mode is the promise: a mode that quietly answered a weaker question than the one on screen
+was upstream's design (D102, "the ladder resolves it without asking the user to choose"), and the user
+asked for it to go. The rungs did not disappear; they became the menu items, and the code got smaller:
+`runPlan`, the plan plumbing and the "phrase not found · words anywhere" announcement are gone.
+
+What each mode is answered by:
+
+- **our index** (FTS5, which has positions): the mode's own rung, one expression - the phrase lowered as
+  one quoted phrase, the distance as NEAR(...,10), the words as each word's prefix. Pinned by a test
+  that asserts the three expressions differ and are what their label says.
+- **an archive** (no positions anywhere in its index): "Слова" from the index; "Фраза" and "Рядом" by
+  verifying the reading in the ARTICLE TEXT of the candidates the index returns
+  (internal/format/zim/dmsh_readings.go). The check is literal (folded text, so inflections do not
+  match - which is what "exact" means, and what our own unstemmed index does too) and bounded: the
+  candidate count is the cost of the reading, reported rather than hidden.
+
+Verified live, on both kinds of dictionary, with "музыкальный инструмент": on Ushakov's (our index) the
+readings nest as they must - phrase 51, near 62, words 63 - and on the converted Викисловарь (an archive)
+the strict modes return exactly the one article that contains the phrase, «музыкальный инструмент»,
+while the words mode returns thousands.
+
+Also: marking follows the family, not one member. Both search handlers enabled highlight marks for
+`mode == FullText` only, so the day a reading was added the strict modes answered with rungs set and
+nothing marked; `search.Mode.IsFullText` now says which modes are one family. And the test that pinned
+the old descent (hilite_wire_test.go, "reversed words fall to NEAR") was rewritten to ask each mode for
+the reading it promises - the behaviour changed by decision, so the test changed with it.
+
 **The complete list works too, from the archive** (2026-11-01, asked for after the first test). A
 search on an archive-backed dictionary now finds ALL its occurrences, exactly like a dictionary with an
 index of ours: the header reads "Викисловарь 1–5 (166) Browse" where it said "5+ results · Complete list

@@ -199,7 +199,7 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	// the reader clicked, and marking it inside the article would mark the
 	// word they are already looking at, on every line it appears (D102).
 	hl := request.Highlight
-	marks := marker(mode == search.FullText && hl)
+	marks := marker(mode.IsFullText() && hl)
 	// Capped like the store's own maxLimit: the store clamps at its boundary,
 	// but a direct backend treats the limit as a stop sign only, and would
 	// materialize every match - article bodies included - before stopping.

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/ftsq"
 )
 
 var errSuggestionLimit = errors.New("suggestion candidate limit reached")
@@ -66,7 +67,7 @@ func StreamHeadwordSuggestions(ctx context.Context, openers []Opener, term strin
 				StreamBrowseSuggestions(context.Context, string, func(string) error) error
 			})
 			if !ok {
-				hit := query(ctx, d, Wildcards, term, nil, limit)
+				hit := query(ctx, d, Wildcards, term, ftsq.Rung{}, false, limit)
 				if hit.Err != nil {
 					post(suggestionUpdate{index: i, meta: hit.Meta, err: hit.Err})
 				}

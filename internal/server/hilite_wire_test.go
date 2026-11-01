@@ -84,19 +84,27 @@ func TestSearchHighlight(t *testing.T) {
 func TestSearchPhraseMarking(t *testing.T) {
 	s, id := newHLServer(t)
 
+	/* The MODE is the reading, so each case names the one it is asking for. A
+	   mode that relaxed into a weaker reading would answer a question nobody
+	   asked, and the test that used to live here pinned exactly that descent:
+	   "casa una" falling from a phrase to NEAR on its own. That descent is gone
+	   by decision - the reader chooses the reading now - so the marking cases
+	   moved to the modes that promise them. */
 	for _, tc := range []struct {
-		name, q, rung string
-		marks         []string
+		name, q, mode, rung string
+		marks               []string
 	}{
-		{"adjacent words are one span", "vivienda es una", "phrase",
+		{"the phrase mode marks the words as one span", "vivienda es una", "phrase", "phrase",
 			[]string{`<mark class="wu-hl">vivienda es una</mark>`}},
-		{"reversed words fall to NEAR and mark apart", "casa una", "near",
+		{"the near mode marks the words apart", "casa una", "near", "near",
 			[]string{`<mark class="wu-hl">casa</mark>`, `<mark class="wu-hl">una</mark>`}},
-		{"a single word does not relax", "vivi", "words",
+		{"the words mode does not join them either", "vivienda es una", "fts", "words",
+			[]string{`<mark class="wu-hl">vivienda</mark>`, `<mark class="wu-hl">es</mark>`}},
+		{"one word is one reading", "vivi", "fts", "words",
 			[]string{`<mark class="wu-hl">vivienda</mark>`}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			hits := searchStream(t, s, "/api/search?q="+url.QueryEscape(tc.q)+"&mode=fts&hl=1&dict="+id)
+			hits := searchStream(t, s, "/api/search?q="+url.QueryEscape(tc.q)+"&mode="+tc.mode+"&hl=1&dict="+id)
 			var rung string
 			for _, h := range hits {
 				if len(h.Results) > 0 {
@@ -104,7 +112,7 @@ func TestSearchPhraseMarking(t *testing.T) {
 				}
 			}
 			if rung != tc.rung {
-				t.Errorf("q=%q answered on rung %q, want %q", tc.q, rung, tc.rung)
+				t.Errorf("q=%q in mode %q answered on rung %q, want %q", tc.q, tc.mode, rung, tc.rung)
 			}
 			got := bodies(hits)
 			for _, m := range tc.marks {

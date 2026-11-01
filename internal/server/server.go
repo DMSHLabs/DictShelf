@@ -1665,7 +1665,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	// the reader clicked, and marking it inside the article would mark the
 	// word they are already looking at, on every line it appears (D102).
 	hl, _ := queryFlag(r.URL.Query(), "hl")
-	marks := marker(mode == search.FullText && hl)
+	marks := marker(mode.IsFullText() && hl)
 	// Capped like the store's own maxLimit (one page plus a sentinel): the store clamps at its boundary,
 	// but a direct backend treats the limit as a stop sign only, and would
 	// materialize every match - article bodies included - before stopping.

@@ -79,7 +79,11 @@ func (s *Server) articleResultCacheSetup(request SearchRequest) (*entry, dict.Di
 
 func searchModeForArticleCache(value string) (string, error) {
 	switch value {
-	case "prefix", "suffix", "contains", "word", "wordLemma", "exact", "exactLemma", "wildcards", "fts":
+	// The strict full-text modes are the same index query with a different
+	// reading: request.Rung says which, articleFullTextMatch builds that
+	// reading's expression, and the archive verifies it in the article text - so
+	// nothing downstream needs to know the difference.
+	case "prefix", "suffix", "contains", "word", "wordLemma", "exact", "exactLemma", "wildcards", "fts", "phrase", "near":
 		return value, nil
 	default:
 		return "", fmt.Errorf("invalid article result mode %q", value)

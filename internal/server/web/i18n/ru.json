@@ -979,6 +979,9 @@
   "search.exactLemma": "точно + лемма",
   "search.articles": "Текст статей",
   "search.fullTextDescription": "Искать в тексте",
+  "search.modePhrase": "Фраза (как набрано)",
+  "search.modeNear": "Рядом (не дальше 10 слов)",
+  "search.modeWords": "Слова (где угодно)",
   "search.wide": "Переключить широкий вид",
   "search.expand": "Развернуть все результаты",
   "search.collapse": "Свернуть все результаты",
@@ -1047,8 +1050,6 @@
   "search.click": "щёлкните для поиска",
   "search.noResults": "ничего не найдено",
   "search.enableMode": "добавить {what} этому словарю",
-  "search.phraseNear": "фраза не найдена · слова рядом",
-  "search.phraseWords": "фраза не найдена · слова в любом месте",
   "search.results": {
     "one": "{number} результат",
     "few": "{number} результата",

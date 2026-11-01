@@ -30,6 +30,8 @@ const (
 	Prefix
 	Contains
 	FullText
+	Phrase
+	Near
 	Wildcards
 	Suffix
 	WholeWord
@@ -38,10 +40,7 @@ const (
 )
 
 func (m Mode) String() string {
-	if m == Wildcards {
-		return "wildcards"
-	}
-	return [...]string{"exact", "prefix", "contains", "fts", "wildcards", "suffix", "word", "wordLemma", "exactLemma"}[m]
+	return [...]string{"exact", "prefix", "contains", "fts", "phrase", "near", "wildcards", "suffix", "word", "wordLemma", "exactLemma"}[m]
 }
 
 // ParseMode reads a mode by its API name. "" is prefix, the default; "fuzzy"
@@ -56,6 +55,10 @@ func ParseMode(s string) (Mode, error) {
 		return Contains, nil
 	case "fts":
 		return FullText, nil
+	case "phrase":
+		return Phrase, nil
+	case "near":
+		return Near, nil
 	case "wildcards", "mask":
 		return Wildcards, nil
 	case "suffix":
@@ -71,10 +74,11 @@ func ParseMode(s string) (Mode, error) {
 }
 
 // Query searches one dictionary the way the fan-out searches each of its
-// members - the same plan, the same ladder, the same capability rules - so a
+// members - the same reading for the mode, the same capability rules - so a
 // command-line lookup and the app cannot answer the same question differently.
 func Query(ctx context.Context, d dict.Dictionary, mode Mode, term string, limit int) Hit {
-	return query(ctx, d, mode, term, planFor(mode, term), limit)
+	rung, hasRung := rungFor(mode, term)
+	return query(ctx, d, mode, term, rung, hasRung, limit)
 }
 
 // HasMask reports whether term contains either supported wildcard.
@@ -264,7 +268,7 @@ func StreamOpen(ctx context.Context, openers []Opener, mode Mode, term string, p
 // StreamOpenWithTerms allows a caller to add per-dictionary lemma alternatives
 // after the dictionary's language metadata is available in the worker.
 func StreamOpenWithTerms(ctx context.Context, openers []Opener, mode Mode, term string, perDict int, termFor func(int, dict.Meta, string) string, emit func(i int, h Hit)) {
-	plan := planFor(mode, term)
+	rung, hasRung := rungFor(mode, term)
 	sem := make(chan struct{}, Workers())
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -358,7 +362,7 @@ func StreamOpenWithTerms(ctx context.Context, openers []Opener, mode Mode, term 
 					return
 				}
 			}
-			hit := runQuery(ctx, d, mode, queryTerm, plan, perDict)
+			hit := runQuery(ctx, d, mode, queryTerm, rung, hasRung, perDict)
 			if hit.Meta.Name != "" {
 				dictName = hit.Meta.Name
 			}
@@ -392,9 +396,9 @@ func safeTermFor(resolve func(int, dict.Meta, string) string, i int, d dict.Dict
 // which the janitor eventually closes underneath it; the buffered send means
 // the abandoned goroutine also ends without blocking whenever its query
 // finally does.
-func runQuery(ctx context.Context, d dict.Dictionary, mode Mode, term string, plan []ftsq.Rung, perDict int) Hit {
+func runQuery(ctx context.Context, d dict.Dictionary, mode Mode, term string, rung ftsq.Rung, hasRung bool, perDict int) Hit {
 	done := make(chan Hit, 1)
-	go func() { done <- query(ctx, d, mode, term, plan, perDict) }()
+	go func() { done <- query(ctx, d, mode, term, rung, hasRung, perDict) }()
 	select {
 	case h := <-done:
 		return h
@@ -428,11 +432,39 @@ func safeOpen(open Opener) (d dict.Dictionary, err error) {
 // planFor parses a full-text query ONCE per fan-out. Parsing it per dictionary
 // would be cheap and still wrong: a hundred dictionaries must answer the same
 // question, and a query is not a per-dictionary object.
-func planFor(mode Mode, term string) []ftsq.Rung {
-	if mode != FullText {
-		return nil
+// rungFor is the ONE reading a full-text mode asks for: the phrase, the words
+// near one another, or the words anywhere.
+//
+// The mode IS the promise. A search that quietly answers a weaker question than
+// the one on screen is lying about its result, so no mode walks a ladder any
+// more: each asks for its own reading and reports which one answered.
+//
+// The operator language still wins where it is explicit. A quoted query parses
+// to a single rung of its own, and a mode whose name is not in that rung set
+// uses what the query itself asked for - so typing quotes in "words" still
+// searches the phrase, and the header says so.
+func rungFor(mode Mode, term string) (ftsq.Rung, bool) {
+	var want string
+	switch mode {
+	case Phrase:
+		want = "phrase"
+	case Near:
+		want = "near"
+	case FullText:
+		want = "words"
+	default:
+		return ftsq.Rung{}, false
 	}
-	return ftsq.Parse(term).Rungs()
+	rungs := ftsq.Parse(term).Rungs()
+	for _, r := range rungs {
+		if r.Name == want {
+			return r, true
+		}
+	}
+	if len(rungs) > 0 {
+		return rungs[0], true
+	}
+	return ftsq.Rung{}, false
 }
 
 // query runs one dictionary's lookup, converting a parser panic into that
@@ -445,7 +477,7 @@ func planFor(mode Mode, term string) []ftsq.Rung {
 // the HTTP handler did not create - so Go's rule that a panic can only be
 // recovered on its own goroutine means the handler's recover cannot see it and
 // the process dies. One bad file must cost one row, not the server.
-func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, plan []ftsq.Rung, perDict int) (h Hit) {
+func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, rung ftsq.Rung, hasRung bool, perDict int) (h Hit) {
 	defer func() {
 		if r := recover(); r != nil {
 			h.Err = dict.PanicError(h.Meta.Path, r)
@@ -499,32 +531,44 @@ func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, plan 
 			return h
 		}
 		h.Results, h.Err = headwords.SearchHeadwordsMode(ctx, term, mode.String(), perDict)
-	case FullText:
+	case FullText, Phrase, Near:
 		if !indexed || !caps.FTS {
 			h.Skipped = true
 			return h
 		}
-		// A source that answers full text itself (a Kiwix archive with its own
-		// index) has one reading and no expression language, so the ladder does
-		// not apply: ask it and stop. "words" is the honest name of that
-		// reading - the index holds stems, not phrases - and without a rung the
-		// hit would not be highlighted at all (see ArchiveFullText).
-		if af, ok := d.(ArchiveFullText); ok && af.FullTextFromArchive() {
-			h.Results, h.Err = s.FullTextContext(ctx, term, perDict)
-			if h.Err == nil {
-				h.Rung, h.OneReading = "words", true
+		// A source that answers full text itself - a Kiwix archive - has no
+		// positions in its index, so the strict readings cannot be ASKED of it.
+		// It answers "words" natively, and the two strict ones are verified in
+		// the article text instead: the same promise, a slower way to keep it,
+		// with a bounded number of candidates checked and the count reported so
+		// the reader can see what the reading cost (ArchiveStrict).
+		if af, ok := d.(ArchiveStrict); ok && af.FullTextFromArchive() {
+			switch mode {
+			case Phrase:
+				h.Results, h.Err = af.ArchivePhrase(ctx, term, perDict, archiveCheckCandidates(perDict))
+				h.Rung = "phrase"
+			case Near:
+				h.Results, h.Err = af.ArchiveNear(ctx, archiveNearDistance, term, perDict, archiveCheckCandidates(perDict))
+				h.Rung = "near"
+			default:
+				h.Results, h.Err = s.FullTextContext(ctx, term, perDict)
+				h.Rung = "words"
 			}
+			if h.Err != nil {
+				h.Rung = ""
+			}
+			h.OneReading = true
 			return h
 		}
-		if len(plan) > 0 && runPlan(ctx, s, plan, perDict, &h) {
+		if !hasRung {
+			// The query has no words at all: nothing to ask for, and asking the
+			// database for an empty reading answers with everything.
+			h.Skipped = true
 			return h
 		}
-		// No plan (the query has no words), or every rung failed to execute -
-		// a defect in the lowering, not an answer. The store's own single
-		// reading serves the reader better than an error.
-		h.Results, h.Err = s.FullTextContext(ctx, term, perDict)
+		h.Results, h.Err = s.FullTextMatch(ctx, rung.Match, perDict)
 		if h.Err == nil {
-			h.Rung = "words"
+			h.Rung = rung.Name
 		}
 	case Wildcards:
 		if indexed {
@@ -542,31 +586,24 @@ func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, plan 
 	return h
 }
 
-// runPlan walks the relaxation ladder and stops at the FIRST rung that returns
-// anything, reporting whether any rung executed at all.
+// archiveCheckCandidates is how many of the archive's ranked candidates the
+// strict readings are allowed to verify for one page.
 //
-// Descent is on EMPTINESS, never on "few results". A phrase that matched three
-// articles has answered the question; adding the bag-of-words hits underneath
-// it would bury the three that were actually asked for, which is the failure
-// mode this whole design exists to remove. An error is not emptiness either -
-// it means this reading was never tried, so the ladder keeps going and the
-// caller is told only if nothing ran.
-func runPlan(ctx context.Context, s dict.Searcher, plan []ftsq.Rung, perDict int, h *Hit) bool {
-	ran := false
-	for _, r := range plan {
-		res, err := s.FullTextMatch(ctx, r.Match, perDict)
-		if err != nil {
-			h.Err = err
-			continue
-		}
-		ran = true
-		if len(res) > 0 {
-			h.Results, h.Rung, h.Err = res, r.Name, nil
-			return true
-		}
+// Verifying a phrase means reading articles, so a query with a million
+// candidates cannot be answered this way in one page's time; the reading is a
+// promise about what was checked, not about everything the index holds. Twenty
+// pages' worth, with a floor, covers a phrase that exists in a handful of
+// articles - which is the case the strict modes are for.
+func archiveCheckCandidates(perDict int) int {
+	n := perDict * 20
+	if n < 200 {
+		n = 200
 	}
-	if ran {
-		h.Err = nil // the ladder ran to the end and the answer is "nothing"
-	}
-	return ran
+	return n
 }
+
+// archiveNearDistance is how many other words may sit between the query's words
+// in the "near" reading, for both kinds of dictionary: it is the FTS5 default
+// (NEAR(...) with no distance is 10) and the number the mode's own label
+// states, so the two answers agree by construction rather than by luck.
+const archiveNearDistance = 10

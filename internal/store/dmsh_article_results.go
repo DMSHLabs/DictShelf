@@ -23,7 +23,9 @@ func (s *Store) StreamArticleIDs(ctx context.Context, query, mode, fullTextMatch
 	var err error
 	match := func(string) bool { return true }
 	switch mode {
-	case "fts":
+	// The strict readings run the same SQL: what differs is the expression in
+	// fullTextMatch, which the caller built from the mode's own rung.
+	case "fts", "phrase", "near":
 		if !s.ftsOK {
 			return dict.ErrUnsupported
 		}

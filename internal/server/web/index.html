@@ -266,7 +266,9 @@ window.wudictFontScale=(function(){
 <option value="exact">=</option>
 <option value="exactLemma">=+</option>
 <option value="wildcards">*?</option>
-<option value="fts">{{T:search.fullTextDescription}}</option>
+<option value="phrase">{{T:search.modePhrase}}</option>
+<option value="near">{{T:search.modeNear}}</option>
+<option value="fts">{{T:search.modeWords}}</option>
 </select>
 <button type="button" class="choice-btn themed-select-btn" id="modeMenuBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="{{T:search.mode}}" disabled></button>
 <span class="choice-menu menu-card themed-select-menu" id="modeMenu" role="listbox" aria-label="{{T:search.mode}}" data-w="wide" hidden></span>
@@ -7757,8 +7759,13 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
   // that HAS a ladder: one whose full text comes from an archive index matches
   // words and never tried a phrase, so "phrase not found" would be a claim
   // about a query nobody ran (h.oneReading, from search.Hit.OneReading).
-  const rung=!h.oneReading&&mode==="fts"&&/\s/.test(q||"")&&(h.rung==="near"||h.rung==="words")
-    ?`<span class="rung">${esc(tx(h.rung==="near"?"search.phraseNear":"search.phraseWords"))} · </span>`:"";
+  /* No rung is announced: each full-text mode asks for one reading and answers
+     with it, so there is no relaxation to explain. The reading still rides on the
+     hit for the highlight marks - the words of the reading are what gets marked. */
+  /* Each full-text mode asks for ONE reading and answers with it, so there is no
+     relaxation to announce: the header shows the count, and the reading rides on
+     the hit only far enough to mark the words that were searched for. */
+  const rung="";
   const countLabel=paging?(rung?`<span class="count">${rung}</span>`:``):more
     ?`<span class="count">${rung}${more} ${esc(tx("search.results",{count:perDict,number:""}).trim())}</span>`
     :`<span class="count">${rung}${esc(tx("search.results",{count:h.results.length,number:window.wudictI18n.number(h.results.length)}))}</span>`;

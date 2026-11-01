@@ -971,6 +971,9 @@
   "search.exactLemma": "exact + lemma",
   "search.articles": "The article text",
   "search.fullTextDescription": "Search the text",
+  "search.modePhrase": "Phrase (exactly as typed)",
+  "search.modeNear": "Near (within 10 words)",
+  "search.modeWords": "Words (anywhere)",
   "search.wide": "Toggle wide layout",
   "search.expand": "Expand all results",
   "search.collapse": "Collapse all results",
@@ -1039,8 +1042,6 @@
   "search.click": "click to search",
   "search.noResults": "no results",
   "search.enableMode": "add the {what} to this dictionary",
-  "search.phraseNear": "phrase not found · words proximity",
-  "search.phraseWords": "phrase not found · words anywhere",
   "search.results": {
     "one": "{number} result",
     "other": "{number} results"

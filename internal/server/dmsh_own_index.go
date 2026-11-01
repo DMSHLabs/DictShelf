@@ -130,16 +130,27 @@ func archiveAnswersFullText(path string) bool {
 // A source that cannot enumerate its answer reports ErrUnsupported rather than
 // an empty list: the caller treats the two differently, and "no results" would
 // be a lie about a search that has plenty.
-func (u *upgraded) archiveArticleIDs(ctx context.Context, query string, emit func([]int64, int, bool) error) error {
+func (u *upgraded) archiveArticleIDs(ctx context.Context, query, mode string, emit func([]int64, int, bool) error) error {
 	src, err := u.source()
 	if err != nil {
 		return err
 	}
+	reading, known := zimformat.ReadingFor(mode)
+	if !known {
+		return dict.ErrUnsupported
+	}
 	streamer, ok := src.(interface {
-		StreamFullTextHeadwords(string, func(string) error) error
+		StreamHeadwords(string, zimformat.Reading, int, func(string) error) error
 	})
 	if !ok {
 		return dict.ErrUnsupported
+	}
+	// The strict readings answer from the candidates they could check, and say
+	// so: maxCheck bounds the articles read, and a list that hit the bound is
+	// reported as unfinished rather than presented as the whole answer.
+	check := 0
+	if reading != zimformat.ReadingWords {
+		check = archiveStrictCheck
 	}
 	var (
 		pending []string
@@ -171,7 +182,7 @@ func (u *upgraded) archiveArticleIDs(ctx context.Context, query string, emit fun
 		}
 		return nil
 	}
-	err = streamer.StreamFullTextHeadwords(query, func(headword string) error {
+	err = streamer.StreamHeadwords(query, reading, check, func(headword string) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -186,3 +197,51 @@ func (u *upgraded) archiveArticleIDs(ctx context.Context, query string, emit fun
 	}
 	return flush(true)
 }
+
+// ArchivePhrase answers the "phrase" reading: the words adjacent, in order,
+// verified in the article text of the archive's ranked candidates
+// (internal/format/zim, dmsh_readings.go - the index has no positions to ask).
+func (u *upgraded) ArchivePhrase(ctx context.Context, query string, limit, maxCheck int) ([]dict.Result, error) {
+	return u.archiveReading(ctx, "phrase", 0, query, limit, maxCheck)
+}
+
+// ArchiveNear answers the "near" reading: the words within distance of one
+// another, verified the same way.
+func (u *upgraded) ArchiveNear(ctx context.Context, distance int, query string, limit, maxCheck int) ([]dict.Result, error) {
+	return u.archiveReading(ctx, "near", distance, query, limit, maxCheck)
+}
+
+// archiveReading runs one strict reading against the source, or reports
+// ErrUnsupported when the source cannot answer it (a handle whose archive is
+// missing, or a reader that has no such reading).
+func (u *upgraded) archiveReading(ctx context.Context, mode string, distance int, query string, limit, maxCheck int) ([]dict.Result, error) {
+	src, err := u.source()
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	switch {
+	case mode == "phrase":
+		if s, ok := src.(interface {
+			FullTextPhrase(string, int, int) ([]dict.Result, error)
+		}); ok {
+			return s.FullTextPhrase(query, limit, maxCheck)
+		}
+	case mode == "near":
+		if s, ok := src.(interface {
+			FullTextNear(int, string, int, int) ([]dict.Result, error)
+		}); ok {
+			return s.FullTextNear(distance, query, limit, maxCheck)
+		}
+	}
+	return nil, dict.ErrUnsupported
+}
+
+// archiveStrictCheck is how many articles the strict readings may read while
+// building the complete list for one dictionary. Verifying a phrase means
+// reading articles, so a query with a million candidates cannot be listed to its
+// end in a background pass's time; this is the bound, and the list is marked
+// unfinished when it bites.
+const archiveStrictCheck = 3000
