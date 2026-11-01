@@ -442,12 +442,23 @@ revision 1, level 2, directory from 11 to 323 (156 items) with item offsets 8185
 by 13 bytes, and block 1 has level 0 with eight 13-byte leaf items - all consistent with the layout above.
 So the addressing model is confirmed, not guessed.
 
+**Our reader works** (`internal/format/zim/glass`, pure Go, no cgo): it parses the version file of a real
+archive (format 1134, revision 1, block 8192, 1 528 188 documents, postlist root 571 with 4 617 462 terms,
+docdata root 59 228 with exactly one record per document, and the termlist/position/spelling/synonym
+tables empty - which matches libzim indexing without positions) and **finds terms in the postlist table**:
+`"джаз"` comes back with a 517-byte first chunk and `"кларнетист"` with 47 bytes, where gozim failed with
+`root block 571 not found`. Two things that finding settled: terms are the plain lowercase words - the
+`Z`-prefixed stemmed forms are *not* in this index, so a query needs unaccenting and case folding but no
+snowball stemmer (per archive: a build with a stemmer configured may differ, so try the plain term first
+and only then a stemmed one); and a branch item keeps its key length two bytes further along than a leaf
+item, which is a descent bug that fails silently rather than loudly.
+
 **What is still to implement** (in `internal/format/zim/glass`, our own package): the version parser and
 this block/table layer first (that is the fix gozim never had), then the postlist chunk decoding
 (`glass_postlist.cc`: termfreq, collfreq and the docid deltas; no positions exist, libzim indexed with
 `index_text_without_positions`), then the docdata table for docid -> article path, then the query side:
-unaccent (ICU-equivalent - libzim's own step, see `src/tools.cpp`), tokenize, drop stopwords, stem with
-snowball for the archive's language, and intersect the posting lists (`OP_AND`). The corpus to check
+unaccent (ICU-equivalent - libzim's own step, see `src/tools.cpp`), tokenize, drop stopwords, look the
+terms up, and intersect the posting lists (`OP_AND`). The corpus to check
 against is the user's four archives; the oracle to check *correctness* against is Xapian 1.4.32 built
 locally, never shipped.
 
