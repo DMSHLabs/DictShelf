@@ -8,7 +8,7 @@ package store
 //
 //	<db dir>/
 //	  AHD5-2017/            ← folder name mirrors the source FILE name
-//	    text.db             ← articles + search indexes
+//	    text.db             ← articles (or headwords) + search indexes
 //	    media.db            ← packed images/audio (only after "pack media")
 //	    info.txt            ← human-readable receipt; also the fast source index
 //	  Oxford Advanced/
@@ -667,12 +667,19 @@ func writeInfo(dir, source string) error {
 		fmt.Fprintf(&b, "\n%s%s = %s\n", keepComment, keepKey, keepValue)
 	}
 	fmt.Fprintf(&b, "\n# origin: %s\n", src)
-	// What the database actually holds. A title-only ZIM is "headwords + search
-	// index" and saying "articles" there would send a reader looking for article
-	// text in a file that deliberately has none (SPEC §24).
+	// What the database actually holds, in the form's own words (SPEC §24).
+	// There are three of them now, and the third is why this stopped being a
+	// two-way choice: a ZIM can hold our article index WITHOUT the article text
+	// it was built from, so "articles + search index" describes bodies that are
+	// not in the file and "headwords + search index" hides an index that is -
+	// one sends a reader looking for text, the other for a search that is there.
+	_, articleBodies := ZIMForm(meta)
 	what := "articles + search index"
-	if levelHeadwords == ingestLevel(PlanFromMeta(meta)) {
+	switch {
+	case levelHeadwords == ingestLevel(PlanFromMeta(meta)):
 		what = "headwords + search index"
+	case !articleBodies:
+		what = "headwords + article index (article text stays in the archive)"
 	}
 	fmt.Fprintf(&b, "# files: %s (%s)", TextDBName, what)
 	if _, err := os.Stat(filepath.Join(dir, "icon.cache")); err == nil {

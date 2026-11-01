@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
@@ -75,5 +76,34 @@ func TestIndexOnlyReaderKeepsTheIndexAndNotTheBodies(t *testing.T) {
 	}
 	if !PlanFromMeta(meta).FullText {
 		t.Error("the meta does not say the article text is indexed, so a rebuild would drop it")
+	}
+}
+
+// The receipt says which of the three forms the folder holds, because it is
+// what a reader looks at when the source is long gone: "articles + search
+// index" would send them looking for article text that this form deliberately
+// does not keep, and "headwords + search index" would hide the article index
+// that is there.
+func TestReceiptNamesTheIndexOnlyForm(t *testing.T) {
+	dir := t.TempDir()
+	textDB := filepath.Join(dir, TextDBName)
+	src := filepath.Join(dir, "source.zim")
+	if err := os.WriteFile(src, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := &dropBodyReader{&fakeReader{meta: dict.Meta{Name: "Indexonly", Format: "zim", Path: src},
+		entries: []dict.Entry{h("alpha", "<p>one two</p>")}}}
+	if _, err := IngestPlan(r, textDB, Plan{Contains: true, FullText: true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteInfo(dir); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(InfoPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "# files: " + TextDBName + " (headwords + article index (article text stays in the archive))"; !strings.Contains(string(data), want) {
+		t.Errorf("the receipt does not name the form; want %q in:\n%s", want, data)
 	}
 }

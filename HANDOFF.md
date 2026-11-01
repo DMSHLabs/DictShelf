@@ -675,10 +675,10 @@ entries in 458 seconds, and the result is the form, exactly - `index_kind=headwo
 read and indexed and none of it was kept: the whole point of the form, on a real archive, for the first
 time.
 
-Two consequences to finish, both cosmetic and both to do with the window: `info.txt` still reads "files:
-text.db (articles + search index)" for a database that holds no articles (the wording distinguishes the
-two forms for what the READER emitted, not for what was kept), and a database that now has BOTH indexes -
-its archive's and ours - needs the chip and the window to say so as one state rather than two.
+The receipt now names all three forms (`store.writeInfo`): "headwords + search index", "articles +
+search index", and for this one "headwords + article index (article text stays in the archive)" - the
+rule was two-way while there were two forms, and the third made both of the old answers wrong in opposite
+directions. Pinned by a test on the real fixture, not on the wording alone.
 
 ## Two chips, and who answers which reading (2026-11-02)
 
