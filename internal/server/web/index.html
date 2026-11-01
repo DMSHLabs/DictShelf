@@ -4139,10 +4139,14 @@ function renderPanel(){
         ` data-feat="${key}" data-on="${on?1:0}"${stale?' data-stale="1"':""}`+
         ` title="${escAttr(tip)}">${esc(label)}${size}${stale?" ⟳":""}</span>`;
     }
-    /* The archive's own full-text index, beside ours: a fact about the source,
-       not a switch. Locked, because there is nothing here to turn off - the
-       index belongs to the archive and travels with it. */
-    if(d.archiveIndex)caps+=`<span class="feat on locked" title="${escAttr(tx("dictUI.ftsArchiveHint"))}">${esc(tx("dictUI.ftsArchive"))}</span>`;
+    /* The archive's own index is shown ONLY beside an index of ours, and that
+       is a decision, not a layout accident: it stores no positions, so it
+       answers "words" and nothing else, and the strict readings over it mean
+       reading article texts - slow, and on a phone a battery question. A
+       dictionary that has only that index therefore does not get a chip
+       claiming full text: it gets the "our FTS" switch, which is what would
+       make the mode actually work. */
+    if(d.archiveIndex&&d.ourFullText)caps+=`<span class="feat on locked" title="${escAttr(tx("dictUI.ftsArchiveHint"))}">${esc(tx("dictUI.ftsArchive"))}</span>`;
     // Contains and full-text are both built only after an explicit action.
     // "pack media" is offered only when the dictionary actually has packable
     // media, a source to pack it from, and it isn't already packed.

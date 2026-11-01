@@ -680,6 +680,25 @@ search index", and for this one "headwords + article index (article text stays i
 rule was two-way while there were two forms, and the third made both of the old answers wrong in opposite
 directions. Pinned by a test on the real fixture, not on the wording alone.
 
+### What the row says now (same day, user's decision)
+
+The archive's index is no longer presented as full text. The chip appears ONLY beside an index of ours,
+and it says what it is: «в архиве: слова», because the archive's index stores words without positions -
+it answers "words" and nothing else, and a phrase or proximity search over it means reading article
+texts, which on a phone is a battery question as much as a time one. A ZIM whose archive has an index and
+which has none of ours therefore shows one chip, "our FTS" (off, with a build estimate), and no claim of
+full text at all; the converted Russian Wiktionary shows both, side by side. The window's state line for
+such a row says the same thing instead of "ours not needed".
+
+**The user's decisions, to implement next** (recorded here because they change the shape, not just the
+wording): (1) strict modes over an archive-only dictionary must not scan article texts at all - they open
+the build offer window, with the estimate, and the row says why it has no answer; the scan stays only as
+an explicit "search the texts anyway" choice in that same window. (2) Every cap that hides results goes:
+`archiveStrictCheck` above all, and the query side's `ftsq.maxTokens` (128) must refuse an absurd query
+out loud instead of silently searching its first 128 words. (3) Results are delivered progressively: five
+articles per dictionary first, then the search continues in the background to the end, or until the reader
+changes the query or mode.
+
 ## The strict readings were mostly blind, and one of them lied (2026-11-02)
 
 Reported by the user, with a live example: «ищу джазовый кларнетист, статья „Ниммонс, Фил" содержит эту
