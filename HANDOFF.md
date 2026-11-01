@@ -237,6 +237,32 @@ had it backwards). Neither path indexes on first use, so the shared rule is safe
 a keystroke may open an unprepared source at all. Making them agree means choosing, which is the user's
 call. The self-indexed formats (ZIM, `entryHasSelfIndex`) are exempt on both sides.
 
+## Lemma files on this machine (Russian installed 2026-11-01)
+
+`~/.dmshlabs/dictshelf/lemmas/ru.tsv.gz` (1.9 MB) is what `internal/morph` reads: `.tsv` + optional
+`.gz`, the stem resolved through `internal/lang`, so the name needs no guessing. Verified by loading it
+and lemmatizing, not by reading it: человека/людей -> человек, года -> год, статьями -> статья, времени ->
+время, кларнетиста -> кларнетист, джазового -> джазовый, and the ё case works both ways (идёт and идет ->
+идти), which is what `yoRetry` in morph.go exists for. The built-in English still answers (running -> run).
+Data: 48 213 lines, 566 275 forms. The whole retry path is covered by `TestSharedSearchMorphology` in
+internal/server, which passes.
+
+What it costs on this machine, measured: 266 ms to load and first answer, **+82 MB heap** resident
+(morph.go's comment says the ru pack is 65 MB, so that upper bound is low for Russian - it matters where
+the budget is 64 MB, which is Android's PREVIEW_MEMORY default). 1000 further lookups take under a
+millisecond in total: the load is the cost, not the use.
+
+Two things about the data that are not bugs, so nobody re-finds them: a word that is both a form and a
+lemma keeps golem's single answer - "домашние" is a form of "домашний" AND a lemma of its own (the
+plural-only noun), and since the file lists the noun line first, the answer is "домашние" itself, which
+`Lemma` reports as no useful answer; and 4 610 forms are prefixed with `*` (golem's own English pack has
+none), the source list's mark for "in the paradigm but not a word" - golem keeps the mark as part of the
+key, so those forms simply never match, which is the same outcome by accident.
+
+A file dropped into the folder while the app is running is picked up on the next start or by the lemma
+installer in the app (`internal/server/lemmas.go` calls `Morph.Rescan`); `wudict lemmas list` cannot run
+while the app is up, because every non-informational command takes the single-instance mutex.
+
 ## ZIM prepared databases now have two forms (read-through full text)
 
 A ZIM's prepared database was always title-only (SPEC §24), so an `article_fts` built over it could
