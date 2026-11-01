@@ -118,6 +118,13 @@ func (r *Reader) ExtraMeta() map[string]string {
 	if r.headwordsOnly {
 		m["index_kind"] = "headwords"
 	}
+	// A fact about the SOURCE, recorded while the archive is open anyway: this
+	// archive carries its own full-text index, so full text is answered from it
+	// and no index of ours has to be built (see dmsh_xapian.go, and
+	// store.OwnFullText, which reads this key).
+	if r.d.HasFullTextIndex() {
+		m[OwnIndexMetaKey] = "1"
+	}
 	if s := r.stats; s != nil {
 		m["zim_articles"] = strconv.Itoa(s.Articles)
 		m["zim_redirects"] = strconv.Itoa(s.Redirects)

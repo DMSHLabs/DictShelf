@@ -56,6 +56,7 @@ type Store struct {
 	db               *sql.DB
 	meta             dict.Meta
 	ftsOK            bool   // article text indexed (ingest_level != "headwords")
+	ownFullText      bool   // the SOURCE carries its own index (see dmsh_own_ft.go)
 	hasHeadwordFTS   bool   // optional token index for headword word/prefix search
 	articleFTSTable  string // legacy entry_fts or current article_fts
 	srcPath          string // source_path recorded at ingest ("" if unknown)
@@ -186,6 +187,7 @@ func Open(path string) (*Store, error) {
 		Header:        headerOf(m),
 	}
 	s.ftsOK = PlanFromMeta(m).FullText
+	s.ownFullText = OwnFullText(m)
 	if stampOf(m, "ingest_version", 1) >= 6 {
 		s.articleFTSTable = "article_fts"
 	} else {

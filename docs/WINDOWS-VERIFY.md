@@ -273,3 +273,21 @@ them are in `docs/handoff-archive.md`.
   - Seven server tests used to fail on Windows at the rename step before
     item 2 (`2675563`) fixed it — if they regress, look at
     `internal/server/registry_windows.go`.
+  - Two server tests fail on clean HEAD here, on `dev` as well as on the
+    ZIM-index branch (checked with `git worktree` at both commits on
+    2026-11-01, so neither branch introduced them). Both look environment- or
+    markup-dependent rather than intermittently flaky - they failed in every
+    run, alone and in the suite:
+    - `TestConfigEndpointAndSetupPage` — "/setup not served: 200": the page IS
+      served (200) but its body does not carry the `<title>Edit Folders</title>`
+      the probe looks for, which is the markup the 2026-10-02 note above says
+      those probes were switched to. So either the page's title drifted or the
+      probe was never run after that change; check `internal/server/web/`
+      against the probe before assuming flakiness.
+    - `TestNewDictionariesGetContainsIndexWithoutSavedDefaults` — "unexpected
+      first-run index features: {Exact:true Prefix:true Contains:false
+      FTS:false}": the freshly built database has no `entry_trigram` although
+      the same test's next assertion says the unsaved defaults DO select the
+      contains index. Worth starting from what chooses the first-run plan
+      (`prefs.newIndexDefaults` and the registry's first-run ingest), because
+      the two halves of the test disagree about it.

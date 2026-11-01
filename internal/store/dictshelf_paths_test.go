@@ -29,4 +29,3 @@ func TestDefaultDBDirUsesDictShelfDataRoot(t *testing.T) {
 		t.Fatalf("DefaultDBDir() = %q, want %q", got, want)
 	}
 }
-

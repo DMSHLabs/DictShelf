@@ -496,6 +496,18 @@ func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, plan 
 			h.Skipped = true
 			return h
 		}
+		// A source that answers full text itself (a Kiwix archive with its own
+		// index) has one reading and no expression language, so the ladder does
+		// not apply: ask it and stop. "words" is the honest name of that
+		// reading - the index holds stems, not phrases - and without a rung the
+		// hit would not be highlighted at all (see ArchiveFullText).
+		if af, ok := d.(ArchiveFullText); ok && af.FullTextFromArchive() {
+			h.Results, h.Err = s.FullTextContext(ctx, term, perDict)
+			if h.Err == nil {
+				h.Rung = "words"
+			}
+			return h
+		}
 		if len(plan) > 0 && runPlan(ctx, s, plan, perDict, &h) {
 			return h
 		}

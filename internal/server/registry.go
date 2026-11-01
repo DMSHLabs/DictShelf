@@ -191,11 +191,22 @@ func (u *upgraded) ContainsContext(ctx context.Context, word string, limit int) 
 }
 
 func (u *upgraded) FullTextContext(ctx context.Context, query string, limit int) ([]dict.Result, error) {
+	// An archive that carries its own full-text index answers this itself, over
+	// the article text rather than over titles (dmsh_own_index.go).
+	if r, ok, err := u.archiveFullText(ctx, query, limit); ok {
+		return r, err
+	}
 	r, err := u.Store.FullTextContext(ctx, query, limit)
 	return u.titleResults(ctx, r, err)
 }
 
 func (u *upgraded) FullTextMatch(ctx context.Context, match string, limit int) ([]dict.Result, error) {
+	// The same archive has no FTS5 expression language, so this reading does
+	// not exist for it; the search asks FullTextContext instead
+	// (search.ArchiveFullText).
+	if u.Store.OwnFullText() {
+		return nil, nil
+	}
 	r, err := u.Store.FullTextMatch(ctx, match, limit)
 	return u.titleResults(ctx, r, err)
 }

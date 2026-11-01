@@ -1050,8 +1050,12 @@ type dictInfo struct {
 	Entries     int       `json:"entries"`
 	Headwords   int       `json:"headwords,omitempty"`
 	Caps        dict.Caps `json:"caps"`
-	DBPath      string    `json:"dbPath,omitempty"` // exposed per D7: users share these files
-	Error       string    `json:"error,omitempty"`
+	// OwnFullText: the archive carries its own full-text index, so full text is
+	// answered from it and there is no index of ours to build, remove or
+	// estimate. Caps.FTS is true either way; this says who answers.
+	OwnFullText bool   `json:"ownFullText,omitempty"`
+	DBPath      string `json:"dbPath,omitempty"` // exposed per D7: users share these files
+	Error       string `json:"error,omitempty"`
 
 	// ContainsStale: the trigram index was built by an older text folding, so
 	// substring search may miss words whose folding changed. Reported, not
@@ -1250,7 +1254,8 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 			ID: e.ID, Path: e.Path, Name: meta["name"], Format: meta["format"], Entries: ec,
 			Headwords:         sourceHeadwordCount(e.Path, meta),
 			SelfIndexed:       formatHasSelfIndex(meta["format"]),
-			Caps:              dict.Caps{Exact: true, Prefix: true, Contains: p.Plan.Contains, FTS: p.Plan.FullText},
+			Caps:              dict.Caps{Exact: true, Prefix: true, Contains: p.Plan.Contains, FTS: p.Plan.FullText || store.OwnFullText(meta)},
+			OwnFullText:       store.OwnFullText(meta),
 			DBPath:            p.TextDB,
 			ContainsStale:     p.Plan.Contains && store.FoldStale(meta),
 			Outdated:          rebuildable(e.Path) && (!formatHasSelfIndex(meta["format"]) || isZIMPath(e.Path)) && len(p.Stale(e.Path)) > 0,
