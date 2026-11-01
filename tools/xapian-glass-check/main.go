@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/format/zim"
 	"github.com/DMSHLabs/DictShelf/internal/format/zim/glass"
 )
@@ -53,6 +54,7 @@ func main() {
 	}
 	runQueries(db, article, terms)
 	runFullText(article, terms)
+	runAsDictionary(path, terms)
 	dumpDoc(db, 250122)
 	dumpDoc(db, 2472)
 	for _, term := range terms {
@@ -237,6 +239,39 @@ func runFullText(article *zim.Dict, queries []string) {
 		for _, r := range found {
 			fmt.Printf("      %-40s статья %d байт\n", r.Headword, len(r.Body))
 		}
+	}
+}
+
+// runAsDictionary asks the question the search actually asks: a registered ZIM
+// opens as an ordinary dict.Dictionary, and the full-text routing reaches the
+// archive by type-asserting that interface on it (upgraded.archiveFullText).
+// The type assertion is the one assumption the routing makes, so it is checked
+// against a real archive here rather than assumed.
+func runAsDictionary(path string, queries []string) {
+	d, err := dict.Open(path)
+	if err != nil {
+		fmt.Println("  dict.Open:", err)
+		return
+	}
+	defer d.Close()
+	searcher, ok := d.(interface {
+		FullText(string, int) ([]dict.Result, error)
+	})
+	if !ok {
+		fmt.Println("  dict.Open дал словарь, который полный текст не отвечает")
+		return
+	}
+	if len(queries) == 0 {
+		return
+	}
+	found, err := searcher.FullText(queries[0], 3)
+	if err != nil {
+		fmt.Printf("  через dict.Open %q: %v\n", queries[0], err)
+		return
+	}
+	fmt.Printf("  через dict.Open %q: статей %d\n", queries[0], len(found))
+	for _, r := range found {
+		fmt.Printf("      %-40s статья %d байт\n", r.Headword, len(r.Body))
 	}
 }
 
