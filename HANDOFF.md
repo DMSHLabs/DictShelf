@@ -462,6 +462,28 @@ terms up, and intersect the posting lists (`OP_AND`). The corpus to check
 against is the user's four archives; the oracle to check *correctness* against is Xapian 1.4.32 built
 locally, never shipped.
 
+**Where the reader stands and where it stops.** Working and verified against the Russian Wiktionary: the
+version file, the single-file block space, the B-tree descent, item keys and the docdata table -
+`internal/format/zim/glass`, exercised by `tools/xapian-glass-check`, which also fetches the article the
+index names and checks the term is in it. Not working yet: the *body* of a posting chunk. A term's tag
+decodes its first three values plausibly for several terms (documents, occurrences, first document id),
+and `"кларнетист"` is 47 bytes for 11 documents and 32 occurrences, but no arrangement of the remaining
+bytes that I tried consumes the tag exactly while yielding 11 documents summing to 32 occurrences: the
+layout derived from `make_start_of_first_chunk` + `make_start_of_chunk` (entries, collection frequency,
+first document, a flag byte, the span to the chunk's last document, then a frequency and gap/frequency
+pairs) lands one document and one occurrence short, and a scan over header lengths 3..16 with both value
+orders found no exact fit. The item framing itself is sound: 70 bytes = 2 size + 1 key length + 20 key +
+47 tag, flags `0x60` (first and last component, uncompressed), key = the raw UTF-8 term, which also says
+the postlist key carries no prefix and no length.
+
+The next step is not more reading: build Xapian 1.4.32 locally, write a short C++ program that opens the
+extracted blob and dumps one term's posting list (`xapian-check`, or through its API), and compare byte
+for byte with what our decoder sees. That is the oracle we planned to build anyway, and it turns the
+remaining question into a diff. Two smaller things for the same pass: the docdata keys use the
+sort-preserving encoding (implemented, wants a test against a known document id and path), and the
+container needs the byte-range API so a reader works from a mapped archive instead of the copied blob the
+tool uses today.
+
 - With the local MinGW GCC 13.1.0, `go test -tags sqlite_fts5 -trimpath ./... -count=1`, `go vet -tags sqlite_fts5 -trimpath ./...`, and `go build -tags sqlite_fts5 -trimpath ./...` pass after removing the duplicate LSD implementation. Real-dictionary integration and Windows/Android UI checks remain unverified.
 - Android runs Go through JNI without an HTTP listener; Windows listenerless desktop uses WebView2 and a native bridge. Build recipes are in `docs/WINDOWS-VERIFY.md`; Android uses `build-android.cmd debug intel`. Do not install APKs or commit unless requested.
 - Windows/Android search, index maintenance and visual checks remain pending. Other open items include portable Windows write-path gaps (`docs/PORTABLE-WRITES-AUDIT.md`), Edit Folders verification, icon visibility and MDX ad-slot reindex/display.
