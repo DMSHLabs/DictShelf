@@ -179,3 +179,69 @@ func (s *Store) ArticlesByIDs(ctx context.Context, ids []int64) ([]dict.Result, 
 	}
 	return out, nil
 }
+
+// entryIDBatch is how many headwords one lookup statement may carry. SQLite's
+// default limit on host parameters is 999 per statement (SQLITE_MAX_VARIABLE_NUMBER), and a cache build asks about thousands of articles at a time.
+const entryIDBatch = 400
+
+// EntryIDsForHeadwords maps headwords to prepared entry ids, keeping the order
+// it is given and dropping what this database does not hold.
+//
+// It exists for the one path that cannot ask SQLite for its results: a
+// dictionary whose full text comes from its archive (see
+// internal/format/zim/glass). The archive answers with article headwords, and a
+// page of the answer still has to become entry ids, because that is what the
+// result cache stores and what ArticlesByIDs reads back.
+//
+// The first id for a headword wins, which matters when two ranked hits name the
+// same article: the list keeps the position of the better-ranked one and does
+// not show the article twice.
+func (s *Store) EntryIDsForHeadwords(ctx context.Context, words []string) ([]int64, error) {
+	if len(words) == 0 {
+		return nil, nil
+	}
+	out := make([]int64, 0, len(words))
+	seen := make(map[int64]bool, len(words))
+	for start := 0; start < len(words); start += entryIDBatch {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		end := min(start+entryIDBatch, len(words))
+		batch := words[start:end]
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(batch)), ",")
+		args := make([]any, len(batch))
+		for i, w := range batch {
+			args[i] = w
+		}
+		rows, err := s.db.QueryContext(ctx, `SELECT w,id FROM entry WHERE w IN (`+placeholders+`)`+subEntryFilter("w"), args...)
+		if err != nil {
+			return nil, err
+		}
+		byWord := make(map[string]int64, len(batch))
+		for rows.Next() {
+			var w string
+			var id int64
+			if err := rows.Scan(&w, &id); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			if _, dup := byWord[w]; !dup {
+				byWord[w] = id
+			}
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		rows.Close()
+		for _, w := range batch {
+			id, ok := byWord[w]
+			if !ok || seen[id] {
+				continue
+			}
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	return out, nil
+}

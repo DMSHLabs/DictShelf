@@ -180,3 +180,54 @@ func (d *Dict) FullText(query string, limit int) ([]dict.Result, error) {
 	}
 	return d.results(idxs, 0)
 }
+
+// StreamFullTextHeadwords answers a full-text query with the headwords of the
+// articles that hold every word of it, best first, calling emit for each one and
+// reading no article body.
+//
+// It is what a caller needs to enumerate the whole answer: the archive names an
+// article by path (the docdata table holds "C/<path>"), this database names it
+// by headword, and the naming rule - the title when the file records one, else
+// the path - lives here, in the package that knows the container. A hit whose
+// path the archive no longer holds is skipped rather than failing the walk: an
+// index can name an article that has since been dropped.
+//
+// The answer is streamed because it can be huge: a common word has over a
+// million articles, and a caller that pages through them needs ids, not a slice
+// of everything. The search itself is not streamed - glass.Search materialises
+// its hits (about 8 bytes each) before ranking, which a background pass can
+// afford.
+func (d *Dict) StreamFullTextHeadwords(query string, emit func(headword string) error) error {
+	window, size, err := d.XapianIndex()
+	if err != nil {
+		return err
+	}
+	db, err := glass.OpenSource(window, size)
+	if err != nil {
+		return err
+	}
+	res, err := db.Search(query)
+	if err != nil {
+		return fmt.Errorf("%w: %w", dict.ErrUnsupported, err)
+	}
+	for _, h := range res.Hits {
+		path, err := db.DocPath(h.DocID)
+		if err != nil {
+			continue
+		}
+		name := strings.TrimPrefix(path, "C/")
+		i, de, ok := d.c.find(d.c.contentNS(), name)
+		if !ok || !d.c.isArticle(de) {
+			continue
+		}
+		if de.isRedirect() {
+			if _, de, err = d.c.resolve(i); err != nil {
+				continue
+			}
+		}
+		if err := emit(de.headword()); err != nil {
+			return err
+		}
+	}
+	return nil
+}

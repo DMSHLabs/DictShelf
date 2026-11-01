@@ -30,6 +30,7 @@ import (
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	zimformat "github.com/DMSHLabs/DictShelf/internal/format/zim"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 )
 
 // Caps advertises full text for a prepared database whose archive answers it.
@@ -106,4 +107,82 @@ func noteArchiveFullText(info *dictInfo) {
 func archiveAnswersFullText(path string) bool {
 	own, err := zimformat.HasOwnFullTextIndex(path)
 	return err == nil && own
+}
+
+// archiveArticleIDs enumerates the whole answer for the result cache - the list
+// behind "N+ results" and Browse, which pages through every match instead of
+// the first few.
+//
+// The store's own implementation reads the ids from SQLite, which a database
+// built from an archive does not have for full text; this answers from the
+// archive instead, keeping the archive's rank order. That order is the same one
+// the interactive search produced, because both ask the same reader the same
+// question - which is what lets page two continue page one rather than reshuffle
+// it.
+//
+// Batching matches the store's: ids are looked up in batches of a few hundred
+// (one statement each), and emitted in pages of indexconst.BrowsePageSize, with
+// the running total and the final done flag, exactly as the SQLite path emits
+// them. A headword this database does not hold is dropped - by choice, not by
+// accident: it means the archive's index names an entry the prepared database
+// never had, and inventing an id for it is not possible.
+//
+// A source that cannot enumerate its answer reports ErrUnsupported rather than
+// an empty list: the caller treats the two differently, and "no results" would
+// be a lie about a search that has plenty.
+func (u *upgraded) archiveArticleIDs(ctx context.Context, query string, emit func([]int64, int, bool) error) error {
+	src, err := u.source()
+	if err != nil {
+		return err
+	}
+	streamer, ok := src.(interface {
+		StreamFullTextHeadwords(string, func(string) error) error
+	})
+	if !ok {
+		return dict.ErrUnsupported
+	}
+	var (
+		pending []string
+		ids     []int64
+		total   int
+	)
+	// flush moves the headwords gathered so far through the id lookup and into
+	// the cache, leaving whatever does not fill a page for the next call.
+	flush := func(done bool) error {
+		if len(pending) > 0 {
+			got, err := u.Store.EntryIDsForHeadwords(ctx, pending)
+			if err != nil {
+				return err
+			}
+			ids = append(ids, got...)
+			pending = pending[:0]
+		}
+		for len(ids) >= indexconst.BrowsePageSize || (done && len(ids) > 0) {
+			n := min(indexconst.BrowsePageSize, len(ids))
+			total += n
+			chunk, rest := ids[:n], ids[n:]
+			ids = rest
+			if err := emit(chunk, total, false); err != nil {
+				return err
+			}
+		}
+		if done {
+			return emit(nil, total, true)
+		}
+		return nil
+	}
+	err = streamer.StreamFullTextHeadwords(query, func(headword string) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		pending = append(pending, headword)
+		if len(pending) >= 4*indexconst.BrowsePageSize {
+			return flush(false)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return flush(true)
 }

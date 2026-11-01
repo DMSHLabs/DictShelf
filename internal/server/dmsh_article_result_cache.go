@@ -17,6 +17,7 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/ftsq"
 	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 	"github.com/DMSHLabs/DictShelf/internal/indexconst"
+	"github.com/DMSHLabs/DictShelf/internal/search"
 	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
@@ -98,6 +99,15 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 	e, _, source, signature, query, err := s.articleResultCacheSetup(request)
 	if err != nil {
 		return err
+	}
+	// A dictionary whose full text comes from its archive has ONE reading of a
+	// full-text query, and a paged answer has to say so too: the page the reader
+	// is looking at is drawn from this path once the result cache is running, not
+	// from the search that started it (search.ArchiveFullText; without this the
+	// header claims a phrase was tried and not found).
+	oneReading := false
+	if af, ok := source.(search.ArchiveFullText); ok {
+		oneReading = af.FullTextFromArchive()
 	}
 	switch request.CacheAction {
 	case "build":
@@ -206,7 +216,7 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 		}
 		return emit(SearchEvent{T: "hit", Dict: e.ID, Results: results, CacheID: request.CacheID,
 			Total: total, Complete: complete, Start: request.Start, HasNext: end < total || !complete,
-			Rung: request.Rung, Term: query})
+			Rung: request.Rung, OneReading: oneReading, Term: query})
 	default:
 		return fmt.Errorf("invalid article result cache action %q", request.CacheAction)
 	}

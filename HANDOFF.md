@@ -658,14 +658,32 @@ Two things the live run taught, both now recorded in the code:
   no banner at all and is killed at 40 s). The offer therefore quotes the folder size, and the index
   figure appears only where a build can measure it (the pure-Go modernc build can; this one cannot).
 
-**Still missing on this path: the complete list.** The window's own paging ("N+ results", then Browse)
-needs `StreamArticleIDs`, which streams every match's entry id from SQLite in display order into a page
-file - and for an archive-backed database there is no article index to stream from, so the header says
-"Complete list unavailable" and a search can only show the first page. The user asked about exactly
-this. The design is: a streaming ranked query in `glass` (the reader already walks postings, so it can
-yield hits in BM25 order without materialising them), `upgraded.StreamArticleIDs` answering from the
-archive for such a handle, and a batched path→entry-id lookup (one `IN (...)` per page of 500 rather
-than one query per hit) - worth doing, and deliberately not rushed.
+**The complete list works too, from the archive** (2026-11-01, asked for after the first test). A
+search on an archive-backed dictionary now finds ALL its occurrences, exactly like a dictionary with an
+index of ours: the header reads "Викисловарь 1–5 (166) Browse" where it said "5+ results · Complete list
+unavailable", page two continues page one, and Browse pages the same list. Three pieces, each where the
+knowledge lives:
+
+- `zim.Dict.StreamFullTextHeadwords` - the archive's answer as headwords, best first, streamed and
+  without reading a body. The naming rule (the title when the file records one, else the path) stays in
+  the package that knows the container, and a hit whose article the archive no longer holds is skipped.
+- `store.EntryIDsForHeadwords` - headwords to prepared entry ids, batched (400 a statement: SQLite's
+  host-parameter limit is 999), keeping the order it is given, first-wins so a duplicate shows once, and
+  dropping what the database does not hold. A test pins all three properties.
+- `upgraded.archiveArticleIDs` - drives the two, emitting pages of indexconst.BrowsePageSize with the
+  running total and the final done flag, exactly as the SQLite path emits them, so the result cache does
+  not know which of the two it is talking to.
+
+Two numbers worth keeping: the archive's rank order is what both the first page and the cache use, so
+paging cannot reshuffle; and the total is the archive's, minus the handwords this database does not hold
+(166 against the reader's 169 for "духовой инструмент" - redirects resolved to targets the prepared
+database already has, and duplicates, both dropped on purpose). A query that matches a million articles
+reads all of them once (about 8 bytes a hit inside glass.Search) - a background pass, not the keystroke
+path.
+
+Also: the paged answer needed the one-reading flag as well, because a paged result is drawn from the
+result cache rather than from the search that started it (dmsh_article_result_cache.go now asks the
+handle), or the header would claim a phrase had been tried and not found.
 
 **The migration of the four existing databases is a click, not a job.** They are in the read-through
 form; nothing rebuilds them by itself - no reconcile runs at startup, deliberately, because a silent

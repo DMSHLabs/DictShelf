@@ -6,96 +6,71 @@ package store
 
 import (
 	"context"
-	"fmt"
+	"database/sql"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 )
 
-func TestStreamArticleIDsKeepsBoundedBatchesAndArticleOrder(t *testing.T) {
-	entries := make([]dict.Entry, 625)
-	for i := range entries {
-		entries[i] = h(fmt.Sprintf("token%04d", i), fmt.Sprintf("<p>body %d</p>", i))
-	}
-	path := filepath.Join(t.TempDir(), "text.db")
-	reader := &fakeReader{meta: dict.Meta{Name: "many", Format: "test", Path: "/x"}, entries: entries}
-	if _, err := IngestPlan(reader, path, Plan{}, nil); err != nil {
+// A dictionary whose full text comes from its archive hands back headwords, and
+// a page of them still has to become entry ids. Three things have to hold, and
+// each of them is a way the paged list could go wrong: the ORDER is the rank
+// order that was given (or page two would reshuffle page one), an article named
+// twice appears once (or the list would show it twice), and a headword this
+// database does not hold is dropped rather than mapped to somebody else.
+func TestEntryIDsForHeadwordsKeepsOrderAndDropsTheUnknown(t *testing.T) {
+	dir := t.TempDir()
+	textDB := filepath.Join(dir, TextDBName)
+	src := filepath.Join(dir, "source.dsl")
+	if err := os.WriteFile(src, []byte("#NAME test\n\nword\n\tbody\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	s, err := Open(path)
+	r := &fakeReader{meta: dict.Meta{Name: "Order", Format: "dsl", Path: src},
+		entries: []dict.Entry{h("beta", "<p>one</p>"), h("alpha", "<p>two</p>"), h("gamma", "<p>three</p>")}}
+	if _, err := IngestPlan(r, textDB, Plan{Contains: true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(textDB)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	var ids []int64
-	var largest int
-	err = s.StreamArticleIDs(context.Background(), "token", "prefix", "", func(batch []int64, total int, done bool) error {
-		if len(batch) > largest {
-			largest = len(batch)
-		}
-		ids = append(ids, batch...)
-		if done && total != len(ids) {
-			t.Fatalf("final count %d, received %d IDs", total, len(ids))
-		}
-		return nil
-	})
+	ids := map[string]int64{}
+	db, err := sql.Open(driverName, "file:"+textDB+"?mode=ro")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ids) != 625 || largest > 300 {
-		t.Fatalf("IDs=%d, largest batch=%d", len(ids), largest)
-	}
-	portion, err := s.ArticlesByIDs(context.Background(), ids[295:395])
+	defer db.Close()
+	rows, err := db.Query("SELECT w, id FROM entry")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(portion) != 100 || portion[0].Headword != "token0295" || portion[99].Headword != "token0394" {
-		t.Fatalf("portion edges: %+v / %+v", portion[0], portion[len(portion)-1])
+	for rows.Next() {
+		var w string
+		var id int64
+		if err := rows.Scan(&w, &id); err != nil {
+			t.Fatal(err)
+		}
+		ids[w] = id
 	}
-}
+	rows.Close()
 
-func TestStreamArticleIDsUsesSearchModesWithoutBodies(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "text.db")
-	reader := &fakeReader{meta: dict.Meta{Name: "modes", Format: "test", Path: "/x"}, entries: []dict.Entry{
-		h("Blue heart", "<p>cardiac tissue</p>"), h("heartbroken", "<p>sad</p>"),
-		h("work", "<p>labor</p>"), h("work", "<p>second article</p>"), h("café", "<p>coffee</p>"),
-	}}
-	if _, err := IngestPlan(reader, path, Plan{Contains: true, FullText: true}, nil); err != nil {
-		t.Fatal(err)
-	}
-	s, err := Open(path)
+	got, err := s.EntryIDsForHeadwords(context.Background(), []string{"gamma", "nothing-here", "beta", "gamma", "alpha"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
-	for _, tc := range []struct{ mode, query, fts, want string }{
-		{"prefix", "hea", "", "Blue heart"},
-		{"suffix", "art", "", "Blue heart"},
-		{"contains", "ear", "", "Blue heart"},
-		{"word", "heart", "", "Blue heart"},
-		{"wordLemma", "worked\x1fwork", "", "work"},
-		{"exact", "work", "", "work"},
-		{"exactLemma", "worked\x1fwork", "", "work"},
-		{"fts", "cardiac", "\"cardiac\"*", "Blue heart"},
-	} {
-		t.Run(tc.mode, func(t *testing.T) {
-			var ids []int64
-			err := s.StreamArticleIDs(context.Background(), tc.query, tc.mode, tc.fts,
-				func(batch []int64, _ int, _ bool) error { ids = append(ids, batch...); return nil })
-			if err != nil {
-				t.Fatal(err)
-			}
-			results, err := s.ArticlesByIDs(context.Background(), ids)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if len(results) == 0 || results[0].Headword != tc.want {
-				t.Fatalf("results = %+v; want %s", results, tc.want)
-			}
-			if tc.want == "work" && len(results) != 2 {
-				t.Fatalf("duplicate headword must retain both articles: %+v", results)
-			}
-		})
+	want := []int64{ids["gamma"], ids["beta"], ids["alpha"]}
+	if len(got) != len(want) {
+		t.Fatalf("ids = %v, want %v (the unknown dropped, the duplicate once)", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("ids = %v, want %v (order must be the one given)", got, want)
+		}
+	}
+	if empty, err := s.EntryIDsForHeadwords(context.Background(), nil); err != nil || len(empty) != 0 {
+		t.Errorf("no headwords = %v, %v; want nothing and no error", empty, err)
 	}
 }

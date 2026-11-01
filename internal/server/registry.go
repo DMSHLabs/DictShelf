@@ -217,6 +217,12 @@ func (u *upgraded) SearchHeadwordsMode(ctx context.Context, query, mode string, 
 }
 
 func (u *upgraded) StreamArticleIDs(ctx context.Context, query, mode, fullTextMatch string, emit func([]int64, int, bool) error) error {
+	// The whole answer, when the archive is the one that has it: a database
+	// built from an archive has no article index for SQLite to page through
+	// (dmsh_own_index.go, archiveArticleIDs).
+	if mode == "fts" && u.Store.OwnFullText() {
+		return u.archiveArticleIDs(ctx, query, emit)
+	}
 	return u.Store.StreamArticleIDs(ctx, query, mode, fullTextMatch, emit)
 }
 
