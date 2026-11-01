@@ -3755,56 +3755,21 @@ async function loadDicts(rescan){
    per-dictionary switch and the result summaries all use, so a chip never
    names a mode differently from the rest of the page. */
 const MODE_SHORT={prefix:"ab→",suffix:"→ab",contains:"ab",word:"·ab·",wordLemma:"·ab·+",exact:"=",exactLemma:"=+",wildcards:"*?",fts:tx("dictUI.fts")};
-/* A mode's mark: the pattern the mode menu's left column shows. The mode button
-   and the narrow-width chip wear it too, so the control names the mode the way
-   the menu does. The article-text mode is the one mode that searches article
-   bodies instead of matching a headword, so it wears a page with a marked word
-   rather than a headword pattern - the app's own highlight: accent band, page
-   text inside it, underline below. The page's ink stays --fg rather than
-   following the row, because a selected row is accent-coloured and the band
-   would merge into its own outline. */
-const MODE_GLYPHS={prefix:"ab→",suffix:"→ab",contains:"ab",word:"·ab·",wordLemma:"·ab·+",exact:"=",exactLemma:"=+",wildcards:"*?"};
-/* The number the "near" reading uses. It is the rule, not decoration, so it is
-   written once here and pinned to the Go constant FTS5's own NEAR default is
-   read from (internal/ftsq, NearDefault) by TestModeMarksQuoteTheNearRule - a
-   mark that quotes a rule has to quote the rule that runs. */
-const NEAR_WORDS=10;
-const MODE_SVG_ICONS=(()=>{
-  /* The article readings are a family of three drawn marks: two word bars, and
-     the one thing that differs between the readings drawn in the middle -
-     nothing for a phrase, the bounded distance for "near", dots for "anywhere".
-     Drawn rather than typed because the same mark has to sit in the menu's
-     3.1em icon column and in the search field's chip at once, and the distance
-     has to hang above the arrow; SVG follows the interface font size, while a
-     nested-flex glyph pinned to 14px would not. currentColor, so a selected row
-     tints its mark the way it tints its text. */
-  const bars=(x,w)=>`<rect x="${x}" y="10.3" width="${w}" height="4" rx="1.15" fill="currentColor" stroke="none"/>`;
-  const head=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">`;
-  return {
-    // Adjacent, in this order: nothing between them.
-    phrase:head+bars(2.4,8.6)+bars(13,8.6)+`</svg>`,
-    // Within a bounded distance, either order: a double arrow with the bound
-    // written over it - the rule itself, not a metaphor for it.
-    near:head+bars(1.4,6.2)+bars(16.4,6.2)
-      +`<path d="M9.1 12.3h5.8" stroke-width="1.4"/>`
-      +`<path d="M8.5 12.3l2.6-2v4z" fill="currentColor" stroke="none"/>`
-      +`<path d="M15.7 12.3l-2.6-2v4z" fill="currentColor" stroke="none"/>`
-      +`<text x="12" y="8.8" text-anchor="middle" font-size="9" font-weight="600" fill="currentColor" stroke="none">${NEAR_WORDS}</text>`
-      +`</svg>`,
-    // Anywhere: no bound to draw, so the space between them is only dots, and
-    // they fade towards the second word because the distance is unbounded.
-    fts:head+bars(1.4,6.2)+bars(16.4,6.2)
-      +`<circle cx="9.6" cy="12.3" r="1.05" fill="currentColor" stroke="none"/>`
-      +`<circle cx="12" cy="12.3" r="1.05" fill="currentColor" stroke="none" opacity=".6"/>`
-      +`<circle cx="14.4" cy="12.3" r="1.05" fill="currentColor" stroke="none" opacity=".32"/>`
-      +`</svg>`
-  };
-})();function modeMark(el,mode){
+/* A mode's mark: the pattern the mode menu's left column shows, worn by the
+   mode button too, so the control names the mode the way the menu does.
+   The three article readings are two words and what stands between them - the
+   words hard against each other for a phrase, the pair with a bound between
+   for "near", the pair with an unbounded gap for "anywhere". They are typed,
+   not drawn, so they follow the interface font size like the headword patterns
+   above them; the bound itself (10) is stated in the row's own hint rather than
+   squeezed over an arrow (search.modeHintNear), which is where a reader can
+   actually read it. */
+const MODE_GLYPHS={prefix:"ab→",suffix:"→ab",contains:"ab",word:"·ab·",wordLemma:"·ab·+",exact:"=",exactLemma:"=+",wildcards:"*?",
+  phrase:"[A B]",near:"[A ↔ B]",fts:"[A … B]"};
+function modeMark(el,mode){
   const glyph=MODE_GLYPHS[mode];
-  if(glyph){el.textContent=glyph;return true}
-  const svg=MODE_SVG_ICONS[mode];
-  if(!svg)return false;
-  el.innerHTML=svg;return true;
+  if(!glyph)return false;
+  el.textContent=glyph;return true;
 }
 const SEARCH_MODE_KEY="wudict_search_mode";
 const canonicalSearchMode=mode=>mode==="mask"?"wildcards":mode;

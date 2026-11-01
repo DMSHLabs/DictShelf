@@ -1155,7 +1155,6 @@ html[data-styled-selects] #modeMenuBtn{display:flex;flex:none;width:auto;min-wid
    article-text mode mark is drawn rather than typed, so size it to match the
    glyphs beside the menu descriptions. */
 .themed-select-btn svg{display:block;flex:none;width:1.15em;height:1.15em}
-#modeChip svg{display:block;flex:none;width:1.5em;height:1.5em}
 #modeMenu{max-height:calc(100vh - 12px);overflow:auto;padding:.2em;font-size:calc(var(--ui-edit_control-font) * 1rem)}
 #appearanceBackground small,.screen-row small{display:block;font-size:calc(var(--ui-hint-font-size) * 1rem);
   line-height:1.4;color:var(--label-quiet)}

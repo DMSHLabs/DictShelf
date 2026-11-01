@@ -723,14 +723,18 @@ archive itself)". What is NOT verified: an actual on-request build from the wind
 (hours of work), and the Russian rendering of the new strings (the catalogs are key-matched and pass
 `tools/i18n-test.cjs`; the test server came up in English).
 
-**The three readings are drawn marks now** (the user's design, 2026-11-02): two word bars with the one
-thing that differs between the readings drawn between them - nothing for a phrase, a double arrow with the
-bound over it for "near", fading dots for "anywhere". SVG rather than typed glyphs because the same mark
-has to sit in the menu's 3.1em icon column and on the mode button, and the bound has to hang above the
-arrow; `currentColor`, so a selected row tints its mark the way it tints its text. The bound is not
-decoration, so it is not copied: the page's `NEAR_WORDS` is compared with `ftsq.NearDefault` (now exported,
-and `search.archiveNearDistance` reads it too) by `TestModeMarksQuoteTheNearRule`, which also fails when a
-reading the menu offers loses its mark.
+**The three readings have their own marks** (the user's design, 2026-11-02): `[A B]`, `[A ↔ B]`,
+`[A … B]` - two words and what stands between them, tight for a phrase, an arrow for "near", an unbounded
+gap for "anywhere". They are typed glyphs beside the headword patterns (`ab→`, `=`, `*?`), not drawn: the
+first version drew them in SVG with the bound hanging over the arrow, and the user's answer was that the
+blocks were unclear and that letters in brackets are what reads - which also removes the width problem the
+drawn marks were invented for. Two consequences worth keeping: the menu's icon column went from 3.1em to
+4.4em to hold `[A ↔ B]` (every row shares it, so all of them start their text at the same place), and the
+bound is no longer written in the mark at all - it is stated in the row's own hint, which is the one place
+a reader can read it. `TestModeMarksQuoteTheNearRule` now pins that: the near hint in both catalogs has to
+contain `ftsq.NearDefault` (which `search.archiveNearDistance` also reads), and each reading has to have a
+mark at all. The labels and hints were shortened to one line each as part of the same pass
+(`search.modePhrase`/`Near`/`Words` and their hints).
 
 That test exists because the work found a real defect: `setSearchMode` gated on `MODE_SHORT`, a table of
 the FALLBACK MARKS, and the three readings were absent from it - so choosing "Phrase" and reloading
