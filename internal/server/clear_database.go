@@ -224,6 +224,17 @@ func (e *entry) clearDatabase(want clearDatabaseRequest) error {
 			return err
 		}
 	} else if want.Contains || want.FullText {
+		// Dropped where the index lies, which is a write into a database the
+		// measurement pass may be walking: the walk yields here rather than the
+		// two colliding over SQLite's lock (entry.walk). The rebuild branch above
+		// is fenced by reconcileLockedContext itself.
+		release := e.walk.own()
+		defer func() {
+			release()
+			if e.reg != nil {
+				e.reg.measureLater(e)
+			}
+		}()
 		indexErr := store.ClearSearchIndexesContext(ctx, text, want.Contains, want.FullText)
 		reopenErr := e.reopen()
 		e.gen.Add(1)

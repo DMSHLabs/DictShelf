@@ -5,6 +5,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"os"
 	"strconv"
@@ -194,12 +195,23 @@ func Inspect(textDB string) Prepared {
 // pass, which runs once per process and writes the result into the cache. The
 // listing path must not call it (see Inspect).
 func MeasureIndexSizes(textDB string, plan Plan) (contains, fullText int64) {
+	return MeasureIndexSizesContext(context.Background(), textDB, plan)
+}
+
+// MeasureIndexSizesContext is MeasureIndexSizes for a walk that can be called
+// off. The walk is a page-by-page pass and holds a read lock on the database for
+// as long as it runs, so the writer of that same file - an ingest renaming a new
+// database over this one, or an index rebuilt in place - has to be able to stop
+// it rather than wait for it. A cancelled walk answers (0, 0), which is what any
+// walk that could not read the database answers; the caller is the measurement
+// pass, which leaves the dictionary for the writer to schedule again.
+func MeasureIndexSizesContext(ctx context.Context, textDB string, plan Plan) (contains, fullText int64) {
 	db, err := openRO(textDB)
 	if err != nil {
 		return 0, 0
 	}
 	defer db.Close()
-	return searchIndexSizes(db, plan)
+	return searchIndexSizesContext(ctx, db, plan)
 }
 
 // SearchIndexSizes returns the on-disk bytes used by the optional FTS5 indexes.
@@ -210,13 +222,17 @@ func SearchIndexSizes(textDB string, plan Plan) (contains, fullText int64) {
 		return 0, 0
 	}
 	defer db.Close()
-	return searchIndexSizes(db, plan)
+	return searchIndexSizesContext(context.Background(), db, plan)
 }
 
 func searchIndexSizes(db *sql.DB, plan Plan) (contains, fullText int64) {
+	return searchIndexSizesContext(context.Background(), db, plan)
+}
+
+func searchIndexSizesContext(ctx context.Context, db *sql.DB, plan Plan) (contains, fullText int64) {
 	measure := func(table string) int64 {
 		var size int64
-		if err := db.QueryRow(`SELECT COALESCE(SUM(pgsize), 0) FROM dbstat WHERE name = ? OR name LIKE ?`, table, table+"_%").Scan(&size); err != nil {
+		if err := db.QueryRowContext(ctx, `SELECT COALESCE(SUM(pgsize), 0) FROM dbstat WHERE name = ? OR name LIKE ?`, table, table+"_%").Scan(&size); err != nil {
 			return 0
 		}
 		return size

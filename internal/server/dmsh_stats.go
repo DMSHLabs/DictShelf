@@ -33,6 +33,12 @@ import (
 // the dialog asks for it.
 func (r *Registry) warmStatsStart(entries []*entry) { r.statsOnce.Do(func() { r.warmStats(entries) }) }
 
+// errMeasurementDeferred says a measurement did not happen because a writer owns
+// the dictionary's files right now: not a failure, and nothing was published.
+// The write that took them schedules the measurement when it is done
+// (measureLater), so the dictionary is not left without numbers.
+var errMeasurementDeferred = errors.New("the dictionary is being written; measure later")
+
 // warmStats measures them all.
 func (r *Registry) warmStats(entries []*entry) {
 	sem := make(chan struct{}, 2)
@@ -47,6 +53,10 @@ func (r *Registry) warmStats(entries []*entry) {
 			defer wg.Done()
 			defer func() { <-sem }()
 			if _, err := r.measureStats(e); err != nil {
+				if errors.Is(err, errMeasurementDeferred) {
+					logx.V("stats: %s is being written; leaving it for the writer to schedule", e.Path)
+					return
+				}
 				logx.Warn("could not measure %s: %v", e.Path, err)
 			}
 		}(e)
@@ -97,8 +107,25 @@ func (r *Registry) measureStats(e *entry) (store.Stats, error) {
 	// the private file it is writing and records them in the database itself
 	// (store.IndexSizesRecorded). The walk stays for a library prepared before
 	// that, where the numbers are simply unknown until it runs once.
+	//
+	// It yields while it runs (entry.walk): a writer of the same file cancels it
+	// rather than waiting for it, and claims the files until it is done. A walk
+	// that did not run, or was cancelled, has NOT measured anything - so nothing
+	// is published, and the writer that interrupted it schedules it again
+	// (measureLater). Publishing a zero here would be worse than publishing
+	// nothing: the cache would answer as measured, and the dictionary would show
+	// empty indexes for ever.
 	if !store.IndexSizesRecorded(prepared.Meta) {
-		s.ContainsIndexBytes, s.FullTextIndexBytes = store.MeasureIndexSizes(prepared.TextDB, prepared.Plan)
+		ctx, ok := e.walk.begin()
+		if !ok {
+			return store.Stats{}, errMeasurementDeferred
+		}
+		s.ContainsIndexBytes, s.FullTextIndexBytes = store.MeasureIndexSizesContext(ctx, prepared.TextDB, prepared.Plan)
+		cancelled := ctx.Err() != nil
+		e.walk.end()
+		if cancelled {
+			return store.Stats{}, errMeasurementDeferred
+		}
 	}
 	src := prepared.Meta["source_path"]
 	if src == "" || !isZIMFormat(prepared.Meta["format"]) {
@@ -125,6 +152,25 @@ func (r *Registry) measureStats(e *entry) (store.Stats, error) {
 	s.ZIMMixedBytes = int64(ds.MixedBytes)
 	s.ZIMOtherBytes = int64(ds.OtherBytes)
 	return s, store.WriteStats(filepath.Dir(prepared.TextDB), s)
+}
+
+// measureLater schedules the measurement a writer interrupted, in the
+// background.
+//
+// The walk yields to a writer (entry.walk), and a walk that gave up leaves the
+// dictionary unmeasured; the pass that would have measured it runs once per
+// process, so without this the numbers would be missing until the next start -
+// which is the thing the fence exists to avoid. It runs off the request path, on
+// the file as the writer left it.
+func (r *Registry) measureLater(e *entry) {
+	go func() {
+		if !r.statsNeeded(e) {
+			return
+		}
+		if _, err := r.measureStats(e); err != nil && !errors.Is(err, errMeasurementDeferred) {
+			logx.V("stats: could not measure %s: %v", e.Path, err)
+		}
+	}()
 }
 
 func isZIMFormat(format string) bool { return format == "zim" }

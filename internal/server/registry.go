@@ -495,6 +495,92 @@ type entry struct {
 	// the prepared database (Windows only; set with the backend handback in
 	// registry_windows.go). Set false again by the defer in setFeatures.
 	rebuilding atomic.Bool
+
+	// walk fences the one long reader of this dictionary's prepared files - the
+	// index-size measurement - against everything that writes them. See
+	// preparedWalk.
+	walk preparedWalk
+}
+
+// preparedWalk is the fence between the one long reader of a dictionary's
+// prepared files and everything that writes them.
+//
+// The reader is the index-size measurement (store.MeasureIndexSizesContext):
+// dbstat is a page-by-page pass over the whole database, tens of seconds on a
+// large one, and it holds a read lock for as long as it runs. The writers are
+// the ingest that renames a new database over the old one and the maintenance
+// paths that rebuild or drop an index where it lies. They must not wait for a
+// walk - a rebuild would sit for minutes, and on the rescan route a request
+// waits for the job - and they must not be broken by one either: on Windows
+// renaming over a database an open connection holds fails outright with "Access
+// is denied", which is what a build hitting a walk in flight used to do.
+//
+// So the walk yields. A writer claims the files: that cancels the walk in flight
+// and waits for it to let go - milliseconds, because a SQLite query obeys its
+// context - and holds every new walk off until the write is done. A walk that
+// gave up leaves the dictionary unmeasured, so the writer schedules the
+// measurement it interrupted (Registry.measureLater): giving up is not the same
+// as giving away.
+//
+// One mutex and one channel, and no lock ordering to get wrong: guard is held
+// for a handshake and never while walking or writing, and done is the walk in
+// flight, which is the only thing a writer waits on.
+type preparedWalk struct {
+	guard sync.Mutex
+	stop  context.CancelFunc
+	done  chan struct{}
+	owned bool
+}
+
+// begin claims the files for one walk. It answers false when a writer owns them
+// or a walk is already running - a second one would read the same file and
+// produce the same numbers.
+func (w *preparedWalk) begin() (context.Context, bool) {
+	w.guard.Lock()
+	defer w.guard.Unlock()
+	if w.owned || w.done != nil {
+		return nil, false
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	w.stop, w.done = cancel, make(chan struct{})
+	return ctx, true
+}
+
+// end releases the claim begin took, cancelling the context so the walk does not
+// leave a cancelable one alive, and letting any writer waiting on it go.
+func (w *preparedWalk) end() {
+	w.guard.Lock()
+	done, stop := w.done, w.stop
+	if stop != nil {
+		stop()
+	}
+	w.stop, w.done = nil, nil
+	w.guard.Unlock()
+	if done != nil {
+		close(done)
+	}
+}
+
+// own takes the files for a rewrite: it cancels the walk in flight, waits for it
+// to let go, and holds every new walk off until the returned release is called.
+// A writer defers the release and calls Registry.measureLater afterwards, which
+// is what makes the interrupted measurement come back.
+func (w *preparedWalk) own() (release func()) {
+	w.guard.Lock()
+	w.owned = true
+	if w.stop != nil {
+		w.stop()
+	}
+	done := w.done
+	w.guard.Unlock()
+	if done != nil {
+		<-done // the abort, not the walk: a cancelled query returns at once
+	}
+	return func() {
+		w.guard.Lock()
+		w.owned = false
+		w.guard.Unlock()
+	}
 }
 
 // noPackableMedia reports whether a prior full ingest found nothing to pack,
@@ -1890,6 +1976,19 @@ func (e *entry) reconcileLockedContext(ctx context.Context, name string, t store
 	if err := ctx.Err(); err != nil {
 		return store.Outcome{}, err
 	}
+	// An ingest ends by renaming a new database over the old one, which on
+	// Windows fails outright if anything has that database open - so the
+	// index-size walk yields here rather than being waited for or, worse, having
+	// the publish fail (entry.walk). Held for the whole ingest: the file is being
+	// written for all of it, and a walk of it would measure a database that is
+	// about to be replaced.
+	release := e.walk.own()
+	defer func() {
+		release()
+		if e.reg != nil {
+			e.reg.measureLater(e)
+		}
+	}()
 	zim := isZIMPath(e.Path)
 	if entryHasSelfIndex(e) && !zim {
 		store.IndexDiagnostic("skip prepared database source=%q dictionary=%q reason=native-index", e.Path, name)
@@ -2217,6 +2316,16 @@ func (e *entry) setContainsIndexContext(ctx context.Context, action string, prog
 		return err
 	}
 	releasePrepared(e, textDB)
+	// The index is rewritten where it lies, which is a write into a database the
+	// measurement pass may be walking: the walk yields here instead of the two
+	// colliding over SQLite's lock (entry.walk).
+	release := e.walk.own()
+	defer func() {
+		release()
+		if e.reg != nil {
+			e.reg.measureLater(e)
+		}
+	}()
 	var err error
 	if action == "delete" {
 		err = store.ClearSearchIndexesContext(ctx, textDB, true, false)

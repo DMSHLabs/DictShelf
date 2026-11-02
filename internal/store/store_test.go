@@ -1146,11 +1146,15 @@ func TestIndexSizesAreMeasuredOutsideTheOpenPath(t *testing.T) {
 				got.ContainsSize, got.FullTextSize)
 		}
 		// The measurement itself still answers, for the caller that may pay it.
+		// How much it can see depends on the SQLite build: dbstat is a compile-time
+		// option, so the sizes are positive only where it is present (see
+		// dbstatAvailable - the cgo driver needs the `sqlite_dbstat` tag).
+		measured := dbstatAvailable(t, path)
 		contains, fullText := MeasureIndexSizes(path, plan)
-		if plan.Contains && contains <= 0 {
+		if measured && plan.Contains && contains <= 0 {
 			t.Errorf("contains index size = %d, want positive", contains)
 		}
-		if plan.FullText && fullText <= 0 {
+		if measured && plan.FullText && fullText <= 0 {
 			t.Errorf("full-text index size = %d, want positive", fullText)
 		}
 		if !plan.Contains && contains != 0 {
@@ -1215,6 +1219,22 @@ func TestOptionalIndexMaintenanceKeepsFeaturesIndependent(t *testing.T) {
 	}
 }
 
+// dbstatAvailable reports whether this build's SQLite has the dbstat virtual
+// table. It is a compile-time option: the pure-Go driver always has it, the cgo
+// one only under the `sqlite_dbstat` tag (mattn's sqlite3_opt_dbstat.go) - and
+// without it every index size measures as zero, which the code has always
+// allowed for ("dbstat is absent from some SQLite builds").
+func dbstatAvailable(t *testing.T, textDB string) bool {
+	t.Helper()
+	db, err := openRO(textDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var pageno int
+	return db.QueryRow(`SELECT pageno FROM dbstat LIMIT 1`).Scan(&pageno) == nil
+}
+
 // A build records what its indexes cost, on the private file, before it
 // publishes: the number a listing shows must never come from walking a live
 // database (Store.IndexSizesRecorded). The recorded figure is checked against
@@ -1241,7 +1261,7 @@ func TestBuildRecordsIndexSizes(t *testing.T) {
 	if !ok {
 		t.Fatal("the build's measurements were not readable back")
 	}
-	if s.ContainsIndexBytes <= 0 || s.FullTextIndexBytes <= 0 {
+	if dbstatAvailable(t, path) && (s.ContainsIndexBytes <= 0 || s.FullTextIndexBytes <= 0) {
 		t.Errorf("recorded index sizes = %d, %d; want both above zero", s.ContainsIndexBytes, s.FullTextIndexBytes)
 	}
 	contains, fullText := MeasureIndexSizes(path, plan)
@@ -1302,7 +1322,7 @@ func TestMaintenanceRefreshesRecordedIndexSizes(t *testing.T) {
 		return s
 	}
 	before := recorded()
-	if before.ContainsIndexBytes <= 0 || before.FullTextIndexBytes <= 0 {
+	if dbstatAvailable(t, path) && (before.ContainsIndexBytes <= 0 || before.FullTextIndexBytes <= 0) {
 		t.Fatalf("nothing was recorded to compare against: %+v", before)
 	}
 

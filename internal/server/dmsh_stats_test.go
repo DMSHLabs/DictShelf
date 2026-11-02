@@ -7,6 +7,7 @@ package server
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,6 +16,115 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/store"
 )
+
+// The fence, as a fence: one walk at a time, a writer cancels the walk in flight
+// and waits only for it to let go, no walk starts while a writer owns the files,
+// and the release is what hands them back. The 50 ms wait below is a NEGATIVE
+// assertion - the writer must still be waiting - which is the only timing here;
+// nothing depends on the walk being slow.
+func TestPreparedWalkYieldsToAWriter(t *testing.T) {
+	var w preparedWalk
+	ctx, ok := w.begin()
+	if !ok {
+		t.Fatal("a free fence refused a walk")
+	}
+	if ctx.Err() != nil {
+		t.Fatal("a fresh walk is already cancelled")
+	}
+	if _, second := w.begin(); second {
+		t.Error("a second walk was admitted while one is running")
+	}
+	type takeover struct{ release func() }
+	taken := make(chan takeover, 1)
+	go func() { taken <- takeover{w.own()} }()
+	select {
+	case <-taken:
+		t.Fatal("a writer took the files while a walk was still running")
+	case <-time.After(50 * time.Millisecond):
+	}
+	if ctx.Err() == nil {
+		t.Error("the writer did not cancel the walk in flight")
+	}
+	w.end() // the walk lets go
+	var got takeover
+	select {
+	case got = <-taken:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the writer never got the files after the walk let go")
+	}
+	if _, ok := w.begin(); ok {
+		t.Error("a walk started while a writer owned the files")
+	}
+	got.release()
+	if _, ok := w.begin(); !ok {
+		t.Error("the fence stayed owned after the writer released it")
+	}
+	w.end()
+}
+
+// A walk that did not run must publish nothing. Zeros would be worse than
+// nothing: the cache would answer as measured and the dictionary would show
+// empty indexes for ever. And the writer that interrupted it schedules the
+// measurement, which is what puts the real numbers back.
+func TestDeferredMeasurementPublishesNothingAndComesBack(t *testing.T) {
+	keepWarm := warmEnabled
+	warmEnabled = false
+	t.Cleanup(func() { warmEnabled = keepWarm })
+
+	reg, e, textDB := preparedForServer(t, "dsl")
+	// Stand in for a library prepared before the build recorded the sizes: no
+	// recorded pair, no cache - i.e. the one case that still walks.
+	db, err := sql.Open(sqliteDriver(), "file:"+textDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("DELETE FROM meta WHERE key IN ('contains_index_bytes','full_text_index_bytes')"); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	if err := os.Remove(store.StatsPath(filepath.Dir(textDB))); err != nil {
+		t.Fatal(err)
+	}
+	if !reg.statsNeeded(e) {
+		t.Fatal("the fixture must stand for a dictionary that still needs measuring")
+	}
+
+	release := e.walk.own() // a writer owns the files
+	if _, err := reg.measureStats(e); !errors.Is(err, errMeasurementDeferred) {
+		t.Fatalf("measureStats while a writer owns the files = %v, want a deferral", err)
+	}
+	if _, cached := store.ReadStats(textDB); cached {
+		t.Fatal("a measurement that never ran was published anyway")
+	}
+	release()
+
+	reg.measureLater(e) // what a writer does when it is done
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		cached, ok := store.ReadStats(textDB)
+		if ok {
+			// What the walk can see depends on the SQLite build (dbstat is a
+			// compile-time option: the cgo driver has it only under the
+			// `sqlite_dbstat` tag, the pure-Go one always), so the assertion is
+			// that the measurement came back and matches this build's answer -
+			// not that it found bytes.
+			contains, fullText := store.MeasureIndexSizes(textDB, store.Inspect(textDB).Plan)
+			if cached.ContainsIndexBytes != contains || cached.FullTextIndexBytes != fullText {
+				t.Errorf("the deferred measurement published (%d, %d), this build measures (%d, %d)",
+					cached.ContainsIndexBytes, cached.FullTextIndexBytes, contains, fullText)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the writer's re-measure never published a measurement")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
 
 // preparedForServer prepares one dictionary into the isolated library and
 // returns the registry that sees it.
