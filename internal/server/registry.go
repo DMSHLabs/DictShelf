@@ -2375,6 +2375,97 @@ func (e *entry) setContainsIndexContext(ctx context.Context, action string, prog
 	return reopenErr
 }
 
+// setFullTextIndex changes only the article index. The mandatory headword index
+// is prepared first when no usable text database exists; an existing base index
+// and any contains index are left intact.
+//
+// An UPDATE is a rebuild of the index alone, and it comes from what the
+// database already holds - its rows are keyed by entry.id and its text is the
+// body column, so there is nothing to re-ingest and no headword table to touch
+// (store.RebuildArticleIndexContext). A database that cannot supply it - no
+// stored bodies, or an index that still lives inside text.db - is rebuilt from
+// the source the way it always was.
+func (e *entry) setFullTextIndex(action string, progress store.Progress) error {
+	return e.setFullTextIndexContext(context.Background(), action, progress)
+}
+
+func (e *entry) setFullTextIndexContext(ctx context.Context, action string, progress store.Progress) error {
+	defer currentIndexLimit().Acquire()()
+	defer HoldActiveProcs()()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	e.ingestMu.Lock()
+	defer e.ingestMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	defer e.rebuilding.Store(false)
+	if e.indexBlocked() {
+		return errors.New("dictionary index was removed; create an index in Dictionary settings")
+	}
+
+	textDB, prepared := validPrepared(e.Path)
+	if !prepared && action != "delete" {
+		if _, err := e.reconcileLockedContext(ctx, e.probeName(), store.Target{}, progress); err != nil {
+			return err
+		}
+		textDB, prepared = validPrepared(e.Path)
+	}
+	if !prepared {
+		return nil
+	}
+	have := store.Inspect(textDB).Plan.FullText
+	if action == "create" && have || action == "delete" && !have {
+		return nil
+	}
+	// "recreate" is the caller asking for this index to be built from the
+	// SOURCE again, which is the heavier operation by name; "update" and
+	// "create" are the ones that mean the index should be there and be current.
+	// A database that cannot answer either - no stored bodies, or an index that
+	// still lives inside text.db - takes the full path as well.
+	if action != "delete" && (action == "recreate" || !store.ArticleIndexRebuildable(textDB)) {
+		// The article text is not in this database to index: a reader that drops
+		// body columns (the text lives in the archive), or an index that still
+		// lives inside text.db, whose migration is a rebuild of the whole file.
+		// That is the source path, and it brings its own fence and store release.
+		on, contains := true, store.Inspect(textDB).Plan.Contains
+		_, err := e.reconcileLockedContext(ctx, e.probeName(), store.Target{
+			FullText: &on, Contains: &contains, Rebuild: store.Always,
+		}, progress)
+		return err
+	}
+
+	e.openMu.Lock()
+	defer e.openMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	releasePrepared(e, textDB)
+	// The index file is replaced where it lies, which is a write the measurement
+	// pass may be walking: the walk yields here instead of the two colliding
+	// over the file (entry.walk).
+	release := e.walk.own()
+	defer func() {
+		release()
+		if e.reg != nil {
+			e.reg.measureLater(e)
+		}
+	}()
+	var err error
+	if action == "delete" {
+		err = store.ClearSearchIndexesContext(ctx, textDB, false, true)
+	} else {
+		err = store.RebuildArticleIndexContext(ctx, textDB, progress)
+	}
+	reopenErr := e.reopen()
+	e.gen.Add(1)
+	if err != nil {
+		return errors.Join(err, reopenErr)
+	}
+	return reopenErr
+}
+
 // reopen swaps in a view of the freshly written data and lets go of the old
 // one. The superseded handle is usually a DIRECT backend holding a headword map
 // worth hundreds of bytes per entry; left to the garbage collector, that memory

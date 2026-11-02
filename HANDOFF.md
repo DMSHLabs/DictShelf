@@ -1069,6 +1069,21 @@ Verified: `make check` exits 0; a live server asked for full text on a dictionar
 its phrase search answers with marks; and a library prepared by an earlier build - article index still
 inside - keeps answering (rule 3).
 
+**Rebuilding the index is the index's own operation now.** `store.RebuildArticleIndexContext` builds
+`articles.db` from the database's own columns - the key is `entry.id`, the text column is
+`htmlref.PlainText` of the body in `entry.m` - so the ids come from the very table the readers use and
+the alignment between the two files is structural rather than a version promise. Nothing else is
+written: no source is read, no headword table is touched, `text.db` is not replaced, and only a meta row
+(`ingest_level`, `articles_split`) and the recorded size change there. It refuses with
+`ErrArticleNeedsReingest` where the article text is not in the database - a reader that drops body
+columns (a ZIM keeping its articles in the archive, `stored_body_bytes=0`), or an index still inside
+`text.db`, whose migration VACUUMs the file - and callers fall back to the source path. Wired to the
+actions that mean "this index should be there and be current": the panel's per-feature `fts`
+`create`/`update` in its bulk panel (Android/desktop bridge and `/api/index-work`), and the
+"Existing indexes" dialog's `fullText: update` on `/api/rescan`. `recreate` stays the source path by
+name. The first half of the win is wall-clock (no source read, no headword rebuild, no whole-file
+write); the second is that a tokenizer change can no longer change what the headword search finds.
+
 **The older half, kept for the record:** `Plan.SplitArticles` (recorded as `articles_split=1` ONLY when
 true, so every database built before this keeps exactly the meta it had - the reader golden test caught
 that on the first try);

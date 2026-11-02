@@ -532,7 +532,12 @@ func (r *Registry) updateDictionaryIndexesContext(ctx context.Context, req resca
 				have = store.KeptPlan(store.TextDBPath(dir))
 			}
 			want.Index = (!t.nativeOnly && req.Existing.Index == "recreate") ||
-				(req.Existing.Contains == "update" && have.Contains) || (req.Existing.FullText == "update" && have.FullText)
+				(req.Existing.Contains == "update" && have.Contains)
+			// A full-text UPDATE is a rebuild of that index alone, which this
+			// database's own bodies supply: it is not a reason to re-ingest
+			// (clearDatabase). A base RECREATE is, and then the full text is built
+			// in that same pass - which is what Index already means.
+			want.articleIndex = req.Existing.FullText == "update" && have.FullText
 			want.Contains = req.Existing.Contains == "delete"
 			want.FullText = req.Existing.FullText == "delete"
 		}

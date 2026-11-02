@@ -429,6 +429,8 @@ func (s *Server) startIndexWork(raw []byte, single, allowBaseDelete bool) (index
 					j.update(func(st *jobStatus) { st.Result = result })
 				} else if op.Feature == "contains" && !e.indexBlocked() {
 					err = e.setContainsIndexContext(ctx, op.Action, progress)
+				} else if op.Feature == "fts" && !e.indexBlocked() {
+					err = e.setFullTextIndexContext(ctx, op.Action, progress)
 				} else {
 					want := s.currentFeatures(e)
 					force := op.Feature != "contains" && (op.Action == "update" || op.Action == "recreate")

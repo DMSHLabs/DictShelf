@@ -22,9 +22,15 @@ type clearDatabaseRequest struct {
 	Contains bool `json:"contains"`
 	FullText bool `json:"fullText"`
 	Obsolete bool `json:"obsolete"`
-	plan     *store.Plan
-	progress store.Progress
-	ctx      context.Context
+	// articleIndex asks for the FULL-TEXT INDEX to be UPDATED rather than for
+	// the database to be re-ingested with a different set of indexes (Index).
+	// The API's "fullText: update" becomes this or Index where the request is
+	// read, because only there is it known whether the base index is being
+	// recreated in the same pass. Not a request-body field: it is set inside.
+	articleIndex bool
+	plan         *store.Plan
+	progress     store.Progress
+	ctx          context.Context
 }
 
 // cleanupLibrary retains only prepared folders belonging to discovered sources.
@@ -213,7 +219,28 @@ func (e *entry) clearDatabase(want clearDatabaseRequest) error {
 			return err
 		}
 	}
-	if want.Index || (want.Obsolete && len(store.Inspect(text).TextStale(e.Path)) > 0) {
+	// An article-index update is a rebuild of that index ALONE: the headword
+	// tables do not change, and the index is a function of the bodies this
+	// database already holds, so there is nothing to re-ingest
+	// (store.RebuildArticleIndexContext). A database that cannot supply it - no
+	// stored bodies, or an index still inside text.db - is not an update at all
+	// and takes the full path below, which is what it has always done.
+	articleRebuild := want.articleIndex && !want.Index
+	if articleRebuild && store.ArticleIndexRebuildable(text) {
+		release := e.walk.own()
+		defer func() {
+			release()
+			if e.reg != nil {
+				e.reg.measureLater(e)
+			}
+		}()
+		indexErr := store.RebuildArticleIndexContext(ctx, text, want.progress)
+		reopenErr := e.reopen()
+		e.gen.Add(1)
+		if indexErr != nil || reopenErr != nil {
+			return errors.Join(indexErr, reopenErr)
+		}
+	} else if want.Index || articleRebuild || (want.Obsolete && len(store.Inspect(text).TextStale(e.Path)) > 0) {
 		// Rebuild atomically: a failed rebuild preserves the existing searchable data.
 		if _, err := e.reconcileLockedContext(ctx, e.probeName(), store.Target{
 			FullText: &plan.FullText, Contains: &plan.Contains, Rebuild: store.Always,
