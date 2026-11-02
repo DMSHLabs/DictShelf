@@ -2337,3 +2337,10 @@ html:is([data-shell-sepia],[data-shell-image]) .list-search-input{background-col
 #portableStatus:empty,#portableSourcePath:empty{display:none}
 #portableProgress{width:100%;margin-top:1em}
 #portableTool[hidden]{display:none}
+
+/* The line a plate carries when the reading the reader asked for was not the
+   one answered: the words the archive's index can give are above it, and this
+   says what is missing and offers the thing that answers it. Its own row, on
+   the accent colour, and it wraps rather than fighting the count for space. */
+.search-needs-index{margin:.15em 0 .35em;color:var(--accent);font-size:calc(var(--ui-font-addition) * 1rem);line-height:1.35}
+.search-needs-index .btn{margin-left:.4em;vertical-align:baseline}

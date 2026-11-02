@@ -610,7 +610,15 @@ func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, rung 
 			// the caller offers to build that index. Only the words reading,
 			// which is what the archive's own index was built for, is answered.
 			if mode != FullText {
+				// Answer with what that index can do - the words reading, in
+				// rank order - and carry the fact that the reading ASKED FOR is
+				// not answered (NeedsIndex). A plate with the words and a line
+				// naming what is missing is more use than an empty plate, and it
+				// is not the silent substitution this fork removed: the line is
+				// the substitution, said out loud, next to the count.
 				h.NeedsIndex = true
+				h.Results, h.Err = s.FullTextContext(ctx, term, perDict)
+				h.Rung, h.OneReading = "words", true
 				return h
 			}
 			switch mode {

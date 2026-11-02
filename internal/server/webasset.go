@@ -12,9 +12,7 @@ import (
 // The embedded pages, scripts and stylesheets are served without their
 // comments. The sources keep them - they are this program's documentation -
 // but a browser has no use for half of index.html, and every load of the page
-// paid for it. Stripping runs once, at start, on the embedded bytes, so there
-// is no second file to build, version or keep in step, and a tag-less
-// `go build` serves exactly what `make build` does.
+// paid for it. Stripping runs once, at start, on the embedded bytes.
 //
 // Only a comment that occupies whole lines is removed:
 //

@@ -74,8 +74,11 @@ func TestArchiveReadingsPerMode(t *testing.T) {
 		wantFirst string
 	}{
 		{FullText, "words", 1, 0, 0, false, "beta"},
-		{Phrase, "", 0, 0, 0, true, ""},
-		{Near, "", 0, 0, 0, true, ""},
+		// A strict reading: the phrase is NOT answered (no scanner is asked),
+		// and the plate is not empty either - the words reading answers it,
+		// with the fact that the phrase is missing (NeedsIndex) riding along.
+		{Phrase, "words", 1, 0, 0, true, "beta"},
+		{Near, "words", 1, 0, 0, true, "beta"},
 	} {
 		af := &archiveFake{fake: fake{name: "archive.zim", words: []string{"beta"}}}
 		hits := all(context.Background(), []dict.Dictionary{af}, tc.mode, "beta gamma", 10)
@@ -89,12 +92,11 @@ func TestArchiveReadingsPerMode(t *testing.T) {
 		if h.Rung != tc.wantRung {
 			t.Errorf("%v: Rung = %q, want %q", tc.mode, h.Rung, tc.wantRung)
 		}
-		if tc.declined {
-			if len(h.Results) != 0 || h.Skipped || h.Err != nil {
-				t.Errorf("%v: a declined reading must return nothing and be neither skipped nor an error: %+v", tc.mode, h)
-			}
-		} else if len(h.Results) != 1 || h.Results[0].Headword != tc.wantFirst {
+		if len(h.Results) != 1 || h.Results[0].Headword != tc.wantFirst {
 			t.Errorf("%v: results = %+v", tc.mode, h.Results)
+		}
+		if tc.declined && (h.Skipped || h.Err != nil) {
+			t.Errorf("%v: a reading that falls back to words is neither skipped nor an error: %+v", tc.mode, h)
 		}
 		if af.wordsCalls != tc.words || af.phraseCalls != tc.phrase || af.nearCalls != tc.near {
 			t.Errorf("%v: readings asked = words %d, phrase %d, near %d; want %d/%d/%d",
@@ -169,14 +171,23 @@ func TestStrictReadingIsDeclinedWithoutOurIndex(t *testing.T) {
 	fake := &archiveFake{}
 	h := query(context.Background(), fake, Phrase, "beta gamma", ftsq.Rung{}, false, 5)
 	if !h.NeedsIndex {
-		t.Error("the strict reading was not declined, so the reader would have been told the phrase is absent")
+		t.Error("the fact that the phrase was not answered is missing, so the plate could not say so")
 	}
 	if h.Skipped || h.Err != nil {
-		t.Errorf("declining is neither skipping nor an error: skipped=%v err=%v", h.Skipped, h.Err)
+		t.Errorf("a fallback is neither skipping nor an error: skipped=%v err=%v", h.Skipped, h.Err)
 	}
-	if fake.phraseCalls != 0 || fake.nearCalls != 0 || fake.wordsCalls != 0 {
-		t.Errorf("the archive was read for a reading that must not scan: words=%d phrase=%d near=%d",
-			fake.wordsCalls, fake.phraseCalls, fake.nearCalls)
+	if len(h.Results) == 0 {
+		t.Error("the plate was left empty; the words the archive's index can give must be there")
+	}
+	if h.Rung != "words" || !h.OneReading {
+		t.Errorf("the answer must say which reading it is: rung=%q oneReading=%v", h.Rung, h.OneReading)
+	}
+	if fake.phraseCalls != 0 || fake.nearCalls != 0 {
+		t.Errorf("the archive was asked to verify a phrase it cannot verify: phrase=%d near=%d",
+			fake.phraseCalls, fake.nearCalls)
+	}
+	if fake.wordsCalls != 1 {
+		t.Errorf("the words reading answered the plate %d times, want once", fake.wordsCalls)
 	}
 	// The words reading still goes to the archive: that is what its index is for.
 	if h := query(context.Background(), fake, FullText, "beta gamma", ftsq.Rung{Name: "words", Match: `"beta"`}, true, 5); h.NeedsIndex {

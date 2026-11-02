@@ -110,8 +110,19 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 	// from the search that started it (search.ArchiveFullText; without this the
 	// header claims a phrase was tried and not found).
 	oneReading := false
+	needsIndex := false
 	if af, ok := source.(search.ArchiveFullText); ok {
 		oneReading = af.FullTextFromArchive()
+	}
+	// The same fact for the strict readings: this source answers them with the
+	// words reading, because it has no positions to verify a phrase with, so the
+	// plate has to carry the line naming what is missing - and the page drawn
+	// from this path (the cache, once it is running) has to carry it too.
+	// search.archiveStrictDeclined is what the routing asks.
+	if request.Mode != "fts" {
+		if ai, ok := source.(interface{ HasArticleIndex() bool }); !ok || !ai.HasArticleIndex() {
+			needsIndex = oneReading
+		}
 	}
 	switch request.CacheAction {
 	case "build":
@@ -220,7 +231,7 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 		}
 		return emit(SearchEvent{T: "hit", Dict: e.ID, Results: results, CacheID: request.CacheID,
 			Total: total, Complete: complete, Start: request.Start, HasNext: end < total || !complete,
-			Rung: request.Rung, OneReading: oneReading, Term: query})
+			Rung: request.Rung, OneReading: oneReading, NeedsIndex: needsIndex, Term: query})
 	default:
 		return fmt.Errorf("invalid article result cache action %q", request.CacheAction)
 	}

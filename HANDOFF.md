@@ -832,6 +832,30 @@ Recorded before the work, because each one changes which part of the flow moves.
    between, `articlePageCache`/`wildcardPages`) is for the modes whose total is NOT known until the
    articles have been counted, which is exactly the full-text family.
 
+### ...and the plate is not left empty: it answers with the words and says what is missing (2026-11-02)
+
+The user's refinement, and better than what I had built: a strict reading on a dictionary whose archive has
+its own index still is NOT verified by scanning, but the plate is not left empty either - it answers with
+what that index can do (the words reading, its own ranking) and carries a line, on the plate's own row in
+the accent colour, naming what is missing: "the archive's index found all the words. The exact phrase needs
+our index: [Build]". The line is the substitution said out loud, next to the count, which is what makes it
+not the silent relaxation this fork removed.
+
+Three places had to agree, and the third is the one that took the test to find:
+
+- `search.query`'s archive branch answers `FullTextContext` (words), sets `Rung="words"`, `OneReading` and
+  keeps `NeedsIndex` (search.go).
+- the plate renders the line whenever `h.needsIndex`, regardless of whether results came (index.html), with
+  `.search-needs-index` in app.css: its own row, `var(--accent)`, wrapping instead of fighting the count.
+- **the article-result cache path had to carry it too**: once the cache is running the page is drawn from
+  it, not from the search that started it, so `needsIndex` was lost and the line never appeared (found by
+  driving the page, not by reading the code). `dmsh_article_result_cache.go` recomputes it from
+  `HasArticleIndex()` exactly as `search.archiveStrictDeclined` does.
+
+Verified on the live page, scoped to the Wikipedia: phrase «джазовый кларнетист» -> 5 words results, one
+`.search-needs-index` line in `rgb(224,134,0)` (the accent), text "found all the words. The exact phrase
+needs our index: Build", and the API answer carries `rung=words, needsIndex, oneReading` in 0.15 s.
+
 ## Strict readings are declined, not scanned; the caps are gone (2026-11-02)
 
 The user's decisions, implemented: "все ограничения убираем - это зло и неправда" and "искать по статьям

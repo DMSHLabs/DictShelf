@@ -7805,7 +7805,7 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
      and, on a phone, battery. The row therefore says what is missing and offers
      the thing that answers it - our index, built from the same article text but
      storing positions - and the window that opens shows the number first. */
-  if(h.needsIndex&&!h.results.length){
+  if(h.needsIndex){
     const note=document.createElement("p");note.className="search-needs-index";
     const build=document.createElement("button");build.type="button";build.className="btn";
     build.textContent=tx("search.needsIndexBuild");
