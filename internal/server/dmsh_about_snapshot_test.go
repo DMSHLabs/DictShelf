@@ -8,9 +8,48 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"testing"
+
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 )
+
+// The About reports the size of the dictionary's source files - what the
+// information dialog prints above the headword count. It is stat'd, never
+// read, and a source that is gone reports nothing rather than failing.
+func TestDesktopAboutSnapshotReportsSourceSize(t *testing.T) {
+	s, id := aboutServer(t, "")
+	e, err := s.reg.get(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want int64
+	for _, path := range dict.SourceFiles(e.Path) {
+		want += fsx.FileSize(path)
+	}
+	if want <= 0 {
+		t.Fatalf("the fixture has no source files to measure")
+	}
+	value, err := s.DesktopJSON(aboutBase, "about", id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := value.(aboutInfo).FileSize; got != want {
+		t.Fatalf("fileSize = %d, want %d (the files on disk)", got, want)
+	}
+	if err := os.Remove(e.Path); err != nil {
+		t.Fatal(err)
+	}
+	value, err = s.DesktopJSON(aboutBase, "about", id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gone := value.(aboutInfo).FileSize; gone != 0 {
+		t.Fatalf("fileSize after the source was removed = %d, want 0", gone)
+	}
+}
 
 func TestDesktopAboutSnapshotWithoutRouter(t *testing.T) {
 	s, id := aboutServer(t, "#LANGUAGE \"English\"\nPublished by nobody.\n")
