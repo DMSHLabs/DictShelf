@@ -53,7 +53,11 @@ func TestIndexWorkSurvivesRequestAndStopsBetweenOperations(t *testing.T) {
 		}
 		s.jobs.wg.Wait()
 	}()
-	ops := []indexOperation{{first.ID, "contains", "create"}, {entries[1].ID, "fts", "create"}}
+	// Full text, not contains: a new dictionary already has the contains index
+	// (the profile default), so asking for it again is a no-op either way and
+	// could not tell a stopped operation from one that never started. Full text
+	// is the index this profile does not have.
+	ops := []indexOperation{{first.ID, "fts", "create"}, {entries[1].ID, "fts", "create"}}
 	body, _ := json.Marshal(ops)
 	ctx, cancel := context.WithCancel(context.Background())
 	req := newRequest("POST", "/api/index-work", strings.NewReader(string(body))).WithContext(ctx)
@@ -85,7 +89,7 @@ func TestIndexWorkSurvivesRequestAndStopsBetweenOperations(t *testing.T) {
 	if result.Running || !result.Canceled || result.Done != 0 || result.Error != "" {
 		t.Fatalf("completion: %+v", result)
 	}
-	if s.currentFeatures(first).Contains {
+	if s.currentFeatures(first).FullText {
 		t.Fatal("stopped operation unexpectedly created its index")
 	}
 	if s.currentFeatures(entries[1]).FullText {

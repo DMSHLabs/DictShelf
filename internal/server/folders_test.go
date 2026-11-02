@@ -174,7 +174,12 @@ func TestConfigEndpointAndSetupPage(t *testing.T) {
 	// the setup page is served on demand, not only while the registry is empty
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, newRequest("GET", "/setup", nil))
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "<title>Edit Folders</title>") {
+	/* Told apart by a class in its own markup, not by its <title>: the title is
+	   a translated string (pages.setupTitle, "Dictionary management" now, "Edit
+	   Folders" when this test was written), so asserting on it made the positive
+	   check fail on a rename and the negative one below pass for ever. The class
+	   is on setup.html's <body> and on no other page's. */
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "workspace-folders") {
 		t.Fatalf("/setup not served: %d", rec.Code)
 	}
 	if !strings.Contains(rec.Body.String(), "Serving 1 dictionary from 2 folders") {
@@ -183,10 +188,7 @@ func TestConfigEndpointAndSetupPage(t *testing.T) {
 	// "/" still serves the app, not setup, while dictionaries are in use
 	rec = httptest.NewRecorder()
 	s.ServeHTTP(rec, newRequest("GET", "/", nil))
-	// Told apart by its own markup, not by one of its sentences: every page
-	// carries the whole i18n catalog, so a phrase from setup.html is in the
-	// app page's body too (renderUI ships messages and fallback alike).
-	if strings.Contains(rec.Body.String(), "<title>Edit Folders</title>") {
+	if strings.Contains(rec.Body.String(), "workspace-folders") {
 		t.Error("/ should serve the app once dictionaries are in use")
 	}
 }

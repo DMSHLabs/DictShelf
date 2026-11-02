@@ -328,15 +328,14 @@ func (r *Registry) queueNewDictionaries() error {
 			changed = true
 		}
 	}
-	// A headword index is mandatory for a newly added dictionary. Saved defaults
-	// choose only the optional contains and full-text indexes. In particular, a
-	// first scan must still queue the base index before the setup page has saved
-	// those preferences.
-	defaults := indexOptions{Index: true}
-	if f.IndexDefaults != nil {
-		defaults = *f.IndexDefaults
-		defaults.Index = true
-	}
+	// A headword index is mandatory for a newly added dictionary; the optional
+	// contains and full-text indexes follow the defaults, and BOTH come from
+	// newIndexDefaults - the same call the setup page and Dictionary settings
+	// make to say what the default is. A second copy of that rule here is how a
+	// fresh profile got a base index while the settings went on reporting
+	// contains as the default, which is what
+	// TestNewDictionariesGetContainsIndexWithoutSavedDefaults caught.
+	defaults := p.newIndexDefaults()
 	for source, family := range families {
 		if !f.DSLKnown[source] {
 			f.DSLKnown[source] = true

@@ -294,13 +294,22 @@ func TestDictsAndSearch(t *testing.T) {
 	if !dicts[0].Caps.Prefix || dicts[0].DBPath == "" {
 		t.Errorf("caps/dbpath: %+v", dicts[0])
 	}
-	if dicts[0].Caps.FTS || dicts[0].Caps.Contains {
-		t.Errorf("preparing a DSL must not build the opt-in indexes: %+v", dicts[0].Caps)
+	// A new profile's defaults are the headword index AND the contains index -
+	// pages.indexDefaultsHint promises the reader "A headword index is always
+	// created for new dictionaries. The selected optional indexes are created
+	// too." - while full text stays opt-in. This used to assert the opposite
+	// ("preparing a DSL must not build the opt-in indexes"), which is what the
+	// queue did before it was made to read newIndexDefaults.
+	if !dicts[0].Caps.Contains || dicts[0].Caps.FTS {
+		t.Errorf("a new dictionary gets the headword and contains indexes, and no full text: %+v", dicts[0].Caps)
 	}
 	id := dicts[0].ID
 
-	// Contains works from the base headword index; enabling its optional
-	// trigram and token indexes accelerates the same query.
+	// Contains is answered by the base headword index on its own - the optional
+	// trigram and token indexes only accelerate the same query - so the one this
+	// profile built is dropped first. That is what puts the base index under
+	// test, and every headword mode below has to answer without it.
+	sse(t, s, "/api/ingest?dict="+id+"&contains=0")
 	hits := searchStream(t, s, "/api/search?q=corazón&mode=contains&dict="+id)
 	if len(hits) != 1 || len(hits[0].Results) != 1 || hits[0].Results[0].Headword != "corazón" {
 		t.Fatalf("contains with base index: %+v", hits)
@@ -315,6 +324,7 @@ func TestDictsAndSearch(t *testing.T) {
 			t.Errorf("%s with base index: %+v", mode, hits)
 		}
 	}
+	// ...and the same query answered from the optional index once it is built.
 	sse(t, s, "/api/ingest?dict="+id+"&contains=1")
 	hits = searchStream(t, s, "/api/search?q=corazón&mode=contains&dict="+id)
 	if len(hits) != 1 || len(hits[0].Results) != 1 || hits[0].Results[0].Headword != "corazón" {
@@ -515,7 +525,7 @@ func TestSetupFlow(t *testing.T) {
 	// An empty collection now starts on the regular, usable main screen.
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, newRequest("GET", "/", nil))
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `id="panel"`) || strings.Contains(rec.Body.String(), "<title>Edit Folders</title>") {
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `id="panel"`) || strings.Contains(rec.Body.String(), "workspace-folders") {
 		t.Fatalf("expected main page with empty collection, got %d", rec.Code)
 	}
 
@@ -670,7 +680,7 @@ func TestSetupConsentFlow(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, newRequest("GET", "/", nil))
-	if !strings.Contains(rec.Body.String(), `id="panel"`) || strings.Contains(rec.Body.String(), "<title>Edit Folders</title>") {
+	if !strings.Contains(rec.Body.String(), `id="panel"`) || strings.Contains(rec.Body.String(), "workspace-folders") {
 		t.Fatal("prepared dictionaries must not replace the main page")
 	}
 
@@ -705,7 +715,7 @@ func TestSetupConsentFlow(t *testing.T) {
 	s.ServeHTTP(rec, newRequest("GET", "/", nil))
 	// Markup, not a sentence: every page ships the whole i18n catalog, so
 	// setup.html's phrases are in the app page's body too (renderUI).
-	if strings.Contains(rec.Body.String(), "<title>Edit Folders</title>") {
+	if strings.Contains(rec.Body.String(), "workspace-folders") {
 		t.Error("setup page still shown after dictionaries were enrolled")
 	}
 }

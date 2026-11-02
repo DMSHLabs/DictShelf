@@ -190,7 +190,11 @@ func TestDictsReconcileInvalidates(t *testing.T) {
 	s, row, tag := settled(t)
 	e, _ := s.reg.get(row.ID)
 	before := e.gen.Load()
-	sse(t, s, "/api/ingest?dict="+row.ID+"&contains=1")
+	// Full text, not contains: a new dictionary already HAS the contains index
+	// (that is the profile default), so asking for it again is deliberately a
+	// no-op that changes nothing and moves no gen. A change is what this test is
+	// about, and full text is the one this profile does not have yet.
+	sse(t, s, "/api/ingest?dict="+row.ID+"&fts=1")
 	if e.gen.Load() == before {
 		t.Fatal("a reconcile did not move gen")
 	}
