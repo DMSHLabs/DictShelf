@@ -40,7 +40,12 @@ type aboutInfo struct {
 	// FileSize is the total size in bytes of the dictionary's source files -
 	// its main file and the companions beside it (dict.SourceFiles). Zero when
 	// the source is gone or nothing regular could be stat'd.
-	FileSize     int64  `json:"fileSize,omitempty"`
+	FileSize int64 `json:"fileSize,omitempty"`
+	// IndexSize is what its search indexes cost on disk: the prepared database,
+	// plus the article index in its own file when the build split one off. One
+	// file or two (see indexSize). Zero when nothing has been prepared, and
+	// reported even when the source is gone - the index is then all there is.
+	IndexSize    int64  `json:"indexSize,omitempty"`
 	IndexLang    string `json:"indexLang,omitempty"`
 	ContentsLang string `json:"contentsLang,omitempty"`
 }
@@ -53,6 +58,10 @@ type aboutInfo struct {
 type aboutSource struct {
 	name, format, desc string
 	srcPath            string
+	// textDB is the prepared database, when there is one. It is a fact of the
+	// library rather than of the source, so it is filled on every path that
+	// knows it - and only the prepared branch does.
+	textDB             string
 	indexLang          string
 	contentsLang       string
 	headwords, entries int

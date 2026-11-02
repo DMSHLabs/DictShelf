@@ -18,6 +18,28 @@ func RebuildContainsIndex(path string, progress Progress) (err error) {
 	return RebuildContainsIndexContext(context.Background(), path, progress)
 }
 
+// liveWrite opens a connection for a maintenance write into a database the
+// application may still be using. dsnIngest is the temp-file DSN: no
+// durability, and no busy timeout either, because an ingest target is a file
+// nobody else has. A prepared database is the opposite case - a search, or the
+// measurement pass walking the whole file through dbstat
+// (store.searchIndexSizes), can hold a read lock while this runs - so the wait
+// every other connection the application opens asks for is set here, before the
+// journal-mode change that needs it just as much. The pragma is per connection,
+// which is why the pool is capped at one.
+func liveWrite(ctx context.Context, path string) (*sql.DB, error) {
+	db, err := sql.Open(driverName, dsnIngest(path)+"&mode=rw")
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
+	if _, err := db.ExecContext(ctx, "PRAGMA busy_timeout=5000"); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return db, nil
+}
+
 func RebuildContainsIndexContext(ctx context.Context, path string, progress Progress) (err error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -25,7 +47,7 @@ func RebuildContainsIndexContext(ctx context.Context, path string, progress Prog
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	db, err := sql.Open(driverName, dsnIngest(path)+"&mode=rw")
+	db, err := liveWrite(ctx, path)
 	if err != nil {
 		return err
 	}
@@ -164,12 +186,11 @@ func ClearSearchIndexesContext(ctx context.Context, path string, contains, fullT
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	db, err := sql.Open(driverName, dsnIngest(path)+"&mode=rw")
+	db, err := liveWrite(ctx, path)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
-	db.SetMaxOpenConns(1)
 	if _, err := db.ExecContext(ctx, "PRAGMA journal_mode=DELETE"); err != nil {
 		return err
 	}

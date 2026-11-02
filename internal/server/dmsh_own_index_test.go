@@ -63,6 +63,18 @@ func recordedOwnFullText(t *testing.T, textDB string) {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	// One connection, and it waits for a lock instead of failing on sight. This
+	// database is live: the registry opens it at startup and then measures it,
+	// and the measurement walks the whole file (SELECT ... FROM dbstat holds a
+	// read lock while it does). Every connection the application opens carries a
+	// busy timeout for exactly this reason (store's dsnRO/dsnWildcardCache); a
+	// raw one would answer "database is locked (5)" the moment the pass and this
+	// write overlap, which is what this test used to do about once in sixty runs
+	// (-count=60).
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+		t.Fatal(err)
+	}
 	// ingest_level=text is what an article index would say; the point of the
 	// test is that full text is still advertised, because it comes from the
 	// archive. The table itself is left alone - what the row reads is the meta.

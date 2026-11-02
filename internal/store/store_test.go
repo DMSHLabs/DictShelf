@@ -1215,6 +1215,62 @@ func TestOptionalIndexMaintenanceKeepsFeaturesIndependent(t *testing.T) {
 	}
 }
 
+// A maintenance write lands in a database the application is still using, so it
+// has to wait for a reader instead of failing on sight. The reader here stands
+// in for the one that made this real: the measurement pass opens the prepared
+// database read-only and walks the whole file through dbstat
+// (store.searchIndexSizes), holding a read lock for the length of that walk -
+// and the rebuild beside it used to answer "database is locked (5)" the moment
+// the two overlapped, because its connection carried no busy timeout (the
+// ingest DSN it reuses is documented for a temp file, and a live one needs the
+// wait every other connection the application opens asks for).
+func TestIndexMaintenanceWaitsForAReadLock(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "text.db")
+	r := &fakeReader{meta: dict.Meta{Name: "busy", Format: "test", Path: "/x"}, entries: []dict.Entry{
+		h("Blue heart", "<p>cardiac tissue</p>"),
+	}}
+	if _, err := IngestPlan(r, path, Plan{Contains: true}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	reader, err := sql.Open(driverName, dsnRO(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	tx, err := reader.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := tx.QueryRow("SELECT count(*) FROM entry").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	// The reader lets go while the maintenance write is already waiting, which
+	// is the case the busy timeout exists for. A write that does not wait fails
+	// here instead, on the reader still being open.
+	released := make(chan struct{})
+	go func() {
+		defer close(released)
+		time.Sleep(300 * time.Millisecond)
+		_ = tx.Rollback()
+	}()
+	if err := RebuildContainsIndex(path, nil); err != nil {
+		<-released
+		t.Fatalf("the rebuild did not wait for the reader: %v", err)
+	}
+	<-released
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if !s.hasHeadwordFTS || !s.hasTrigram {
+		t.Errorf("after the rebuild: headword=%v trigram=%v", s.hasHeadwordFTS, s.hasTrigram)
+	}
+}
+
 // MDict repacks store expandable sections as "@"-prefixed headwords - 59 % of
 // LDOCE6 No-Voice is `@collocations_woman` and friends. They must be fetchable
 // by exact lookup (that is how an article's link pulls one in) and invisible
