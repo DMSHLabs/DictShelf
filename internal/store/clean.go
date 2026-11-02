@@ -119,6 +119,10 @@ func judgeFolder(dir string) []Leftover {
 const ingestGrace = time.Hour
 
 // staleIngests lists abandoned ingest temps directly inside a healthy folder.
+//
+// The grace above is what separates this from SweepIngestTemps, which runs at
+// startup and has none: both ask the same question - isIngestTemp, one rule for
+// what a working file is - but only this one can run while a build is in flight.
 func staleIngests(dir string) []Leftover {
 	des, err := os.ReadDir(dir)
 	if err != nil {
@@ -127,7 +131,7 @@ func staleIngests(dir string) []Leftover {
 	cutoff := time.Now().Add(-ingestGrace)
 	var out []Leftover
 	for _, de := range des {
-		if de.IsDir() || !strings.Contains(strings.ToLower(de.Name()), ".ingest.") {
+		if de.IsDir() || !isIngestTemp(de.Name()) {
 			continue
 		}
 		fi, err := de.Info()

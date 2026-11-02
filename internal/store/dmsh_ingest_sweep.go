@@ -18,8 +18,13 @@ import (
 // share that stem - are never a published state.
 const ingestTempInfix = ".ingest."
 
-// isIngestTemp reports whether a file name is one of those working files.
-func isIngestTemp(name string) bool { return strings.Contains(name, ingestTempInfix) }
+// isIngestTemp reports whether a file name is one of those working files. The
+// one rule, shared with clean.go's staleIngests: that one applies an hour's
+// grace because `wudict clean` can run while a build is in flight, this one
+// none because it runs at startup.
+func isIngestTemp(name string) bool {
+	return strings.Contains(strings.ToLower(name), ingestTempInfix)
+}
 
 // SweepIngestTemps clears the working files an interrupted ingest left in a
 // prepared folder, and reports how many went and how many bytes they held.
@@ -35,7 +40,9 @@ func isIngestTemp(name string) bool { return strings.Contains(name, ingestTempIn
 //
 // Safe whenever no ingest is in flight, which is why the caller runs it once, at
 // startup: the application is single-instance (one mutex over the whole
-// install), so nothing can be indexing yet. Nothing else ever reads a name with
+// install), so nothing can be indexing yet - and that is also why it needs no
+// grace period, unlike clean.go's staleIngests, which can be asked to clean a
+// folder while a build is writing into it. Nothing else ever reads a name with
 // that infix either - isTextDB accepts text.db and *.text.db, and every walker
 // uses the published names - so a file this leaves is a file no one can use.
 func SweepIngestTemps(dir string) (removed int, freed int64) {

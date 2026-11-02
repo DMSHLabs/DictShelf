@@ -114,9 +114,9 @@ func (s *Server) rowsGlobal(st fileState[*facet.Rules]) string {
 // rowKey names everything on disk a row of e is derived from, by stat alone:
 // the source, its folder (a companion .mdd, .files.zip or abbreviation file
 // appearing or vanishing changes the folder's mtime), the abbreviation file's
-// content, the library folder LookupDir resolves and the text.db and media.db
-// in it. The prepared databases run with journal_mode=OFF, so every write
-// lands in the .db file itself and moves its size or mtime.
+// content, the library folder LookupDir resolves and the text.db, media.db and
+// articles.db in it. The prepared databases run with journal_mode=OFF, so every
+// write lands in the .db file itself and moves its size or mtime.
 //
 // e.gen covers what the stats cannot see: changes the app makes itself
 // (entry.reconcile, D157) and a rescan dropping a backend the row was derived
@@ -142,6 +142,16 @@ func rowKey(e *entry, global string) string {
 		sig(textDB)
 		if m := store.MediaSibling(textDB); m != "" {
 			sig(m)
+		}
+		// articles.db belongs here for the reason text.db does, not the reason
+		// the folder does: the folder's mtime moves when a file appears or
+		// vanishes, which already covers adding this sibling or deleting it - but
+		// an index rewritten where it lies moves only its own size or mtime, and a
+		// row derived from the previous edition would go on describing it
+		// (store.ArticlesSibling: the file a build gives the article full-text
+		// index when it keeps it out of the database).
+		if articles, ok := store.ArticlesSibling(textDB); ok {
+			sig(articles)
 		}
 	}
 	return b.String()

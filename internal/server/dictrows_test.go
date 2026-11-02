@@ -184,6 +184,29 @@ func wantFull(t *testing.T, s *Server, tag, why string) string {
 	return next
 }
 
+// A build may keep the article full-text index in a file of its own beside the
+// database (store.ArticlesSibling). The row key has to name that file:
+// adding it or deleting it moves the FOLDER's mtime, which the key already
+// carries, but an index rewritten where it lies moves only the file's own size -
+// and a row derived from the previous edition would go on describing it.
+func TestRowKeySignsTheArticleSibling(t *testing.T) {
+	_, e, textDB := preparedForServer(t, "dsl")
+	sibling := store.ArticlesFilePath(textDB)
+	if _, ok := store.ArticlesSibling(textDB); ok {
+		t.Fatalf("the fixture already has %s", sibling)
+	}
+	if err := os.WriteFile(sibling, []byte("the article index"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	built := rowKey(e, "")
+	if err := os.WriteFile(sibling, []byte("the article index, rebuilt and longer than it was"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if rebuilt := rowKey(e, ""); rebuilt == built {
+		t.Error("a rewritten articles.db did not move the row key")
+	}
+}
+
 // A change the app makes to prepared data invalidates the kept answer even
 // where the filesystem clock could not tell (entry.gen, bumped by reconcile).
 func TestDictsReconcileInvalidates(t *testing.T) {
