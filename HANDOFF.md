@@ -786,6 +786,30 @@ out loud instead of silently searching its first 128 words. (3) Results are deli
 articles per dictionary first, then the search continues in the background to the end, or until the reader
 changes the query or mode.
 
+## Progressive results: the user's three decisions, to implement (2026-11-02)
+
+Recorded before the work, because each one changes which part of the flow moves.
+
+1. **The first portion is five, for every dictionary and every mode**, and the remainder arrives in the
+   SECOND portion - uniform on purpose, "чтобы не было вопросов почему разное поведение". Today the first
+   paint is however much the first answer carried: the state is created with
+   `initial: msg.results.length` (index.html:1436) and the main search's size comes from the request's `n`
+   (the page's own call was NOT located with confidence - the three `"&n="` sites are the suggestions
+   (1691), the deferred search (7606) and `fetchSearchPortion` (10052), so the initial size for the
+   cache-driven path is set server-side: `Search`'s `n := request.Limit; if n <= 0 { n = 20 }` and the
+   legacy handler's equivalent). Setting this is the first edit, and it is where the next session starts.
+2. **The background continuation is always on, and the setting is hidden.** The gate today is
+   `state.background` (`if(state.background){articleCacheQueue.push(state)}`, index.html:1440) and the
+   control is `countAllResultsInBackground` with its checkbox (index.html:1532). "Главное, чтобы фоновый
+   поток мгновенно прерывался и начинал искать при поиске другого слова": that part already holds -
+   a new search calls `cancelArticleResultCaches()` and aborts the `AbortController`, and the cache task
+   in the status bar has a stop button.
+3. **Where the total is known exactly (headword modes), no background pass runs at all**: the first block
+   is five and the rest is plain arithmetic - the block count and the number of words - which the paging
+   controls already speak. The article-result cache (a SQLite store of the blocks the reader switches
+   between, `articlePageCache`/`wildcardPages`) is for the modes whose total is NOT known until the
+   articles have been counted, which is exactly the full-text family.
+
 ## Strict readings are declined, not scanned; the caps are gone (2026-11-02)
 
 The user's decisions, implemented: "все ограничения убираем - это зло и неправда" and "искать по статьям
