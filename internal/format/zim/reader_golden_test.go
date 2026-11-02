@@ -23,8 +23,8 @@ import (
 // absent marker only ever described the read-through form, which was previously
 // refused; it is now a form in its own right.
 var readerGolden = goldentest.Golden{
-	Versions: "reader=4 ingest=7 markup=2 fold=1",
-	Hash:     "f59c94310b9de115a3b699cbd48b7697b6ad5b2f1f723723c96d182c6f6b4434",
+	Versions: "reader=4 ingest=8 markup=2 fold=1",
+	Hash:     "ef4db5e3a4d207fbc4fc1d2384f559bb9c14a184d7efca43e09953450f2ce421",
 }
 
 func TestReaderGolden(t *testing.T) {

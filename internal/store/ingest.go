@@ -272,14 +272,37 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 		}
 	}
 
+	// The two numbers a reader is shown, and they are COUNTED here rather than
+	// declared by the source. Articles are the entries a reader can open;
+	// headwords are those plus every alias pointing at one - a redirect, a
+	// second spelling, a synonym - which is what answers "how many words can I
+	// look up here".
+	//
+	// The source's own EntryCount is deliberately not what goes into meta: it is
+	// what the source THINKS it holds (a hand-edited DSL #ENTRY_COUNT or a
+	// truncated MDX disagrees with the records actually read), and a format that
+	// declares nothing - Lingvo DSL never sets it - left the panel with no
+	// headword count to show at all. `total` remains that declared number, since
+	// it is the only denominator progress has (see clampDone below).
+	//
+	// Aliases come from the finished table rather than from a tally kept while
+	// writing, because two writers fill it: the scan's own synonyms
+	// (ingestRowWriter.write) and redirect resolution above. One query over what
+	// landed cannot disagree with what a later reader finds.
+	articles := id - int64(subEntries)
+	var aliases int64
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM alias").Scan(&aliases); err != nil {
+		return rep, err
+	}
+
 	metaKV := map[string]string{
 		"dict_uuid":      uuid,
 		"name":           srcMeta.Name,
 		"format":         srcMeta.Format,
 		"source_path":    srcMeta.Path,
 		"description":    srcMeta.Description,
-		"entry_count":    fmt.Sprint(id - int64(subEntries)),
-		"headword_count": fmt.Sprint(total),
+		"entry_count":    fmt.Sprint(articles),
+		"headword_count": fmt.Sprint(articles + aliases),
 		"sub_entries":    fmt.Sprint(subEntries), // @-prefixed, hidden from browsing
 		// What the indexes of this dictionary would cost, measured while the
 		// only pass that sees the bodies runs. body_bytes is before deflate

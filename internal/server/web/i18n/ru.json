@@ -813,6 +813,7 @@
   "dictUI.dragNamed": "Перетащить «{name}» для изменения порядка",
   "dictUI.entries": "Статей: {number}",
   "dictUI.headwordsCount": "Заголовков: {number}",
+  "dictUI.articleAndHeadwordCounts": "Статей: {entries} · Заголовков: {headwords}",
   "dictUI.fileSize": {
     "one": "Размер файла: {size} ({bytes} байт)",
     "few": "Размер файла: {size} ({bytes} байта)",

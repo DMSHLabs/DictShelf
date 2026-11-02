@@ -1336,9 +1336,11 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 	return info
 }
 
-// sourceHeadwordCount is the number declared by the source format. Prepared
-// metadata stores it for new indexes; older libraries can still get it from a
-// cheap format prober when the source is available.
+// sourceHeadwordCount is how many headwords this dictionary has: articles plus
+// their aliases, counted by the ingest that wrote the database (store/ingest.go).
+// A library prepared before IngestVersion 8 has no such number, or the count its
+// source DECLARED - so the cheap format prober stands in for it when the source
+// is still there, and 0 (no line at all) is the honest answer otherwise.
 func sourceHeadwordCount(path string, meta map[string]string) int {
 	if n, err := strconv.Atoi(meta["headword_count"]); err == nil && n > 0 {
 		return n

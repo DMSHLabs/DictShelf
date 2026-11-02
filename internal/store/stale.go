@@ -39,7 +39,11 @@ import (
 // IngestVersion identifies IngestPlan's behaviour. Bump it in the same commit
 // as any change to what an ingest writes for the same Reader output; the
 // golden tests in the format packages fail on such a change and say so.
-const IngestVersion = 7
+//
+// 8: headword_count is what the ingest counted (articles + aliases) instead of
+// the count the source declared, so a library built by 7 shows the old number
+// until it is rebuilt.
+const IngestVersion = 8
 
 // StatsVersion identifies how the size measurements recorded at ingest
 // (body_bytes, headword_chars) were taken. They are volatile meta - the

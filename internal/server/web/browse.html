@@ -1977,9 +1977,28 @@ let browseDictInfoRequest=0,browseDictInfoPress=null,browseDictInfoSuppress=null
 /* A byte count in decimal units - the same rule as index.html's mb(), logx.Size
    and the other pages, so one file never reads as two sizes. */
 const browseSize=n=>n<1e3?n+" B":n<1e6?Math.round(n/1e3)+" kB":n<1e7?(n/1e6).toFixed(1)+" MB":n<1e9?Math.round(n/1e6)+" MB":(n/1e9).toFixed(1)+" GB";
+/* The two counts a dictionary's row reports: the articles it opens, and the
+   headwords those carry once every alias is counted with them. Both numbers
+   when they differ, one when they agree or when only one is known at all (an
+   older library has no headword count), nothing when neither is. Same rule as
+   group-editor.js's groupCounts. */
+function browseCounts(d){
+  const articles=Number(d&&d.entries),headwords=Number(d&&d.headwords);
+  const articlesKnown=Number.isFinite(articles)&&articles>0,headwordsKnown=Number.isFinite(headwords)&&headwords>0;
+  if(!articlesKnown&&!headwordsKnown)return null;
+  if(articlesKnown&&headwordsKnown&&articles!==headwords)return{
+    text:num(articles)+" / "+num(headwords),
+    title:tx("dictUI.articleAndHeadwordCounts",{entries:num(articles),headwords:num(headwords)})};
+  const n=headwordsKnown?headwords:articles;
+  return {text:num(n),title:headwordsKnown?tx("dictUI.headwordsCount",{number:num(n)}):tx("dictUI.entries",{number:num(n)})};
+}
 async function showBrowseDictionaryInfo(id){
   const d=(browseChooserDictionaries||[]).find(item=>item.id===id)||
-    (state?.dict===id?{id,browseLabel:state.title||state.name,headwords:state.total}:null);
+    /* The word-list view's own dictionary, when the chooser never loaded. Its
+       `total` counts the browsable rows, which are articles - reported as such,
+       so the real headword count comes from the About fetch below rather than
+       being invented from a list length. */
+    (state?.dict===id?{id,browseLabel:state.title||state.name,entries:state.total}:null);
   if(!d)return;
   const dialog=$("browseDictInfo"),title=$("browseDictInfoTitle"),counts=$("browseDictInfoCounts"),paths=$("browseDictInfoPaths"),about=$("browseDictInfoAbout");
   if(dialog.open&&dialog.dataset.dict===id)return;
@@ -2136,8 +2155,8 @@ async function chooser(){
     '</p><p><a href="/">'+tx("browse.openApp")+"</a></p>");
   browseChooserDictionaries=ds.map(d=>({...d,browseLabel:label(d)}));
   card(heading+"<div class='picks'>"+
-    ds.map(d=>'<a href="?dict='+encodeURIComponent(d.id)+'&chooser=1" data-dict="'+esc(d.id)+'">'+browseDictIconHTML(d.id)+'<span class="pick-name">'+esc(label(d))+'</span>'+
-      (d.entries!==undefined&&d.entries!==null&&Number.isFinite(Number(d.entries))?'<span class="pick-headword-count" title="'+esc(tx("dictUI.headwordsCount",{number:num(Number(d.entries))}))+'">('+num(Number(d.entries))+')</span>':"")+"</a>").join("")+"</div>"+
+    ds.map(d=>{const counts=browseCounts(d);return '<a href="?dict='+encodeURIComponent(d.id)+'&chooser=1" data-dict="'+esc(d.id)+'">'+browseDictIconHTML(d.id)+'<span class="pick-name">'+esc(label(d))+'</span>'+
+      (counts?'<span class="pick-headword-count" title="'+esc(counts.title)+'">('+counts.text+')</span>':"")+"</a>"}).join("")+"</div>"+
     '<div class="list-search-dock" role="search"></div>',true);
   requestAnimationFrame(()=>requestAnimationFrame(()=>logBrowseNavigation("chooser_ready",performance.now()-chooserStarted,{words:ds.length})));
   const picks=$("msg").querySelector(".picks");
