@@ -182,6 +182,7 @@ for (const language of ['en', 'ru']) {
     expandAll:false, anchorOnce:null, hitName:h=>h.name,dictIconHTML:()=>'',observeSearchDictName(){},searchPortionSize:()=>5,articleCacheGroupID:'',
     renderArticle:(dd,body,id)=>{articles.push({body,id});return null}};
   vm.runInNewContext(main.match(/^const FEAT_NAME=.*;$/m)[0] + '\n' +
+    main.match(/^const fullTextReading=.*;$/m)[0] + '\n' +
     main.match(/function renderSlot\(box,h,mode,q,perDict,group,paging=null\)\{[\s\S]*?\n}/)[0], resultContext);
   const box=node(), body='<p lang="en">word {query}</p>', headword='<word> {number}';
   resultContext.renderSlot(box,{dict:'original-id',name:'<Dictionary>',results:[{Headword:headword,Body:body}]},'prefix','word',1,false);

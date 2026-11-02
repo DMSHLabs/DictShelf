@@ -1684,7 +1684,7 @@ window.wuSearchHistory.setSearch((word,source)=>{
 });
 window.wuSearchHistory.setSuggest((q,onHit,signal,mode)=>{
   const sel=$("dict").value||"all";
-  if(mode==="fts")return;
+  if(fullTextReading(mode))return;
   const ids=sel==="all"?activeUserGroupIds():sel.startsWith("g:")?groupIds(sel):null;
   if(ids&&!ids.length)return;
   const dict=ids?ids.join(","):sel,perDictionary=window.wudictSuggestionPerDictionary||40;
@@ -7743,7 +7743,7 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
   if(h.skipped){
     // Both heavier indexes are opt-in, so a skipped dictionary is not a dead
     // end: offer to add the one this search needed, right where it was missed.
-    const feat=mode==="fts"?"fts":mode==="contains"?"contains":"";
+    const feat=fullTextReading(mode)?"fts":mode==="contains"?"contains":"";
     if(feat){
       /* But it has not answered the QUERY - it has answered about itself, and
          a slot in the answer list is for answers. On a corpus where the heavy
@@ -10218,7 +10218,7 @@ document.addEventListener("keydown",e=>{
 function searchFor(term,opts){
   const t=String(term||"").trim();
   if(!t)return;
-  if(!opts?.preserveMode&&["fts","wildcards","suffix","word","wordLemma","exactLemma"].includes($("mode").value))setSearchMode("prefix");
+  if(!opts?.preserveMode&&(fullTextReading($("mode").value)||["wildcards","suffix","word","wordLemma","exactLemma"].includes($("mode").value)))setSearchMode("prefix");
   window.wuSearchHistory.record(t);
   window.wuSearchHistory.hide();
   $("q").value=t;                       // verbatim: no trimming, ever

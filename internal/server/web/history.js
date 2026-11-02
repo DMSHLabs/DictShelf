@@ -13,6 +13,12 @@
   const MAX = 1000;
   const searchStorageKey = "wudict_search_history_v2";
   const wildcardsStorageKey = "wudict_wildcards_history_v2";
+  /* The three article readings - words, phrase, near - answer from article text,
+     not from headwords, and this list offers headwords. Asking for them would
+     run a full-text search on every keystroke for a list that cannot show the
+     answer. index.html names the same three (fullTextReading); the two have to
+     move together. */
+  const fullTextReading = mode => mode === "fts" || mode === "phrase" || mode === "near";
   const key = s => s.normalize("NFC").toLocaleLowerCase();
   const suggestionCollator = new Intl.Collator(undefined, {sensitivity: "base", numeric: false});
   const caseFold = s => String(s).normalize("NFC").toLocaleLowerCase();
@@ -252,7 +258,7 @@
     show(value);
     const q = value.trim();
     const mode = $("mode").value;
-    if ((q.length < 2 && !(mode === "wildcards" && /[*?]/.test(q))) || mode === "fts") return;
+    if ((q.length < 2 && !(mode === "wildcards" && /[*?]/.test(q))) || fullTextReading(mode)) return;
     const seq = suggestSeq;
     suggestAC = new AbortController();
     Promise.resolve(suggest(q, (results, resultMode, dict) => {
