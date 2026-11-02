@@ -27,11 +27,16 @@
 .headword-control-find-menu[hidden]{display:none}
 .headword-control-find-group+.headword-control-find-group{margin-top:.25em;padding-top:.25em;border-top:1px solid var(--line)}
 .headword-control-find-group-title{padding:.2em .5em;color:var(--muted-fg,var(--fg));font-size:calc(var(--ui-font-section) * 1rem);font-weight:600}
-.headword-control-find-option{box-sizing:border-box;display:grid;grid-template-columns:4.4em minmax(0,1fr);align-items:start;gap:.2em;width:100%;padding:.35em .5em;border:0;border-radius:4px;background:transparent;color:var(--fg);font:inherit;font-size:calc(var(--ui-font-addition) * 1rem);text-align:left;white-space:normal;cursor:pointer}
-/* The icon column is wide enough for the widest mark there is - "[A ↔ B]" and
-   the headword patterns beside it - because a mark that overflows its column
-   pushes into the row's own text. Every row shares the column, so they all
-   start their text at the same place. */
+.headword-control-find-option{box-sizing:border-box;display:grid;grid-template-columns:max-content minmax(0,1fr);align-items:start;gap:.2em;width:100%;padding:.35em .5em;border:0;border-radius:4px;background:transparent;color:var(--fg);font:inherit;font-size:calc(var(--ui-font-addition) * 1rem);text-align:left;white-space:normal;cursor:pointer}
+/* The icon column hugs the mark it holds (max-content), so the description
+   starts right beside it instead of at a fixed column. It used to be a fixed
+   4.4em - wide enough for the widest mark there is, "[A ↔ B]" - with every row
+   sharing it so they all began their text in the same place; that is what left
+   the short marks ("=", "ab") with a hole in front of them, the more visible the
+   more of the long ones were hidden. Alignment was traded for that compactness
+   on purpose: if the ragged left edge comes to matter more, the column can be
+   sized to the widest VISIBLE mark instead (measured, or one column per section),
+   which keeps the aligned start and still shrinks when the wide marks go. */
 .headword-control-find-option-icon{white-space:nowrap;font-variant-numeric:tabular-nums}
 .headword-control-find-option-copy{display:inline;min-width:0;overflow-wrap:anywhere}
 .headword-control-find-option-title{display:inline}
@@ -44,7 +49,17 @@
    so the mode menu's card rule in app.css (which flattens every other button
    to a full-width row) steps aside for it. The box is drawn here rather than
    taken from checkbox.css, which browse.html does not load. */
-.headword-control-find-bar{display:flex;align-items:center;justify-content:flex-end;gap:.3em;padding:.1em .2em .25em}
+/* The gear - and, while editing, the tick and the cross - sits IN the menu's
+   first row. As a flex row of its own it left a blank line above the first
+   section; now the bar is taken out of the flow and pinned to the menu's
+   corner (the menu is position:fixed, so it is the containing block and the bar
+   scrolls with the rows exactly as the first row does), and the row underneath
+   keeps clear of it by the rule after this one. */
+.headword-control-find-bar{position:absolute;right:.35em;top:.35em;z-index:1;display:flex;align-items:center;justify-content:flex-end;gap:.3em}
+/* Whatever that first row turns out to be - a section's name, or the first
+   command when the name is hidden - its text stops short of the bar, so menu
+   text never runs under the gear. Wide enough for the tick AND the cross. */
+.headword-control-find-bar+.headword-control-find-group>:first-child{padding-right:5.2em}
 .headword-control-find-bar button{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;flex:none;
   width:1.9em;height:1.9em;padding:0;border:1px solid var(--line);border-radius:5px;
   background:var(--bg-card,var(--bg));color:var(--fg);font:inherit;font-size:1em;line-height:1;cursor:pointer}
@@ -52,9 +67,12 @@
 .headword-control-find-bar button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .headword-control-find-customize svg{display:block;width:1.15em;height:1.15em}
 .headword-control-find-confirm,.headword-control-find-cancel{color:var(--accent);font-weight:600}
-.headword-control-find-option.is-customizing{grid-template-columns:auto 4.4em minmax(0,1fr);cursor:pointer}
+.headword-control-find-option.is-customizing{grid-template-columns:auto max-content minmax(0,1fr);cursor:pointer}
 .headword-control-find-option.is-customizing:disabled{cursor:default}
 .headword-control-find-option.is-customizing:disabled .headword-control-find-box{opacity:.55}
+/* A tick box stands apart from the command it turns on: the .2em the grid
+   already leaves reads as touching. The name row below has its own flex gap. */
+.headword-control-find-option.is-customizing .headword-control-find-box{margin-right:.4em;margin-top:.15em}
 /* The section's name is a checkbox row of its own while editing: it turns the
    name on and off, not the commands under it. A button needs the look of the
    div it replaces. */
@@ -65,7 +83,6 @@
 .headword-control-find-box{flex:none;box-sizing:border-box;position:relative;width:18px;height:18px;
   border:1.5px solid var(--ds-checkbox-border-color,var(--fg));border-radius:4px;
   background-color:var(--ds-checkbox-background,var(--paper-bg,var(--bg)))}
-.headword-control-find-option.is-customizing .headword-control-find-box{margin-top:.15em}
 .headword-control-find-option[aria-checked="true"] .headword-control-find-box::after,
 .headword-control-find-group-title[aria-checked="true"] .headword-control-find-box::after{
   content:"";position:absolute;left:35%;top:8%;width:25%;height:48%;
