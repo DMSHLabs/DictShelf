@@ -522,9 +522,10 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	// uuid check does not help: keptUUID keeps this dictionary's uuid across a
 	// rebuild of the same source (stale.go), so an articles.db built from the
 	// previous edition would still pass attachArticles and be searched as this
-	// database's index. Only a folder-form publish is cleared: for the loose
-	// "<name>.text.db" the sibling name is not this database's to take.
-	if articlesTmp == "" && strings.EqualFold(filepath.Base(dbPath), TextDBName) {
+	// database's index. The stale sibling is cleared for every shape IsTextDB
+	// accepts, because ArticlesFilePath mirrors the loose name too
+	// (<name>.articles.db): the file beside this database is this database's.
+	if articlesTmp == "" && IsTextDB(dbPath) {
 		if err := os.Remove(ArticlesFilePath(dbPath)); err != nil && !os.IsNotExist(err) {
 			logx.V("ingest: could not clear the previous %s: %v", ArticlesFilePath(dbPath), err)
 		}

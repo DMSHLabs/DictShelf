@@ -108,6 +108,13 @@ func adoptOne(textDB string) (string, error) {
 			return dir, err
 		}
 	}
+	// The article index is a file of its own and belongs to this database: a
+	// loose pair moved without it would arrive with no full text at all.
+	if articles := ArticlesFilePath(textDB); fsx.FileExists(articles) {
+		if err := os.Rename(articles, ArticlesFilePath(TextDBPath(dir))); err != nil {
+			return dir, err
+		}
+	}
 	_ = WriteInfo(dir) // receipt is derived; a failure must not undo the move
 	return dir, nil
 }

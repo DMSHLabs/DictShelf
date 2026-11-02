@@ -1058,6 +1058,12 @@ them, and the id prefix grows so the filter does not eat the limit - 59% of LDOC
 and `hashVocab` created its fts5vocab over `main.article_fts` on the database connection, which no longer
 has that table, so every fingerprint of a split database failed outright.
 
+`ArticlesFilePath` mirrors the owner the way `MediaSibling` does: the bundle is `<dir>/articles.db`, a
+loose `<name>.text.db` carries `<name>.articles.db` beside it, so two databases copied out of their
+folders into one directory do not come to share one index. Everything that handles the pair follows the
+same rule - adoption takes the sibling along, `wudict files` lists it, `clean` reports a lone one as an
+orphan, and a build that wrote no article index clears the stale sibling of any shape `IsTextDB` accepts.
+
 Verified: `make check` exits 0; a live server asked for full text on a dictionary produces a folder with
 `articles.db` holding `article_fts` and a `text.db` with only the headword indexes, same `dict_uuid`, and
 its phrase search answers with marks; and a library prepared by an earlier build - article index still

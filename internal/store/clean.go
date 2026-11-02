@@ -70,6 +70,13 @@ func FindLeftovers() ([]Leftover, error) {
 			if fsx.FileExists(strings.TrimSuffix(p, ".media.db") + ".text.db") {
 				reason = "paired with a superseded database"
 			}
+		case strings.HasSuffix(name, ".articles.db"):
+			// the article index is a file of its own and follows the same rule
+			// as media.db: adopted with its database, or a leftover beside one.
+			reason = "article index with no dictionary to pair with"
+			if fsx.FileExists(strings.TrimSuffix(p, ".articles.db") + ".text.db") {
+				reason = "paired with a superseded database"
+			}
 		}
 		if reason != "" {
 			out = append(out, Leftover{Path: p, Size: fi.Size(), Reason: reason})
@@ -100,6 +107,9 @@ func judgeFolder(dir string) []Leftover {
 		reason := "incomplete dictionary folder (no text.db)"
 		if _, err := os.Stat(MediaDBPath(dir)); err == nil {
 			reason = "media.db with no dictionary to pair with"
+		}
+		if _, err := os.Stat(filepath.Join(dir, ArticlesDBName)); err == nil {
+			reason = "articles.db with no dictionary to pair with"
 		}
 		return []Leftover{{Path: dir, Size: dirSize(dir), Reason: reason, IsDir: true}}
 	}

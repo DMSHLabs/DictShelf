@@ -34,8 +34,19 @@ import (
 // ArticlesDBName is the sibling file holding the article full-text index.
 const ArticlesDBName = "articles.db"
 
-// ArticlesFilePath is where the article index of the database at textDB lives.
+// ArticlesFilePath is where the article index of the database at textDB lives: in
+// the bundle the folder's `articles.db`, and for a loose `<name>.text.db` the
+// `<name>.articles.db` beside it - the same rule MediaSibling follows, so two
+// databases copied out of their folders into one directory do not come to share
+// one index. A path that is neither shape gets the folder name beside it, which
+// is what it would have had before the loose form existed.
 func ArticlesFilePath(textDB string) string {
+	if strings.EqualFold(filepath.Base(textDB), TextDBName) {
+		return filepath.Join(filepath.Dir(textDB), ArticlesDBName)
+	}
+	if base, ok := strings.CutSuffix(textDB, ".text.db"); ok {
+		return base + ".articles.db"
+	}
 	return filepath.Join(filepath.Dir(textDB), ArticlesDBName)
 }
 

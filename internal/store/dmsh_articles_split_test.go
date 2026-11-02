@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 )
 
 // A split database keeps its article index in a file of its own, and answers
@@ -195,5 +196,63 @@ word
 	}
 	if p := Inspect(textDB); p.Plan.FullText {
 		t.Error("the prepared database still reports full text with its index file gone")
+	}
+}
+
+// A loose database's article index carries the database's own name, the way
+// media.db does: two loose databases copied into one directory must not come to
+// share one index, and adoption must take the pair along.
+func TestLooseArticleSiblingMirrorsItsName(t *testing.T) {
+	dir := t.TempDir()
+	if got, want := ArticlesFilePath(filepath.Join(dir, TextDBName)), filepath.Join(dir, ArticlesDBName); got != want {
+		t.Errorf("bundle form: got %s, want %s", got, want)
+	}
+	if got, want := ArticlesFilePath(filepath.Join(dir, "some-dict.text.db")), filepath.Join(dir, "some-dict.articles.db"); got != want {
+		t.Errorf("loose form: got %s, want %s", got, want)
+	}
+	if ArticlesFilePath(filepath.Join(dir, "a.text.db")) == ArticlesFilePath(filepath.Join(dir, "b.text.db")) {
+		t.Error("two loose databases in one directory share one article index")
+	}
+	if got, want := ArticlesFilePath(filepath.Join(dir, "not-a-db")), filepath.Join(dir, ArticlesDBName); got != want {
+		t.Errorf("neither shape: got %s, want %s", got, want)
+	}
+}
+
+func TestAdoptionTakesTheLooseArticleIndexAlong(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("WUDICT_DB_DIR", root)
+	src := filepath.Join(root, "source.dsl")
+	if err := os.WriteFile(src, []byte("#NAME t\n\nword\n\tbody\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loose := filepath.Join(root, "Adopted-1234abcd.text.db")
+	r := &fakeReader{meta: dict.Meta{Name: "Adopted", Format: "dsl", Path: src},
+		entries: []dict.Entry{h("alpha", "<p>one two</p>")}}
+	if _, err := IngestPlan(r, loose, Plan{FullText: true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !fsx.FileExists(ArticlesFilePath(loose)) {
+		t.Fatal("the loose build wrote no article index beside its database")
+	}
+	dir, err := adoptOne(loose)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dir == "" {
+		t.Fatal("the loose database was not adopted")
+	}
+	if !fsx.FileExists(filepath.Join(dir, ArticlesDBName)) {
+		t.Error("adoption moved the database without its article index")
+	}
+	if fsx.FileExists(ArticlesFilePath(loose)) {
+		t.Error("the loose article index was left behind")
+	}
+	s, err := Open(TextDBPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if !s.HasArticleIndex() {
+		t.Error("the adopted database lost its full text")
 	}
 }

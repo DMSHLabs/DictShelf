@@ -789,6 +789,7 @@ func dictFiles(arg string) []dictFile {
 		}
 		add("prepared", abs) // loose <name>.text.db, copied out of its folder
 		add("prepared", store.MediaSibling(abs))
+		add("prepared", store.ArticlesFilePath(abs)) // loose <name>.articles.db
 		return out
 	}
 	for _, p := range dict.SourceFiles(abs) {

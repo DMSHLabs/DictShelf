@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -934,8 +935,25 @@ func TestAdoptLooseKeepsExistingFolder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(orph) != 1 || filepath.Base(orph[0].Path) != "Dup-11112222.text.db" {
-		t.Fatalf("the duplicate should be the only removable item: %+v", orph)
+	// The pair is one thing: the loose database and the article index beside it
+	// are both superseded by the prepared folder, and nothing else is.
+	var names []string
+	for _, o := range orph {
+		names = append(names, filepath.Base(o.Path))
+	}
+	sort.Strings(names)
+	want := []string{"Dup-11112222.articles.db", "Dup-11112222.text.db"}
+	if !reflect.DeepEqual(names, want) {
+		t.Fatalf("the duplicate pair should be the only removable items: %+v", orph)
+	}
+	wantReason := map[string]string{
+		"Dup-11112222.text.db":     "superseded by a prepared folder for the same dictionary",
+		"Dup-11112222.articles.db": "paired with a superseded database",
+	}
+	for _, o := range orph {
+		if base := filepath.Base(o.Path); o.Reason != wantReason[base] {
+			t.Errorf("%s: reason %q, want %q", base, o.Reason, wantReason[base])
+		}
 	}
 }
 
