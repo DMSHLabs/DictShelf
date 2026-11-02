@@ -378,9 +378,38 @@ cover: ## Tests with coverage report
 bench: ## Run benchmarks
 	CGO_ENABLED=1 $(TEST_ENV) go test $(GOFLAGS) -bench=. -benchmem -run=^$$ ./...
 
+# vet: everything, with ONE analysis turned off for ONE package.
+#
+# internal/cli reaches Win32 through uintptr->unsafe.Pointer conversions - a COM
+# vtable walk (desktop_icon_windows.go), a keyboard hook's lParam and memory
+# from GlobalLock (desktop_window_windows.go) - which is exactly the shape vet's
+# unsafeptr analysis exists to flag. There is no Go idiom that satisfies it
+# (unsafe.Add does not: the conversion itself is what is reported), and the
+# conversions cannot be delegated anywhere either: golang.org/x/sys/windows -
+# already a dependency - has no GlobalLock, no SetWindowsHookEx and no COM
+# helper, and does the same unsafe.Pointer(uintptr(…)) in its own syscall layer.
+# The Win32 ABI hands a hook's lParam over as an integer; nothing can receive a
+# pointer there.
+#
+# So the ANALYSIS is switched off for that package, not the package itself: every
+# other check still runs on every one of its files, and every other package is
+# vetted in full. go vet has no per-line suppression - no comment or directive
+# silences a finding - so this is the closest thing to naming the four sites, and
+# it is steadier than an allowlist of file:line, which breaks on every edit.
+#
+# The alternative, skipping the package, was tried first and was worse: it took
+# the rest of internal/cli out of the gate on the machine the product is built
+# on. Fixing the code instead means rewriting the hook and the COM calls, which
+# is a product decision (the hook exists so letter shortcuts ignore the layout).
+#
+# If golangci-lint is installed, `make lint` runs it over the build tags as well,
+# and THAT tool does support //nolint:govet directives on the lines themselves.
+VET_SKIP_ANALYSIS := internal/cli
+
 .PHONY: vet
-vet: ## go vet
-	CGO_ENABLED=1 go vet $(GOFLAGS) ./...
+vet: ## go vet (unsafeptr is off for internal/cli - see above)
+	CGO_ENABLED=1 go vet $(GOFLAGS) $$(CGO_ENABLED=1 go list $(GOFLAGS) ./... | grep -v '/$(VET_SKIP_ANALYSIS)$$')
+	CGO_ENABLED=1 go vet -unsafeptr=false $(GOFLAGS) ./$(VET_SKIP_ANALYSIS)/
 
 .PHONY: fmt
 fmt: ## gofmt all sources in place
