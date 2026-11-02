@@ -9,12 +9,38 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
+
+// A dictionary's index is one file or two: the prepared database, and - for a
+// build that split the article index into a file of its own - articles.db
+// beside it. Both are the index, so both count; nothing prepared counts as
+// nothing, and the dialog then prints no line at all.
+func TestIndexSizeCountsOneOrTwoFiles(t *testing.T) {
+	dir := t.TempDir()
+	textDB := filepath.Join(dir, store.TextDBName)
+	if err := os.WriteFile(textDB, make([]byte, 1200), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := indexSize(textDB); got != 1200 {
+		t.Errorf("one file: indexSize = %d, want 1200", got)
+	}
+	if err := os.WriteFile(store.ArticlesFilePath(textDB), make([]byte, 800), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := indexSize(textDB); got != 2000 {
+		t.Errorf("two files: indexSize = %d, want 2000", got)
+	}
+	if got := indexSize(""); got != 0 {
+		t.Errorf("nothing prepared: indexSize = %d, want 0", got)
+	}
+}
 
 // The About reports the size of the dictionary's source files - what the
 // information dialog prints above the headword count. It is stat'd, never

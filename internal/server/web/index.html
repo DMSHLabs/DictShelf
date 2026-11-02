@@ -6338,18 +6338,19 @@ window.wudictShowDictionaryInfo=async id=>{
   name.textContent=dictLabel(d);
   const fullPaths=[...(d.sourceFiles||[]),d.source,...(d.mediaSrc||[])].filter((path,index,all)=>path&&all.indexOf(path)===index);
   paths.innerHTML=fullPaths.map(path=>`<div class="prow"><span class="path" data-full="${escAttr(path)}" title="${escAttr(tx("panel.copyPath"))}">${pathHTML(path)}</span></div>`).join("");
-  /* File size comes from the About fetch (the server stats the source on disk),
-     so the counts are painted twice: from the list row at once, then again with
-     the size once the answer lands. */
-  const paintCounts=(headwords,entries,fileSize)=>{
+  /* File and index sizes come from the About fetch (the server stats the source
+     and the prepared database on disk), so the counts are painted twice: from
+     the list row at once, then again with the sizes once the answer lands. */
+  const paintCounts=(headwords,entries,fileSize,indexSize)=>{
     const counts=[];
     if(fileSize>0)counts.push(tx("dictUI.fileSize",{count:fileSize,size:mb(fileSize),bytes:Number(fileSize).toLocaleString("en-US")}));
+    if(indexSize>0)counts.push(tx("dictUI.indexSize",{count:indexSize,size:mb(indexSize),bytes:Number(indexSize).toLocaleString("en-US")}));
     if(headwords)counts.push(tx("dictUI.numberOfHeadwords",{number:Number(headwords).toLocaleString("en-US")}));
     if(entries)counts.push(tx("dictUI.numberOfEntries",{number:Number(entries).toLocaleString("en-US")}));
     paths.parentElement.querySelectorAll(":scope > .dict-info-counts").forEach(node=>node.remove());
     if(counts.length)paths.insertAdjacentHTML("beforebegin",`<div class="dict-info-counts">${counts.map(esc).join("<br>")}</div>`);
   };
-  paintCounts(d.headwords,d.entries,0);
+  paintCounts(d.headwords,d.entries,0,0);
   about.textContent="…";
   if(!dialog.open)dialog.showModal();
   try{
@@ -6357,7 +6358,7 @@ window.wudictShowDictionaryInfo=async id=>{
     if(!response.ok)throw new Error(response.status);
     const info=await response.json();
     if(request!==dictInfoRequest||!dialog.open)return;
-    paintCounts(d.headwords||info.headwords,d.entries||info.entries,info.fileSize||0);
+    paintCounts(d.headwords||info.headwords,d.entries||info.entries,info.fileSize||0,info.indexSize||0);
     about.innerHTML=(info.html||`<p>${esc(tx("dictUI.emptyAbout"))}</p>`)+aboutLangs(info);
   }catch(_){
     if(request===dictInfoRequest&&dialog.open)about.textContent=tx("dictUI.notAvailable");

@@ -809,6 +809,10 @@
     "one": "File size: {size} ({bytes} byte)",
     "other": "File size: {size} ({bytes} bytes)"
   },
+  "dictUI.indexSize": {
+    "one": "Index size: {size} ({bytes} byte)",
+    "other": "Index size: {size} ({bytes} bytes)"
+  },
   "dictUI.numberOfHeadwords": "Number of headwords: {number}",
   "dictUI.numberOfEntries": "Number of entries: {number}",
   "dictUI.indexedSize": "Indexed: {size} on disk",

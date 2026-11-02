@@ -78,6 +78,7 @@ func (s *Server) aboutSourceFor(e *entry) aboutSource {
 			name: dict.DisplayText(m["name"]), format: m["format"],
 			desc:      dict.DisplayText(m["description"]),
 			srcPath:   src,
+			textDB:    p.TextDB,
 			indexLang: m["index_lang"], contentsLang: m["contents_lang"],
 			headwords: parseAboutCount(m["headword_count"]), entries: parseAboutCount(m["entry_count"]),
 		}
@@ -132,6 +133,22 @@ func sourceSize(files []string) int64 {
 	return total
 }
 
+// indexSize is what a dictionary's search indexes cost on disk: the prepared
+// database (headwords and the headword index, with the article index inside it
+// for every build that did not split one off), plus that article index in its
+// own articles.db when the build did. One file or two - the sibling's presence
+// is what says which (store.ArticlesSibling), exactly as media.db does.
+func indexSize(textDB string) int64 {
+	if textDB == "" {
+		return 0
+	}
+	total := fsx.FileSize(textDB)
+	if articles, ok := store.ArticlesSibling(textDB); ok {
+		total += fsx.FileSize(articles)
+	}
+	return total
+}
+
 // aboutOf composes the About for one dictionary, cheapest first: the live
 // sidecar beside the source, else whatever the header put in the description,
 // else nothing at all - in which case the disclosure is not rendered. It
@@ -148,6 +165,7 @@ func (s *Server) aboutOf(e *entry, base string) (aboutInfo, bool) {
 		ID: e.ID, Name: src.name, Format: src.format,
 		IndexLang: src.indexLang, ContentsLang: src.contentsLang,
 		Headwords: src.headwords, Entries: src.entries,
+		IndexSize: indexSize(src.textDB),
 	}
 	// A source that has been moved away or deleted still leaves a working
 	// library behind (D2/D9); its sidecar is simply gone, and the description

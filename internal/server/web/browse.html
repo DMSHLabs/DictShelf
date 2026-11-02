@@ -1986,16 +1986,18 @@ async function showBrowseDictionaryInfo(id){
   const request=++browseDictInfoRequest;
   dialog.dataset.dict=id;
   title.textContent=d.browseLabel||d.name||d.id;
-  /* The size is the About fetch's - the server stats the source on disk - so the
-     lines are painted twice: at once without it, again when the answer lands. */
-  const paintCounts=(headwords,entries,fileSize)=>{
+  /* The sizes are the About fetch's - the server stats the source and the
+     prepared database on disk - so the lines are painted twice: at once without
+     them, again when the answer lands. */
+  const paintCounts=(headwords,entries,fileSize,indexSize)=>{
     const countLines=[];
     if(fileSize>0)countLines.push(t("dictUI.fileSize",{count:fileSize,size:browseSize(fileSize),bytes:num(Number(fileSize))}));
+    if(indexSize>0)countLines.push(t("dictUI.indexSize",{count:indexSize,size:browseSize(indexSize),bytes:num(Number(indexSize))}));
     if(Number(headwords)>0)countLines.push(t("dictUI.numberOfHeadwords",{number:num(Number(headwords))}));
     if(Number(entries)>0)countLines.push(t("dictUI.numberOfEntries",{number:num(Number(entries))}));
     counts.innerHTML=countLines.map(esc).join("<br>");
   };
-  paintCounts(d.headwords,d.entries,0);
+  paintCounts(d.headwords,d.entries,0,0);
   const files=[...(d.sourceFiles||[]),d.source,...(d.mediaSrc||[])].filter((path,index,all)=>path&&all.indexOf(path)===index);
   const paintPaths=allFiles=>{const unique=allFiles.filter((path,index,all)=>path&&all.indexOf(path)===index);paths.innerHTML=unique.map(path=>'<div class="browse-dict-info-path" data-full="'+esc(path)+'" title="'+tx("panel.copyPath")+'">'+esc(path)+'</div>').join("")};
   paintPaths(files);
@@ -2007,7 +2009,7 @@ async function showBrowseDictionaryInfo(id){
     else if(typeof window.wudictNativeCall==="function"){info=await window.wudictNativeCall("about",id)}
     else{const response=await fetch("/api/about?dict="+encodeURIComponent(id));if(!response.ok)throw new Error(response.status);info=await response.json()}
     if(request!==browseDictInfoRequest||!dialog.open)return;
-    paintCounts(d.headwords||info.headwords,d.entries||info.entries,info.fileSize||0);
+    paintCounts(d.headwords||info.headwords,d.entries||info.entries,info.fileSize||0,info.indexSize||0);
     paintPaths([...files,...(info.sourceFiles||[])]);
     const langs=[];
     if(info.indexLang)langs.push(t("dictUI.headwords",{language:info.indexLang}));
