@@ -7,14 +7,19 @@ const vm=require('node:vm');
 const main=fs.readFileSync('internal/server/web/index.html','utf8');
 const groups=fs.readFileSync('internal/server/web/group-editor.js','utf8');
 (async()=>{
+  // saveGroupOrder reads the module's own state, so every global it touches has
+  // to be bound here; groupShowAllPreferred=false and groupMemberDraft=null are
+  // the "an ordinary group, no unsaved edit" case the assertion is about.
   const rows={scrollTop:12}, controls={};let sent;
   const context={dicts:[{id:'a',dsl:{parser:'original',variant:'original'}},{id:'hidden',dsl:{variant:'gd'}},{id:'b'}],cfgInfo:null,
     userGroups:[{id:'group',members:['a','hidden','b']}],selectedGroup:'group',pickerGroup:'all',groupSaving:false,
-    $:id=>id==='groupRows'?rows:controls[id]||(controls[id]={checked:false,value:''}),
+    groupShowAllPreferred:false,groupMemberDraft:null,
+    prefOrder:[],prefPinned:[],prefCustomOrder:false,savePrefs:()=>{},refreshDictUI:()=>{},doSearch:()=>{},
+    $:id=>id==='groupRows'?rows:controls[id]||(controls[id]={checked:false,value:'',textContent:'',disabled:false}),
     groupRequest:async(url,method,body)=>{sent=body},
     orderedIds:()=>['a','hidden','b'],refreshLivePicker:()=>{},renderGroupRows:()=>{}};
   vm.createContext(context);
-  vm.runInContext(groups.match(/async function saveGroupOrder\(ids,focusId\)\{[\s\S]*?\n\}/)[0],context);
+  vm.runInContext(groups.match(/async function saveGroupOrder\(ids,focusId[^)]*\)\{[\s\S]*?\n\}/)[0],context);
   await context.saveGroupOrder(['b','hidden']);
   assert.equal(sent.members.join(','),'a,b,hidden');
   assert.equal(context.userGroups[0].members.join(','),'a,b,hidden');
