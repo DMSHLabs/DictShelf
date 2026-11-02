@@ -12313,6 +12313,11 @@ function sheetMenuNew(anchor,menu,fill){
     anchor,menu,
     isOpen(){return !menu.hidden},
     place(){
+      /* Before the position is worked out, not after: the icon column the rows
+         are laid out with changes how tall they are, and the height decides
+         which side of the anchor the menu opens on. A menu without icon rows
+         measures nothing and says so. */
+      window.wudictHeadwordControl?.measureIconColumn(menu);
       const r=anchor.getBoundingClientRect();
       // A menu that speaks for a control is exactly as wide as it is.
       if(menu.dataset.w==="anchor")menu.style.width=Math.round(r.width)+"px";
@@ -12405,6 +12410,11 @@ let modeMenuCustomizing=false,modeMenuDraftModes=null,modeMenuDraftHeadings=null
 const modeMenuPrefs=()=>window.wudictHeadwordControl.findMenuPrefs;
 function themedSelect(select,button,menu){
   const ctl=sheetMenuNew(button,menu,()=>{
+    // The rows are built here rather than by the shared control, so the icon
+    // column is sized here too - one column for this menu's widest mark, from
+    // the same measurement the other menus use (headword-control.js). Not in
+    // the fill callback: that runs while the menu is still hidden, and a hidden
+    // element measures nothing.
     if(select.id==="mode"){menu.replaceChildren(...modeMenuNodes(ctl));return true}
     const nodes=[];let group=null;
     for(const option of select.options){

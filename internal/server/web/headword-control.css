@@ -27,16 +27,16 @@
 .headword-control-find-menu[hidden]{display:none}
 .headword-control-find-group+.headword-control-find-group{margin-top:.25em;padding-top:.25em;border-top:1px solid var(--line)}
 .headword-control-find-group-title{padding:.2em .5em;color:var(--muted-fg,var(--fg));font-size:calc(var(--ui-font-section) * 1rem);font-weight:600}
-.headword-control-find-option{box-sizing:border-box;display:grid;grid-template-columns:max-content minmax(0,1fr);align-items:start;gap:.2em;width:100%;padding:.35em .5em;border:0;border-radius:4px;background:transparent;color:var(--fg);font:inherit;font-size:calc(var(--ui-font-addition) * 1rem);text-align:left;white-space:normal;cursor:pointer}
-/* The icon column hugs the mark it holds (max-content), so the description
-   starts right beside it instead of at a fixed column. It used to be a fixed
-   4.4em - wide enough for the widest mark there is, "[A ↔ B]" - with every row
-   sharing it so they all began their text in the same place; that is what left
-   the short marks ("=", "ab") with a hole in front of them, the more visible the
-   more of the long ones were hidden. Alignment was traded for that compactness
-   on purpose: if the ragged left edge comes to matter more, the column can be
-   sized to the widest VISIBLE mark instead (measured, or one column per section),
-   which keeps the aligned start and still shrinks when the wide marks go. */
+.headword-control-find-option{box-sizing:border-box;display:grid;grid-template-columns:var(--find-icon-column,max-content) minmax(0,1fr);align-items:start;gap:.2em;width:100%;padding:.35em .5em;border:0;border-radius:4px;background:transparent;color:var(--fg);font:inherit;font-size:calc(var(--ui-font-addition) * 1rem);text-align:left;white-space:normal;cursor:pointer}
+/* One icon column for the whole menu, sized to the widest mark that menu is
+   showing plus one to two spaces (--find-icon-column, measured in
+   headword-control.js and by the mode menu's own builder). So every description
+   begins at the same place, and the column is as narrow as that menu's marks
+   allow. A fixed 4.4em did the first without the second - it was sized for the
+   widest mark there is, "[A ↔ B]", and left a hole in front of "=" and "ab",
+   worse the more of the long marks were hidden - and hugging each mark did the
+   second without the first, starting each description at a different place.
+   The fallback is for a menu measured before it had rows: hug the mark. */
 .headword-control-find-option-icon{white-space:nowrap;font-variant-numeric:tabular-nums}
 .headword-control-find-option-copy{display:inline;min-width:0;overflow-wrap:anywhere}
 .headword-control-find-option-title{display:inline}
@@ -67,7 +67,7 @@
 .headword-control-find-bar button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .headword-control-find-customize svg{display:block;width:1.15em;height:1.15em}
 .headword-control-find-confirm,.headword-control-find-cancel{color:var(--accent);font-weight:600}
-.headword-control-find-option.is-customizing{grid-template-columns:auto max-content minmax(0,1fr);cursor:pointer}
+.headword-control-find-option.is-customizing{grid-template-columns:auto var(--find-icon-column,max-content) minmax(0,1fr);cursor:pointer}
 .headword-control-find-option.is-customizing:disabled{cursor:default}
 .headword-control-find-option.is-customizing:disabled .headword-control-find-box{opacity:.55}
 /* A tick box stands apart from the command it turns on: the .2em the grid

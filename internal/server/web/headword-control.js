@@ -95,7 +95,12 @@
      localStorage, like every other choice about this window. */
   const hiddenModesKey = "wudict_hidden_find_modes";
   const hiddenHeadingsKey = "wudict_hidden_find_headings";
-  const gearIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-linecap="butt"><circle cx="12" cy="12" r="7.4" stroke-width="2.4" stroke-dasharray="2.7 2.7"/><circle cx="12" cy="12" r="3.3" stroke-width="1.8"/></svg>';
+  /* The same gear the Dictionary groups panel's edit button wears
+     (#groupEditToggle in index.html): one drawn cog with an inner circle, so the
+     two places that open a panel for editing a list are recognisably the same
+     kind of control. Both menus that show it - this one and the mode menu's own
+     builder in index.html - take it from here. */
+  const gearIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M10 2h4l.5 2.4 1.8.8 2.1-1.3 1.7 1.7-1.3 2.1.8 1.8L22 10v4l-2.4.5-.8 1.8 1.3 2.1-1.7 1.7-2.1-1.3-1.8.8L14 22h-4l-.5-2.4-1.8-.8-2.1 1.3-1.7-1.7 1.3-2.1-.8-1.8L2 14v-4l2.4-.5.8-1.8-1.3-2.1 1.7-1.7 2.1 1.3 1.8-.8Z"/></svg>';
   function readNames(key) {
     try {
       const value = JSON.parse(localStorage.getItem(key) || "[]");
@@ -104,6 +109,38 @@
   }
   function writeNames(key, values) {
     try { localStorage.setItem(key, JSON.stringify([...values])); } catch (_) {}
+  }
+  /* One icon column for a whole menu, sized to the widest mark that menu is
+     actually showing, so every description begins at the same place AND the
+     column is no wider than this menu needs. A fixed column of 4.4em - what the
+     stylesheet used to carry - did the first without the second: it was sized
+     for the widest mark there is, "[A ↔ B]", and left a hole in front of "=" and
+     "ab", worse the more of the long marks were hidden. Hugging each mark did
+     the second without the first, starting each description at a different
+     place.
+     Measured from the text's own box in the DOM, not with a canvas: canvas
+     resolved a different face for these marks - "[A ↔ B]" measured 34.5px there
+     and occupies 48.3px on screen - which is how the widest marks came to be
+     overlapped by the descriptions beside them. Module scope, and exposed on
+     wudictHeadwordControl, because the mode menu's rows are built by index.html
+     rather than here. */
+  function measureIconColumn(menu) {
+    if (!menu) return;
+    const icons = menu.querySelectorAll(".headword-control-find-option-icon");
+    if (!icons.length) { menu.style.removeProperty("--find-icon-column"); return; }
+    let widest = 0;
+    const range = document.createRange();
+    for (const icon of icons) {
+      range.selectNodeContents(icon);
+      widest = Math.max(widest, range.getBoundingClientRect().width);
+    }
+    /* A menu that is still hidden measures nothing: leave the column as it is
+       and let the open that shows it measure for real. */
+    if (widest < 1) return;
+    /* Plus one to two spaces of the row's own font: the gap between the longest
+       mark and the description. Half of it here, the rest is the grid's own
+       .2em gap, so the widest mark ends up about two spaces from its text. */
+    menu.style.setProperty("--find-icon-column", "calc(" + Math.ceil(widest) + "px + .15em)");
   }
   /* A menu never renders empty: if the shared set would hide every command of
      the menu it is read in, that menu shows them all rather than a bare bar. */
@@ -434,6 +471,11 @@
     }
     function positionFindMenu() {
       if (!findMenuOpen) return;
+      /* Measured HERE, not where the rows are built: both this menu and the
+         mode menu are filled while still hidden, and a hidden element measures
+         nothing. By now the menu is on the page and laid out, and the width the
+         column comes back with is what the height below is computed from. */
+      measureIconColumn(el.findMenu);
       const anchor = el.mask.getBoundingClientRect();
       const gap = 4, edge = 8;
       const above = Math.max(0, anchor.top - gap - edge);
@@ -642,7 +684,7 @@
   }
 
   window.wudictHeadwordControl = Object.freeze({create, cacheRead, cacheWrite, threshold, setThreshold,
-    findMenuPrefs, findMenuGear:gearIcon,
+    findMenuPrefs, findMenuGear:gearIcon, measureIconColumn,
     registerRibbon(api){if(api&&typeof api.measure==="function"&&typeof api.paint==="function")ribbon=api},
     get ribbon(){return ribbon}});
 })();
