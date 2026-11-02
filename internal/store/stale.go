@@ -159,7 +159,7 @@ func Inspect(textDB string) Prepared {
 					// The same rule Open applies: a split index whose file is
 					// gone is no index, so the row must not offer one (see
 					// store.go's Open).
-					if p.Plan.FullText && p.Plan.SplitArticles {
+					if p.Plan.FullText && !p.Plan.ArticlesInside {
 						if _, ok := ArticlesSibling(textDB); !ok {
 							p.Plan.FullText = false
 						}
@@ -230,7 +230,8 @@ func SearchIndexSizes(textDB string, plan Plan) (contains, fullText int64) {
 // without opening a second handle for it.
 //
 // The contains index is always in that database. The article index is not: a
-// build may keep it in a file of its own (Plan.SplitArticles), so it is read
+// build keeps it in a file of its own unless the Plan says otherwise, so it is
+// read
 // from whichever file holds it - the published sibling beside the database
 // (articlesFileOf), the temp file a build has not renamed into place yet
 // (articlesDB, which the ingest names), or the database itself, which is where
@@ -373,10 +374,11 @@ func PlanFromMeta(m map[string]string) Plan {
 	return Plan{
 		FullText: m["ingest_level"] != levelHeadwords,
 		Contains: m["has_trigram"] == "1",
-		// Only a database that HAS a text index can be split: one whose index was
-		// removed keeps the key, and reading it as a split would ask a rebuild for
-		// articles that are not there.
-		SplitArticles: m["ingest_level"] != levelHeadwords && m["articles_split"] == "1",
+		// "Inside" only describes a database that HAS an article index: one with
+		// none is not inside anything, and a rebuild that adds full text adds it as
+		// a file of its own (which is also why an old database and an empty plan
+		// compare equal - Plan.SameIndexes).
+		ArticlesInside: m["ingest_level"] != levelHeadwords && m["articles_split"] != "1",
 	}
 }
 

@@ -1014,10 +1014,12 @@ dropped the reader back to the first option in silence, while the menu kept offe
 is now derived from the select's own options (`searchModeExists`), which cannot drift from the control it
 describes. Verified by driving the page: all three readings survive a reload, each wearing its own mark.
 
-## The article index in a file of its own: reader done, writer still off (2026-11-02)
+## The article index is a file of its own (2026-11-03; reader 2026-11-02)
 
-The reader is in and tested; the writer stays OFF until the sibling-awareness audit below is done, and
-that is a deliberate stop, not an oversight.
+ON, by the user's four rules: full text is created only as `articles.db`; when that file exists the
+database is not even asked about a full-text index; when it does not exist, the database is (`text.db`
+holds one for every library built before the split); and a full-text rebuild takes the index out of the
+database and creates it as the file, which is the migration.
 
 **How the reader does it, and why not ATTACH.** ATTACH is a per-connection statement and this process
 pools connections without a limit (`pool.go` deliberately sets no `SetMaxOpenConns`), so ATTACH would mean
@@ -1040,17 +1042,26 @@ Two honest behaviours fell out of writing the tests:
 - A dictionary that is never searched by text opens nothing extra: that is why the sibling is lazy, same
   argument as D64 for `media.db`.
 
-**What has to happen before the writer is switched on.** `Plan.SplitArticles` is set NOWHERE today, so
-every existing database keeps its shape and nothing in the library changes. Turning it on means auditing
-every place that already knows about `media.db` and teaching it about `articles.db` - the list, from
-`grep MediaDBName|MediaSibling`: `cli --list` (cli.go:791), the `-full` media check (cli.go:970), remove.go,
-clear_database.go (two sites), dictrows.go, server.go's file listing, adopt.go, link.go, clean.go,
-reconcile.go, store.go's Open, stale.go, library.go's `MediaSibling`/`WriteInfo` (the receipt now names the
-article index file too) - plus the portable/export bundle, which must carry the pair or the folder is not
-one dictionary any more. `clear_indexes.go` already removes the sibling and skips the VACUUM. Until that
-audit is done the reader is dormant but tested: `TestSplitArticlesAnswersLikeAnUnsplittedOne` ingests the
-same content split and unsplit and insists the answers are identical, and
-`TestRemovingTheSplitSiblingEndsTheFullText` pins the removal behaviour.
+**What turning it on needed**, and what it found. `Plan.ArticlesInside` is the OLD shape and the zero Plan
+is the new one, so no caller can get the old one by forgetting a line; the field stays because the old
+shape is not gone - every existing library has it - and a test that has to reproduce one (the migration
+included) asks for it by name. `Plan.SameIndexes` is what "the same indexes" means for a rebuild: the form
+is NOT compared, because it is not content and moves on its own when the full text is rebuilt - comparing
+it would have sent every library built before the split into a full re-ingest, silently, at the first
+request (two sites compared a whole Plan: reconcile.go and restoreIndexContext). `articles_split` is
+volatile meta, for the same reason, or every recorded reader golden would have changed.
+
+The audit found two real defects in the reader, both invisible while the writer was off, and an existing
+test caught each: the sibling branch of `articleMatches` took ids from the article index WITHOUT the
+sub-entry filter the JOIN carries, so hidden `@`-subentries came back as results (`isSubEntry` now filters
+them, and the id prefix grows so the filter does not eat the limit - 59% of LDOCE6's rows are subentries);
+and `hashVocab` created its fts5vocab over `main.article_fts` on the database connection, which no longer
+has that table, so every fingerprint of a split database failed outright.
+
+Verified: `make check` exits 0; a live server asked for full text on a dictionary produces a folder with
+`articles.db` holding `article_fts` and a `text.db` with only the headword indexes, same `dict_uuid`, and
+its phrase search answers with marks; and a library prepared by an earlier build - article index still
+inside - keeps answering (rule 3).
 
 **The older half, kept for the record:** `Plan.SplitArticles` (recorded as `articles_split=1` ONLY when
 true, so every database built before this keeps exactly the meta it had - the reader golden test caught
@@ -1073,12 +1084,6 @@ first attempt - one `ATTACH` in `store.Open` - left a database whose queries say
 The fix is a `driver.Connector` wrapper that attaches as each connection opens
 (`sql.OpenDB(attachingConnector{...})` in `openRO` and in the ingest), which is a change to how the store
 opens databases and deserves its own pass with its own tests.
-
-**Until then nothing may turn the split on.** No caller sets `SplitArticles` - not the server's ZIM path,
-not the CLI - so the option is inert: a database that asks for it would build correctly and then be
-unsearchable in full text, which is worse than not having the split at all. The order is: the connector,
-then the callers (the index-only ZIM form is the one that wants it), then the receipt and the window's
-wording.
 
 ## A ZIM without its own index gets ours, without the bodies (2026-11-02)
 

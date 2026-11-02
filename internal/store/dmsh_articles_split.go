@@ -175,31 +175,64 @@ func (s *Store) articleMatches(ctx context.Context, match string, limit int, wit
 		rows, err := s.db.QueryContext(ctx, query, args...)
 		return scanArticleHits(rows, err, withBodies)
 	}
-	idsQuery := `SELECT rowid FROM ` + s.articleFTSTable + ` WHERE ` + s.articleFTSTable + ` MATCH ?1 ORDER BY rank`
-	var args []any
+	// The sibling has no entry table, so the sub-entry filter the JOIN carries in
+	// its WHERE cannot be part of this query: it is applied when the rows are read
+	// (entryRowsByIDs), and the prefix asked for has to grow to pay for it. With
+	// LIMIT alone, a dictionary whose rows are mostly hidden @-subentries - 59% of
+	// LDOCE6 - would answer with a nearly empty page where the same query on an
+	// unsplitted database answers `limit` results, which is what
+	// TestSubEntriesHiddenFromBrowsing and TestSplitArticlesAnswersLikeAnUnsplittedOne
+	// are for.
+	want, asked := 0, 0
 	if limit > 0 {
-		idsQuery += ` LIMIT ?2`
-		args = append(args, clamp(limit))
+		want = clamp(limit)
+		asked = want
 	}
-	rows, err := db.QueryContext(ctx, idsQuery, append([]any{match}, args...)...)
+	var hits []articleHit
+	for {
+		idsQuery := `SELECT rowid FROM ` + s.articleFTSTable + ` WHERE ` + s.articleFTSTable + ` MATCH ?1 ORDER BY rank`
+		args := []any{match}
+		if asked > 0 {
+			idsQuery += ` LIMIT ?2`
+			args = append(args, asked)
+		}
+		ids, err := scanIDs(db.QueryContext(ctx, idsQuery, args...))
+		if err != nil {
+			return nil, err
+		}
+		if len(ids) == 0 {
+			break
+		}
+		// Rank order, and each batch is a prefix of it, so appending keeps it.
+		batch, err := s.entryRowsByIDs(ctx, ids, withBodies)
+		if err != nil {
+			return nil, err
+		}
+		hits = append(hits, batch...)
+		// Enough real entries, or the index has no more ids to give.
+		if want == 0 || len(hits) >= want || len(ids) < asked {
+			break
+		}
+		asked *= 4
+	}
+	return hits, nil
+}
+
+// scanIDs reads a column of rowids, closing the rows either way.
+func scanIDs(rows *sql.Rows, err error) ([]int64, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	var ids []int64
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
-			rows.Close()
 			return nil, err
 		}
 		ids = append(ids, id)
 	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return nil, err
-	}
-	return s.entryRowsByIDs(ctx, ids, withBodies)
+	return ids, rows.Err()
 }
 
 // entryRowsByIDs reads the rows for the ids, keeping the ids' order.
@@ -236,6 +269,12 @@ func (s *Store) entryRowsByIDs(ctx context.Context, ids []int64, withBodies bool
 			} else if err := rows.Scan(&h.ID, &h.W); err != nil {
 				rows.Close()
 				return nil, err
+			}
+			// The DELETE-side half of the JOIN's filter: an MDict expandable
+			// section is not a result (subEntryFilter, store.go - the same rule in
+			// Go, so the two cannot drift).
+			if isSubEntry(h.W) {
+				continue
 			}
 			found[h.ID] = h
 		}

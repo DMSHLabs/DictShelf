@@ -82,6 +82,8 @@ func TestReconcile(t *testing.T) {
 		t.Errorf("outdated, nobody asked: rebuilt=%v reads=%d, want left alone", out.Rebuilt, reads)
 	}
 	out = run(Target{Rebuild: IfOutdated})
+	// The article index is a file of its own now, so the plan it had carries the
+	// split too (ingest sets it from FullText).
 	if !out.Rebuilt || !slices.Contains(out.Why, ReasonIngest) || out.Plan != (Plan{FullText: true, Contains: true}) {
 		t.Errorf("outdated, asked: %+v, want rebuilt on the plan it had", out)
 	}

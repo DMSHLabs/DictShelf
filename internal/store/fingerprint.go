@@ -7,6 +7,7 @@ package store
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -163,8 +164,19 @@ func Fingerprint(textDB string) (string, error) {
 			fts == "article_fts" && (!s.ftsOK || s.articleFTSTable != "article_fts") {
 			continue
 		}
+		/* The article index may live in a file of its own (articles.db), so its
+		   vocabulary has to be read from the file that holds it - articleHandle
+		   answers which, and false means "inside this database", where every
+		   database built before the split keeps it. The hash is the same either
+		   way, because it is the same index: the same terms in the same order. */
+		vocabDB := s.db
+		if fts == "article_fts" {
+			if article, split := s.articleHandle(); split {
+				vocabDB = article
+			}
+		}
 		field(fts)
-		if err := hashVocab(s, fts, field); err != nil {
+		if err := hashVocab(context.Background(), vocabDB, fts, field); err != nil {
 			return "", fmt.Errorf("%s: %s: %w", textDB, fts, err)
 		}
 	}
@@ -184,6 +196,13 @@ func volatileMeta(k string) bool {
 		"ingest_version", "reader_version", "markup_version", "fold_version",
 		"body_bytes", "stored_body_bytes", "headword_bytes", "stats_version",
 		"contains_index_bytes", "full_text_index_bytes",
+		// The form the article index is kept in. It is not content: the same index
+		// reads the same either way and hashes the same either way, and the form
+		// moves on its own the next time the full text is rebuilt - so a golden
+		// recorded before the split has to match the same dictionary built after
+		// it (Plan.SameIndexes says the same thing about rebuilding, and the golden
+		// tests are what enforce it here).
+		"articles_split",
 		"zim_articles", "zim_redirects", "zim_media", "zim_other", "zim_clusters",
 		"zim_text_bytes", "zim_mixed_bytes", "zim_other_bytes":
 		return true
@@ -193,12 +212,14 @@ func volatileMeta(k string) bool {
 
 // hashVocab feeds every token instance of a contentless FTS5 table into the
 // hash, in a total order. The fts5vocab table lives in the connection's TEMP
-// schema, so it is created on one pinned connection; the main database stays
+// schema, so it is created on one pinned connection; the database it reads is
 // read-only (mode=ro) - only the query_only guard is lifted, and only on this
 // connection of a handle Fingerprint closes when it returns.
-func hashVocab(s *Store, table string, field func(string)) error {
-	ctx := context.Background()
-	conn, err := s.db.Conn(ctx)
+//
+// db is the connection holding the table, which is not always the database: a
+// split article index is read from its sibling (see the caller).
+func hashVocab(ctx context.Context, db *sql.DB, table string, field func(string)) error {
+	conn, err := db.Conn(ctx)
 	if err != nil {
 		return err
 	}

@@ -101,7 +101,7 @@ func newIngestRowWriter(ctx context.Context, tx *sql.Tx, plan Plan) *ingestRowWr
 	}
 	if plan.FullText {
 		table := "article_fts"
-		if plan.SplitArticles {
+		if !plan.ArticlesInside {
 			table = "articles.article_fts"
 		}
 		w.article = newIngestBulk(ctx, tx, "INSERT INTO "+table+"(rowid, w, txt) VALUES", 3)

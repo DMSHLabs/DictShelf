@@ -36,7 +36,15 @@ func canonicalDictEvents(events []dictMsg) []dictMsg {
 	}
 	rows := append([]dictMsg(nil), copyEvents[1:len(copyEvents)-1]...)
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Dict.ID < rows[j].Dict.ID })
-	return append(append([]dictMsg{copyEvents[0]}, rows...), copyEvents[len(copyEvents)-1])
+	last := copyEvents[len(copyEvents)-1]
+	/* What the two adapters are being compared on is the LIST: the rows, in a
+	   settled order, and the validator. Free space and the volume name describe
+	   the disk, not the dictionary list, and they are read per response - any
+	   write anywhere in the milliseconds between the two calls moves them, which
+	   is how a background pass (a sidecar, the startup sweep, a build's
+	   articles.db) came to look like the transports disagreeing. */
+	last.FreeBytes, last.LibraryVolume = 0, ""
+	return append(append([]dictMsg{copyEvents[0]}, rows...), last)
 }
 
 func TestDictionaryListSharedByHTTPAndNativeWithoutRouter(t *testing.T) {

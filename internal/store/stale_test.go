@@ -131,6 +131,8 @@ func TestRebuildKeepsUUIDAndMedia(t *testing.T) {
 	if !MediaPaired(textDB) {
 		t.Fatal("freshly packed media not paired")
 	}
+	// The plan a rebuild is asked to keep carries the split as well: full text is
+	// built in a file of its own now, which is what the meta records.
 	if got := KeptPlan(textDB); got != (Plan{FullText: true, Contains: true}) {
 		t.Errorf("KeptPlan = %+v", got)
 	}

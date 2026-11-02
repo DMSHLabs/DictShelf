@@ -48,10 +48,13 @@ const (
 // missing or unusable database, or one built from an older edition of the
 // source, and nothing else.
 type Target struct {
-	// SplitArticles keeps the article index in a file of its own; nil keeps the
+	// ArticlesInside reproduces the OLD shape, the article index inside the
+	// database; nil is the behaviour the application wants, which is a file of its
+	// own - including for a database that predates it, so a rebuild migrates one
+	// (rule 4 of the split's design).
 	// shape the database already has, so a rebuild never moves it by accident
 	// (dmsh_articles_split.go).
-	SplitArticles *bool
+	ArticlesInside *bool
 	// FullText and Contains set one index each; nil keeps what is built. A
 	// dictionary never prepared - or whose database cannot be read - has
 	// nothing to keep and starts from headwords only (D24).
@@ -229,8 +232,15 @@ func reconcileText(src string, t Target, h Hooks, out *Outcome) (p Prepared, dir
 	if t.FullText != nil {
 		plan.FullText = *t.FullText
 	}
-	if t.SplitArticles != nil {
-		plan.SplitArticles = *t.SplitArticles
+	if t.ArticlesInside != nil {
+		plan.ArticlesInside = *t.ArticlesInside
+	} else {
+		/* Not "keep the form that is there": a rebuild takes the article index
+		   OUT of the database and creates it as articles.db, which is what
+		   migrates every library built before the split. That is what leaving
+		   this nil - at every call site the application has - means, and a test
+		   that wants the old shape has to ask for it by name. */
+		plan.ArticlesInside = false
 	}
 	if t.Contains != nil {
 		plan.Contains = *t.Contains
@@ -240,7 +250,13 @@ func reconcileText(src string, t Target, h Hooks, out *Outcome) (p Prepared, dir
 	// The reasons are read only when they can matter: a usable, current
 	// database on the wanted plan is rebuilt only if Rebuild says so, and this
 	// runs for every indexing request.
-	need := t.Out != "" || !p.Current(src) || plan != p.Plan
+	//
+	// sameIndexes, not ==: WHICH indexes are wanted is a reason to rebuild, the
+	// form the article index is kept in is not. Comparing that too would send
+	// every library built before the split into a full rebuild at the first
+	// request - and the form moves on its own the next time the full text is
+	// rebuilt anyway (Plan.ArticlesInside).
+	need := t.Out != "" || !p.Current(src) || !plan.SameIndexes(p.Plan)
 	var why []Reason
 	if !need && t.Rebuild != nil {
 		why = p.TextStale(src)

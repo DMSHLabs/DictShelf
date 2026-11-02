@@ -122,7 +122,11 @@ func (e *entry) restoreIndexContext(ctx context.Context, plan store.Plan, progre
 	}
 	textDB := store.TextDBPath(dir)
 	prepared, ready := store.PreparedFor(e.Path)
-	if !ready || prepared != textDB || len(store.Inspect(textDB).TextStale(e.Path)) != 0 || store.KeptPlan(textDB) != plan {
+	// SameIndexes, not ==: the form the article index is kept in is not a reason
+	// to rebuild by itself - a database that keeps it inside is current, and it
+	// moves into a file of its own when the full text is rebuilt - so comparing
+	// it here would re-ingest every library built before the split.
+	if !ready || prepared != textDB || len(store.Inspect(textDB).TextStale(e.Path)) != 0 || !store.KeptPlan(textDB).SameIndexes(plan) {
 		if _, err := e.reconcileLockedContext(ctx, e.probeName(), store.Target{
 			FullText: &plan.FullText, Contains: &plan.Contains, Rebuild: store.Always,
 		}, progress); err != nil {

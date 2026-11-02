@@ -58,11 +58,31 @@ type Report struct {
 type Plan struct {
 	FullText bool // index article text (the largest index)
 	Contains bool // trigram and token FTS over headwords
-	// SplitArticles keeps the article index in its own articles.db beside the
-	// database instead of inside it (dmsh_articles_split.go). Only meaningful
-	// with FullText, and false for every database built before it existed, which
-	// is why an old database compares equal to the intent "no split".
-	SplitArticles bool
+	// ArticlesInside keeps the article index inside the database instead of in
+	// articles.db beside it (dmsh_articles_split.go). NOTHING BUILT BY THE
+	// APPLICATION SETS IT: the article index is created in a file of its own,
+	// always, and that is why the field is named for the OLD shape - a zero Plan
+	// is the current behaviour, and no caller can get the old one by forgetting
+	// a line.
+	//
+	// It stays constructible because the old shape is not gone: every database
+	// built before the split has it, the readers still serve it (rules 2 and 3 in
+	// the split's own terms), and a test that has to reproduce one - including
+	// the migration a rebuild performs - asks for it here.
+	ArticlesInside bool
+}
+
+// sameIndexes reports whether two plans ask for the same indexes.
+//
+// ArticlesInside is deliberately not compared. It is not a reason to rebuild
+// anything by itself: a database that keeps its article index inside is current,
+// and the index moves into a file of its own the next time the full text is
+// rebuilt - which is the migration, done when there is a rebuild to do it in.
+// Comparing it would make every library built before the split look outdated, and
+// the first indexing request would send tens of gigabytes through a re-ingest
+// (reconcile.go, where this decides between "current" and "rebuild").
+func (p Plan) SameIndexes(q Plan) bool {
+	return p.FullText == q.FullText && p.Contains == q.Contains
 }
 
 // IngestPlan scans r into a new text database at dbPath (atomically: written
@@ -114,7 +134,7 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	// files, renamed together at the end.
 	articlesTmp := ""
 	articleTable := "article_fts"
-	if plan.FullText && plan.SplitArticles {
+	if plan.FullText && !plan.ArticlesInside {
 		articlesTmp = tmp + "-articles"
 		articleTable = "articles.article_fts"
 		_ = os.Remove(articlesTmp)
@@ -195,7 +215,7 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 		}
 	}
 
-	if plan.FullText && plan.SplitArticles {
+	if plan.FullText && !plan.ArticlesInside {
 		// Recorded only when it is true, so a database that is not split - every
 		// one built before this existed - keeps exactly the meta it had.
 		if _, err = db.ExecContext(ctx, `INSERT OR REPLACE INTO meta(key, value) VALUES('articles_split', '1')`); err != nil {
@@ -446,10 +466,10 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	// index segments and a size taken before it describes an index that no
 	// longer exists.
 	//
-	// The article index may be in a file of its own (plan.SplitArticles), whose
-	// temp exists on disk now and is renamed into place a few lines below; the
-	// empty textDB says so, because the directory may still hold an articles.db
-	// from an earlier split build and this one must not be measured as that.
+	// The article index may be in a file of its own (the default; the temp exists
+	// on disk now and is renamed into place a few lines below); the empty textDB
+	// says so, because the directory may still hold an articles.db from an earlier
+	// split build and this one must not be measured as that.
 	containsIndex, fullTextIndex := indexSizesOf(ctx, db, "", articlesTmp, plan)
 	if _, err = db.ExecContext(ctx, "INSERT INTO meta(key, value) VALUES('contains_index_bytes', ?), ('full_text_index_bytes', ?)",
 		fmt.Sprint(containsIndex), fmt.Sprint(fullTextIndex)); err != nil {

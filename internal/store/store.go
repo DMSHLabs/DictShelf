@@ -206,7 +206,7 @@ func Open(path string) (*Store, error) {
 	// database - ClearSearchIndexes deletes the sibling and does not rewrite the
 	// database at all). Reporting full text from the meta alone would answer a
 	// search with "no such table" and offer a chip for an index that is gone.
-	if s.ftsOK && plan.SplitArticles {
+	if s.ftsOK && !plan.ArticlesInside {
 		if _, ok := ArticlesSibling(path); !ok {
 			s.ftsOK = false
 		}
@@ -222,7 +222,8 @@ func Open(path string) (*Store, error) {
 	// per-connection statement - so the read side waits for a connector that
 	// attaches as each connection opens, rather than being done with one call
 	// that happens to land on one connection (dmsh_articles_split.go). Until
-	// then nothing may ask for the split: no caller sets SplitArticles.
+	// then nothing may ask for the split: the article index is a file of its own
+	// unless a Plan says otherwise, and the application never says so.
 	var headFTS int
 	db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type='table' AND name='entry_fts'`).Scan(&headFTS)
 	s.hasHeadwordFTS = headFTS > 0

@@ -28,7 +28,7 @@ func TestSplitArticlesIndexInItsOwnFile(t *testing.T) {
 	}
 	r := &fakeReader{meta: dict.Meta{Name: "Split", Format: "dsl", Path: src},
 		entries: []dict.Entry{h("alpha", "<p>one two</p>"), h("beta", "<p>three two</p>")}}
-	if _, err := IngestPlan(r, textDB, Plan{Contains: true, FullText: true, SplitArticles: true}, nil); err != nil {
+	if _, err := IngestPlan(r, textDB, Plan{Contains: true, FullText: true}, nil); err != nil {
 		t.Fatal(err)
 	}
 	art := ArticlesFilePath(textDB)
@@ -92,7 +92,7 @@ func TestSplitArticlesIndexInItsOwnFile(t *testing.T) {
 // inside, for all three readings the reader has.
 func TestSplitArticlesAnswersLikeAnUnsplittedOne(t *testing.T) {
 	entries := []dict.Entry{h("alpha", "<p>one two</p>"), h("beta", "<p>three two</p>"), h("gamma", "<p>one three</p>")}
-	build := func(dir string, split bool) string {
+	build := func(dir string, inside bool) string {
 		textDB := filepath.Join(dir, TextDBName)
 		src := filepath.Join(dir, "source.dsl")
 		if err := os.WriteFile(src, []byte(`#NAME t
@@ -102,7 +102,7 @@ word
 			t.Fatal(err)
 		}
 		r := &fakeReader{meta: dict.Meta{Name: "Split", Format: "dsl", Path: src}, entries: entries}
-		if _, err := IngestPlan(r, textDB, Plan{Contains: true, FullText: true, SplitArticles: split}, nil); err != nil {
+		if _, err := IngestPlan(r, textDB, Plan{Contains: true, FullText: true, ArticlesInside: inside}, nil); err != nil {
 			t.Fatal(err)
 		}
 		return textDB
@@ -171,7 +171,7 @@ word
 	}
 	r := &fakeReader{meta: dict.Meta{Name: "Split", Format: "dsl", Path: src},
 		entries: []dict.Entry{h("alpha", "<p>one two</p>")}}
-	if _, err := IngestPlan(r, textDB, Plan{FullText: true, SplitArticles: true}, nil); err != nil {
+	if _, err := IngestPlan(r, textDB, Plan{FullText: true}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(ArticlesFilePath(textDB)); err != nil {

@@ -1077,7 +1077,13 @@ func TestOptionalHeadwordAndArticleIndexes(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer s.Close()
-			for table, want := range map[string]bool{"entry_fts": tc.headword, "entry_trigram": tc.trigram, "article_fts": tc.article} {
+			// The two headword indexes are always in the database. The article
+			// index is not: a build puts it in a file of its own, and its presence
+			// is asked of the reader rather than looked for in this file - the
+			// sibling's existence is the shape, which is the rule the whole split
+			// runs on (ArticlesSibling; the reader ignores an in-database copy
+			// whenever there is one).
+			for table, want := range map[string]bool{"entry_fts": tc.headword, "entry_trigram": tc.trigram} {
 				var count int
 				if err := s.db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&count); err != nil {
 					t.Fatal(err)
@@ -1085,6 +1091,12 @@ func TestOptionalHeadwordAndArticleIndexes(t *testing.T) {
 				if (count > 0) != want {
 					t.Errorf("%s present=%v, want %v", table, count > 0, want)
 				}
+			}
+			if got := s.HasArticleIndex(); got != tc.article {
+				t.Errorf("article index present=%v, want %v", got, tc.article)
+			}
+			if _, split := ArticlesSibling(path); split != tc.article {
+				t.Errorf("articles.db present=%v, want %v (the build keeps the index in its own file)", split, tc.article)
 			}
 			for _, mode := range []struct{ name, query, want string }{
 				{"prefix", "hea", "Blue heart"},
@@ -1139,11 +1151,23 @@ func TestIndexSizesAreMeasuredOutsideTheOpenPath(t *testing.T) {
 		if _, err := IngestPlan(r, path, plan, nil); err != nil {
 			t.Fatal(err)
 		}
-		// Inspect answers what the database IS, without weighing it.
+		// Inspect answers what the database IS, without weighing it. The article
+		// index is the one size it may report - it is a FILE of its own, so the
+		// number is an os.Stat and not a page walk - and the contains index, which
+		// is always inside, must stay unmeasured here.
 		got := Inspect(path)
-		if got.ContainsSize != 0 || got.FullTextSize != 0 {
-			t.Errorf("Inspect measured sizes (%d, %d); opening a dictionary must not walk its pages",
-				got.ContainsSize, got.FullTextSize)
+		if got.ContainsSize != 0 {
+			t.Errorf("Inspect measured the contains index (%d bytes); opening a dictionary must not walk its pages", got.ContainsSize)
+		}
+		wantFull := int64(0)
+		if article, ok := ArticlesSibling(path); ok {
+			if fi, err := os.Stat(article); err == nil {
+				wantFull = fi.Size()
+			}
+		}
+		if got.FullTextSize != wantFull {
+			t.Errorf("Inspect reported the full-text size as %d, want %d (the sibling's own size, or nothing without one)",
+				got.FullTextSize, wantFull)
 		}
 		// The measurement itself still answers, for the caller that may pay it.
 		// How much it can see depends on the SQLite build: dbstat is a compile-time
@@ -1350,40 +1374,71 @@ func TestMaintenanceRefreshesRecordedIndexSizes(t *testing.T) {
 	}
 }
 
-// A build that writes no article sibling must clear one an earlier build left:
-// the reader takes the file's presence as the answer to where the article index
-// is, and the uuid does NOT catch a stale one, because keptUUID keeps this
-// dictionary's uuid across a rebuild of the same source. So "text.db changed,
-// the sibling is invalid" is made true here and nowhere else.
-func TestAnUnsplittingBuildClearsTheSiblingItDidNotWrite(t *testing.T) {
+// The article index moves between the two shapes only one way in practice, and
+// both halves of the move are asserted here.
+//
+// Outward (rule 4 of the split's design): a full-text rebuild takes the index OUT
+// of the database and creates it as articles.db, which is what migrates every
+// library built before the split.
+//
+// Inward (a shape only a test gets to ask for): a build that writes the index
+// inside writes no sibling, and the one an earlier build left has to go - the
+// reader takes the FILE's presence as the answer to where the article index is,
+// and the uuid does not catch a stale one, because keptUUID keeps this
+// dictionary's uuid across a rebuild of the same source.
+func TestFullTextIsSplitAndARebuildMigratesIt(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "text.db")
 	r := &fakeReader{meta: dict.Meta{Name: "split", Format: "test", Path: "/x"}, entries: []dict.Entry{
 		h("Blue heart", "<p>cardiac tissue</p>"),
 	}}
-	if _, err := IngestPlan(r, path, Plan{Contains: true, FullText: true, SplitArticles: true}, nil); err != nil {
+	articleIn := func(textDB string) bool {
+		t.Helper()
+		db, err := openRO(textDB)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+		var count int
+		if err := db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='article_fts'").Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		return count > 0
+	}
+
+	// The old shape, built on purpose: the index inside, no sibling.
+	if _, err := IngestPlan(r, path, Plan{Contains: true, FullText: true, ArticlesInside: true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := ArticlesSibling(path); ok {
+		t.Fatal("a build that was asked to keep the index inside published articles.db")
+	}
+	if !articleIn(path) {
+		t.Fatal("the index is not in the database it was asked to stay in")
+	}
+
+	// A rebuild, as the application asks for it: the index comes out.
+	if _, err := IngestPlan(r, path, Plan{Contains: true, FullText: true}, nil); err != nil {
 		t.Fatal(err)
 	}
 	sibling, ok := ArticlesSibling(path)
 	if !ok {
-		t.Fatal("the split build published no articles.db")
+		t.Fatal("the rebuild did not publish articles.db")
 	}
-	splitUUID, _ := ReadMeta(path)
+	if articleIn(path) {
+		t.Errorf("the rebuild left the article index in text.db as well as %s", filepath.Base(sibling))
+	}
 
-	// The same source, rebuilt WITHOUT the split - which is what turning the
-	// feature off, or an older flag, looks like.
-	if _, err := IngestPlan(r, path, Plan{Contains: true, FullText: true}, nil); err != nil {
+	// And back inside - only a test may ask - which must clear the sibling the
+	// previous build wrote, or the reader would search the index that is no
+	// longer this database's.
+	if _, err := IngestPlan(r, path, Plan{Contains: true, FullText: true, ArticlesInside: true}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := ArticlesSibling(path); ok {
-		t.Errorf("%s survived a build that did not write it: the reader would search the previous edition's index",
-			filepath.Base(sibling))
+		t.Errorf("%s survived a build that wrote its index inside", filepath.Base(sibling))
 	}
-	// And the uuid really is kept, which is why the file's absence is the only
-	// thing that can stand for this.
-	rebuiltUUID, _ := ReadMeta(path)
-	if rebuiltUUID["dict_uuid"] != splitUUID["dict_uuid"] {
-		t.Logf("note: the uuid changed across the rebuild (%s -> %s); the removal is still what the pair relies on",
-			splitUUID["dict_uuid"], rebuiltUUID["dict_uuid"])
+	if !articleIn(path) {
+		t.Error("the index was not written inside on the way back")
 	}
 }
 
@@ -1398,7 +1453,7 @@ func TestSplitBuildRecordsTheArticleIndexSize(t *testing.T) {
 		h("Blue heart", "<p>cardiac tissue</p>"),
 		h("Red heart", "<p>cardiac muscle</p>"),
 	}}
-	plan := Plan{Contains: true, FullText: true, SplitArticles: true}
+	plan := Plan{Contains: true, FullText: true}
 	if _, err := IngestPlan(r, path, plan, nil); err != nil {
 		t.Fatal(err)
 	}
