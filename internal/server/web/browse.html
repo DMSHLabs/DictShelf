@@ -1974,6 +1974,9 @@ async function unprepared(){
 }
 
 let browseDictInfoRequest=0,browseDictInfoPress=null,browseDictInfoSuppress=null;
+/* A byte count in decimal units - the same rule as index.html's mb(), logx.Size
+   and the other pages, so one file never reads as two sizes. */
+const browseSize=n=>n<1e3?n+" B":n<1e6?Math.round(n/1e3)+" kB":n<1e7?(n/1e6).toFixed(1)+" MB":n<1e9?Math.round(n/1e6)+" MB":(n/1e9).toFixed(1)+" GB";
 async function showBrowseDictionaryInfo(id){
   const d=(browseChooserDictionaries||[]).find(item=>item.id===id)||
     (state?.dict===id?{id,browseLabel:state.title||state.name,headwords:state.total}:null);
@@ -1983,13 +1986,16 @@ async function showBrowseDictionaryInfo(id){
   const request=++browseDictInfoRequest;
   dialog.dataset.dict=id;
   title.textContent=d.browseLabel||d.name||d.id;
-  const paintCounts=(headwords,entries)=>{
+  /* The size is the About fetch's - the server stats the source on disk - so the
+     lines are painted twice: at once without it, again when the answer lands. */
+  const paintCounts=(headwords,entries,fileSize)=>{
     const countLines=[];
+    if(fileSize>0)countLines.push(t("dictUI.fileSize",{count:fileSize,size:browseSize(fileSize),bytes:num(Number(fileSize))}));
     if(Number(headwords)>0)countLines.push(t("dictUI.numberOfHeadwords",{number:num(Number(headwords))}));
     if(Number(entries)>0)countLines.push(t("dictUI.numberOfEntries",{number:num(Number(entries))}));
     counts.innerHTML=countLines.map(esc).join("<br>");
   };
-  paintCounts(d.headwords,d.entries);
+  paintCounts(d.headwords,d.entries,0);
   const files=[...(d.sourceFiles||[]),d.source,...(d.mediaSrc||[])].filter((path,index,all)=>path&&all.indexOf(path)===index);
   const paintPaths=allFiles=>{const unique=allFiles.filter((path,index,all)=>path&&all.indexOf(path)===index);paths.innerHTML=unique.map(path=>'<div class="browse-dict-info-path" data-full="'+esc(path)+'" title="'+tx("panel.copyPath")+'">'+esc(path)+'</div>').join("")};
   paintPaths(files);
@@ -2001,7 +2007,7 @@ async function showBrowseDictionaryInfo(id){
     else if(typeof window.wudictNativeCall==="function"){info=await window.wudictNativeCall("about",id)}
     else{const response=await fetch("/api/about?dict="+encodeURIComponent(id));if(!response.ok)throw new Error(response.status);info=await response.json()}
     if(request!==browseDictInfoRequest||!dialog.open)return;
-    paintCounts(d.headwords||info.headwords,d.entries||info.entries);
+    paintCounts(d.headwords||info.headwords,d.entries||info.entries,info.fileSize||0);
     paintPaths([...files,...(info.sourceFiles||[])]);
     const langs=[];
     if(info.indexLang)langs.push(t("dictUI.headwords",{language:info.indexLang}));

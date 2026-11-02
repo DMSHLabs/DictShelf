@@ -832,6 +832,21 @@ Recorded before the work, because each one changes which part of the flow moves.
    between, `articlePageCache`/`wildcardPages`) is for the modes whose total is NOT known until the
    articles have been counted, which is exactly the full-text family.
 
+**Two things the user's screenshots caught the same day**, both of them consequences of that change:
+
+- The archive's chip was still hidden when an index of ours was absent (a decision from earlier the same
+  day, when the chip was the only claim of full text). With the new line on the plate the search DOES use the
+  archive's index, so hiding it made a plate that answers from the archive look like a dictionary with no
+  index at all. The chip is shown whenever the archive has one, and its label already says what that index
+  can do ("in the archive: words") - there is no claim to withdraw any more.
+- The words were NOT highlighted. The marks are built from the rung NAME (`marker`, server.go), and a phrase
+  request carried `rung="phrase"` into the marking even when the answer was the words reading, so the marks
+  looked for a phrase that is not in the article. Both marking sites now use the reading that ANSWERED
+  (`words` when `NeedsIndex`), and the cache path carries that name to the page as well. Verified in the
+  server's own answer: `mode=phrase&hl=1` on the Wikipedia gives `rung=words needsIndex=true` and 8 marks -
+  «кларнетист», «джазовый», «кларнетисты»… The live page could not confirm it: articles render in a Shadow
+  DOM or an iframe, and a plain `querySelectorAll('mark')` in the page context cannot see inside them.
+
 ### ...and the plate is not left empty: it answers with the words and says what is missing (2026-11-02)
 
 The user's refinement, and better than what I had built: a strict reading on a dictionary whose archive has

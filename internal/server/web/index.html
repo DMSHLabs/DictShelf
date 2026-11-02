@@ -4141,14 +4141,14 @@ function renderPanel(){
         ` data-feat="${key}" data-on="${on?1:0}"${stale?' data-stale="1"':""}`+
         ` title="${escAttr(tip)}">${esc(label)}${size}${stale?" ⟳":""}</span>`;
     }
-    /* The archive's own index is shown ONLY beside an index of ours, and that
-       is a decision, not a layout accident: it stores no positions, so it
-       answers "words" and nothing else, and the strict readings over it mean
-       reading article texts - slow, and on a phone a battery question. A
-       dictionary that has only that index therefore does not get a chip
-       claiming full text: it gets the "our FTS" switch, which is what would
-       make the mode actually work. */
-    if(d.archiveIndex&&d.ourFullText)caps+=`<span class="feat on locked" title="${escAttr(tx("dictUI.ftsArchiveHint"))}">${esc(tx("dictUI.ftsArchive"))}</span>`;
+    /* The archive's own index, shown whenever the archive has one. It is not
+       hidden any more when ours is absent, and the reason is the label: it now
+       says what that index can actually do ("in the archive: words"), so there
+       is no claim of full text to withdraw - and the search DOES use it (it
+       answers the words reading, which is what the strict modes fall back to
+       and what the plate says). Hiding it made a plate that answers from the
+       archive look like it had no index at all. */
+    if(d.archiveIndex)caps+=`<span class="feat on locked" title="${escAttr(tx("dictUI.ftsArchiveHint"))}">${esc(tx("dictUI.ftsArchive"))}</span>`;
     // Contains and full-text are both built only after an explicit action.
     // "pack media" is offered only when the dictionary actually has packable
     // media, a source to pack it from, and it isn't already packed.
@@ -6330,11 +6330,18 @@ window.wudictShowDictionaryInfo=async id=>{
   name.textContent=dictLabel(d);
   const fullPaths=[...(d.sourceFiles||[]),d.source,...(d.mediaSrc||[])].filter((path,index,all)=>path&&all.indexOf(path)===index);
   paths.innerHTML=fullPaths.map(path=>`<div class="prow"><span class="path" data-full="${escAttr(path)}" title="${escAttr(tx("panel.copyPath"))}">${pathHTML(path)}</span></div>`).join("");
-  paths.parentElement.querySelectorAll(":scope > .dict-info-counts").forEach(node=>node.remove());
-  const counts=[];
-  if(d.headwords)counts.push(tx("dictUI.numberOfHeadwords",{number:Number(d.headwords).toLocaleString("en-US")}));
-  if(d.entries)counts.push(tx("dictUI.numberOfEntries",{number:Number(d.entries).toLocaleString("en-US")}));
-  if(counts.length)paths.insertAdjacentHTML("beforebegin",`<div class="dict-info-counts">${counts.map(esc).join("<br>")}</div>`);
+  /* File size comes from the About fetch (the server stats the source on disk),
+     so the counts are painted twice: from the list row at once, then again with
+     the size once the answer lands. */
+  const paintCounts=(headwords,entries,fileSize)=>{
+    const counts=[];
+    if(fileSize>0)counts.push(tx("dictUI.fileSize",{count:fileSize,size:mb(fileSize),bytes:Number(fileSize).toLocaleString("en-US")}));
+    if(headwords)counts.push(tx("dictUI.numberOfHeadwords",{number:Number(headwords).toLocaleString("en-US")}));
+    if(entries)counts.push(tx("dictUI.numberOfEntries",{number:Number(entries).toLocaleString("en-US")}));
+    paths.parentElement.querySelectorAll(":scope > .dict-info-counts").forEach(node=>node.remove());
+    if(counts.length)paths.insertAdjacentHTML("beforebegin",`<div class="dict-info-counts">${counts.map(esc).join("<br>")}</div>`);
+  };
+  paintCounts(d.headwords,d.entries,0);
   about.textContent="…";
   if(!dialog.open)dialog.showModal();
   try{
@@ -6342,6 +6349,7 @@ window.wudictShowDictionaryInfo=async id=>{
     if(!response.ok)throw new Error(response.status);
     const info=await response.json();
     if(request!==dictInfoRequest||!dialog.open)return;
+    paintCounts(d.headwords||info.headwords,d.entries||info.entries,info.fileSize||0);
     about.innerHTML=(info.html||`<p>${esc(tx("dictUI.emptyAbout"))}</p>`)+aboutLangs(info);
   }catch(_){
     if(request===dictInfoRequest&&dialog.open)about.textContent=tx("dictUI.notAvailable");

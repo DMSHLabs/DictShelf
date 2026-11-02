@@ -124,6 +124,13 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 			needsIndex = oneReading
 		}
 	}
+	// The reading that ANSWERED. The page drawn from this path marks its words
+	// from this name, so a phrase answered with words has to say "words" or the
+	// highlight marks the phrase that is not there (found on the live page).
+	answerRung := request.Rung
+	if needsIndex {
+		answerRung = "words"
+	}
 	switch request.CacheAction {
 	case "build":
 		match := ""
@@ -231,7 +238,7 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 		}
 		return emit(SearchEvent{T: "hit", Dict: e.ID, Results: results, CacheID: request.CacheID,
 			Total: total, Complete: complete, Start: request.Start, HasNext: end < total || !complete,
-			Rung: request.Rung, OneReading: oneReading, NeedsIndex: needsIndex, Term: query})
+			Rung: answerRung, OneReading: oneReading, NeedsIndex: needsIndex, Term: query})
 	default:
 		return fmt.Errorf("invalid article result cache action %q", request.CacheAction)
 	}

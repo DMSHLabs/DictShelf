@@ -141,6 +141,20 @@ func FileExists(path string) bool {
 	return err == nil && !fi.IsDir()
 }
 
+// FileSize is the size in bytes of the regular file at path, or 0 when it is
+// missing, unreadable, or not a regular file. A directory reports 0 rather
+// than the total of its children: this is one stat, not a walk.
+func FileSize(path string) int64 {
+	if path == "" {
+		return 0
+	}
+	fi, err := os.Stat(path)
+	if err != nil || !fi.Mode().IsRegular() {
+		return 0
+	}
+	return fi.Size()
+}
+
 // DirExists reports that path names a directory.
 func DirExists(path string) bool {
 	if path == "" {

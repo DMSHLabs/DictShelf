@@ -29,16 +29,20 @@ import (
 // formats happen to have a prober.
 
 type aboutInfo struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name,omitempty"`
-	Format       string   `json:"format,omitempty"`
-	HTML         string   `json:"html"`
-	Source       string   `json:"source,omitempty"`
-	SourceFiles  []string `json:"sourceFiles,omitempty"`
-	Headwords    int      `json:"headwords,omitempty"`
-	Entries      int      `json:"entries,omitempty"`
-	IndexLang    string   `json:"indexLang,omitempty"`
-	ContentsLang string   `json:"contentsLang,omitempty"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name,omitempty"`
+	Format      string   `json:"format,omitempty"`
+	HTML        string   `json:"html"`
+	Source      string   `json:"source,omitempty"`
+	SourceFiles []string `json:"sourceFiles,omitempty"`
+	Headwords   int      `json:"headwords,omitempty"`
+	Entries     int      `json:"entries,omitempty"`
+	// FileSize is the total size in bytes of the dictionary's source files -
+	// its main file and the companions beside it (dict.SourceFiles). Zero when
+	// the source is gone or nothing regular could be stat'd.
+	FileSize     int64  `json:"fileSize,omitempty"`
+	IndexLang    string `json:"indexLang,omitempty"`
+	ContentsLang string `json:"contentsLang,omitempty"`
 }
 
 // aboutSource is what one dictionary declares about itself, gathered without
@@ -107,6 +111,18 @@ func parseAboutCount(value string) int {
 	return n
 }
 
+// sourceSize totals the regular files among a dictionary's source paths: its
+// main file, the companions a format needs beside it, and its media. A folder
+// (StarDict's res/, an unpacked .files directory) contributes nothing - sizing
+// one means walking it, and About stays a handful of stats, never a walk.
+func sourceSize(files []string) int64 {
+	var total int64
+	for _, path := range files {
+		total += fsx.FileSize(path)
+	}
+	return total
+}
+
 // aboutOf composes the About for one dictionary, cheapest first: the live
 // sidecar beside the source, else whatever the header put in the description,
 // else nothing at all - in which case the disclosure is not rendered. It
@@ -129,6 +145,7 @@ func (s *Server) aboutOf(e *entry, base string) (aboutInfo, bool) {
 	// copied at ingest is then all there is.
 	if src.srcPath != "" && !store.IsTextDB(src.srcPath) && fsx.FileExists(src.srcPath) {
 		info.SourceFiles = dict.SourceFiles(src.srcPath)
+		info.FileSize = sourceSize(info.SourceFiles)
 		// With a format name, ask that format's provider; without one - the
 		// dictionary is neither prepared, nor probeable, nor already open -
 		// ask them all, which is a handful of stats and still no open.

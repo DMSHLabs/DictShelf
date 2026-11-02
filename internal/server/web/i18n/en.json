@@ -805,6 +805,10 @@
   "dictUI.dragNamed": "Drag to reorder {name}",
   "dictUI.entries": "{number} entries",
   "dictUI.headwordsCount": "Headwords: {number}",
+  "dictUI.fileSize": {
+    "one": "File size: {size} ({bytes} byte)",
+    "other": "File size: {size} ({bytes} bytes)"
+  },
   "dictUI.numberOfHeadwords": "Number of headwords: {number}",
   "dictUI.numberOfEntries": "Number of entries: {number}",
   "dictUI.indexedSize": "Indexed: {size} on disk",

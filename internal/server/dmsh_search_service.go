@@ -358,7 +358,16 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 		// dictionary's internal ref into /res/{dict}/…, and `clean` then
 		// absolutises exactly those. Reducing first would throw away the
 		// references before they had been named.
-		hl := marks(h.Term, h.Rung)
+		// The marks follow the reading that ANSWERED, not the one that was asked
+		// for: a dictionary whose archive index has no positions answers a
+		// phrase with the words reading (search.Hit.NeedsIndex), and marking the
+		// phrase there would mark nothing at all - which is exactly what the
+		// reader saw (found 2026-11-02).
+		reading := h.Rung
+		if h.NeedsIndex {
+			reading = "words"
+		}
+		hl := marks(h.Term, reading)
 		for j := range h.Results {
 			h.Results[j].Body = RewriteEntryHTMLMarked(h.Results[j].Body, id, hl)
 		}
