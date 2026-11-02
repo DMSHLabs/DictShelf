@@ -47,7 +47,9 @@ const IngestVersion = 7
 // content - so a change here invalidates them without asking anyone to
 // rebuild; a reader that finds a version it does not know treats the
 // measurements as absent rather than misread.
-const StatsVersion = 1
+// StatsVersion is the measurement format. 2 added the FTS5 index sizes, which
+// the listing reads from the cache instead of walking pages itself.
+const StatsVersion = 2
 
 // MediaVersion identifies IngestMedia's behaviour, bumped the same way.
 const MediaVersion = 1
@@ -157,9 +159,13 @@ func Inspect(textDB string) Prepared {
 							p.Plan.FullText = false
 						}
 					}
-					if p.Plan.Contains || p.Plan.FullText {
-						p.ContainsSize, p.FullTextSize = searchIndexSizes(db, p.Plan)
-					}
+					// Deliberately NOT measured here. The index sizes come from
+					// dbstat, a page-by-page walk that costs seconds on a large
+					// database, and this runs in the path that opens a
+					// dictionary - so a library of forty of them took a minute
+					// to open, on every start, to draw chips that show sizes.
+					// The numbers live in the measurement cache instead
+					// (ReadStats, filled by the registry's background pass).
 					// A split index is its own file: that is the whole point of
 					// splitting it, and its size needs no page accounting.
 					if art, ok := ArticlesSibling(textDB); ok {
@@ -175,6 +181,21 @@ func Inspect(textDB string) Prepared {
 		p.Media = true
 	}
 	return p
+}
+
+// MeasureIndexSizes returns the on-disk bytes used by the optional FTS5
+// indexes, by walking the database's pages (dbstat).
+//
+// It is exported for the one caller that may pay it: the background measurement
+// pass, which runs once per process and writes the result into the cache. The
+// listing path must not call it (see Inspect).
+func MeasureIndexSizes(textDB string, plan Plan) (contains, fullText int64) {
+	db, err := openRO(textDB)
+	if err != nil {
+		return 0, 0
+	}
+	defer db.Close()
+	return searchIndexSizes(db, plan)
 }
 
 // SearchIndexSizes returns the on-disk bytes used by the optional FTS5 indexes.

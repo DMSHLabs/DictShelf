@@ -1122,7 +1122,14 @@ func TestOptionalHeadwordAndArticleIndexes(t *testing.T) {
 	}
 }
 
-func TestInspectReportsOptionalIndexSizes(t *testing.T) {
+// The index sizes are measurements, and measuring them means walking every page
+// of the database (dbstat). That is cheap on a small database and costs seconds
+// on a large one, so where it happens matters: Inspect runs in the path that
+// OPENS a dictionary - a library of forty of them spent a minute walking pages
+// to draw chips that show sizes (found 2026-11-02) - while MeasureIndexSizes is
+// called by the background pass that fills the measurement cache, once per
+// process, and never from a listing.
+func TestIndexSizesAreMeasuredOutsideTheOpenPath(t *testing.T) {
 	for _, plan := range []Plan{{Contains: true}, {FullText: true}, {Contains: true, FullText: true}} {
 		path := filepath.Join(t.TempDir(), "text.db")
 		r := &fakeReader{meta: dict.Meta{Name: "sizes", Format: "test", Path: "/x"}, entries: []dict.Entry{
@@ -1132,16 +1139,37 @@ func TestInspectReportsOptionalIndexSizes(t *testing.T) {
 		if _, err := IngestPlan(r, path, plan, nil); err != nil {
 			t.Fatal(err)
 		}
+		// Inspect answers what the database IS, without weighing it.
 		got := Inspect(path)
-		contains, fullText := SearchIndexSizes(path, plan)
-		if got.ContainsSize != contains || got.FullTextSize != fullText {
-			t.Fatalf("Inspect sizes = (%d, %d), direct measurement = (%d, %d)", got.ContainsSize, got.FullTextSize, contains, fullText)
+		if got.ContainsSize != 0 || got.FullTextSize != 0 {
+			t.Errorf("Inspect measured sizes (%d, %d); opening a dictionary must not walk its pages",
+				got.ContainsSize, got.FullTextSize)
 		}
-		if plan.Contains && got.ContainsSize <= 0 {
-			t.Errorf("contains index size = %d, want positive", got.ContainsSize)
+		// The measurement itself still answers, for the caller that may pay it.
+		contains, fullText := MeasureIndexSizes(path, plan)
+		if plan.Contains && contains <= 0 {
+			t.Errorf("contains index size = %d, want positive", contains)
 		}
-		if plan.FullText && got.FullTextSize <= 0 {
-			t.Errorf("full-text index size = %d, want positive", got.FullTextSize)
+		if plan.FullText && fullText <= 0 {
+			t.Errorf("full-text index size = %d, want positive", fullText)
+		}
+		if !plan.Contains && contains != 0 {
+			t.Errorf("contains index size = %d with no contains index", contains)
+		}
+		// And it is what the cache carries afterwards.
+		s := StatsIdentity(got.Meta)
+		s.Version = StatsVersion
+		s.ContainsIndexBytes, s.FullTextIndexBytes = contains, fullText
+		if err := WriteStats(filepath.Dir(path), s); err != nil {
+			t.Fatal(err)
+		}
+		cached, ok := ReadStats(path)
+		if !ok {
+			t.Fatal("the measurement was not accepted by the cache")
+		}
+		if cached.ContainsIndexBytes != contains || cached.FullTextIndexBytes != fullText {
+			t.Errorf("cache holds (%d, %d), measured (%d, %d)",
+				cached.ContainsIndexBytes, cached.FullTextIndexBytes, contains, fullText)
 		}
 	}
 }

@@ -37,7 +37,25 @@ type estimateView struct {
 // the plan the database was prepared with) decide whether a row is offered at
 // all, and the build itself re-checks the real tables before it writes.
 func (s *Server) attachEstimate(info *dictInfo) {
-	if info == nil || info.Error != "" || info.DBPath == "" || info.OurFullText || info.Job != nil {
+	if info == nil {
+		return
+	}
+	// The index sizes first, and before every guard below: they are
+	// measurements, they come from the cache the registry's background pass
+	// fills (never from walking pages here), and a dictionary that already has
+	// our index is exactly the one whose size a reader wants to see - so this
+	// must not sit behind the "no estimate needed" return.
+	if info.DBPath != "" {
+		if stats, ok := store.ReadStats(info.DBPath); ok {
+			if stats.ContainsIndexBytes > 0 {
+				info.ContainsSize = stats.ContainsIndexBytes
+			}
+			if stats.FullTextIndexBytes > 0 {
+				info.FullTextSize = stats.FullTextIndexBytes
+			}
+		}
+	}
+	if info.Error != "" || info.DBPath == "" || info.OurFullText || info.Job != nil {
 		return
 	}
 	fi, err := os.Stat(info.DBPath)

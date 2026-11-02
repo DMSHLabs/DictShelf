@@ -44,15 +44,23 @@ type Stats struct {
 
 	// ZIM only: which prepared form the database is in ("headwords" or
 	// "articles", store.ZIMForm) and what its directory held.
-	ZIMForm       string `json:"zim_form,omitempty"`
-	ZIMArticles   int64  `json:"zim_articles,omitempty"`
-	ZIMRedirects  int64  `json:"zim_redirects,omitempty"`
-	ZIMMedia      int64  `json:"zim_media,omitempty"`
-	ZIMOther      int64  `json:"zim_other,omitempty"`
-	ZIMClusters   int64  `json:"zim_clusters,omitempty"`
-	ZIMTextBytes  int64  `json:"zim_text_bytes,omitempty"`
-	ZIMMixedBytes int64  `json:"zim_mixed_bytes,omitempty"`
-	ZIMOtherBytes int64  `json:"zim_other_bytes,omitempty"`
+	ZIMForm      string `json:"zim_form,omitempty"`
+	ZIMArticles  int64  `json:"zim_articles,omitempty"`
+	ZIMRedirects int64  `json:"zim_redirects,omitempty"`
+	ZIMMedia     int64  `json:"zim_media,omitempty"`
+	ZIMOther     int64  `json:"zim_other,omitempty"`
+	ZIMClusters  int64  `json:"zim_clusters,omitempty"`
+	// The FTS5 index sizes, in bytes. They are measured with dbstat, which is a
+	// page-by-page walk of the database - seconds on a large one - so they are
+	// measured ONCE, by the pass that fills this cache, and never in the path
+	// that opens a dictionary: a listing that walks every page of every
+	// database takes a minute before it can show a name (found 2026-11-02).
+	ContainsIndexBytes int64 `json:"contains_index_bytes,omitempty"`
+	FullTextIndexBytes int64 `json:"full_text_index_bytes,omitempty"`
+
+	ZIMTextBytes  int64 `json:"zim_text_bytes,omitempty"`
+	ZIMMixedBytes int64 `json:"zim_mixed_bytes,omitempty"`
+	ZIMOtherBytes int64 `json:"zim_other_bytes,omitempty"`
 }
 
 // StatsPath is where a folder's measurements live.

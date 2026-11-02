@@ -725,6 +725,26 @@ bug) in a leaf package both sides can import. `internal/format/dsl` no longer im
 Two golden tests in `internal/format/dsl` fail on this checkout at the session's base commit as well; they
 are recorded in `docs/WINDOWS-VERIFY.md` as known failures to look at, not caused by this work.
 
+### And the same shape again: opening a dictionary walked every page of it (2026-11-02)
+
+The first search after startup took **117.9 s**, and the log showed it opening all 44 dictionaries while
+the user waited - "don't wait for all of them" was the request. Instrumented, the chain was exact:
+`store.Open` of the 3.5 GB Wikipedia-source database takes 1.2 ms, while `store.PreparedFor` of the same
+dictionary took 9.3 s - and inside it, `Inspect` **6.5-9.3 s**. `Inspect` ran `searchIndexSizes`, which
+measures the FTS5 index sizes with `SELECT SUM(pgsize) FROM dbstat`: a page-by-page walk of the whole
+database, seconds on a large one, ~1 s on a medium one, and it ran for EVERY dictionary in the path that
+opens a dictionary - to fill the chips that show "contains 22 MB" and "our FTS 1.29 GB".
+
+The fix moves the measurement out of the open path entirely: `Inspect` no longer measures anything,
+`store.MeasureIndexSizes` is exported for the one caller that may pay it (the registry's background
+measurement pass, once per process), the numbers are written into `stats.cache` (`StatsVersion` 2 added
+`ContainsIndexBytes`/`FullTextIndexBytes`), and the row reads them from that cache in `attachEstimate` -
+before its guards, because the dictionary that already HAS our index is exactly the one whose size a
+reader wants, and that is the case the guards return early for. Measured after, same server: first search
+**117.9 s -> 0.16 s**; every size is back in the listing (Викисловарь 1 291 067 392 = the old dbstat
+number, Викитека 3 167 371 264 = its rebuilt index). `TestIndexSizesAreMeasuredOutsideTheOpenPath` pins
+the new contract: Inspect reports none, MeasureIndexSizes answers, and the cache keeps it.
+
 ### A ZIM search costs ~6.3 s whatever it is asked (found 2026-11-02, not fixed)
 
 Timed against a running server on the live library:

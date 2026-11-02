@@ -92,6 +92,10 @@ func (r *Registry) measureStats(e *entry) (store.Stats, error) {
 	} else {
 		s.ZIMForm = store.ZIMFormOf(prepared.Meta)
 	}
+	// The index sizes are a page walk of the database (dbstat), which is why
+	// they are measured HERE and only here: once per process, off the request
+	// path, and written into the cache both the chips and the estimate read.
+	s.ContainsIndexBytes, s.FullTextIndexBytes = store.MeasureIndexSizes(prepared.TextDB, prepared.Plan)
 	src := prepared.Meta["source_path"]
 	if src == "" || !isZIMFormat(prepared.Meta["format"]) {
 		// Nothing else can be measured without reading the dictionary itself.
