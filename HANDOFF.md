@@ -790,6 +790,14 @@ changes the query or mode.
 
 Recorded before the work, because each one changes which part of the flow moves.
 
+1. **RETRACTED 2026-11-02: the first portion IS five already.** This file claimed otherwise because the
+   server's default (`n <= 0 -> 20`) was read as the answer; the page does not use that default at all. It
+   sends its own size: `perDict=5` for both the group and the single-dictionary case (index.html:9740-9741)
+   and `n=String(perDict)` in the request (9820). Verified on a live page: the request that goes out is
+   `n=5`, the first paint shows exactly five headwords, the total (27) is already on the header, and the
+   remainder arrives as a portion when the section is opened. Nothing to change here. The original claim
+   follows, struck through by this note:
+
 1. **The first portion is five, for every dictionary and every mode**, and the remainder arrives in the
    SECOND portion - uniform on purpose, "чтобы не было вопросов почему разное поведение". Today the first
    paint is however much the first answer carried: the state is created with
@@ -812,6 +820,12 @@ Recorded before the work, because each one changes which part of the flow moves.
    поток мгновенно прерывался и начинал искать при поиске другого слова": that part already holds -
    a new search calls `cancelArticleResultCaches()` and aborts the `AbortController`, and the cache task
    in the status bar has a stop button.
+3. **Where the total is known exactly, no background pass runs - and that already holds.**
+   Verified: a prefix search paints five headwords with `total=27` on the header and creates NO
+   article-result cache at all (the counting pass is driven by that cache). The cache is created for the
+   modes whose total is unknown until the articles have been counted, which is the full-text family and
+   the mask view. The original note follows:
+
 3. **Where the total is known exactly (headword modes), no background pass runs at all**: the first block
    is five and the rest is plain arithmetic - the block count and the number of words - which the paging
    controls already speak. The article-result cache (a SQLite store of the blocks the reader switches
