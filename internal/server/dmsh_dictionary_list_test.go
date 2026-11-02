@@ -40,12 +40,13 @@ func canonicalDictEvents(events []dictMsg) []dictMsg {
 }
 
 func TestDictionaryListSharedByHTTPAndNativeWithoutRouter(t *testing.T) {
-	s := newTestServer(t)
-	// First list allows self-preparing fixtures to settle; then compare the
-	// stable view produced by the two adapters.
-	if _, err := s.listDictionaries(context.Background(), "", func(dictMsg) error { return nil }); err != nil {
-		t.Fatal(err)
-	}
+	// settled, not newTestServer: the registry measures every prepared
+	// dictionary after it opens the backends, and that pass writes a stats.cache
+	// into the prepared folder a row key includes - so the library is only at
+	// rest once it is over (dictrows_test.go, settled). A single list is not
+	// enough: it can land mid-pass and answer without a validator while the
+	// next adapters answer with one, which reads as the transports disagreeing.
+	s, _, _ := settled(t)
 	httpRecorder := httptest.NewRecorder()
 	s.ServeHTTP(httpRecorder, newRequest("GET", "/api/dicts", nil))
 	httpEvents := readDictEvents(t, httpRecorder.Body.Bytes())

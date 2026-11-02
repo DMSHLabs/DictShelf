@@ -49,6 +49,18 @@ func preparedForServer(t *testing.T, format string) (*Registry, *entry, string) 
 // The warm pass is what fills the measurements a dialog needs, and it must do
 // it once: the second start of the application has nothing to measure.
 func TestWarmStatsMeasuresOnceAndCaches(t *testing.T) {
+	// The registry measures every prepared dictionary by itself, right after it
+	// is built, and writes the same stats.cache this test measures by hand with
+	// WriteStats - which writes in place, because a cache its reader validates
+	// needs no atomicity (store/dmsh_stats_cache.go). A concurrent read can
+	// therefore catch a half-written file: fine for the product, which rejects
+	// it and measures again, and fatal for a test that asserts one measurement's
+	// own cache. So the registry's pass is turned off here rather than raced
+	// with. No test in this package runs in parallel, so the switch is safe.
+	keepWarm := warmEnabled
+	warmEnabled = false
+	t.Cleanup(func() { warmEnabled = keepWarm })
+
 	reg, e, textDB := preparedForServer(t, "dsl")
 	if !reg.statsNeeded(e) {
 		t.Fatal("a dictionary without a cache needs measuring")

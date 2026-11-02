@@ -61,7 +61,11 @@ func dictsWith(t *testing.T, s *Server, inm string) (int, []dictInfo, string) {
 // An unchanged library is answered with a 304 and no body; a source file that
 // changes on disk changes the validator and the row is derived again.
 func TestDictsRevalidation(t *testing.T) {
-	s := newTestServer(t)
+	// settled, not newTestServer: the registry measures every prepared
+	// dictionary after it opens the backends and writes a stats.cache into each
+	// prepared folder, and a row key includes that folder - so "an unchanged
+	// library" is only true once that pass is over (dictrows_test.go, settled).
+	s, _, _ := settled(t)
 	code, rows, tag := dictsWith(t, s, "")
 	if code != 200 || len(rows) != 1 || tag == "" {
 		t.Fatalf("first answer: %d, %d rows, tag %q", code, len(rows), tag)

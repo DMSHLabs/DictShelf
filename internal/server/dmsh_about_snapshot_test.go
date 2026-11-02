@@ -39,6 +39,12 @@ func TestDesktopAboutSnapshotReportsSourceSize(t *testing.T) {
 	if got := value.(aboutInfo).FileSize; got != want {
 		t.Fatalf("fileSize = %d, want %d (the files on disk)", got, want)
 	}
+	// The removal needs the file to itself. The fixture's dictionary is
+	// prepared by the first-run queue, which is reading the source while it
+	// works, and Windows refuses to unlink a file that is still open - so the
+	// preparation is waited for first (aboutServer does not wait: every other
+	// test here only reads the row).
+	waitNewDictionaryIndexing(t, s.reg)
 	if err := os.Remove(e.Path); err != nil {
 		t.Fatal(err)
 	}
