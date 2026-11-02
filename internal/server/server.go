@@ -1750,8 +1750,12 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return d, err
 			}
-			backend, database, index := searchLocationForLog(e, d, mode)
+			// Only when the line will be written: this helper answers a
+			// question about the STARTUP path as it goes - which database is
+			// in force, and whether it validates - and asking it per result
+			// batch costs seconds on a real library.
 			if searchDiagnostics {
+				backend, database, index := searchLocationForLog(e, d, mode)
 				logx.SystemDiagnostic("search database query=%q mode=%q dictionary=%q backend=%q database=%q index=%q", q, mode, e.probeName(), backend, database, index)
 			}
 			return d, nil

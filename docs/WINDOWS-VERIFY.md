@@ -289,7 +289,15 @@ them are in `docs/handoff-archive.md`.
       those probes were switched to. So either the page's title drifted or the
       probe was never run after that change; check `internal/server/web/`
       against the probe before assuming flakiness.
-    - `TestNewDictionariesGetContainsIndexWithoutSavedDefaults` — "unexpected
+    - `TestReaderGolden` and `TestGDReaderGolden` (internal/format/dsl) — "prepared
+    content changed but no version was bumped", accepted a different hash than the
+    stored one. Checked with `git worktree` at the session's base commit
+    `8d970980` on 2026-11-02, where they fail identically, so they are not caused
+    by the work of 2026-11-01/02; they are either a stale golden in this checkout
+    or something about the fixture files on this machine. Worth a look before the
+    next upstream sync, because the check exists to catch a real class of bug
+    (content changing without the version bump that makes a library rebuild).
+  - `TestNewDictionariesGetContainsIndexWithoutSavedDefaults` — "unexpected
       first-run index features: {Exact:true Prefix:true Contains:false
       FTS:false}": the freshly built database has no `entry_trigram` although
       the same test's next assertion says the unsaved defaults DO select the

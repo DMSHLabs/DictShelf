@@ -319,8 +319,8 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 			if err != nil {
 				return d, err
 			}
-			backend, database, index := searchLocationForLog(e, d, mode)
 			if request.SearchDiagnostics {
+				backend, database, index := searchLocationForLog(e, d, mode)
 				logx.SystemDiagnostic("search database query=%q mode=%q dictionary=%q backend=%q database=%q index=%q", q, mode, e.probeName(), backend, database, index)
 			}
 			return d, nil

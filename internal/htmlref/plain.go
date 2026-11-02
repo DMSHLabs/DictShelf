@@ -2,19 +2,19 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package store
+package htmlref
 
 import (
 	"html"
 	"strings"
 )
 
-// StripHTML reduces article HTML to plain text for FTS indexing
+// PlainText reduces article HTML to plain text for FTS indexing
 // (FTS-audit #1: indexing raw HTML pollutes matches with tag/attribute
 // tokens). It drops tags entirely, skips <script>/<style> contents,
 // unescapes entities, and collapses whitespace. It is deliberately
 // forgiving: dictionary HTML is frequently malformed.
-func StripHTML(s string) string {
+func PlainText(s string) string {
 	var b strings.Builder
 	b.Grow(len(s) / 2)
 	inTag := false

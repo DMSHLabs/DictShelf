@@ -7,6 +7,10 @@ package store
 import (
 	"context"
 	"errors"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/htmlref"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
+	"github.com/DMSHLabs/DictShelf/internal/sysmem"
 	"io"
 	"math"
 	"runtime"
@@ -14,10 +18,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/DMSHLabs/DictShelf/internal/dict"
-	"github.com/DMSHLabs/DictShelf/internal/indexconst"
-	"github.com/DMSHLabs/DictShelf/internal/sysmem"
 )
 
 const (
@@ -386,7 +386,7 @@ func prepareIngestEntry(e dict.Entry, plan Plan, dropBodies bool, ctx context.Co
 		result.body = encodeBody(body)
 	}
 	if plan.FullText {
-		result.text = StripHTML(body)
+		result.text = htmlref.PlainText(body)
 	}
 	result.subEntry = isSubEntry(result.headword)
 	for _, extra := range e.Headwords[1:] {

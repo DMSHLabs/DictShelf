@@ -694,6 +694,37 @@ the two Wiktionaries. Wiki*source* articles are long texts with few articles, so
 right family and the band is simply too narrow for it - the next four builds should be measured before the
 band is quoted again.
 
+### ...and it is fixed: a log line was asking the startup path a question (2026-11-02)
+
+The 6.3 s was not the index, not the archive and not the reading of bodies. The probe chain, in order:
+`prefix` on Викитека costs the same as `exact` and as a phrase, and a plain DSL dictionary in the same
+server answers in 0.28 s; the store's own calls on the very same database are `open 2 ms`, `prefix 3.6 ms`,
+`exact 0.6 ms`, `fulltext 3.8 ms` - so the index answers a phrase in 3.8 MILLISECONDS while the request
+took seconds; and instrumenting the request showed the gap sitting between the opener's return and the
+dictionary's own query, with `backend="prepared"` on the right database.
+
+The culprit: `searchLocationForLog`, a helper that exists only to fill the "search database ..." line of
+the diagnostics log, was called UNCONDITIONALLY on every result batch. It calls `validPrepared`, which for
+anything whose entry path is a SOURCE rather than a text.db (every ZIM, every DSL source) resolves the
+prepared database through `store.PreparedFor` - a library-wide lookup - and that is where the seconds went.
+A native dictionary entry is already a text.db, so `validPrepared` returns at the first line: which is why
+only ZIMs and sources paid, and why the cost scaled with the library rather than with the query.
+
+Fixed by asking the helper only when the line will actually be written. Measured after, same server, warm:
+Викитека `prefix` 6.7 s -> **0.15 s**, `phrase` 6.5 s -> **0.04 s**, `exact` 6.3 s -> **0.04 s**; the
+Russian Wiktionary's phrase 5.2 s -> **0.10 s** (its first call is cold disk, the index is 1.29 GB);
+Ushakov unchanged at 0.48 s. The first request after startup still pays the library's warm-up - all 44
+dictionaries opened in series, ~46 s on this machine - and that is the next thing to look at, because it
+is the same class of cost: opening every dictionary to answer a question about one.
+
+Also in this change, because it fell out of the same probe: `internal/store/strip.go` moved to
+`internal/htmlref/plain.go` as `htmlref.PlainText`. The archive reader has to fold the same text our
+article index is built from, and importing `store` from `internal/format/zim` closed a cycle that broke
+`go test ./internal/store` - the move keeps one implementation (the whole point, after the two-stripper
+bug) in a leaf package both sides can import. `internal/format/dsl` no longer imports store for it either.
+Two golden tests in `internal/format/dsl` fail on this checkout at the session's base commit as well; they
+are recorded in `docs/WINDOWS-VERIFY.md` as known failures to look at, not caused by this work.
+
 ### A ZIM search costs ~6.3 s whatever it is asked (found 2026-11-02, not fixed)
 
 Timed against a running server on the live library:

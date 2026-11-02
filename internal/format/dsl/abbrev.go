@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
-	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // A DSL dictionary is often shipped with a "<name>_abrv.dsl" or
@@ -170,7 +170,7 @@ func loadAbbrev(mainPath string) *abbrevMap {
 // can carry. StripHTML already unescapes entities and collapses whitespace; the
 // cut is on runes, so a multi-byte expansion is never sliced mid-character.
 func abbrevText(body string) string {
-	s := strings.TrimSpace(store.StripHTML(body))
+	s := strings.TrimSpace(htmlref.PlainText(body))
 	if r := []rune(s); len(r) > maxAbbrevRunes {
 		s = strings.TrimSpace(string(r[:maxAbbrevRunes])) + "…"
 	}

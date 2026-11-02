@@ -38,7 +38,7 @@ import (
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/format/zim/glass"
-	"github.com/DMSHLabs/DictShelf/internal/store"
+	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 )
 
 // ErrCheckBound is returned by a strict reading that stopped at its bound with
@@ -143,7 +143,7 @@ func (d *Dict) verifiedFullText(query string, limit, maxCheck int, keep func(tok
 // articleTokens is the article as folded words, with markup treated as a
 // separator.
 //
-// The markup is stripped by store.StripHTML, which is the same function the
+// The markup is stripped by htmlref.PlainText, which is the same function the
 // article index of OUR own databases is built with (the index column is
 // StripHTML(body)): the two answers to "what does this article say" have to
 // agree, or the reading verified here would disagree with the one a prepared
@@ -159,7 +159,7 @@ func (d *Dict) verifiedFullText(query string, limit, maxCheck int, keep func(tok
 // indexes it too: a phrase whose words stand in the title has to verify here
 // the same way it verifies there.
 func articleTokens(body []byte) []string {
-	return glass.FoldText(store.StripHTML(string(body)))
+	return glass.FoldText(htmlref.PlainText(string(body)))
 }
 
 // phraseIn reports whether the words appear consecutively, in that order.

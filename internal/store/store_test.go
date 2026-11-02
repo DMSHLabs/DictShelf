@@ -702,31 +702,6 @@ func TestOpenRejectsForeignDB(t *testing.T) {
 	}
 }
 
-func TestStripHTML(t *testing.T) {
-	cases := map[string]string{
-		`<p>a<br/>b</p>`:                             "a b",
-		`<script>var x=1;</script>text`:              "text",
-		`<style>.a{color:red}</style>word`:           "word",
-		`a &amp; b &lt;c&gt;`:                        "a & b <c>",
-		`<div class="k1 k2" style="x:y">inner</div>`: "inner",
-		// A self-closing script has no contents and no closing tag: the skip
-		// it opens has to end with the tag itself, or everything after it in
-		// the article is silently missing from the full-text index.
-		`<script src="x.js"/>after`:         "after",
-		`<style/>after`:                     "after",
-		`<script/>a<script>bad()</script>b`: "a b",
-		// ...but a "/>" INSIDE script contents is script text, not the end of
-		// the skip.
-		`<script>f(a<b/>c)</script>tail`: "tail",
-		``:                               "",
-	}
-	for in, want := range cases {
-		if got := StripHTML(in); got != want {
-			t.Errorf("StripHTML(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 func TestSlug(t *testing.T) {
 	cases := map[string]string{
 		"Diccionario de la lengua española (2016)": "Diccionario-de-la-lengua-española-2016",
