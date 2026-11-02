@@ -110,6 +110,7 @@
     "errors.archiveRatio",
     "errors.collectionMissing",
     "errors.indexRemoved",
+    "errors.tooManyWords",
     "errors.collectionFileMissing",
     "errors.notDownload"
   ];

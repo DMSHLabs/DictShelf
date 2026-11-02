@@ -137,6 +137,7 @@
   "database.failed": "Could not update everything: {error}",
   "errors.collectionMissing": "no such dictionary in this collection",
   "errors.indexRemoved": "dictionary index was removed; create an index in Dictionary settings",
+  "errors.tooManyWords": "the query has more than 128 words to search",
   "errors.collectionFileMissing": "no such file",
   "errors.notDownload": "not a download",
   "errors.sharePage": "that is wudict's page of dictionary links: open it in a browser and choose a dictionary there",

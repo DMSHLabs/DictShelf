@@ -1652,6 +1652,12 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, "missing q parameter")
 		return
 	}
+	// A query wider than the token cap cannot be run as asked, and running the
+	// first 128 words of it in silence is the one thing not to do: say so.
+	if ftsq.Parse(q).TooMany() {
+		httpErr(w, 400, "the query has more than %d words to search", ftsq.MaxTokens)
+		return
+	}
 	mode, err := search.ParseMode(r.URL.Query().Get("mode"))
 	if err != nil {
 		httpErr(w, 400, "%v", err)

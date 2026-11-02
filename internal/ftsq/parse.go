@@ -244,7 +244,7 @@ func lex(s string) ([]token, bool) {
 			t.prefix = t.text != w
 			out = append(out, t)
 		}
-		if len(out) > maxTokens {
+		if len(out) > MaxTokens {
 			return nil, false
 		}
 	}
@@ -439,7 +439,7 @@ func (p *parser) phrase() (node, bool) {
 	default:
 		return nil, false
 	}
-	if p.terms += len(terms); p.terms > maxTokens {
+	if p.terms += len(terms); p.terms > MaxTokens {
 		return nil, false
 	}
 	return phraseNode{terms: terms}, true

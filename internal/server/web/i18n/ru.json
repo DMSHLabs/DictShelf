@@ -137,6 +137,7 @@
   "database.failed": "Не удалось обновить всё: {error}",
   "errors.collectionMissing": "В этой коллекции нет выбранного словаря",
   "errors.indexRemoved": "Индекс словаря удалён. Создайте индекс в настройках словарей",
+  "errors.tooManyWords": "В запросе слишком много слов для поиска",
   "errors.collectionFileMissing": "Файл не найден",
   "errors.notDownload": "По ссылке не удалось получить файл",
   "errors.sharePage": "Это страница wudict со ссылками на словари. Откройте её в браузере и выберите словарь",

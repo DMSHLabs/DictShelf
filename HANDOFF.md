@@ -803,10 +803,13 @@ Measured on the live library: Википедия (no index of ours) `phrase` →
 `archiveStrictCheck` is 0 (unbounded) and `search`'s scanner helpers stay for the one case that can still
 want them - an explicit "search the texts anyway" in that window, which is NOT built yet: today the scan
 has no caller, and that is deliberate, because the default must not do silently what the reader is being
-offered an alternative to. `ftsq.Parse` also stopped truncating a 128-word query in silence: `Query.TooMany`
-says the query below is a prefix of what was typed, and `rungFor` refuses instead of searching the first
-128 words. The message the reader sees for that is not wired to a catalog key yet (the wire carries the
-fact; the text is English for now).
+offered an alternative to. `ftsq.Parse` also stopped truncating a 128-word query in silence: `Query.TooMany` says the query below is
+a prefix of what was typed, `rungFor` refuses instead of searching the first 128 words, and BOTH search
+entry points refuse the request out loud with "the query has more than 128 words to search"
+(`ftsq.MaxTokens` is exported for the sentence). The page shows it in the reader's language through the
+legacy text-match list (`errors.tooManyWords`, ru/en) - deliberately reusing that mechanism rather than
+inventing a code field for one message, since the wire already carries `SearchError.Kind` for the family
+that grows next.
 
 
 

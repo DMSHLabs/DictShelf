@@ -76,10 +76,10 @@ const (
 	// spellings drift apart.
 	NearDefault = 10
 
-	// maxTokens bounds a hostile query. Every token costs a phrase slot in the
+	// MaxTokens bounds a hostile query. Every token costs a phrase slot in the
 	// highlighter and a term in the FTS5 expression tree; a thousand-word paste
 	// into the search box must not become a thousand-way query.
-	maxTokens = 128
+	MaxTokens = 128
 
 	// maxDepth bounds parenthesis nesting so a crafted query cannot recurse the
 	// parser into the stack.
@@ -99,10 +99,10 @@ type Query struct {
 	raw   string
 	words []string // the plain reading: bare tokens, operators not present
 	node  node     // the operator reading, nil unless operator mode was entered
-	more  bool     // the input had more words than maxTokens
+	more  bool     // the input had more words than MaxTokens
 }
 
-// TooMany reports that the input carried more words than maxTokens, so the
+// TooMany reports that the input carried more words than MaxTokens, so the
 // query below is a PREFIX of what was typed. Silently searching the first 128
 // words of a 200-word paste is the kind of quiet lie a reader cannot see
 // through, so the caller is told and can say so.
@@ -122,7 +122,7 @@ func Parse(input string) *Query {
 	for _, f := range strings.Fields(input) {
 		if w := strings.TrimRight(f, "*"); hasToken(w) {
 			q.words = append(q.words, w)
-			if len(q.words) == maxTokens {
+			if len(q.words) == MaxTokens {
 				q.more = true
 				break
 			}

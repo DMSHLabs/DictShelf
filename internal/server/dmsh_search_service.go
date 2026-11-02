@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/ftsq"
 	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 	"github.com/DMSHLabs/DictShelf/internal/lang"
@@ -183,6 +184,11 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	q := strings.TrimSpace(request.Query)
 	if q == "" {
 		return searchRequestError(SearchInvalidRequest, "missing q parameter")
+	}
+	// A query wider than the token cap cannot be run as asked, and running the
+	// first 128 words of it in silence is the one thing not to do: say so.
+	if ftsq.Parse(q).TooMany() {
+		return searchRequestError(SearchInvalidRequest, "the query has more than %d words to search", ftsq.MaxTokens)
 	}
 	mode, err := search.ParseMode(request.Mode)
 	if err != nil {
