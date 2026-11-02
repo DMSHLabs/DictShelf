@@ -4068,8 +4068,15 @@ function dslIndexControls(d){
   return `<div class="dsl-index-controls">`+(()=>{
     const disabled=!target||!d.dsl.sourceAvailable;
     const indexed=!!target?.dbSize;
+    /* The index chip is a MEASUREMENT, not a door. It used to be a button whose
+       title said "delete index", so pressing the size of a prepared DSL threw
+       the index away - and for a DSL the prepared index is the only usable form
+       of the dictionary. Facts are not switches on this card, and a fact is not
+       something to press either: the chip is a quiet, unclickable plate that
+       says what is on disk (data-index-size is the marker the bulk progress
+       uses to find it - it is not a capability, so it carries no data-feat). */
     let controls=indexed
-      ? `<button type="button" class="feat on${disabled?" locked":""}" data-delete-index="1" data-target="${escAttr(target.id)}" title="${escAttr(tx("dictUI.deleteIndex"))}"${disabled?" disabled":""}>${mb(target.dbSize)}</button>`
+      ? `<span class="feat on locked" data-index-size="1" data-target="${escAttr(target.id)}" title="${escAttr(tx("dictUI.indexedSize",{size:mb(target.dbSize)}))}">${mb(target.dbSize)}</span>`
       : `<button type="button" class="feat${disabled?" locked":""}" data-feat="base" data-target="${escAttr(target?.id||"")}"${disabled?" disabled":""}>${esc(tx("dictUI.index"))}</button>`;
     for(const [key,name,on,bytes] of [["contains","dictUI.contains",target?.caps?.Contains,target?.containsSize||0],["fts","dictUI.fts",target?.caps?.FTS,target?.fullTextSize||0]]){
       const stale=key==="contains"&&on&&target?.containsStale;
@@ -6171,7 +6178,7 @@ function requestIndexStop(){
 	setGlobalStop(requestIndexStop,tx("dictUI.bulkStopping"));
 }
 function bulkFeatureLabels(d,feat){
-  const selector=feat==="base"?'[data-feat="base"],[data-delete-index]':`[data-feat="${feat}"]`;
+  const selector=feat==="base"?'[data-feat="base"],[data-index-size]':`[data-feat="${feat}"]`;
   if(d.dsl)return [...document.querySelectorAll(selector)].filter(el=>el.dataset.target===d.id);
   const card=document.querySelector(`.pd[data-id="${d.id}"]`);
   return card?[...card.querySelectorAll(feat==="base"?'.feat[data-feat="base"],.feat.on.locked:not([data-feat])':selector)]:[];
@@ -6465,8 +6472,6 @@ document.addEventListener("contextmenu",event=>{
   window.wudictShowDictionaryInfo(id);
 });
 $("panelList").addEventListener("click",e=>{
-  const index=e.target.closest("[data-delete-index]");
-  if(index){if(!index.disabled&&!index.classList.contains("busy"))askDSLIndexRemoval(index);return}
   /* A trait is a scope, taken the same way the card title takes one (D109):
      through the <select> and its change event, so it is persisted, chipped,
      re-run and — because it is a group — demands no index (PERF.md M1). The
@@ -6594,20 +6599,6 @@ $("panelList").addEventListener("keydown",e=>{
    the import dialog uses "originals" for the user's own files on shared
    storage — one word for two different files, in one app, is the confusion
    that made the import's keep/delete question unanswerable. */
-function askDSLIndexRemoval(button){
-  const pd=button.closest(".pd"),d=dicts.find(x=>x.id===pd.dataset.id);
-  const target=dicts.find(x=>x.id===button.dataset.target);
-  if(!target?.dbSize||!d.dsl.sourceAvailable)return;
-  pd.querySelector("details.prov").open=true;
-  const name=dictLabel(target),size=mb((target.dbSize||0)+(target.mediaSize||0));
-  const features=[tx("dictUI.indexPlain")];
-  if(target.caps?.Contains)features.push(tx("dictUI.contains"));
-  if(target.caps?.FTS)features.push(tx("dictUI.fts"));
-  if(target.mediaDB||target.mediaSize)features.push(tx("dictUI.packedMedia"));
-  pd.querySelector(".rmwrap").innerHTML=`<span class="rmq">${esc(tx("dictUI.deleteIndexConfirm",{name,size,features:features.join(" · ")}))}<br>`+
-    `<button type="button" class="rmgo" data-rm="index" data-target="${escAttr(target.id)}">${esc(tx("panel.delete"))}</button>`+
-    `<button type="button" class="rmno">${esc(tx("panel.cancel"))}</button></span>`;
-}
 function askRemoval(pd){
   const d=dicts.find(x=>x.id===pd.dataset.id);if(!d)return;
   // The confirmation replaces the trigger where it stands - at the foot of the

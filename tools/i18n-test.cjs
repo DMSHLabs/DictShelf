@@ -273,6 +273,11 @@ for (const language of ['en', 'ru']) {
   const indexed=cardContext.dslIndexControls(cardContext.dicts[0]);
   assert.match(indexed,/data-feat="contains" data-target="dsl-id" data-on="1"/);
   assert.ok(indexed.includes('/browse?dict=dsl-id'));
+  // The index chip is a measurement, not a door: pressing it used to delete the
+  // index of a prepared DSL, which is the only usable form of that dictionary.
+  // It carries no data-feat (it is not a switch) and cannot be pressed.
+  assert.ok(!indexed.includes('data-delete-index'),'the index chip is not a delete button');
+  assert.match(indexed,/<span class="feat on locked"[^>]*data-index-size="1"/,'the index chip says what is on disk');
   cardContext.dicts[0].dbSize=0;
   const missing=cardContext.dslIndexControls(cardContext.dicts[0]);
   assert.ok(missing.includes('dsl-index-warning'));

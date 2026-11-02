@@ -26,6 +26,16 @@ pending.
 
 Work directly in `D:\Projects\Android\wudict`, as the user requested. Recheck branch/status before editing; old stashes exist and must be inspected before use.
 
+## The dictionary card's index chip (2026-11-03)
+
+The chip that shows a prepared DSL's index size used to be a button titled "delete index": pressing
+it removed the prepared database. It is now a measurement - a `span.feat.on.locked` carrying
+`data-index-size` and the tooltip "Indexed: {size} on disk", with no click. The locked measurement
+chips (index size, native index, a ZIM's built-in index) are also dimmed and unfilled now; a filled
+accent chip on this card means a live switch, and those still are. The `[data-delete-index]` handler
+and `askDSLIndexRemoval` are removed; the bulk progress label looks for `data-index-size`.
+"Index only" in the card's Remove flow and the bulk panel's base delete are unchanged by decision.
+
 ## Existing documentation
 
 ### Article find (2026-10-03)

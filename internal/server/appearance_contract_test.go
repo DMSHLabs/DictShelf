@@ -143,11 +143,13 @@ func TestAppearanceContract(t *testing.T) {
 	//    paper or preset can reach — and it is how the new System pane arrived
 	//    on 2026-09-29 with the two greys on its headings, hints, units and
 	//    notes: grey in BOTH looks, which is the one thing the register exists
-	//    to prevent. Two exceptions, both white on a filled surface.
-	whiteOnFill := map[string]string{
-		".pd .feat.locked:not([data-feat]):hover": "the hover of a filled pill: the fill comes from .pd .feat.on",
-		".pd .feat.on.locked:hover":               "the hover of a filled pill, dimmed to say it cannot be pressed",
-	}
+	//    to prevent. The two exceptions this list carried were the hovers of a
+	//    locked pill, whose white came from the fill .pd .feat.on set in another
+	//    rule; 2026-11-03 a locked measurement chip lost its fill outright (it is
+	//    not a switch and must not look like one), so nothing paints white on a
+	//    fill it does not state itself any more. The mechanism stays: a rule that
+	//    needs the exception adds itself here with its reason.
+	whiteOnFill := map[string]string{}
 	t.Run("text colours are tokens", func(t *testing.T) {
 		seen := map[string]bool{}
 		for _, d := range docs {

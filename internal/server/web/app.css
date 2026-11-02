@@ -1483,18 +1483,20 @@ html[data-dict-icons-off] .dict-icon{display:none}
    a disabled control (2026-09-28, from the reader: "100 MB" and "contains" read
    grey on a card whose switches are all live). `.locked` on a CAPABILITY — the
    chips that carry data-feat — means the source file is gone, so the switch
-   cannot be moved: disabled, and dimmed. `.locked` on the INDEX chip means
-   nothing of the sort: that chip is not a control at all but the measurement of
-   a file on disk, and a measurement keeps its full strength. data-feat is the
-   marker — every capability chip has one, the index chip has none — so the
-   dimming, and the hover that would otherwise promise a click, are scoped to
-   it. */
+   cannot be moved: disabled, and dimmed. `.locked` on an INDEX chip means
+   nothing of the sort: it is the measurement of a file on disk.
+   2026-11-03, the owner's decision: measurements read QUIET, and lose the fill
+   outright. A chip wearing the accent pill of a live switch promises a press,
+   and there is none to give: not on the index chip (whose press used to delete
+   the index), not on the archive's built-in index. So the accent fill stays
+   what this file has always said it is — "press to spend disk on an index" —
+   and a measurement is an outlined, quieter plate instead: dimmed, quiet ink,
+   and a hover that changes nothing. data-feat is the marker: every capability
+   chip has one, a measurement has none. */
 .pd .feat.locked{cursor:default;opacity:.5}
-.pd .feat.locked:not([data-feat]){opacity:1}
-.pd .feat.locked:not([data-feat]):hover{border-color:var(--accent);color:#fff}
 .pd .feat.locked:hover{border-color:var(--line);color:var(--label-quiet)}
-.pd .feat.on.locked:hover{border-color:var(--accent);color:#fff;opacity:.5}
-.pd .feat.on.locked:not([data-feat]):hover{opacity:1}
+.pd .feat.locked:not([data-feat]),.pd .feat.locked.on:not([data-feat]){
+  opacity:.75;background:transparent;border-color:var(--line);color:var(--label-quiet)}
 .pd .feat.busy{border-style:dashed;cursor:default}
 /* stale: still on, still working, but rebuildable — a dotted edge reads as
    "provisional" without the alarm of an error colour */

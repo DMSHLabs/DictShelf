@@ -1014,6 +1014,27 @@ dropped the reader back to the first option in silence, while the menu kept offe
 is now derived from the select's own options (`searchModeExists`), which cannot drift from the control it
 describes. Verified by driving the page: all three readings survive a reload, each wearing its own mark.
 
+## The index chip is a measurement, not a door (2026-11-03)
+
+On the dictionary card of a prepared DSL the index chip showed the size of the index and its
+title said "delete index": pressing a measurement threw away the prepared database, which for a
+DSL is the only usable form of the dictionary. The chip is now a `span` (a quiet plate with the
+size, tooltip "Indexed: {size} on disk") and carries `data-index-size`, not `data-delete-index`;
+`askDSLIndexRemoval` and the whole `[data-delete-index]` click path are gone.
+
+The locked measurement chips - the index size, the native-index chip, and a ZIM's "built-in: words
+only" - also lost the accent fill and read at 75% opacity. The fill is what this stylesheet says a
+live switch wears ("press to spend disk on an index"), so a chip that cannot be pressed no longer
+wears it; the appearance contract's white-on-fill exception list is now empty for the same reason.
+The LIVE switches (`contains`, `full-text`) are untouched: still filled, still pressable.
+
+Deliberately left alone: the two other doors to the same deletion - "Index only" in the card's
+Remove flow, and the bulk panel's base `delete`. Both are labelled, deliberate acts in a flow that
+explains what goes; only the silent chip was wrong. Verified live (preview server + the panel in
+Edge): the chip renders as a `span` with a transparent background, `cursor: default`, opacity .75,
+and a real click opens no confirmation and leaves `text.db` on disk; the JS gate
+(`node tools/i18n-test.cjs`) now pins the markup.
+
 ## The article index is a file of its own (2026-11-03; reader 2026-11-02)
 
 ON, by the user's four rules: full text is created only as `articles.db`; when that file exists the
