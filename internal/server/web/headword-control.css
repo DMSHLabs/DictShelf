@@ -38,6 +38,38 @@
 .headword-control-find-option-hint{display:inline;margin-left:.3em;color:var(--label-quiet);font-size:calc(var(--ui-hint-font-size) * 1rem);font-weight:400}
 .headword-control-find-option:hover,.headword-control-find-option:focus-visible{outline:none;background:color-mix(in srgb,var(--accent) 14%,var(--bg))}
 .headword-control-find-option.is-selected{color:var(--accent);font-weight:600}
+/* ── the prunable menu's chrome ──────────────────────────────────────
+   The gear / tick / cross bar, and the checkboxes the editing rows wear.
+   .headword-control-find-action marks everything here that is NOT a mode row,
+   so the mode menu's card rule in app.css (which flattens every other button
+   to a full-width row) steps aside for it. The box is drawn here rather than
+   taken from checkbox.css, which browse.html does not load. */
+.headword-control-find-bar{display:flex;align-items:center;justify-content:flex-end;gap:.3em;padding:.1em .2em .25em}
+.headword-control-find-bar button{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;flex:none;
+  width:1.9em;height:1.9em;padding:0;border:1px solid var(--line);border-radius:5px;
+  background:var(--bg-card,var(--bg));color:var(--fg);font:inherit;font-size:1em;line-height:1;cursor:pointer}
+.headword-control-find-bar button:hover{border-color:var(--accent);color:var(--accent)}
+.headword-control-find-bar button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.headword-control-find-customize svg{display:block;width:1.15em;height:1.15em}
+.headword-control-find-confirm,.headword-control-find-cancel{color:var(--accent);font-weight:600}
+.headword-control-find-option.is-customizing{grid-template-columns:auto 4.4em minmax(0,1fr);cursor:pointer}
+.headword-control-find-option.is-customizing:disabled{cursor:default}
+.headword-control-find-option.is-customizing:disabled .headword-control-find-box{opacity:.55}
+/* The section's name is a checkbox row of its own while editing: it turns the
+   name on and off, not the commands under it. A button needs the look of the
+   div it replaces. */
+.headword-control-find-group-title.is-customizing{display:flex;align-items:center;gap:.4em;width:100%;
+  padding:.2em .5em;border:0;background:transparent;color:var(--muted-fg,var(--fg));
+  font:inherit;font-size:calc(var(--ui-font-section) * 1rem);font-weight:600;text-align:left;cursor:pointer}
+.headword-control-find-group-title.is-customizing:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.headword-control-find-box{flex:none;box-sizing:border-box;position:relative;width:18px;height:18px;
+  border:1.5px solid var(--ds-checkbox-border-color,var(--fg));border-radius:4px;
+  background-color:var(--ds-checkbox-background,var(--paper-bg,var(--bg)))}
+.headword-control-find-option.is-customizing .headword-control-find-box{margin-top:.15em}
+.headword-control-find-option[aria-checked="true"] .headword-control-find-box::after,
+.headword-control-find-group-title[aria-checked="true"] .headword-control-find-box::after{
+  content:"";position:absolute;left:35%;top:8%;width:25%;height:48%;
+  border:solid var(--ds-checkbox-mark-color,var(--fg));border-width:0 2px 2px 0;transform:rotate(45deg)}
 .headword-control-history{position:fixed;z-index:1499;display:flex;flex-direction:column;min-width:0;max-width:calc(100vw - 1em);max-height:min(50vh,320px);overflow:auto;
   background:var(--bg-card,var(--bg));border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow,0 .25em .75em #0003)}
 .headword-control-history[hidden]{display:none}

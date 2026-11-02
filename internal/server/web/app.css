@@ -1085,11 +1085,13 @@ html[data-shell-image] .menu-card{
 .menu-card[hidden]{display:none}
 /* The mode menu's rows are the headword-control find options; the card's own
    button rule would flatten their two-column grid, so it steps aside and
-   headword-control.css owns those rows wholesale. */
-.menu-card button:not(.headword-control-find-option){box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);width:100%;min-height:calc(var(--ui-control-height) * 1em);
+   headword-control.css owns those rows wholesale. The same goes for the
+   customize bar and the section-name checkboxes (headword-control-find-action):
+   they are the menu's chrome, not rows. */
+.menu-card button:not(.headword-control-find-option):not(.headword-control-find-action){box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);width:100%;min-height:calc(var(--ui-control-height) * 1em);
   padding:.45em .7em;border:0;background:none;color:var(--fg);
   text-align:left;font:inherit;font-size:calc(var(--ui-font-base) * 1rem);cursor:pointer}
-.menu-card button:not(.headword-control-find-option):hover,.menu-card button:not(.headword-control-find-option):focus-visible{
+.menu-card button:not(.headword-control-find-option):not(.headword-control-find-action):hover,.menu-card button:not(.headword-control-find-option):not(.headword-control-find-action):focus-visible{
   background:var(--line-soft);outline:none}
 /* The recent colors: the swatch IS the label's subject, so it leads. */
 .color-history{min-width:10em;max-height:min(50vh,320px)}

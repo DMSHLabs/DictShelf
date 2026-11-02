@@ -8083,7 +8083,8 @@ maskHeadwordControl=window.wudictHeadwordControl.create({
       exact:{title:tx("browse.findModeExact"),hint:tx("search.modeHintExact")},
       exactLemma:{title:tx("browse.findModeExactLemma"),hint:tx("search.modeHintExactLemma")},
       wildcards:{title:tx("browse.findModeWildcards"),hint:tx("search.modeHintWildcards")}},
-    apply:tx("browse.runFind"),previous:tx("browse.previousMatch"),next:tx("browse.nextMatch")},
+    apply:tx("browse.runFind"),previous:tx("browse.previousMatch"),next:tx("browse.nextMatch"),
+    customizeMenu:tx("search.customizeMenu"),customizeApply:tx("search.customizeApply"),customizeCancel:tx("search.customizeCancel")},
   maxRows:3,
   countAction:true,
   onQuery:maskFindInputChanged,
@@ -12389,17 +12390,26 @@ const themedModeHints={prefix:tx("search.modeHintPrefix"),suffix:tx("search.mode
   word:tx("search.modeHintWord"),wordLemma:tx("search.modeHintWordLemma"),exact:tx("search.modeHintExact"),
   exactLemma:tx("search.modeHintExactLemma"),wildcards:tx("search.modeHintWildcards"),
   phrase:tx("search.modeHintPhrase"),near:tx("search.modeHintNear"),fts:tx("search.modeHintWords")};
+/* ── the prunable search menu ────────────────────────────────────────
+   The gear in the mode menu's top-right corner turns its rows into checkboxes:
+   a tick keeps a command, an empty box hides it, and the tick applies while
+   the cross puts back what was there before the gear. One hidden set of mode
+   values and one set of hidden section names are shared with the browse
+   window's find menu and the mask dock (window.wudictHeadwordControl.findMenuPrefs),
+   because it is one list of modes the reader means to keep. A section's name is
+   switched on and off on its own - and never shows when every command under it
+   is hidden, whatever its own box says, because a name over nothing is noise. */
+const MODE_MENU_GROUP={prefix:"eachWord",exact:"wholeHeadword",phrase:"articles"};
+const MODE_MENU_HEADING={eachWord:tx("browse.findModesEachWord"),wholeHeadword:tx("browse.findModesWholeHeadword"),articles:tx("search.articles")};
+let modeMenuCustomizing=false,modeMenuDraftModes=null,modeMenuDraftHeadings=null;
+const modeMenuPrefs=()=>window.wudictHeadwordControl.findMenuPrefs;
 function themedSelect(select,button,menu){
   const ctl=sheetMenuNew(button,menu,()=>{
+    if(select.id==="mode"){menu.replaceChildren(...modeMenuNodes(ctl));return true}
     const nodes=[];let group=null;
     for(const option of select.options){
       if(option.hidden)continue;
-      if(select.id==="mode"&&["prefix","exact","phrase"].includes(option.value)){
-        group=document.createElement("div");group.className="headword-control-find-group";
-        const heading=document.createElement("div");heading.className="headword-control-find-group-title";
-        heading.textContent=tx(option.value==="prefix"?"browse.findModesEachWord":option.value==="exact"?"browse.findModesWholeHeadword":"search.articles");
-        group.append(heading);nodes.push(group);
-      }else if(select.id==="articleFindMode"&&(option.value==="prefix"||option.value==="fts")){
+      if(select.id==="articleFindMode"&&(option.value==="prefix"||option.value==="fts")){
         group=document.createElement("div");group.className="headword-control-find-group";
         if(option.value==="prefix"){
           const heading=document.createElement("div");heading.className="headword-control-find-group-title";
@@ -12437,7 +12447,117 @@ function themedSelect(select,button,menu){
   });
   const show=ctl.show,hide=ctl.hide;
   ctl.show=()=>{if(button.disabled)return;show();button.setAttribute("aria-expanded",String(ctl.isOpen()))};
-  ctl.hide=()=>{hide();button.setAttribute("aria-expanded","false")};
+  /* Closing the menu abandons an editing pass, the way the cross does. */
+  ctl.hide=()=>{hide();button.setAttribute("aria-expanded","false");
+    if(select.id==="mode"){modeMenuCustomizing=false;modeMenuDraftModes=null;modeMenuDraftHeadings=null}};
+  function modeMenuIcon(mode){
+    const icon=document.createElement("span");icon.className="headword-control-find-option-icon";modeMark(icon,mode);
+    return icon;
+  }
+  function modeMenuCopy(mode,fallback){
+    const copy=document.createElement("span");copy.className="headword-control-find-option-copy";
+    const title=document.createElement("span");title.className="headword-control-find-option-title";
+    title.textContent=themedModeDescriptions[mode]||fallback;copy.append(title);
+    if(themedModeHints[mode]){const hint=document.createElement("small");hint.className="headword-control-find-option-hint";hint.textContent=themedModeHints[mode];copy.append(hint)}
+    return copy;
+  }
+  function modeMenuRow(option,ctl){
+    const item=document.createElement("button");
+    item.type="button";item.className="headword-control-find-option";item.role="option";
+    item.setAttribute("aria-selected",String(option.selected));
+    item.disabled=option.disabled;
+    if(option.selected)item.classList.add("is-selected");
+    item.append(modeMenuIcon(option.value),modeMenuCopy(option.value,option.textContent));
+    item.onclick=()=>{select.value=option.value;ctl.hide();select.dispatchEvent(new Event("change",{bubbles:true}));sync();button.focus()};
+    return item;
+  }
+  function modeMenuCheckRow(option,hidden,ctl){
+    const checked=!hidden.has(option.value);
+    const item=document.createElement("button");
+    item.type="button";item.className="headword-control-find-option is-customizing";
+    item.dataset.customizeMode=option.value;
+    item.setAttribute("role","checkbox");item.setAttribute("aria-checked",String(checked));
+    /* The last kept command cannot be dropped, so the menu is never left with
+       nothing to search by. */
+    item.disabled=checked&&[...select.options].filter(other=>!hidden.has(other.value)).length===1;
+    const box=document.createElement("span");box.className="headword-control-find-box";
+    item.append(box,modeMenuIcon(option.value),modeMenuCopy(option.value,option.textContent));
+    item.onclick=()=>{if(hidden.has(option.value))hidden.delete(option.value);else hidden.add(option.value);ctl.show()};
+    return item;
+  }
+  function modeMenuHeadingRow(key,hiddenHeadings,ctl){
+    const row=document.createElement("button");
+    row.type="button";row.className="headword-control-find-group-title is-customizing headword-control-find-action";
+    row.dataset.customizeHeading=key;
+    row.setAttribute("role","checkbox");row.setAttribute("aria-checked",String(!hiddenHeadings.has(key)));
+    const box=document.createElement("span");box.className="headword-control-find-box";
+    const text=document.createElement("span");text.textContent=MODE_MENU_HEADING[key];
+    row.append(box,text);
+    row.onclick=()=>{if(hiddenHeadings.has(key))hiddenHeadings.delete(key);else hiddenHeadings.add(key);ctl.show()};
+    return row;
+  }
+  function modeMenuBar(ctl){
+    const bar=document.createElement("div");bar.className="headword-control-find-bar";
+    const action=document.createElement("button");action.type="button";
+    if(modeMenuCustomizing){
+      action.className="headword-control-find-action headword-control-find-confirm";action.textContent="✓";
+      action.setAttribute("aria-label",tx("search.customizeApply"));action.title=action.getAttribute("aria-label");
+      action.onclick=()=>modeMenuApply(ctl);
+      const cancel=document.createElement("button");
+      cancel.type="button";cancel.className="headword-control-find-action headword-control-find-cancel";cancel.textContent="✕";
+      cancel.setAttribute("aria-label",tx("search.customizeCancel"));cancel.title=cancel.getAttribute("aria-label");
+      cancel.onclick=()=>{modeMenuCustomizing=false;modeMenuDraftModes=null;modeMenuDraftHeadings=null;ctl.show()};
+      bar.append(action,cancel);
+    }else{
+      action.className="headword-control-find-action headword-control-find-customize";
+      action.setAttribute("aria-label",tx("search.customizeMenu"));action.title=action.getAttribute("aria-label");
+      action.innerHTML=window.wudictHeadwordControl.findMenuGear;
+      action.onclick=()=>{modeMenuCustomizing=true;modeMenuDraftModes=modeMenuPrefs().hiddenModes();modeMenuDraftHeadings=modeMenuPrefs().hiddenHeadings();ctl.show()};
+      bar.append(action);
+    }
+    return bar;
+  }
+  function modeMenuApply(ctl){
+    modeMenuPrefs().save(modeMenuDraftModes,modeMenuDraftHeadings);
+    modeMenuCustomizing=false;modeMenuDraftModes=null;modeMenuDraftHeadings=null;
+    const visible=modeMenuPrefs().visibleModes([...select.options].map(option=>option.value),modeMenuPrefs().hiddenModes());
+    if(!visible.includes(select.value)){
+      select.value=visible[0];
+      select.dispatchEvent(new Event("change",{bubbles:true}));
+    }
+    sync();ctl.show();
+  }
+  /* Rebuilt on every open, so a set changed in another window is already in
+     force the next time the menu is shown. In the editing state nothing is
+     filtered out - the reader must see every command to put it back. */
+  function modeMenuNodes(ctl){
+    const prefs=modeMenuPrefs();
+    const hidden=modeMenuCustomizing?modeMenuDraftModes:prefs.hiddenModes();
+    const hiddenHeadings=modeMenuCustomizing?modeMenuDraftHeadings:prefs.hiddenHeadings();
+    const options=[...select.options];
+    const shownSet=modeMenuCustomizing?null:new Set(prefs.visibleModes(options.map(option=>option.value),hidden));
+    const groups=[];let group=null;
+    for(const option of options){
+      if(MODE_MENU_GROUP[option.value]||!group){group={key:MODE_MENU_GROUP[option.value]||null,options:[]};groups.push(group)}
+      group.options.push(option);
+    }
+    const nodes=[modeMenuBar(ctl)];
+    for(const section of groups){
+      const rows=modeMenuCustomizing?section.options:section.options.filter(option=>shownSet.has(option.value));
+      if(!rows.length)continue;
+      const block=document.createElement("div");block.className="headword-control-find-group";
+      if(section.key){
+        if(modeMenuCustomizing)block.append(modeMenuHeadingRow(section.key,hiddenHeadings,ctl));
+        else if(!hiddenHeadings.has(section.key)){
+          const heading=document.createElement("div");heading.className="headword-control-find-group-title";
+          heading.textContent=MODE_MENU_HEADING[section.key];block.append(heading);
+        }
+      }
+      for(const option of rows)block.append(modeMenuCustomizing?modeMenuCheckRow(option,hidden,ctl):modeMenuRow(option,ctl));
+      nodes.push(block);
+    }
+    return nodes;
+  }
   /* The mode button wears the mode's mark, so the mode's own name moves to the
      tooltip and the accessible name - without it the control would announce a
      pattern. Every other menu button keeps its option's text. */

@@ -82,6 +82,44 @@
     {key:"wholeHeadword", modes:["exact", "exactLemma", "wildcards"]}
   ]);
   const findModeIcons = Object.freeze({prefix:"ab→", suffix:"→ab", contains:"ab", word:"·ab·", wordLemma:"·ab·+", exact:"=", exactLemma:"=+", wildcards:"*?"});
+
+  /* ── the prunable find menu ──────────────────────────────────────────
+     A gear in the menu's top-right corner turns its rows into checkboxes: a
+     tick keeps a command, an empty box hides it, and the tick and the cross
+     leave the editing (the tick also applies, the cross puts back what was
+     there before the gear). One hidden set of mode VALUES and one set of
+     hidden section names are shared by every find menu - this component's,
+     which the browse window and the mask dock both build, and the search
+     menu's own builder in index.html - because it is one list of modes the
+     reader means to keep: off in one window, off in the others. The store is
+     localStorage, like every other choice about this window. */
+  const hiddenModesKey = "wudict_hidden_find_modes";
+  const hiddenHeadingsKey = "wudict_hidden_find_headings";
+  const gearIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-linecap="butt"><circle cx="12" cy="12" r="7.4" stroke-width="2.4" stroke-dasharray="2.7 2.7"/><circle cx="12" cy="12" r="3.3" stroke-width="1.8"/></svg>';
+  function readNames(key) {
+    try {
+      const value = JSON.parse(localStorage.getItem(key) || "[]");
+      return new Set(Array.isArray(value) ? value.filter(item => typeof item === "string") : []);
+    } catch (_) { return new Set(); }
+  }
+  function writeNames(key, values) {
+    try { localStorage.setItem(key, JSON.stringify([...values])); } catch (_) {}
+  }
+  /* A menu never renders empty: if the shared set would hide every command of
+     the menu it is read in, that menu shows them all rather than a bare bar. */
+  function visibleModes(values, hidden) {
+    const shown = values.filter(value => !hidden.has(value));
+    return shown.length ? shown : values.slice();
+  }
+  const findMenuPrefs = Object.freeze({
+    hiddenModes() { return readNames(hiddenModesKey); },
+    hiddenHeadings() { return readNames(hiddenHeadingsKey); },
+    save(hiddenModes, hiddenHeadings) {
+      writeNames(hiddenModesKey, hiddenModes);
+      writeNames(hiddenHeadingsKey, hiddenHeadings);
+    },
+    visibleModes
+  });
   function create({dock, ids, labels, maxRows = 2, countAction = false, onQuery, onMode, onFindMode, onThreshold, onApply, onStep, onCount}) {
     if (!dock || !ids) throw new TypeError("headword control needs a dock and element ids");
     const id = name => ids[name];
@@ -123,49 +161,183 @@
       if (notify) onQuery?.(word);
       return true;
     }
-    for (const group of findModeGroups) {
-      const section = document.createElement("div");
-      section.className = "headword-control-find-group";
-      const heading = document.createElement("div");
-      heading.className = "headword-control-find-group-title";
-      heading.textContent = labels.findModeGroups?.[group.key] || group.key;
-      section.append(heading);
-      for (const mode of group.modes) {
-        const item = document.createElement("button");
-        item.type = "button";
-        item.className = "headword-control-find-option";
-        item.dataset.findMode = mode;
-        item.setAttribute("role", "menuitemradio");
-        const icon = document.createElement("span");
-        icon.className = "headword-control-find-option-icon";
-        icon.textContent = findModeIcons[mode];
-        const copy = document.createElement("span");
-        copy.className = "headword-control-find-option-copy";
-        const title = document.createElement("span");
-        title.className = "headword-control-find-option-title";
-        title.textContent = findModes[mode]?.title || findModes[mode]?.description || mode;
-        copy.append(title);
-        if (findModes[mode]?.hint) {
-          const hint = document.createElement("small");
-          hint.className = "headword-control-find-option-hint";
-          hint.textContent = findModes[mode].hint;
-          copy.append(hint);
-        }
-        item.append(icon, copy);
-        item.addEventListener("click", () => {
-          if (el.mask.disabled) return;
-          hideHistory();
-          closeFindMenu();
-          if (selectedFindMode !== mode) {
-            normalizeSingleWord(mode);
-            selectedFindMode = mode;
-            recordCurrentHistory();
-            onFindMode?.(mode);
-          }
-        });
-        section.append(item);
+    const allFindModes = findModeGroups.flatMap(group => group.modes);
+    const customizeLabel = labels.customizeMenu || "Customize this menu";
+    const customizeApplyLabel = labels.customizeApply || "Apply";
+    const customizeCancelLabel = labels.customizeCancel || "Cancel";
+    let customizing = false, draftHiddenModes = null, draftHiddenHeadings = null, adjustingMode = false;
+    function findOptionCopy(mode) {
+      const copy = document.createElement("span");
+      copy.className = "headword-control-find-option-copy";
+      const title = document.createElement("span");
+      title.className = "headword-control-find-option-title";
+      title.textContent = findModes[mode]?.title || findModes[mode]?.description || mode;
+      copy.append(title);
+      if (findModes[mode]?.hint) {
+        const hint = document.createElement("small");
+        hint.className = "headword-control-find-option-hint";
+        hint.textContent = findModes[mode].hint;
+        copy.append(hint);
       }
-      el.findMenu.append(section);
+      return copy;
+    }
+    function findOptionIcon(mode) {
+      const icon = document.createElement("span");
+      icon.className = "headword-control-find-option-icon";
+      icon.textContent = findModeIcons[mode];
+      return icon;
+    }
+    function findOptionRow(mode) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "headword-control-find-option";
+      item.dataset.findMode = mode;
+      item.setAttribute("role", "menuitemradio");
+      item.append(findOptionIcon(mode), findOptionCopy(mode));
+      item.addEventListener("click", () => {
+        if (el.mask.disabled) return;
+        hideHistory();
+        closeFindMenu();
+        if (selectedFindMode !== mode) {
+          normalizeSingleWord(mode);
+          selectedFindMode = mode;
+          recordCurrentHistory();
+          onFindMode?.(mode);
+        }
+      });
+      return item;
+    }
+    /* One drawn box, shared by a command's row and a section's name row: the
+       app's own checkbox control is not loaded in every window this menu opens
+       in (browse.html loads only this stylesheet and workspace.css), so the
+       look is drawn here from the same custom properties. */
+    function findCheckBox() {
+      const box = document.createElement("span");
+      box.className = "headword-control-find-box";
+      return box;
+    }
+    function findCustomizeOption(mode, hidden) {
+      const checked = !hidden.has(mode);
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "headword-control-find-option is-customizing";
+      item.dataset.customizeMode = mode;
+      item.setAttribute("role", "checkbox");
+      item.setAttribute("aria-checked", String(checked));
+      /* The last kept command cannot be dropped, so a menu is never left with
+         nothing to search by. */
+      item.disabled = checked && allFindModes.filter(value => !hidden.has(value)).length === 1;
+      item.append(findCheckBox(), findOptionIcon(mode), findOptionCopy(mode));
+      item.addEventListener("click", () => {
+        if (hidden.has(mode)) hidden.delete(mode); else hidden.add(mode);
+        renderFindMenu();
+      });
+      return item;
+    }
+    function findCustomizeHeading(group, hidden) {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "headword-control-find-group-title is-customizing headword-control-find-action";
+      row.dataset.customizeHeading = group.key;
+      row.setAttribute("role", "checkbox");
+      row.setAttribute("aria-checked", String(!hidden.has(group.key)));
+      const text = document.createElement("span");
+      text.textContent = labels.findModeGroups?.[group.key] || group.key;
+      row.append(findCheckBox(), text);
+      row.addEventListener("click", () => {
+        if (hidden.has(group.key)) hidden.delete(group.key); else hidden.add(group.key);
+        renderFindMenu();
+      });
+      return row;
+    }
+    function findCustomizeBar() {
+      const bar = document.createElement("div");
+      bar.className = "headword-control-find-bar";
+      if (customizing) {
+        const apply = document.createElement("button");
+        apply.type = "button";
+        apply.className = "headword-control-find-action headword-control-find-confirm";
+        apply.textContent = "✓";
+        apply.setAttribute("aria-label", customizeApplyLabel);
+        apply.title = customizeApplyLabel;
+        apply.addEventListener("click", applyFindCustomize);
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.className = "headword-control-find-action headword-control-find-cancel";
+        cancel.textContent = "✕";
+        cancel.setAttribute("aria-label", customizeCancelLabel);
+        cancel.title = customizeCancelLabel;
+        cancel.addEventListener("click", cancelFindCustomize);
+        bar.append(apply, cancel);
+      } else {
+        const gear = document.createElement("button");
+        gear.type = "button";
+        gear.className = "headword-control-find-action headword-control-find-customize";
+        gear.setAttribute("aria-label", customizeLabel);
+        gear.title = customizeLabel;
+        gear.innerHTML = gearIcon;
+        gear.addEventListener("click", () => {
+          customizing = true;
+          draftHiddenModes = findMenuPrefs.hiddenModes();
+          draftHiddenHeadings = findMenuPrefs.hiddenHeadings();
+          renderFindMenu();
+        });
+        bar.append(gear);
+      }
+      return bar;
+    }
+    function markFindSelection() {
+      for (const item of el.findMenu.querySelectorAll("[data-find-mode]")) {
+        const active = item.dataset.findMode === selectedFindMode;
+        item.setAttribute("aria-checked", String(active));
+        item.classList.toggle("is-selected", active);
+      }
+    }
+    /* Rebuilt on every open, so a set changed in another window is already in
+       force the next time the menu is shown. In the editing state nothing is
+       filtered out - the reader must see every command to put it back - and
+       each row carries a checkbox instead of selecting its mode. */
+    function renderFindMenu() {
+      const hidden = customizing ? draftHiddenModes : findMenuPrefs.hiddenModes();
+      const hiddenHeadings = customizing ? draftHiddenHeadings : findMenuPrefs.hiddenHeadings();
+      const shownSet = new Set(customizing ? allFindModes : visibleModes(allFindModes, hidden));
+      const nodes = [findCustomizeBar()];
+      for (const group of findModeGroups) {
+        const modes = group.modes.filter(mode => shownSet.has(mode));
+        if (!modes.length) continue;
+        const section = document.createElement("div");
+        section.className = "headword-control-find-group";
+        if (customizing) section.append(findCustomizeHeading(group, hiddenHeadings));
+        else if (!hiddenHeadings.has(group.key)) {
+          const heading = document.createElement("div");
+          heading.className = "headword-control-find-group-title";
+          heading.textContent = labels.findModeGroups?.[group.key] || group.key;
+          section.append(heading);
+        }
+        for (const mode of modes) section.append(customizing ? findCustomizeOption(mode, hidden) : findOptionRow(mode));
+        nodes.push(section);
+      }
+      el.findMenu.replaceChildren(...nodes);
+      markFindSelection();
+      if (findMenuOpen && !el.findMenu.hidden) positionFindMenu();
+    }
+    function applyFindCustomize() {
+      findMenuPrefs.save(draftHiddenModes, draftHiddenHeadings);
+      customizing = false;
+      draftHiddenModes = null;
+      draftHiddenHeadings = null;
+      const visible = visibleModes(allFindModes, findMenuPrefs.hiddenModes());
+      if (!visible.includes(selectedFindMode)) {
+        selectedFindMode = visible[0];
+        onFindMode?.(selectedFindMode);
+      }
+      renderFindMenu();
+    }
+    function cancelFindCustomize() {
+      customizing = false;
+      draftHiddenModes = null;
+      draftHiddenHeadings = null;
+      renderFindMenu();
     }
     const canvas = document.createElement("canvas").getContext("2d");
     function fit() {
@@ -196,6 +368,10 @@
       el.findMenu.style.removeProperty("max-height");
       findMenuOpen = false;
       el.mask.setAttribute("aria-expanded", "false");
+      /* Closing the menu abandons an editing pass, the way the cross does. */
+      customizing = false;
+      draftHiddenModes = null;
+      draftHiddenHeadings = null;
     }
     function historyKind() { return selectedFindMode === "wildcards" ? "wildcards" : "search"; }
     function hideHistory() {
@@ -274,6 +450,17 @@
     function paint(state = {}) {
       const filtering = !!state.filtering;
       selectedFindMode = findModeIcons[state.findMode] ? state.findMode : "prefix";
+      /* A mode hidden from the menu cannot stay the chosen one: the host is
+         told to move to the first mode still on offer. The flag keeps a host
+         that answers synchronously from re-entering this call. */
+      const offered = visibleModes(allFindModes, findMenuPrefs.hiddenModes());
+      if (!offered.includes(selectedFindMode)) {
+        selectedFindMode = offered[0];
+        if (!adjustingMode) {
+          adjustingMode = true;
+          try { onFindMode?.(selectedFindMode); } finally { adjustingMode = false; }
+        }
+      }
       el.mode.innerHTML = filtering ? icons.filter : icons.search;
       el.mode.classList.toggle("is-on", filtering);
       el.mode.setAttribute("aria-pressed", String(filtering));
@@ -282,11 +469,7 @@
       el.mask.textContent = findModeIcons[selectedFindMode];
       el.mask.setAttribute("aria-label", findModes[selectedFindMode]?.title || findModes[selectedFindMode]?.description || selectedFindMode);
       el.mask.title = el.mask.getAttribute("aria-label");
-      for (const item of el.findMenu.querySelectorAll("[data-find-mode]")) {
-        const active = item.dataset.findMode === selectedFindMode;
-        item.setAttribute("aria-checked", String(active));
-        item.classList.toggle("is-selected", active);
-      }
+      markFindSelection();
       if (historyOpen) renderHistory(el.input.value);
       el.input.placeholder = filtering ? labels.filter : labels.search;
       el.input.setAttribute("aria-label", el.input.placeholder);
@@ -333,6 +516,7 @@
       if (!el.findMenu.hidden) { closeFindMenu(); return; }
       findMenuOpen = true;
       document.body.append(el.findMenu);
+      renderFindMenu();
       el.findMenu.hidden = false;
       el.mask.setAttribute("aria-expanded", "true");
       positionFindMenu();
@@ -458,6 +642,7 @@
   }
 
   window.wudictHeadwordControl = Object.freeze({create, cacheRead, cacheWrite, threshold, setThreshold,
+    findMenuPrefs, findMenuGear:gearIcon,
     registerRibbon(api){if(api&&typeof api.measure==="function"&&typeof api.paint==="function")ribbon=api},
     get ribbon(){return ribbon}});
 })();
