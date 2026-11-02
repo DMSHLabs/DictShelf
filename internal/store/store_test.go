@@ -1350,6 +1350,43 @@ func TestMaintenanceRefreshesRecordedIndexSizes(t *testing.T) {
 	}
 }
 
+// A build that writes no article sibling must clear one an earlier build left:
+// the reader takes the file's presence as the answer to where the article index
+// is, and the uuid does NOT catch a stale one, because keptUUID keeps this
+// dictionary's uuid across a rebuild of the same source. So "text.db changed,
+// the sibling is invalid" is made true here and nowhere else.
+func TestAnUnsplittingBuildClearsTheSiblingItDidNotWrite(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "text.db")
+	r := &fakeReader{meta: dict.Meta{Name: "split", Format: "test", Path: "/x"}, entries: []dict.Entry{
+		h("Blue heart", "<p>cardiac tissue</p>"),
+	}}
+	if _, err := IngestPlan(r, path, Plan{Contains: true, FullText: true, SplitArticles: true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	sibling, ok := ArticlesSibling(path)
+	if !ok {
+		t.Fatal("the split build published no articles.db")
+	}
+	splitUUID, _ := ReadMeta(path)
+
+	// The same source, rebuilt WITHOUT the split - which is what turning the
+	// feature off, or an older flag, looks like.
+	if _, err := IngestPlan(r, path, Plan{Contains: true, FullText: true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := ArticlesSibling(path); ok {
+		t.Errorf("%s survived a build that did not write it: the reader would search the previous edition's index",
+			filepath.Base(sibling))
+	}
+	// And the uuid really is kept, which is why the file's absence is the only
+	// thing that can stand for this.
+	rebuiltUUID, _ := ReadMeta(path)
+	if rebuiltUUID["dict_uuid"] != splitUUID["dict_uuid"] {
+		t.Logf("note: the uuid changed across the rebuild (%s -> %s); the removal is still what the pair relies on",
+			splitUUID["dict_uuid"], rebuiltUUID["dict_uuid"])
+	}
+}
+
 // A build that gives the article index a file of its own must record the size
 // from THAT file. Measuring only text.db would report the full-text index as
 // absent, and the estimate would price a dictionary with a large index as if it

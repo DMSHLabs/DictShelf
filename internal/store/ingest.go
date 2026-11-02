@@ -24,6 +24,7 @@ import (
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/indexconst"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // Progress is called during ingest with entries processed so far and the
@@ -492,6 +493,21 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	}
 	if err = os.Rename(tmp, dbPath); err != nil {
 		return rep, err
+	}
+	// The pair is one thing: a build that wrote NO article sibling must not leave
+	// an earlier one lying beside the database it just replaced.
+	//
+	// Nothing else catches this. The reader takes the FILE's presence as the
+	// answer to "where is the article index" (dmsh_articles_split.go), and the
+	// uuid check does not help: keptUUID keeps this dictionary's uuid across a
+	// rebuild of the same source (stale.go), so an articles.db built from the
+	// previous edition would still pass attachArticles and be searched as this
+	// database's index. Only a folder-form publish is cleared: for the loose
+	// "<name>.text.db" the sibling name is not this database's to take.
+	if articlesTmp == "" && strings.EqualFold(filepath.Base(dbPath), TextDBName) {
+		if err := os.Remove(ArticlesFilePath(dbPath)); err != nil && !os.IsNotExist(err) {
+			logx.V("ingest: could not clear the previous %s: %v", ArticlesFilePath(dbPath), err)
+		}
 	}
 	// refresh the folder receipt (derived from the meta just written; a
 	// failure here must not fail an otherwise complete ingest).
