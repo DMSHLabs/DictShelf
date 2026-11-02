@@ -112,7 +112,7 @@ jobs:
             CGO_ENABLED=1 GOOS=android GOARCH="$goarch" GOARM="$goarm" \
               CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/clang --target=${target}" \
               CXX="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=${target}" \
-              go build -buildmode=c-shared -tags sqlite_fts5 -trimpath \
+              go build -buildmode=c-shared -tags sqlite_fts5,sqlite_dbstat -trimpath \
                 -ldflags "-s -w -extldflags=-Wl,-z,max-page-size=16384" \
                 -o "android/app/src/main/jniLibs/$abi/libwudictbridge.so" ./android/nativebridge
           }

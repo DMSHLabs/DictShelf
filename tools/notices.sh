@@ -20,18 +20,21 @@ tmp=$(mktemp)
 trap 'rm -f "$tmp" "$tmp.mods"' EXIT
 
 : > "$tmp.mods"
-for cfg in \
-  "darwin:" "darwin:sqlite_fts5" "darwin:purego" \
-  "linux:" "linux:sqlite_fts5" "windows:" "windows:sqlite_fts5"
-do
-  goos=${cfg%%:*}; tags=${cfg#*:}
-  # CGO_ENABLED=1 for the cgo flavour, or `go list` would drop the C-backed
-  # SQLite driver from a cross-listed configuration and lose its notice.
-  cgo=0; [ "$tags" = sqlite_fts5 ] && cgo=1
-  CGO_ENABLED=$cgo GOOS=$goos GOARCH=amd64 go list -deps \
-    ${tags:+-tags "$tags"} \
-    -f '{{if .Module}}{{.Module.Path}}	{{.Module.Version}}	{{.Module.Dir}}{{end}}' ./... \
-    2>/dev/null >> "$tmp.mods" || true
+# Every shipped configuration, which is now exactly two drivers per platform:
+# the cgo one the releases are built with (sqlite_fts5,sqlite_dbstat) and the
+# pure-Go one, which has to be asked for by name (driver_purego.go). A build
+# with neither driver fails on purpose (driver_missing.go), so an empty tag list
+# is not a configuration any more.
+for goos in darwin linux windows; do
+  for tags in purego sqlite_fts5,sqlite_dbstat; do
+    # CGO_ENABLED=1 for the cgo flavour, or `go list` would drop the C-backed
+    # SQLite driver from a cross-listed configuration and lose its notice.
+    cgo=0; case "$tags" in *sqlite_fts5*) cgo=1;; esac
+    CGO_ENABLED=$cgo GOOS=$goos GOARCH=amd64 go list -deps \
+      -tags "$tags" \
+      -f '{{if .Module}}{{.Module.Path}}	{{.Module.Version}}	{{.Module.Dir}}{{end}}' ./... \
+      2>/dev/null >> "$tmp.mods" || true
+  done
 done
 
 cat "$head" > "$tmp"

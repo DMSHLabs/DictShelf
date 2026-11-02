@@ -1,5 +1,7 @@
 On this Windows machine, Go cgo uses MinGW GCC configured as `GCC_PATH` in `build-windows.local.bat`; check it before treating GCC as unavailable.
 
+Builds and tests here use the cgo driver: `CGO_ENABLED=1 CC="<GCC_PATH>" go build -tags sqlite_fts5,sqlite_dbstat ./...` (same tags for `go test`). A build with no tags, or with `-tags sqlite_fts5` and `CGO_ENABLED=0`, **fails on purpose** (`internal/store/driver_missing.go`): it used to fall silently to the pure-Go driver, which is a different binary — `dbstat` is compiled into it and out of the cgo one unless `sqlite_dbstat` is passed, so index sizes differ. The pure-Go driver is `-tags purego`, asked for by name (`internal/store/driver_purego.go`).
+
 # Model capability: If you determine during a task that the selected model or reasoning level is not sufficient to complete it reliably, stop work immediately and tell the user which stronger model and level you recommend, and why. Do not continue the task with the current model; resume only after the user switches or explicitly asks you to proceed anyway.
 
 # Working in this checkout

@@ -343,7 +343,7 @@ rem
 rem Equivalent to Makefile android-go:
 rem
 rem GOFLAGS:
-rem   -tags sqlite_fts5 -trimpath
+rem   -tags sqlite_fts5,sqlite_dbstat -trimpath
 rem
 rem LDFLAGS:
 rem   -s -w
@@ -506,7 +506,7 @@ set "CXX=%NDK_BIN%\clang++.exe --target=%ANDROID_TRIPLE%"
 if /i "%~1"=="arm" (set "GOARM=7") else (set "GOARM=")
 
 echo Building libwudictbridge.so for android/%~1
-go build -buildmode=c-shared -tags sqlite_fts5 -trimpath ^
+go build -buildmode=c-shared -tags sqlite_fts5,sqlite_dbstat -trimpath ^
   -ldflags "-s -w -extldflags=-Wl,-z,max-page-size=16384" ^
   -o "%~3" ./android/nativebridge
 if errorlevel 1 exit /b 1

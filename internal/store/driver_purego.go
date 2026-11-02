@@ -2,20 +2,31 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//go:build !sqlite_fts5 || !cgo
+//go:build purego && !sqlite_fts5
 
 package store
 
-// The default driver: modernc.org/sqlite (pure Go, FTS5 always compiled
-// in, no C toolchain). This is what a plain `go build` / `go install`
-// with no tags gets, and what release cross-builds use so a single ubuntu
-// runner can build every platform.
+// The pure-Go driver: modernc.org/sqlite (FTS5 always compiled in, no C
+// toolchain).
 //
-// It is the default because it cannot be wrong (D29): FTS5 is mandatory
-// for store's schema, and this driver always has it. Opt into the faster
-// cgo driver with -tags sqlite_fts5 (driver_cgo.go, D4) - passing that tag
-// on a machine without a C compiler falls back here rather than breaking.
-// The legacy -tags purego also lands here, which is what it always meant.
+// It used to be the silent fallback - any build without -tags sqlite_fts5, and
+// any build of that tag on a machine without a C compiler, landed here. It is
+// now asked for by NAME, with -tags purego, and a build that selects neither
+// driver fails outright (driver_missing.go). The reason is that the fallback was
+// not a fallback but a different binary: this driver and the cgo one differ in
+// more than speed. dbstat is compiled into this one, so every index size is
+// measured here and reads as zero on a cgo build that was not given the
+// sqlite_dbstat tag; and a test run that silently used this driver said nothing
+// about the cgo binary the fork actually ships.
+//
+// Nothing is wrong with driving with modernc - it cannot be short of FTS5, it
+// cross-compiles from one machine and the tests pass on it - so keep using it
+// wherever that is what you mean to test.
+//
+// (The earlier note here said a plain `go build` and the release cross-builds
+// used it; those releases are built per-platform with cgo now - see
+// .github/workflows/build-cgo.yml - so nothing ships on this path by default
+// any more.)
 
 import (
 	"strconv"

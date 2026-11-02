@@ -1,11 +1,11 @@
 name: Build+Release (cgo)
 
 # Performance-optimized builds using the cgo mattn/go-sqlite3 driver
-# (-tags sqlite_fts5, CGO_ENABLED=1). Unlike build-release.yml (pure-Go
-# modernc cross-compiled from one ubuntu box), each target is built on its
-# OWN native runner because cgo cannot cross the host arch/OS. Produces
-# workflow artifacts by default; the explicit publish_release input can add
-# these cgo assets to a GitHub Release.
+# (-tags sqlite_fts5,sqlite_dbstat, CGO_ENABLED=1). Unlike the pure-Go path
+# (modernc, `-tags purego`, which has to be asked for by name), each target is
+# built on its OWN native runner because cgo cannot cross the host arch/OS.
+# Produces workflow artifacts by default; the explicit publish_release input can
+# add these cgo assets to a GitHub Release.
 #
 # C toolchains are preinstalled on the Linux and macOS GitHub-hosted images
 # (actions/runner-images): Ubuntu → gcc, macOS → Xcode/clang. Windows is built
@@ -107,7 +107,7 @@ jobs:
             export CGO_CFLAGS="-O2 -g -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
             export CGO_LDFLAGS="$CGO_CFLAGS"
           fi
-          go build -trimpath -tags sqlite_fts5 \
+          go build -trimpath -tags sqlite_fts5,sqlite_dbstat \
             -ldflags="-s -w -X github.com/DMSHLabs/DictShelf/internal/cli.Version=${VERSION}" \
             -o "${BINARY}" .
 

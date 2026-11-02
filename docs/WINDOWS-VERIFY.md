@@ -49,7 +49,15 @@ them are in `docs/handoff-archive.md`.
   was never served; `tasklist //FI "IMAGENAME eq DictShelf.exe"` should show one
   process after a restart. The page also caches its CSS by the `?v=` hash, so
   the browser must be reloaded after the server is really new.
-- Go: `go build ./...`; targeted `go test ./internal/<pkg> -run '...' -count=1`.
+- Go: `CGO_ENABLED=1 go build -tags sqlite_fts5,sqlite_dbstat ./...`; targeted
+  `CGO_ENABLED=1 go test -tags sqlite_fts5,sqlite_dbstat ./internal/<pkg> -run
+  '...' -count=1`. The cgo driver needs `CC` (MinGW from `GCC_PATH` in
+  `build-windows.local.bat`). **A build with no tags, or with `-tags
+  sqlite_fts5` and `CGO_ENABLED=0`, now fails on purpose** — it used to fall
+  silently to the pure-Go driver, which has dbstat and the cgo one does not
+  unless `sqlite_dbstat` is passed, so the same command could test a different
+  binary from the one shipped (`internal/store/driver_missing.go`). The pure-Go
+  driver is `-tags purego`, asked for by name.
 - **`build-windows.cmd [cli|server|installer] [--channel ...] [--update-icon]`** —
   the fork's Windows builds. The PE resource object `dictshelf_windows_amd64.syso`
   is generated on every build and holds the six icons (from
@@ -65,8 +73,9 @@ them are in `docs/handoff-archive.md`.
   on PATH, then `GCC_ROOTS`) and `ISCC_PATH`. GitHub Actions uses the
   `windows-2022` image's MinGW-w64 GCC from `C:\mingw64\bin` and passes its
   absolute path to the script. Windows
-  desktop always requires cgo (`-tags sqlite_fts5`, CGO_ENABLED=1); there is no purego option or
-  fallback. If no compatible GCC is found, the script exits before replacing
+  desktop always requires cgo (`-tags sqlite_fts5,sqlite_dbstat`, CGO_ENABLED=1);
+  there is no purego option or fallback. If no compatible GCC is found, the
+  script exits before replacing
   the existing executable. This machine's ignored local settings select Qt GCC 13.1.0, which
   produces what `make build` and the CI cgo job ship. `cl.exe` is unusable: Go's
   cgo drives a gcc-style compiler, not MSVC. Verified 2026-09-28: the cgo exe
@@ -114,7 +123,8 @@ them are in `docs/handoff-archive.md`.
 - No `node` in this shell: JS syntax checks by hand/`vm`, and — since
   2026-10-07 — the ZCode in-app browser (the `browser-use` skill's
   `control-browser`) against a local preview, which is the way to check the
-  page actually runs: build the server with `go build -o <tmp>/DictShelf.exe .`,
+  page actually runs: build the server with `CGO_ENABLED=1 go build -tags
+  sqlite_fts5,sqlite_dbstat -o <tmp>/DictShelf.exe .`,
   start it with isolated dirs and no auth —
   `DictShelf.exe serve -dict-dir <test_data> -db-dir <tmp>/lib -config <tmp>/dictshelf.toml
   -port 6925 -auth off -no-browser -no-tray` (the `-config` file must EXIST,

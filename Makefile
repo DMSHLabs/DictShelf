@@ -12,11 +12,17 @@ BUILD_DIR  := dist
 # ---- build --------------------------------------------------------------
 # Official builds use cgo and the fast mattn SQLite driver with FTS5.
 #
-#   cgo  (what `make build` does): CGO_ENABLED=1 -tags sqlite_fts5
+#   cgo  (what `make build` does): CGO_ENABLED=1 -tags sqlite_fts5,sqlite_dbstat
 #     * mattn/go-sqlite3 - fast FTS5 (D4)
 #     * built-in libspeex .spx decoder (internal/speex + internal/speex/clib)
+#     * sqlite_dbstat compiles SQLite's page-accounting vtab in: the measured
+#       index sizes come from it (store.MeasureIndexSizesContext), and without
+#       the tag they read as zero on this driver.
 #     Requires a C compiler.
-GO_TAGS      := sqlite_fts5
+#
+#   pure-Go is opt-in, not a fallback: `-tags purego` (driver_purego.go). A
+#   build that selects neither driver fails on purpose (driver_missing.go).
+GO_TAGS      := sqlite_fts5,sqlite_dbstat
 GOFLAGS      := -tags $(GO_TAGS) -trimpath
 # VERSION must be defined BEFORE LDFLAGS: `:=` expands immediately, so the
 # other order stamped the version with an empty string (the binary then printed
@@ -387,7 +393,7 @@ notices: ## Regenerate THIRD-PARTY-NOTICES.md from the module licences (run afte
 .PHONY: lint
 lint: vet ## golangci-lint if installed, else vet only
 	@if command -v golangci-lint >/dev/null; then \
-		CGO_ENABLED=1 golangci-lint run --build-tags $(GO_TAGS) ./...; \
+		CGO_ENABLED=1 golangci-lint run --build-tags "$(GO_TAGS)" ./...; \
 	else \
 		echo "golangci-lint not installed; ran vet only"; \
 	fi

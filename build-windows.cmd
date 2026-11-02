@@ -232,7 +232,12 @@ if errorlevel 1 (
 )
 
 set "FLAVOUR=cgo"
-set "GO_TAGS=sqlite_fts5"
+rem sqlite_dbstat compiles SQLite's page-accounting virtual table in, and the
+rem measured index sizes come from it (store.MeasureIndexSizesContext). Without
+rem the tag they read as zero on this driver, and a build is where they are now
+rem recorded - into the database itself - so a build without it would write
+rem zeros permanently. The self-check below asserts this exact string.
+set "GO_TAGS=sqlite_fts5,sqlite_dbstat"
 set "CGO=1"
 
 rem ------------------------------------------------------------
