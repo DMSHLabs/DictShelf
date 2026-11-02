@@ -798,7 +798,15 @@ Recorded before the work, because each one changes which part of the flow moves.
    (1691), the deferred search (7606) and `fetchSearchPortion` (10052), so the initial size for the
    cache-driven path is set server-side: `Search`'s `n := request.Limit; if n <= 0 { n = 20 }` and the
    legacy handler's equivalent). Setting this is the first edit, and it is where the next session starts.
-2. **The background continuation is always on, and the setting is hidden.** The gate today is
+2. **The background continuation is always on, and the setting is hidden.** DONE (2026-11-02):
+   `search()` sets `activeSearchCountsInBackground=true` unconditionally (the one-line gate it replaced is
+   quoted in the comment there), the checkbox is hidden both in the markup and by script while its saved
+   value is still read and written so an older library's preference survives, and the interrupt - the part
+   the user stressed - is the existing `stopArticleResultCaches` plus the stream's AbortController, which a
+   new search runs before anything else. Verified on a live page: a phrase search creates an article-result
+   cache (`details.dict[data-search-cache-id]`) with no preference set, and typing a different query
+   replaces it with a new one. NOT verified: the status-bar task chip for the counting pass (my automation
+   could not observe it; the chip is driven by the same queue that the flag now always fills). The gate today is
    `state.background` (`if(state.background){articleCacheQueue.push(state)}`, index.html:1440) and the
    control is `countAllResultsInBackground` with its checkbox (index.html:1532). "Главное, чтобы фоновый
    поток мгновенно прерывался и начинал искать при поиске другого слова": that part already holds -

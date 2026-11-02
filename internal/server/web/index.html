@@ -552,7 +552,7 @@ window.wudictFontScale=(function(){
     </div>
   </div>
   <div class="facts">
-    <label class="rowlabel"><input class="panel-checkbox" type="checkbox" id="countAllResultsInBackground"> {{T:panel.searchAllResultsInBackground}}</label>
+    <label class="rowlabel" hidden><input class="panel-checkbox" type="checkbox" id="countAllResultsInBackground"> {{T:panel.searchAllResultsInBackground}}</label>
   </div>
   <div class="facts">
     <div class="history-setting">
@@ -1531,11 +1531,13 @@ function searchPortionSize(){
 }
 const countAllResultsCheckbox=$("countAllResultsInBackground");
 if(countAllResultsCheckbox){
-  countAllResultsCheckbox.checked=countAllResultsInBackground;
-  countAllResultsCheckbox.addEventListener("change",()=>{
-    countAllResultsInBackground=countAllResultsCheckbox.checked;
-    savePrefs(true);
-  });
+  /* The setting is hidden, not honoured: the counting is unconditional now
+     (see search()), and a control that changes nothing must not be shown. The
+     value is still read from prefs and still saved, so an older library's
+     setting survives and nothing has to migrate. */
+  countAllResultsCheckbox.checked=true;
+  const control=countAllResultsCheckbox.closest("label")||countAllResultsCheckbox;
+  control.hidden=true;
 }
 function syncSuggestionLimits(){
   $("suggestionPerDictionary").value=String(suggestionPerDictionary);
@@ -9641,7 +9643,13 @@ async function doSearch(ev){
   if(!q){if(browseReturnRouteContext)logBrowseReturnRoute("search_skipped_empty_query");return}
   const mode=searchModeOnce||$("mode").value;searchModeOnce=null;lastSearchMode=mode;
   if(browseReturnRouteContext)logBrowseReturnRoute("search_started",{query:q,mode,dict:$("dict").value||"all"});
-  activeSearchCountsInBackground=countAllResultsInBackground;
+  /* Counting the rest in the background is not a preference any more: a reader
+     who searched asked for the answer, not for its first page, and the modes
+     that cannot know their total until the articles have been counted are
+     exactly the ones where a visible "5 of 500+" would be the puzzle. The work
+     is interruptible at any moment - a new search calls stopArticleResultCaches
+     and aborts the stream - which is what the preference used to stand in for. */
+  activeSearchCountsInBackground=true;
   stopArticleResultCaches();
   if(mode==="wildcards"){
     restoreSearchReturnCacheID=null;
