@@ -1980,8 +1980,10 @@ const browseSize=n=>n<1e3?n+" B":n<1e6?Math.round(n/1e3)+" kB":n<1e7?(n/1e6).toF
 /* The two counts a dictionary's row reports: the articles it opens, and the
    headwords those carry once every alias is counted with them. Both numbers
    when they differ, one when they agree or when only one is known at all (an
-   older library has no headword count), nothing when neither is. Same rule as
-   group-editor.js's groupCounts. */
+   older library has no headword count), nothing when neither is. The same rule
+   index.html's dictCounts draws in the settings window and the group editor -
+   copied here because this page never loads that one, as its size formatter
+   is. */
 function browseCounts(d){
   const articles=Number(d&&d.entries),headwords=Number(d&&d.headwords);
   const articlesKnown=Number.isFinite(articles)&&articles>0,headwordsKnown=Number.isFinite(headwords)&&headwords>0;

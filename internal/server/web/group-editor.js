@@ -421,21 +421,6 @@ function confirmDiscardGroupDraft(onDiscard){
   dialog.addEventListener("close",()=>{if(dialog.returnValue==="discard")onDiscard()},{once:true});
   dialog.showModal();
 }
-/* The two counts a dictionary's row reports: the articles it opens, and the
-   headwords those carry once every alias is counted with them. Both numbers
-   when they differ, one when they agree or when only one is known at all (an
-   older library has no headword count), nothing when neither is. Same rule as
-   browse.html's browseCounts. */
-function groupCounts(d){
-  const number=window.wudictI18n.number,articles=Number(d&&d.entries),headwords=Number(d&&d.headwords);
-  const articlesKnown=Number.isFinite(articles)&&articles>0,headwordsKnown=Number.isFinite(headwords)&&headwords>0;
-  if(!articlesKnown&&!headwordsKnown)return null;
-  if(articlesKnown&&headwordsKnown&&articles!==headwords)return{
-    text:number(articles)+" / "+number(headwords),
-    title:tx("dictUI.articleAndHeadwordCounts",{entries:number(articles),headwords:number(headwords)})};
-  const n=headwordsKnown?headwords:articles;
-  return {text:number(n),title:headwordsKnown?tx("dictUI.headwordsCount",{number:number(n)}):tx("dictUI.entries",{number:number(n)})};
-}
 function renderGroupRows(){
   let group=userGroups.find(g=>g.id===selectedGroup);
   if(groupEditorMode==='new')group={id:'__draft__',name:$('groupNameInline').value,members:[...groupDraftMembers],order:[...groupDraftMembers],readonly:false,filter:groupDraftLinked&&groupDraftFilter?{facet:groupDraftFilter.facet,value:groupDraftFilter.value}:null,selectedFilter:groupDraftFilter?{facet:groupDraftFilter.facet,value:groupDraftFilter.value}:null};
@@ -494,7 +479,9 @@ function renderGroupRows(){
     const name=document.createElement("span");name.className='group-dictionary-name';
     name.classList.add('dict-info-name');name.dataset.dict=d.id;
     const title=document.createElement('span');title.className='group-dictionary-title';title.textContent=dictLabel(d);
-    const counts=groupCounts(d);
+    /* dictCounts is the page's (index.html), the same plate the settings window
+       draws - this file is only ever loaded beside it. */
+    const counts=dictCounts(d);
     if(counts){
       const count=document.createElement('span');count.className='group-dictionary-count';
       count.textContent=' ('+counts.text+')';

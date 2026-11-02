@@ -244,15 +244,31 @@ for (const language of ['en', 'ru']) {
     esc:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'),
     escAttr:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'),
     provenance:()=>'', traits:()=>'', renderReindex:()=>{}};
-  vm.runInNewContext(main.match(/^const FEAT_NAME=.*;$/m)[0]+'\n'+main.match(/function dslIndexControls\(d\)\{[\s\S]*?\n\}/)[0]+'\n'+
+  vm.runInNewContext(main.match(/function dictCounts\(d\)\{[\s\S]*?\n\}/)[0]+'\n'+
+    main.match(/^const FEAT_NAME=.*;$/m)[0]+'\n'+main.match(/function dslIndexControls\(d\)\{[\s\S]*?\n\}/)[0]+'\n'+
     main.match(/function renderPanel\(\)\{[\s\S]*?\n\}/)[0], cardContext);
   cardContext.renderPanel();
   assert.equal(cards[0].dataset.id, 'unchanged-id');
   assert.ok(cards[0].innerHTML.includes('&lt;b>My "dictionary" {name}&lt;/b>'));
   assert.ok(cards[0].innerHTML.includes(t('dictUI.about')));
+  // The counts are labelled lines, as the information popup prints them, and
+  // the meta line no longer repeats the article count.
+  assert.ok(cards[0].innerHTML.includes(t('dictUI.numberOfEntries',{number:'22'})));
+  assert.doesNotMatch(cards[0].innerHTML, /<div class="meta">[^<]*22/);
   assert.ok(cards[0].innerHTML.includes('data-feat="contains"'));
   assert.ok(cards[0].innerHTML.includes('data-feat="fts"'));
   assert.doesNotMatch(main,/id="dslParserSection"|data-dsl-mode=/);
+  // The full-text chip is named the same on every dictionary, and the archive's
+  // own index is the one that carries the qualifier. A built index shows its
+  // size beside its name.
+  cardContext.orderedDicts=()=>[{id:'zim-id',name:'ZIM',source:'a.zim',format:'zim',entries:2141435,headwords:4988715,caps:{},dbSize:9,archiveIndex:true,ourFullText:true,fullTextSize:12}];
+  cards.length=0;
+  cardContext.renderPanel();
+  assert.ok(cards[0].innerHTML.includes('>'+t('dictUI.fts')+': 12 B</span>'),'full-text chip names the index and its size');
+  assert.ok(cards[0].innerHTML.includes('>'+t('dictUI.ftsArchive')+'</span>'),'the archive chip says built-in');
+  assert.ok(!cards[0].innerHTML.includes('FTS'),'no FTS jargon on the card');
+  assert.doesNotMatch(main, /dictUI\.ftsOurs"/);
+  cardContext.orderedDicts=()=>[{id:'unchanged-id',name,source:'sample.dsl',format:'dsl',entries:22,caps:{},dbSize:0}];
   cardContext.dicts=[{id:'dsl-id',source:'a.dsl',dbSize:33,dsl:{source:'a.dsl',sourceAvailable:true},caps:{Contains:true}}];
   const indexed=cardContext.dslIndexControls(cardContext.dicts[0]);
   assert.match(indexed,/data-feat="contains" data-target="dsl-id" data-on="1"/);

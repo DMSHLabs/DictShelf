@@ -2771,6 +2771,25 @@ function dictBaseLabel(d){return d.name||d.path.split("/").pop()}
    by id, because the callers hold ids and the list holds the format. */
 function isZimDict(id){const d=dicts.find(x=>x.id===id);return !!d&&String(d.format||"").toLowerCase()==="zim"}
 function dictLabel(d){return dictTitles.get(d.id)||dictBaseLabel(d)}
+/* A dictionary's two counts, for the places that show them in a NARROW slot:
+   the articles it opens, and the headwords those carry once every alias is
+   counted with them. Both numbers when they differ, one when they agree or when
+   an older library has only the article count, and nothing when neither is
+   known - which is when no plate is drawn at all. The group editor's row uses
+   it, and the Browse chooser carries its own copy (browse.html's browseCounts),
+   the same way its size formatter does. The settings card and the information
+   popup print labelled lines instead - there is room there, and a bare "5,153,776"
+   does not say which of the two numbers it is. */
+function dictCounts(d){
+  const number=window.wudictI18n.number,articles=Number(d&&d.entries),headwords=Number(d&&d.headwords);
+  const articlesKnown=Number.isFinite(articles)&&articles>0,headwordsKnown=Number.isFinite(headwords)&&headwords>0;
+  if(!articlesKnown&&!headwordsKnown)return null;
+  if(articlesKnown&&headwordsKnown&&articles!==headwords)return{
+    text:number(articles)+" / "+number(headwords),
+    title:tx("dictUI.articleAndHeadwordCounts",{entries:number(articles),headwords:number(headwords)})};
+  const n=headwordsKnown?headwords:articles;
+  return {text:number(n),title:headwordsKnown?tx("dictUI.headwordsCount",{number:number(n)}):tx("dictUI.entries",{number:number(n)})};
+}
 function dictIconReady(img){img.style.visibility="";img.dataset.iconRetry="0"}
 function dictIconRetry(img){
   img.style.visibility="hidden";
@@ -4052,10 +4071,13 @@ function dslIndexControls(d){
     let controls=indexed
       ? `<button type="button" class="feat on${disabled?" locked":""}" data-delete-index="1" data-target="${escAttr(target.id)}" title="${escAttr(tx("dictUI.deleteIndex"))}"${disabled?" disabled":""}>${mb(target.dbSize)}</button>`
       : `<button type="button" class="feat${disabled?" locked":""}" data-feat="base" data-target="${escAttr(target?.id||"")}"${disabled?" disabled":""}>${esc(tx("dictUI.index"))}</button>`;
-    for(const [key,name,on] of [["contains","dictUI.contains",target?.caps?.Contains],["fts","dictUI.fts",target?.caps?.FTS]]){
+    for(const [key,name,on,bytes] of [["contains","dictUI.contains",target?.caps?.Contains,target?.containsSize||0],["fts","dictUI.fts",target?.caps?.FTS,target?.fullTextSize||0]]){
       const stale=key==="contains"&&on&&target?.containsStale;
       const what=FEAT_NAME[key];
-      controls+=`<button type="button" class="feat${on?" on":""}${stale?" stale":""}${disabled?" locked":""}" data-feat="${key}" data-target="${escAttr(target?.id||"")}" data-on="${on?1:0}"${stale?' data-stale="1"':""} aria-pressed="${!!on}" title="${escAttr(tx(stale?"dictUI.stale":on?"dictUI.removeHint":"dictUI.addHint",{what}))}"${disabled?" disabled":""}>${esc(tx(name))}</button>`;
+      /* A built index says its size beside its name, the same rule the chips
+         row follows for every other dictionary. */
+      const size=on&&bytes?": "+mb(bytes):"";
+      controls+=`<button type="button" class="feat${on?" on":""}${stale?" stale":""}${disabled?" locked":""}" data-feat="${key}" data-target="${escAttr(target?.id||"")}" data-on="${on?1:0}"${stale?' data-stale="1"':""} aria-pressed="${!!on}" title="${escAttr(tx(stale?"dictUI.stale":on?"dictUI.removeHint":"dictUI.addHint",{what}))}"${disabled?" disabled":""}>${esc(tx(name))}${esc(size)}</button>`;
     }
     const icon=`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6M11 8h2.6M11 11h2.6"/></svg>`;
     const browse=indexed
@@ -4084,13 +4106,12 @@ function renderPanel(){
     const canToggle=!!d.source;
     const feats=[
       ["contains",tx("dictUI.contains"),d.caps?.Contains,d.containsSize||0],
-      /* The full-text chip is about OUR index and nothing else: what a click
-         here builds or removes is our article index, in this database. For a
-         ZIM whose archive carries one of its own there is a second chip beside
-         it saying so, and then this one is named to be told from it - full
-         text works either way; what differs is who answers and what a click
-         touches (the archive's index is not ours to remove). */
-      ["fts",d.archiveIndex?tx("dictUI.ftsOurs"):tx("dictUI.fts"),d.ourFullText,d.fullTextSize||0],
+      /* The full-text chip names the SAME thing on every dictionary - our own
+         FTS5 index, which stores positions. A ZIM whose archive carries an index
+         of its own gets a second chip beside it for that one, and this chip is
+         not renamed to be told from it: what the archive holds is the odd case,
+         and the odd case is the one that gets the qualifier. */
+      ["fts",tx("dictUI.fts"),d.ourFullText,d.fullTextSize||0],
     ];
     /* The index itself, first in the run of chips. Two states: "🚀 index"
        while there is none, and the size once
@@ -4132,30 +4153,33 @@ function renderPanel(){
     for(const[key,label,on,bytes]of feats){
       if(d.dsl&&(key==="fts"||key==="contains"))continue;
       if(key==="media"&&!on&&!d.hasMedia)continue; // nothing to pack
-      const size=on&&bytes?" "+mb(bytes):"";
+      /* A built index says its size beside its name (both of ours are measured
+         from the database), and an absent one says nothing extra: the estimate
+         that argues for building it belongs to the base index, above. */
+      const size=on&&bytes?": "+mb(bytes):"";
       /* A stale index still works — it was built with older text-folding
          rules, so it can only miss words whose folding changed. So it is
          marked, not disabled, and the click rebuilds instead of removing. */
       const stale=key==="contains"&&on&&d.containsStale;
       const what=FEAT_NAME[key];
-      /* An archive whose own index answers means our full-text index is a
-         choice rather than a need, so an absent chip says what it adds instead
-         of promising what the archive already gives. */
+      /* On a ZIM whose archive answers for itself our index is a choice rather
+         than a need, so an absent chip says what it adds instead of promising
+         what the archive already gives. */
       const tip=key==="fts"&&d.archiveIndex&&!on?tx("dictUI.ftsOursHint"):
         !canToggle?tx("dictUI.onlyCopy"):
         stale?tx("dictUI.stale",{what}):
         on?tx("dictUI.removeHint",{what}):tx("dictUI.addHint",{what});
       caps+=`<span class="feat${on?" on":""}${stale?" stale":""}${canToggle?"":" locked"}"`+
         ` data-feat="${key}" data-on="${on?1:0}"${stale?' data-stale="1"':""}`+
-        ` title="${escAttr(tip)}">${esc(label)}${size}${stale?" ⟳":""}</span>`;
+        ` title="${escAttr(tip)}">${esc(label)}${esc(size)}${stale?" ⟳":""}</span>`;
     }
-    /* The archive's own index, shown whenever the archive has one. It is not
-       hidden any more when ours is absent, and the reason is the label: it now
-       says what that index can actually do ("in the archive: words"), so there
-       is no claim of full text to withdraw - and the search DOES use it (it
-       answers the words reading, which is what the strict modes fall back to
-       and what the plate says). Hiding it made a plate that answers from the
-       archive look like it had no index at all. */
+    /* The archive's built-in index, shown whenever the archive has one. It is
+       not hidden when ours is absent, because its label says what it can
+       actually do ("built-in: words only") rather than claiming full text - and
+       the search DOES use it (it answers the words reading, which is what the
+       strict modes fall back to and what the plate says). Hiding it made a
+       dictionary that answers from its archive look like it had no index at
+       all. */
     if(d.archiveIndex)caps+=`<span class="feat on locked" title="${escAttr(tx("dictUI.ftsArchiveHint"))}">${esc(tx("dictUI.ftsArchive"))}</span>`;
     // Contains and full-text are both built only after an explicit action.
     // "pack media" is offered only when the dictionary actually has packable
@@ -4176,12 +4200,21 @@ function renderPanel(){
       acts+=`<a class="act btn" href="#" title="${escAttr(tx("fullText.convertHintUnknown",{db:mb(d.dbSize||0)}))}">${esc(tx("fullText.convert"))}…</a>`;
     }
     if(d.unavailable||d.dsl&&!d.error)acts="";
+    /* What the dictionary holds, as the information popup prints it: labelled
+       lines, not a plate. A plate can only carry a bare number, and "Number of
+       headwords: 5,153,776" is what a reader compares against the dictionary's
+       own documentation - the popup's wording, on the card, from the same two
+       fields the list row already carries. */
+    const counts=[];
+    if(d.headwords)counts.push(esc(tx("dictUI.numberOfHeadwords",{number:window.wudictI18n.number(Number(d.headwords))})));
+    if(d.entries)counts.push(esc(tx("dictUI.numberOfEntries",{number:window.wudictI18n.number(Number(d.entries))})));
+    const countLines=counts.length?`<div class="dict-info-counts">${counts.join("<br>")}</div>`:"";
     div.innerHTML=`<div class="hd">
         <span class="dict-name-line">${dictIconHTML(d.id)}<b class="dict-info-name" data-dict="${escAttr(d.id)}" tabindex="${d.unavailable?-1:0}" role="button" aria-disabled="${!!d.unavailable}" title="${escAttr(tx(d.unavailable?"dictUI.dslUnavailable":"dictUI.searchOnly"))}">${esc(dictLabel(d))}</b><button type="button" class="dict-rename" aria-label="${escAttr(tx("dictUI.renameDictionary"))}" title="${escAttr(tx("dictUI.renameDictionary"))}" data-rename="${escAttr(d.id)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button></span>
       </div>
-      <div class="meta">${esc(d.format||"?")}${d.entries?" · "+esc(tx("dictUI.entries",{number:window.wudictI18n.number(d.entries)})):""}${d.dbSize||selfIndexed?tx("dictUI.indexed"):""}</div>
+      <div class="meta">${esc(d.format||"?")}${d.dbSize||selfIndexed?tx("dictUI.indexed"):""}</div>
       ${dslIndexControls(d)}
-      ${caps?`<div>${caps}</div>`:""}${acts?`<div class="acts">${acts}</div>`:""}
+      ${caps?`<div>${caps}</div>`:""}${countLines}${acts?`<div class="acts">${acts}</div>`:""}
       ${provenance(d)}
       <details class="about"><summary>${esc(tx("dictUI.about"))}</summary>${traits(d)}<div class="aboutbody">…</div></details>`;
     el.appendChild(div);
@@ -6342,11 +6375,15 @@ window.wudictShowDictionaryInfo=async id=>{
      and the prepared database on disk), so the counts are painted twice: from
      the list row at once, then again with the sizes once the answer lands. */
   const paintCounts=(headwords,entries,fileSize,indexSize)=>{
+    /* The reader's own separators, not en-US: the card prints the same two
+       counts from the same helper, and a Russian interface would otherwise show
+       "5,153,776" beside the group editor's "5 153 776". */
+    const number=n=>window.wudictI18n.number(Number(n));
     const counts=[];
-    if(fileSize>0)counts.push(tx("dictUI.fileSize",{count:fileSize,size:mb(fileSize),bytes:Number(fileSize).toLocaleString("en-US")}));
-    if(indexSize>0)counts.push(tx("dictUI.indexSize",{count:indexSize,size:mb(indexSize),bytes:Number(indexSize).toLocaleString("en-US")}));
-    if(headwords)counts.push(tx("dictUI.numberOfHeadwords",{number:Number(headwords).toLocaleString("en-US")}));
-    if(entries)counts.push(tx("dictUI.numberOfEntries",{number:Number(entries).toLocaleString("en-US")}));
+    if(fileSize>0)counts.push(tx("dictUI.fileSize",{count:fileSize,size:mb(fileSize),bytes:number(fileSize)}));
+    if(indexSize>0)counts.push(tx("dictUI.indexSize",{count:indexSize,size:mb(indexSize),bytes:number(indexSize)}));
+    if(headwords)counts.push(tx("dictUI.numberOfHeadwords",{number:number(headwords)}));
+    if(entries)counts.push(tx("dictUI.numberOfEntries",{number:number(entries)}));
     paths.parentElement.querySelectorAll(":scope > .dict-info-counts").forEach(node=>node.remove());
     if(counts.length)paths.insertAdjacentHTML("beforebegin",`<div class="dict-info-counts">${counts.map(esc).join("<br>")}</div>`);
   };
