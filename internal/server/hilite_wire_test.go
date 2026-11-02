@@ -45,6 +45,67 @@ func newHLServer(t *testing.T) (*Server, string) {
 	return s, id
 }
 
+// The reader pages through the ARTICLE RESULT CACHE, not the live answer
+// (`fetchSearchPortion` in index.html), so a strict reading has to keep its
+// marks on the cache's pages too. The strip's Next/Previous walks those marks
+// (index.html, markList/navGo), and a page drawn without them cannot be walked
+// - which is the whole of "Next and Previous work in all three readings".
+// The live answer is the other half of the same promise and is covered by
+// TestSearchPhraseMarking; this is the cache.
+func TestArticleResultCacheMarksStrictReadings(t *testing.T) {
+	s, id := newHLServer(t)
+	s.User = UserDir(t.TempDir())
+	s.wildcardPages.init(s.wildcardCacheDir())
+	t.Cleanup(func() {
+		s.wildcardPages.mu.Lock()
+		defer s.wildcardPages.mu.Unlock()
+		for _, entry := range s.wildcardPages.entries {
+			_ = entry.db.Close()
+		}
+	})
+
+	for _, tc := range []struct {
+		name, q, mode, rung string
+		marks               []string
+	}{
+		{"the phrase mode keeps its one span on a paged result", "vivienda es una", "phrase", "phrase",
+			[]string{`<mark class="wu-hl">vivienda es una</mark>`}},
+		{"the near mode keeps the words apart on a paged result", "casa una", "near", "near",
+			[]string{`<mark class="wu-hl">casa</mark>`, `<mark class="wu-hl">una</mark>`}},
+		{"the words mode marks a paged result too", "vivienda es una", "fts", "words",
+			[]string{`<mark class="wu-hl">vivienda</mark>`, `<mark class="wu-hl">es</mark>`}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cacheID := "strict-reading-" + tc.mode + "-0001"
+			base := "/api/search?q=" + url.QueryEscape(tc.q) + "&mode=" + tc.mode + "&rung=" + tc.rung +
+				"&hl=1&dict=" + id + "&cacheID=" + cacheID
+			build := stream(t, s, base+"&cacheAction=build")
+			built, total := false, 0
+			for _, m := range build {
+				if m.T == "cache" && m.Complete {
+					built, total = true, m.Total
+				}
+			}
+			if !built {
+				t.Fatalf("the cache never completed: %+v", build)
+			}
+			if total == 0 {
+				t.Fatalf("the cache built no ids for a reading that matched: %+v", build)
+			}
+			page := stream(t, s, base+"&cacheAction=page&start=0&size=100")
+			got := bodies(page)
+			if !strings.Contains(got, "vivienda") {
+				t.Fatalf("the cached page carried no article text - the case would pass vacuously: %+v", page)
+			}
+			for _, m := range tc.marks {
+				if !strings.Contains(got, m) {
+					t.Errorf("the cached page lost %s: %s", m, got)
+				}
+			}
+		})
+	}
+}
+
 func bodies(hits []streamMsg) string {
 	var b strings.Builder
 	for _, h := range hits {

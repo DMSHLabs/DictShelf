@@ -99,6 +99,15 @@ func articleFullTextMatch(query, rung string) (string, error) {
 	return "", fmt.Errorf("full-text reading %q is unavailable", rung)
 }
 
+// fullTextReadingMode names the three article readings - the modes whose answer
+// carries the server's highlight marks. They are one thing here for the same
+// reason `searchModeForArticleCache` calls them one index query: the reader's
+// Next/Previous walks those marks, so a page drawn without them cannot be walked
+// at all. The headword modes are not here; their answer carries no marks.
+func fullTextReadingMode(mode string) bool {
+	return mode == "fts" || mode == "phrase" || mode == "near"
+}
+
 func (s *Server) searchArticleResultCache(ctx context.Context, request SearchRequest, emit func(SearchEvent) error) error {
 	e, _, source, signature, query, err := s.articleResultCacheSetup(request)
 	if err != nil {
@@ -119,7 +128,11 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 	// plate has to carry the line naming what is missing - and the page drawn
 	// from this path (the cache, once it is running) has to carry it too.
 	// search.archiveStrictDeclined is what the routing asks.
-	if request.Mode != "fts" {
+	//
+	// The strict readings are named, not "everything but fts": a headword mode
+	// has no full-text reading to decline, and a prefix answer on an archive
+	// without our index must not carry a line offering to build one.
+	if request.Mode == "phrase" || request.Mode == "near" {
 		if ai, ok := source.(interface{ HasArticleIndex() bool }); !ok || !ai.HasArticleIndex() {
 			needsIndex = oneReading
 		}
@@ -134,7 +147,7 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 	switch request.CacheAction {
 	case "build":
 		match := ""
-		if request.Mode == "fts" {
+		if fullTextReadingMode(request.Mode) {
 			match, err = articleFullTextMatch(query, request.Rung)
 			if err != nil {
 				return err
@@ -225,7 +238,7 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 		if err != nil {
 			return err
 		}
-		marks := marker(request.Highlight && request.Mode == "fts")(query, request.Rung)
+		marks := marker(request.Highlight && fullTextReadingMode(request.Mode))(query, request.Rung)
 		for i := range results {
 			results[i].Body = RewriteEntryHTMLMarked(results[i].Body, e.ID, marks)
 		}

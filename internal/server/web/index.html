@@ -2432,7 +2432,7 @@ function applyHL(on,save){
    the answer cannot be re-marked without asking again. Pressing the half that
    is already in force is not a change, the rule both pairs below follow. */
 $("hlToggle").addEventListener("change",e=>{
-  if(applyHL(e.target.checked,true)&&$("mode").value==="fts"&&$("q").value.trim())doSearch();
+  if(applyHL(e.target.checked,true)&&fullTextReading($("mode").value)&&$("q").value.trim())doSearch();
 });
 applyHL(true,false);
 /* Read aloud (D148). Off costs nothing: no listener, no fetch, no voice list.
@@ -3768,6 +3768,14 @@ const MODE_SHORT={prefix:"ab→",suffix:"→ab",contains:"ab",word:"·ab·",word
    actually read it. */
 const MODE_GLYPHS={prefix:"ab→",suffix:"→ab",contains:"ab",word:"·ab·",wordLemma:"·ab·+",exact:"=",exactLemma:"=+",wildcards:"*?",
   phrase:"[A B]",near:"[A ↔ B]",fts:"[A … B]"};
+/* The three article readings - words, phrase, near - and the one thing they
+   share on the client: the SERVER marks the words it matched, so the marks live
+   in the HTML the answer came with (hl=1) instead of being found by the dialog's
+   own scan. Walking those marks is one job, not three, so the readings stand
+   together wherever marks are concerned (markedAnswer, the auto-jump to the
+   first one, and re-marking on the highlight toggle). The headword modes are
+   NOT here: their answer carries no marks. */
+const fullTextReading=mode=>mode==="fts"||mode==="phrase"||mode==="near";
 function modeMark(el,mode){
   const glyph=MODE_GLYPHS[mode];
   if(!glyph)return false;
@@ -9789,7 +9797,7 @@ async function doSearch(ev){
     if(markedAnswer)navAttach(det);
     // Not deferred to a frame: it observes its own timing, because the section
     // it was just handed is not laid out yet.
-    if(commit&&mode==="fts"&&hlOn&&!anchorOnce)revealFirstMark(det);
+    if(commit&&fullTextReading(mode)&&hlOn&&!anchorOnce)revealFirstMark(det);
     return true;
   };
   /* Both strategies, one function — which is why they cannot drift apart. In
@@ -9808,7 +9816,7 @@ async function doSearch(ev){
     // Full-text fan-out also performs its complete-match count in the
     // background. Keep result sections collapsed while those answers arrive;
     // the reader can open one deliberately, and Open all remains a preference.
-    if(mode==="fts"&&!openAll&&preferredSlot<0)return;
+    if(fullTextReading(mode)&&!openAll&&preferredSlot<0)return;
     if(expandAll)return;
     if(orderFirst&&barrier!==null&&frontier<boxes.length){
       while(frontier<boxes.length&&resolved[frontier]){
@@ -9839,7 +9847,7 @@ async function doSearch(ev){
         if(browseArticleDiagContext&&browseArticleDiagContext.searchStartedAt)
           logBrowseArticleTransition("search_stream_begin",performance.now()-browseArticleDiagContext.searchStartedAt);
         navDetach(); // the section it was walking is about to be replaced
-        markedAnswer=mode==="fts"&&hlOn; // only actual FTS marks can be navigated
+        markedAnswer=fullTextReading(mode)&&hlOn; // only the readings whose answer carries marks can be navigated
         navSuppressed=false;
         stale=[...out.childNodes];
         boxes=(msg.slots||[]).map(()=>{const b=document.createElement("div");out.appendChild(b);return b});
