@@ -10440,8 +10440,15 @@ function navPos(){
     return;
   }
   const block=count?window.wudictArticleFindBlockRange?.(navList[navIdx]?.det):"";
+  /* The bar counts OCCURRENCES and the plate counts ARTICLES - one article can
+     hold several - so the two numbers are meant to differ. What must not differ
+     silently is the bar's own completeness: while a dictionary still has a
+     result page nobody has loaded, or its count is still running, the marks
+     drawn are short of the truth and the total has to say so. It uses the same
+     "+" the dialog's own scan already puts on its count for the same reason. */
+  const partial=count>0&&!!window.wudictArticleFindHasMore?.();
   window.wudictArticleFind?.setFullTextNavigation({
-    query:lastQuery,generation:searchSeq,position:count?tx("articleFind.position",{current:navIdx+1,total:count})+(block?" · "+block:""):tx("articleFind.noMatches"),visible:count>0,canNavigate:canPrevious||canNext,canPrevious,canNext,total:count,current:navIdx+1,
+    query:lastQuery,generation:searchSeq,position:count?tx("articleFind.position",{current:navIdx+1,total:count+(partial?"+":"")})+(block?" · "+block:""):tx("articleFind.noMatches"),visible:count>0,canNavigate:canPrevious||canNext,canPrevious,canNext,total:count,current:navIdx+1,
     previous:()=>navGo(-1),next:()=>navGo(1),
     refresh:()=>navPos(),
     goto:page=>navGoto(page),
@@ -10499,8 +10506,16 @@ window.wudictArticleBlockHasMore=(det,direction)=>{
   const first=Math.max(0,Number(det.dataset.searchFirstPageSize)||0);
   return searchPortionPageAt(Number(det.dataset.searchPageStart)||0,size,first)>1;
 };
+/* Is there a result page of this answer that nobody has loaded yet? The bar's
+   occurrence total is short of the truth whenever there is, and the plate's
+   article total says nothing about it. Both directions count: paging REPLACES
+   the loaded page rather than adding to it, so a reader on the last page has
+   left the earlier occurrences behind, and one on the first has not reached the
+   later ones. While the count is still running there is no paged answer yet,
+   and the reprioritise button is the sign that more is coming. */
 window.wudictArticleFindHasMore=()=>[...document.querySelectorAll("details.dict")].some(det=>{
-  if(det.dataset.searchHasNext!==undefined)return det.dataset.searchHasNext==="true";
+  if(det.dataset.searchHasNext!==undefined)
+    return det.dataset.searchHasNext==="true"||!!window.wudictArticleBlockHasMore?.(det,-1);
   return !!det.querySelector(":scope>summary .priority-index");
 });
 window.wudictArticleFindBlockRange=det=>{
