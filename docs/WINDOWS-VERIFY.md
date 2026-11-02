@@ -289,7 +289,10 @@ them are in `docs/handoff-archive.md`.
       those probes were switched to. So either the page's title drifted or the
       probe was never run after that change; check `internal/server/web/`
       against the probe before assuming flakiness.
-    - `TestReaderGolden` and `TestGDReaderGolden` (internal/format/dsl) — "prepared
+    - `TestReaderGolden` (internal/format/bgl) — the same "prepared content changed
+    but no version was bumped" hash mismatch; checked at base `8d970980` the same
+    way as the two below, and fails there identically.
+  - `TestReaderGolden` and `TestGDReaderGolden` (internal/format/dsl) — "prepared
     content changed but no version was bumped", accepted a different hash than the
     stored one. Checked with `git worktree` at the session's base commit
     `8d970980` on 2026-11-02, where they fail identically, so they are not caused
