@@ -680,6 +680,42 @@ search index", and for this one "headwords + article index (article text stays i
 rule was two-way while there were two forms, and the third made both of the old answers wrong in opposite
 directions. Pinned by a test on the real fixture, not on the wording alone.
 
+### First index built for an archive that has its own: Викитека (2026-11-02)
+
+The user's decision was "строим индекс", so the smallest archive without one was rebuilt with
+`wudict ingest -fulltext`: 589 871 entries, `text.db` 267 MB -> 3.51 GB, `stored_body_bytes = 0`,
+`index_kind=headwords` + `ingest_level=text` (the third form), and the receipt now says so in the words of
+the form: "text.db (headwords + article index (article text stays in the archive))". The row reads
+`our FTS 2.95 GB` + `in the archive: words`, exactly as the chips decision intends.
+
+The build is a correction to the index-only estimate band: 3.2 GB over 589 871 articles is **5.4 kB per
+article**, above the encyclopedia band (2500-4000 B/article) that was measured on the two Wikipedias and
+the two Wiktionaries. Wiki*source* articles are long texts with few articles, so "encyclopedia" is the
+right family and the band is simply too narrow for it - the next four builds should be measured before the
+band is quoted again.
+
+### A ZIM search costs ~6.3 s whatever it is asked (found 2026-11-02, not fixed)
+
+Timed against a running server on the live library:
+
+| what | time |
+|---|---|
+| `exact` one article, Викитека (our index, index-only form) | 6.30 s / 6.35 s |
+| `phrase`, 20 results, Викитека | 6.52 s / 6.52 s |
+| `phrase`, 1 result, Викитека | 6.45 s |
+| `phrase`, ru-wiktionary (our index) | 6.85 s, then 3.38 s |
+| `phrase`, a plain DSL dictionary (Ushakov, our index in text.db) | 0.28 s / 0.27 s |
+| opening the archive directly (`zim.Open` + `Meta`) | **5-7 ms** |
+
+So it is not the index, not the number of results and not the reading of article bodies: it is a FIXED
+cost per request that only ZIM dictionaries pay, and opening the container costs nothing like it. The
+plain dictionary in the same server answers in 0.28 s, which is what the index itself costs. This is the
+thing to measure next, before anything is claimed about the index-only form on a phone: candidates are
+the per-request source plumbing (prepared-database reopen, resource resolution, the article-result cache
+write for a page) and the reading of the archive's own directory. Nothing here is caused by the chips or
+by the strict-reading fixes of the same day - the index-only Russian Wiktionary showed it before them too
+(3.4-6.8 s).
+
 ### What the row says now (same day, user's decision)
 
 The archive's index is no longer presented as full text. The chip appears ONLY beside an index of ours,
