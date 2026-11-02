@@ -149,6 +149,14 @@ func Inspect(textDB string) Prepared {
 			if db.QueryRow("PRAGMA user_version").Scan(&schema) == nil {
 				if m, metaErr := readMeta(db); metaErr == nil {
 					p.Meta, p.Schema, p.Plan = m, schema, PlanFromMeta(m)
+					// The same rule Open applies: a split index whose file is
+					// gone is no index, so the row must not offer one (see
+					// store.go's Open).
+					if p.Plan.FullText && p.Plan.SplitArticles {
+						if _, ok := ArticlesSibling(textDB); !ok {
+							p.Plan.FullText = false
+						}
+					}
 					if p.Plan.Contains || p.Plan.FullText {
 						p.ContainsSize, p.FullTextSize = searchIndexSizes(db, p.Plan)
 					}

@@ -862,10 +862,47 @@ dropped the reader back to the first option in silence, while the menu kept offe
 is now derived from the select's own options (`searchModeExists`), which cannot drift from the control it
 describes. Verified by driving the page: all three readings survive a reload, each wearing its own mark.
 
-## The article index in a file of its own: writer done, reader pending (2026-11-02)
+## The article index in a file of its own: reader done, writer still off (2026-11-02)
 
-Half of the split is in, and the half that is missing is a design point rather than a detail, so it is
-written down before anything turns it on.
+The reader is in and tested; the writer stays OFF until the sibling-awareness audit below is done, and
+that is a deliberate stop, not an oversight.
+
+**How the reader does it, and why not ATTACH.** ATTACH is a per-connection statement and this process
+pools connections without a limit (`pool.go` deliberately sets no `SetMaxOpenConns`), so ATTACH would mean
+either a driver connector or an ATTACH before every query. Instead `Store.articleHandle()` opens the
+sibling as its own read-only handle - lazily, on the first full-text query, validated by `dict_uuid`
+exactly as `media.db` is - and the two read sites ask it for matching rowids (`ORDER BY rank`) and then
+fetch their rows from `entry` by primary key in batches of 400, preserving the rank order in Go. One query
+when the index is inside the database (the JOIN is still there, unchanged, for every dictionary built
+before the split), two when it is in the sibling: `articleMatches(ctx, match, limit, withBodies)`.
+`Close` closes the sibling handle too, which a test caught on the first run: on Windows a handle left open
+makes removing the index - the one operation the split exists for - fail.
+
+Two honest behaviours fell out of writing the tests:
+
+- A split index whose FILE is gone is no index. `Open` and `Inspect` both check, because the meta still
+  says `ingest_level=text`: without the check a search would answer "no such table" and the row would offer
+  a full-text chip for a file the reader deleted. With it, removing the index is exactly what
+  `ClearSearchIndexes` does - delete one file, no VACUUM, no rewrite of tens of gigabytes - and the
+  dictionary afterwards reads as a dictionary without full text, offering to build one.
+- A dictionary that is never searched by text opens nothing extra: that is why the sibling is lazy, same
+  argument as D64 for `media.db`.
+
+**What has to happen before the writer is switched on.** `Plan.SplitArticles` is set NOWHERE today, so
+every existing database keeps its shape and nothing in the library changes. Turning it on means auditing
+every place that already knows about `media.db` and teaching it about `articles.db` - the list, from
+`grep MediaDBName|MediaSibling`: `cli --list` (cli.go:791), the `-full` media check (cli.go:970), remove.go,
+clear_database.go (two sites), dictrows.go, server.go's file listing, adopt.go, link.go, clean.go,
+reconcile.go, store.go's Open, stale.go, library.go's `MediaSibling`/`WriteInfo` (the receipt now names the
+article index file too) - plus the portable/export bundle, which must carry the pair or the folder is not
+one dictionary any more. `clear_indexes.go` already removes the sibling and skips the VACUUM. Until that
+audit is done the reader is dormant but tested: `TestSplitArticlesAnswersLikeAnUnsplittedOne` ingests the
+same content split and unsplit and insists the answers are identical, and
+`TestRemovingTheSplitSiblingEndsTheFullText` pins the removal behaviour.
+
+**The older half, kept for the record:** `Plan.SplitArticles` (recorded as `articles_split=1` ONLY when
+true, so every database built before this keeps exactly the meta it had - the reader golden test caught
+that on the first try);
 
 What is in place: `Plan.SplitArticles` (recorded as `articles_split=1` ONLY when true, so every database
 built before this keeps exactly the meta it had - the reader golden test caught that on the first try);

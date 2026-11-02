@@ -79,6 +79,18 @@ type Store struct {
 	media      *Media
 	mediaTried bool // opened and failed, or opened and rejected: do not retry
 
+	// The sibling articles.db (dmsh_articles_split.go) is opened the same way
+	// and for the same reason: only a full-text query ever needs the article
+	// index, and a dictionary that is never searched by text should not carry a
+	// second handle or a second page cache for it. It is the article index of
+	// large dictionaries - the biggest file in the folder after the source - and
+	// the split exists so that dropping it is deleting one file rather than
+	// VACUUMing the whole database.
+	articlePath  string // "" when the index lives in this database
+	articleMu    sync.Mutex
+	articleDB    *sql.DB
+	articleTried bool // opened and failed, or opened and rejected: do not retry
+
 	// The browse strip (browse.go), computed on the first browse of this
 	// handle and kept for its life: a text.db does not change under an open
 	// reader, and re-walking the index for forty numbers on every page turn
@@ -186,7 +198,19 @@ func Open(path string) (*Store, error) {
 		Articles:      zimArticles,
 		Header:        headerOf(m),
 	}
-	s.ftsOK = PlanFromMeta(m).FullText
+	plan := PlanFromMeta(m)
+	s.ftsOK = plan.FullText
+	// A split index that is not there is an index that is not there: the meta
+	// still says the text was indexed, and the file that holds it has been
+	// removed (which is exactly what removing the full text means for a split
+	// database - ClearSearchIndexes deletes the sibling and does not rewrite the
+	// database at all). Reporting full text from the meta alone would answer a
+	// search with "no such table" and offer a chip for an index that is gone.
+	if s.ftsOK && plan.SplitArticles {
+		if _, ok := ArticlesSibling(path); !ok {
+			s.ftsOK = false
+		}
+	}
 	s.ownFullText = OwnFullText(m)
 	if stampOf(m, "ingest_version", 1) >= 6 {
 		s.articleFTSTable = "article_fts"
@@ -324,6 +348,18 @@ func (s *Store) Close() error {
 	s.mediaMu.Unlock()
 	if md != nil {
 		md.Close()
+	}
+	// The sibling article index is a handle of its own and is closed here for
+	// the same reason it is opened late: a dictionary that was never searched
+	// by text has nothing open, and one that was must not keep the file busy.
+	// On Windows an open handle is enough to make removing the dictionary - or
+	// just its index - fail, which is the whole operation the split exists for.
+	s.articleMu.Lock()
+	ad := s.articleDB
+	s.articleDB, s.articleTried = nil, true
+	s.articleMu.Unlock()
+	if ad != nil {
+		ad.Close()
 	}
 	return s.db.Close()
 }
@@ -711,9 +747,15 @@ func (s *Store) FullTextMatch(ctx context.Context, match string, limit int) ([]d
 	if match == "" {
 		return nil, nil
 	}
-	query := `SELECT e.w, e.m FROM ` + s.articleFTSTable + ` f JOIN entry e ON e.id = f.rowid
-		WHERE ` + s.articleFTSTable + ` MATCH ?1` + subEntryFilter("e.w") + `ORDER BY f.rank LIMIT ?2`
-	return s.collect(s.db.QueryContext(ctx, query, match, clamp(limit)))
+	hits, err := s.articleMatches(ctx, match, limit, true)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]dict.Result, 0, len(hits))
+	for _, h := range hits {
+		out = append(out, dict.Result{Headword: h.W, Body: decodeBody(h.M)})
+	}
+	return out, nil
 }
 
 func (s *Store) Keywords(offset, n int) []string {

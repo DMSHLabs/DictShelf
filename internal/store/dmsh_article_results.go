@@ -20,11 +20,15 @@ import (
 // fullTextMatch is the selected rung of the article search ladder.
 func (s *Store) StreamArticleIDs(ctx context.Context, query, mode, fullTextMatch string, emit func([]int64, int, bool) error) error {
 	var rows *sql.Rows
+	var hits []articleHit
 	var err error
 	match := func(string) bool { return true }
 	switch mode {
-	// The strict readings run the same SQL: what differs is the expression in
-	// fullTextMatch, which the caller built from the mode's own rung.
+	// The strict readings ask the same question of the same index: what differs
+	// is the expression in fullTextMatch, which the caller built from the
+	// mode's own rung. The index may live in this database or in its sibling
+	// articles.db, which is a difference of connection, not of query
+	// (articleMatches).
 	case "fts", "phrase", "near":
 		if !s.ftsOK {
 			return dict.ErrUnsupported
@@ -32,9 +36,7 @@ func (s *Store) StreamArticleIDs(ctx context.Context, query, mode, fullTextMatch
 		if fullTextMatch == "" {
 			return emit(nil, 0, true)
 		}
-		rows, err = s.db.QueryContext(ctx, `SELECT e.id,e.w FROM `+s.articleFTSTable+` f
-			JOIN entry e ON e.id=f.rowid WHERE `+s.articleFTSTable+` MATCH ?`+
-			subEntryFilter("e.w")+` ORDER BY f.rank`, fullTextMatch)
+		hits, err = s.articleMatches(ctx, fullTextMatch, 0, false)
 	case "exact":
 		if s.hasFolded {
 			column, key := s.headwordSearchKey(ctx, query)
@@ -106,9 +108,39 @@ func (s *Store) StreamArticleIDs(ctx context.Context, query, mode, fullTextMatch
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	if rows != nil {
+		defer rows.Close()
+	}
+	// The pages are built the same way whether the rows came from one query or
+	// from two: the first hit goes out alone (a search must paint something
+	// immediately), then a page every 300.
 	ids := make([]int64, 0, 300)
 	total := 0
+	add := func(id int64, word string) error {
+		if !match(word) {
+			return nil
+		}
+		ids = append(ids, id)
+		total++
+		if len(ids) == 1 && total == 1 || len(ids) == 300 {
+			if err := emit(ids, total, false); err != nil {
+				return err
+			}
+			ids = make([]int64, 0, 300)
+		}
+		return nil
+	}
+	if hits != nil {
+		for _, h := range hits {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if err := add(h.ID, h.W); err != nil {
+				return err
+			}
+		}
+		return emit(ids, total, true)
+	}
 	for rows.Next() {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -118,16 +150,8 @@ func (s *Store) StreamArticleIDs(ctx context.Context, query, mode, fullTextMatch
 		if err := rows.Scan(&id, &word); err != nil {
 			return err
 		}
-		if !match(word) {
-			continue
-		}
-		ids = append(ids, id)
-		total++
-		if len(ids) == 1 && total == 1 || len(ids) == 300 {
-			if err := emit(ids, total, false); err != nil {
-				return err
-			}
-			ids = make([]int64, 0, 300)
+		if err := add(id, word); err != nil {
+			return err
 		}
 	}
 	if err := rows.Err(); err != nil {

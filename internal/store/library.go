@@ -693,6 +693,11 @@ func writeInfo(dir, source string) error {
 	if _, err := os.Stat(MediaDBPath(dir)); err == nil {
 		fmt.Fprintf(&b, ", %s (images/audio)", MediaDBName)
 	}
+	if _, err := os.Stat(ArticlesFilePath(TextDBPath(dir))); err == nil {
+		// The article index as a file of its own: it is part of the dictionary's
+		// folder and must travel with it, which is why the receipt names it.
+		fmt.Fprintf(&b, ", %s (article index)", ArticlesDBName)
+	}
 	fmt.Fprintf(&b, ", %s (this receipt)\n", InfoName)
 	return os.WriteFile(InfoPath(dir), []byte(b.String()), 0o644)
 }

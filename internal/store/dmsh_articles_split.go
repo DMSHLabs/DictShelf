@@ -23,10 +23,12 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // ArticlesDBName is the sibling file holding the article full-text index.
@@ -88,4 +90,187 @@ func createArticlesDB(db *sql.DB, path, uuid string) error {
 		}
 	}
 	return nil
+}
+
+// articleHandle returns the connection that holds the article index: the
+// sibling articles.db when this dictionary has one, and this database when the
+// index was built inside it (every database built before the split existed).
+//
+// It is opened on first use, not in Open, and the file has to say it belongs to
+// this dictionary (dict_uuid) before it is used - half of another dictionary's
+// index is worse than none of this one's, which is also the rule media.db
+// follows. A file that fails either test is remembered as tried, so a broken
+// sibling costs one attempt and not one per query.
+func (s *Store) articleHandle() (*sql.DB, bool) {
+	if !s.ftsOK {
+		return nil, false
+	}
+	s.articleMu.Lock()
+	defer s.articleMu.Unlock()
+	if s.articleTried {
+		return s.articleDB, s.articleDB != nil
+	}
+	s.articleTried = true
+	path, ok := ArticlesSibling(s.meta.Path)
+	if !ok {
+		return nil, false
+	}
+	db, err := sql.Open(driverName, dsnRO(path))
+	if err != nil {
+		return nil, false
+	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, false
+	}
+	// The sibling carries its own meta table with the dictionary it belongs to.
+	var owner string
+	if err := db.QueryRow(`SELECT value FROM meta WHERE key='dict_uuid'`).Scan(&owner); err != nil {
+		db.Close()
+		return nil, false
+	}
+	if s.uuid == "" || owner != s.uuid {
+		db.Close()
+		return nil, false
+	}
+	s.articlePath, s.articleDB = path, db
+	return s.articleDB, true
+}
+
+// articleHit is one article the article index matched: its id, its headword,
+// and its body when the caller asked for one.
+type articleHit struct {
+	ID int64
+	W  string
+	M  []byte
+}
+
+// articleMatches runs an FTS expression against the article index and returns
+// what matched, best first. withBodies decides whether the (large) body column
+// is read: the streaming id path pages by id and wants only the headword, and
+// carries every match in memory, so asking for bodies there would read the
+// whole dictionary.
+//
+// One query when the index sits in this database, two when it sits in the
+// sibling: a JOIN cannot cross files without ATTACH, and ATTACH is a
+// per-connection statement while this process pools connections and has no
+// limit on their number - the reader deliberately stays away from it
+// (dmsh_articles_split.go's header has the whole argument). The second query is
+// a batch by primary key, and the rank order of the first is preserved: rank
+// comes from the FTS index and from nothing else.
+func (s *Store) articleMatches(ctx context.Context, match string, limit int, withBodies bool) ([]articleHit, error) {
+	columns := "e.id,e.w"
+	if withBodies {
+		columns = "e.id,e.w,e.m"
+	}
+	db, split := s.articleHandle()
+	if !split {
+		query := `SELECT ` + columns + ` FROM ` + s.articleFTSTable + ` f JOIN entry e ON e.id = f.rowid
+			WHERE ` + s.articleFTSTable + ` MATCH ?1` + subEntryFilter("e.w") + `ORDER BY f.rank`
+		args := []any{match}
+		if limit > 0 {
+			query += ` LIMIT ?2`
+			args = append(args, clamp(limit))
+		}
+		rows, err := s.db.QueryContext(ctx, query, args...)
+		return scanArticleHits(rows, err, withBodies)
+	}
+	idsQuery := `SELECT rowid FROM ` + s.articleFTSTable + ` WHERE ` + s.articleFTSTable + ` MATCH ?1 ORDER BY rank`
+	var args []any
+	if limit > 0 {
+		idsQuery += ` LIMIT ?2`
+		args = append(args, clamp(limit))
+	}
+	rows, err := db.QueryContext(ctx, idsQuery, append([]any{match}, args...)...)
+	if err != nil {
+		return nil, err
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	return s.entryRowsByIDs(ctx, ids, withBodies)
+}
+
+// entryRowsByIDs reads the rows for the ids, keeping the ids' order.
+// Unknown ids are dropped, exactly as a JOIN would drop them.
+func (s *Store) entryRowsByIDs(ctx context.Context, ids []int64, withBodies bool) ([]articleHit, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	columns := "id,w"
+	if withBodies {
+		columns = "id,w,m"
+	}
+	found := make(map[int64]articleHit, len(ids))
+	const batch = 400
+	for start := 0; start < len(ids); start += batch {
+		end := min(start+batch, len(ids))
+		part := ids[start:end]
+		parts := make([]string, len(part))
+		args := make([]any, len(part))
+		for i, id := range part {
+			parts[i], args[i] = "?", id
+		}
+		rows, err := s.db.QueryContext(ctx, `SELECT `+columns+` FROM entry WHERE id IN (`+strings.Join(parts, ",")+`)`, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var h articleHit
+			if withBodies {
+				if err := rows.Scan(&h.ID, &h.W, &h.M); err != nil {
+					rows.Close()
+					return nil, err
+				}
+			} else if err := rows.Scan(&h.ID, &h.W); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			found[h.ID] = h
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+	}
+	out := make([]articleHit, 0, len(ids))
+	for _, id := range ids {
+		if h, ok := found[id]; ok {
+			out = append(out, h)
+		}
+	}
+	return out, nil
+}
+
+// scanArticleHits reads the one-query (unsplit) form.
+func scanArticleHits(rows *sql.Rows, err error, withBodies bool) ([]articleHit, error) {
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []articleHit
+	for rows.Next() {
+		var h articleHit
+		if withBodies {
+			if err := rows.Scan(&h.ID, &h.W, &h.M); err != nil {
+				return nil, err
+			}
+		} else if err := rows.Scan(&h.ID, &h.W); err != nil {
+			return nil, err
+		}
+		out = append(out, h)
+	}
+	return out, rows.Err()
 }
