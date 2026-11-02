@@ -1084,6 +1084,30 @@ actions that mean "this index should be there and be current": the panel's per-f
 name. The first half of the win is wall-clock (no source read, no headword rebuild, no whole-file
 write); the second is that a tokenizer change can no longer change what the headword search finds.
 
+### The removal claims the files (2026-11-03)
+
+Deleting a dictionary (or clearing an index) could fail with "The process cannot access the file
+because it is being used by another process" and leave the folder half removed, because `os.RemoveAll`
+had already unlinked part of it. The holder was ours: `measureStats` released the files
+(`e.walk.end()`) BEFORE it wrote `stats.cache`, so the write - a touch of the very folder being
+deleted - sat outside the fence, and `removeLater`'s goroutine could be inside it at that instant. The
+removal took no fence at all.
+
+Both halves are closed the way the file's other writers do it: the fence now covers the write (the ZIM
+directory numbers are read OUTSIDE it, because that is a read of the SOURCE archive - seconds on a big
+one - and no writer of the database has to wait for it), and both removal paths (`Registry.Remove`,
+`removeCachedFolder`) claim the files first, so a pass yields or never starts before anything is
+unlinked. Nothing schedules `measureLater` after a removal: the dictionary is gone, and there is
+nothing left to measure.
+
+What a fence cannot order is a holder it does not own - a scanner or the system indexer touching a file
+that was just written, or one of our own readers taking a moment with the cache. So `store.removeFolder`
+(`removeall_windows.go`) retries a sharing or lock violation for about a second and then reports the
+real error; off Windows there is nothing to retry, an open file can be unlinked. Verified both ways:
+`TestSingleDSLIndexRemoval` 100 runs clean (2/20 before), and each new test fails when its half of the
+fix is removed - `TestRemovalWaitsForThePassHoldingTheFiles` for the fence,
+`TestRemovingAFolderWaitsForATransientHolder` for the retry.
+
 **The older half, kept for the record:** `Plan.SplitArticles` (recorded as `articles_split=1` ONLY when
 true, so every database built before this keeps exactly the meta it had - the reader golden test caught
 that on the first try);

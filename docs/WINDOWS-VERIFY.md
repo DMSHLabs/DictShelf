@@ -279,14 +279,11 @@ them are in `docs/handoff-archive.md`.
     full-suite run on 2026-11-01, with the three transports' rows differing by
     the estimate a background stats pass had just written; passed alone, with
     two neighbours, and in the two full runs either side of it - the fixture's
-    "let self-preparing fixtures settle" first call is what it races), and
-    TestSingleDSLIndexRemoval (seen on 2026-11-03 in one full-suite run and then
-    twice in a row on its own, as `unlinkat .../demo/stats.cache: The process
-    cannot access the file because it is being used by another process` while
-    removing the prepared folder: the fixture has just written that file, and a
-    scanner or indexer holding a new file briefly makes the unlink fail. A clean
-    worktree with the same changes passed it, and the two full runs after it
-    passed, so re-run before believing it - nothing in the tree had changed).
+    "let self-preparing fixtures settle" first call is what it races).
+    TestSingleDSLIndexRemoval used to fail here the same way (`unlinkat
+    .../demo/stats.cache: ... being used by another process`); it was our own
+    stats pass holding the file, and it is fixed - see HANDOFF.md, "The removal
+    claims the files" - 100 runs on 2026-11-03 pass.
   - `internal/intake`: TestJobDisposesSource and
     TestSpooledSourceIsAlwaysRemoved USED to fail here (dispose ran before
     the archive reader closed, so Windows kept the "delete the source"

@@ -157,7 +157,14 @@ func (r *Registry) Remove(id string, dropPrepared, dropSource bool) (removal, er
 				return rep, err
 			}
 		}
+		// A measurement pass may have the folder open - walking it, or writing
+		// stats.cache into it - and Windows refuses to delete a file anything
+		// holds. So the removal claims the files the way every other writer does:
+		// the pass yields here instead of colliding with the unlink, and no new
+		// one starts while the folder is going.
+		release := e.walk.own()
 		n, err := store.RemovePrepared(prepared)
+		release()
 		if err != nil {
 			// RemoveAll can fail after removing some files. Do not make a
 			// possibly partial text.db searchable again; only restore the

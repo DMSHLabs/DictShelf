@@ -391,3 +391,62 @@ func TestDictionaryListReportsFreeSpace(t *testing.T) {
 		t.Error("the response must name the volume it is talking about")
 	}
 }
+
+// Removing a dictionary must not unlink files a measurement pass still holds.
+// Windows refuses to delete an open file, which is what the failure looked
+// like: "The process cannot access the file because it is being used by another
+// process" for a folder the removal had already emptied half way - whenever the
+// background pass happened to be writing stats.cache beside the database it was
+// deleting.
+//
+// The fence closes it from both sides: the pass writes under it (measureStats),
+// and the removal claims the files (Registry.Remove), so the pass has to let go
+// - or never start - before anything is unlinked.
+//
+// The waiting assertion is NEGATIVE - while a pass holds the files, the folder
+// must still be there - and it is the only timing here: nothing depends on the
+// removal being slow.
+func TestRemovalWaitsForThePassHoldingTheFiles(t *testing.T) {
+	reg, e, textDB := preparedForServer(t, "dsl")
+	// The registry measures what it finds on its own; take the files only once
+	// its pass is out of the way, so this test is about the removal, not a race
+	// with the fixture.
+	var held bool
+	for i := 0; i < 200 && !held; i++ {
+		if _, held = e.walk.begin(); !held {
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	if !held {
+		t.Fatal("the registry's own pass never let go of the files")
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := reg.Remove(e.ID, true, false)
+		done <- err
+	}()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		select {
+		case err := <-done:
+			t.Fatalf("the removal finished while a pass held the files: %v", err)
+		default:
+		}
+		if _, err := os.Stat(textDB); err != nil {
+			t.Fatalf("the removal deleted the folder while a pass held the files: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	e.walk.end()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("removal after the pass let go: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the removal never finished after the pass let go")
+	}
+	if _, err := os.Stat(textDB); !os.IsNotExist(err) {
+		t.Errorf("the folder is still there after the removal: %v", err)
+	}
+}

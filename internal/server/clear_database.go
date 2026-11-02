@@ -131,7 +131,17 @@ func (r *Registry) removeCachedFolder(dir string) error {
 	if e != nil {
 		e.closeNow()
 	}
+	// A measurement or stats pass may have this folder open, and Windows will
+	// not delete a file that is in use: it claims the files first when there is
+	// an entry to claim them from, and the pass yields (entry.walk).
+	var release func()
+	if e != nil {
+		release = e.walk.own()
+	}
 	_, err := store.RemovePrepared(dir)
+	if release != nil {
+		release()
+	}
 	return err
 }
 

@@ -68,7 +68,10 @@ func RemovePrepared(dir string) (int64, error) {
 	}
 
 	n := TreeSize(abs)
-	if err := os.RemoveAll(abs); err != nil {
+	// removeFolder, not os.RemoveAll: Windows refuses to delete a file anything
+	// holds open, and holds are transient there far more often than they mean
+	// anything (removeall_windows.go).
+	if err := removeFolder(abs); err != nil {
 		return 0, fmt.Errorf("removing %s: %w", abs, err)
 	}
 	return n, nil
