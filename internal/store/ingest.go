@@ -412,6 +412,20 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	if _, err = db.ExecContext(ctx, "ANALYZE; PRAGMA optimize;"); err != nil {
 		return rep, err
 	}
+	// The FTS index sizes are recorded HERE, on the private file, instead of
+	// being measured later on the live one. dbstat is a page-by-page walk of the
+	// whole database - minutes on a large one - and a listing that waits for it
+	// shows a name before it shows a number (Stats.ContainsIndexBytes). Nothing
+	// else can see this file: it still carries the temp name, and the rename
+	// below is what publishes it, so the walk collides with no reader and no
+	// writer. Measured AFTER the optimize above, because that step rewrites the
+	// index segments and a size taken before it describes an index that no
+	// longer exists.
+	containsIndex, fullTextIndex := searchIndexSizes(db, plan)
+	if _, err = db.ExecContext(ctx, "INSERT INTO meta(key, value) VALUES('contains_index_bytes', ?), ('full_text_index_bytes', ?)",
+		fmt.Sprint(containsIndex), fmt.Sprint(fullTextIndex)); err != nil {
+		return rep, err
+	}
 	if articlesTmp != "" {
 		// The index is written and committed; let go of the file so the rename
 		// below can move it (Windows will not rename an attached database), while
@@ -455,6 +469,11 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	// failure here must not fail an otherwise complete ingest).
 	if strings.EqualFold(filepath.Base(dbPath), TextDBName) {
 		_ = WriteInfo(filepath.Dir(dbPath))
+		// The measurements this build just wrote into the database are published
+		// with it, as the sidecar a listing reads. Nothing else would write that
+		// before the next start, which is why a dictionary built during the
+		// session showed "Calculating" until the application was restarted.
+		_ = writeStatsFromMeta(dbPath)
 	}
 	return rep, nil
 }

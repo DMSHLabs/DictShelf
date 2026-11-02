@@ -6,6 +6,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -46,6 +47,42 @@ func preparedForServer(t *testing.T, format string) (*Registry, *entry, string) 
 	return nil, nil, ""
 }
 
+// The index sizes a build recorded are READ, never re-measured. That walk is a
+// page-by-page pass over the whole database - minutes on a large one - and the
+// listing must not pay it (Store.IndexSizesRecorded; the build records them on
+// the private file instead).
+//
+// The sentinel is what makes the assertion mean something: dbstat is handed a
+// number nobody ever wrote there, so only a read of the recorded value can
+// produce it. A test that just compared two plausible sizes would pass with the
+// walk still in place.
+func TestRecordedIndexSizesAreNotReMeasured(t *testing.T) {
+	reg, e, textDB := preparedForServer(t, "dsl")
+	db, err := sql.Open(sqliteDriver(), "file:"+textDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	// The database is live: the registry's own pass may be measuring it, and a
+	// raw connection would answer "database is locked" instead of waiting (the
+	// same reason liveWrite exists for the product's maintenance writes).
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("UPDATE meta SET value='987654321' WHERE key='contains_index_bytes'"); err != nil {
+		t.Fatal(err)
+	}
+	s, err := reg.measureStats(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.ContainsIndexBytes != 987654321 {
+		t.Errorf("measureStats = %d; it walked the file instead of reading what the build recorded",
+			s.ContainsIndexBytes)
+	}
+}
+
 // The warm pass is what fills the measurements a dialog needs, and it must do
 // it once: the second start of the application has nothing to measure.
 func TestWarmStatsMeasuresOnceAndCaches(t *testing.T) {
@@ -62,6 +99,13 @@ func TestWarmStatsMeasuresOnceAndCaches(t *testing.T) {
 	t.Cleanup(func() { warmEnabled = keepWarm })
 
 	reg, e, textDB := preparedForServer(t, "dsl")
+	// A build publishes the sidecar now, so the cache this test is about has to
+	// be taken away first - "needs measuring" is the state of a dictionary built
+	// before the measurements existed, or one whose cache went missing, which is
+	// exactly what the pass is left for.
+	if err := os.Remove(store.StatsPath(filepath.Dir(textDB))); err != nil {
+		t.Fatal(err)
+	}
 	if !reg.statsNeeded(e) {
 		t.Fatal("a dictionary without a cache needs measuring")
 	}
@@ -130,6 +174,11 @@ func TestListRowEstimatesWithoutMeasurements(t *testing.T) {
 	dir := preparedDSL(t, s)
 	e, err := s.reg.get(idOf(t, s, "test.dsl"))
 	if err != nil {
+		t.Fatal(err)
+	}
+	// A build publishes the sidecar now, so the "no measurements" library this
+	// test stands for is made by removing it.
+	if err := os.Remove(store.StatsPath(dir)); err != nil {
 		t.Fatal(err)
 	}
 	if _, cached := store.ReadStats(store.TextDBPath(dir)); cached {

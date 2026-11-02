@@ -183,6 +183,7 @@ func volatileMeta(k string) bool {
 		"source_sha256_1M", "source_revision", "body_encoding",
 		"ingest_version", "reader_version", "markup_version", "fold_version",
 		"body_bytes", "stored_body_bytes", "headword_bytes", "stats_version",
+		"contains_index_bytes", "full_text_index_bytes",
 		"zim_articles", "zim_redirects", "zim_media", "zim_other", "zim_clusters",
 		"zim_text_bytes", "zim_mixed_bytes", "zim_other_bytes":
 		return true

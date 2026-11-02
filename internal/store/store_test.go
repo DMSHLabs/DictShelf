@@ -1215,6 +1215,121 @@ func TestOptionalIndexMaintenanceKeepsFeaturesIndependent(t *testing.T) {
 	}
 }
 
+// A build records what its indexes cost, on the private file, before it
+// publishes: the number a listing shows must never come from walking a live
+// database (Store.IndexSizesRecorded). The recorded figure is checked against
+// what a walk of the published file says, so "recorded at build" means the same
+// quantity, not a cheaper approximation of it.
+func TestBuildRecordsIndexSizes(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "text.db")
+	r := &fakeReader{meta: dict.Meta{Name: "measured", Format: "test", Path: "/x"}, entries: []dict.Entry{
+		h("Blue heart", "<p>cardiac tissue</p>"),
+		h("Red heart", "<p>cardiac muscle</p>"),
+	}}
+	plan := Plan{Contains: true, FullText: true}
+	if _, err := IngestPlan(r, path, plan, nil); err != nil {
+		t.Fatal(err)
+	}
+	meta, err := ReadMeta(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !IndexSizesRecorded(meta) {
+		t.Fatal("the build did not record the index sizes")
+	}
+	s, ok := StatsFromMeta(meta)
+	if !ok {
+		t.Fatal("the build's measurements were not readable back")
+	}
+	if s.ContainsIndexBytes <= 0 || s.FullTextIndexBytes <= 0 {
+		t.Errorf("recorded index sizes = %d, %d; want both above zero", s.ContainsIndexBytes, s.FullTextIndexBytes)
+	}
+	contains, fullText := MeasureIndexSizes(path, plan)
+	if contains != s.ContainsIndexBytes || fullText != s.FullTextIndexBytes {
+		t.Errorf("recorded (%d, %d) but the published file measures (%d, %d)",
+			s.ContainsIndexBytes, s.FullTextIndexBytes, contains, fullText)
+	}
+	// And the measurements are published WITH the database, as the sidecar a
+	// listing reads: without this a dictionary built during the session shows
+	// "Calculating" until the application is restarted.
+	cached, ok := ReadStats(path)
+	if !ok {
+		t.Fatal("the build published no readable measurements beside the database")
+	}
+	if cached.ContainsIndexBytes != s.ContainsIndexBytes || cached.FullTextIndexBytes != s.FullTextIndexBytes {
+		t.Errorf("sidecar holds (%d, %d), the database records (%d, %d)",
+			cached.ContainsIndexBytes, cached.FullTextIndexBytes, s.ContainsIndexBytes, s.FullTextIndexBytes)
+	}
+	// A build that asked for neither index records zeros rather than nothing:
+	// the keys being present is what says "measured", not the value.
+	bare := filepath.Join(t.TempDir(), "text.db")
+	if _, err := IngestPlan(r, bare, Plan{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	bareMeta, err := ReadMeta(bare)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !IndexSizesRecorded(bareMeta) {
+		t.Error("a build with no indexes still has sizes to record: zero")
+	}
+}
+
+// A maintenance write is the one thing that changes what the indexes cost, and
+// both copies of the number have to follow it: the meta inside the database and
+// the folder's sidecar, which is what a listing reads. Neither used to be
+// refreshed, so the estimate went on describing the index that had just been
+// replaced.
+func TestMaintenanceRefreshesRecordedIndexSizes(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "text.db")
+	r := &fakeReader{meta: dict.Meta{Name: "maintained", Format: "test", Path: "/x"}, entries: []dict.Entry{
+		h("Blue heart", "<p>cardiac tissue</p>"),
+		h("Red heart", "<p>cardiac muscle</p>"),
+	}}
+	if _, err := IngestPlan(r, path, Plan{Contains: true, FullText: true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	recorded := func() Stats {
+		t.Helper()
+		meta, err := ReadMeta(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, ok := StatsFromMeta(meta)
+		if !ok {
+			t.Fatal("the measurements are not readable from the database")
+		}
+		return s
+	}
+	before := recorded()
+	if before.ContainsIndexBytes <= 0 || before.FullTextIndexBytes <= 0 {
+		t.Fatalf("nothing was recorded to compare against: %+v", before)
+	}
+
+	if err := ClearSearchIndexes(path, true, false); err != nil {
+		t.Fatal(err)
+	}
+	after := recorded()
+	// The full-text index was not touched, but the VACUUM relocates pages, so
+	// the check is against the file as it is now, not against the old number.
+	contains, fullText := MeasureIndexSizes(path, Plan{Contains: false, FullText: true})
+	if after.ContainsIndexBytes != 0 {
+		t.Errorf("contains size after its removal = %d, want 0", after.ContainsIndexBytes)
+	}
+	if after.ContainsIndexBytes != contains || after.FullTextIndexBytes != fullText {
+		t.Errorf("recorded (%d, %d) but the file now measures (%d, %d)",
+			after.ContainsIndexBytes, after.FullTextIndexBytes, contains, fullText)
+	}
+	cached, ok := ReadStats(path)
+	if !ok {
+		t.Fatal("the folder's cache was not rewritten into a readable one")
+	}
+	if cached.ContainsIndexBytes != after.ContainsIndexBytes || cached.FullTextIndexBytes != after.FullTextIndexBytes {
+		t.Errorf("cache holds (%d, %d), the database records (%d, %d)",
+			cached.ContainsIndexBytes, cached.FullTextIndexBytes, after.ContainsIndexBytes, after.FullTextIndexBytes)
+	}
+}
+
 // A maintenance write lands in a database the application is still using, so it
 // has to wait for a reader instead of failing on sight. The reader here stands
 // in for the one that made this real: the measurement pass opens the prepared

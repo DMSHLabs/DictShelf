@@ -92,10 +92,14 @@ func (r *Registry) measureStats(e *entry) (store.Stats, error) {
 	} else {
 		s.ZIMForm = store.ZIMFormOf(prepared.Meta)
 	}
-	// The index sizes are a page walk of the database (dbstat), which is why
-	// they are measured HERE and only here: once per process, off the request
-	// path, and written into the cache both the chips and the estimate read.
-	s.ContainsIndexBytes, s.FullTextIndexBytes = store.MeasureIndexSizes(prepared.TextDB, prepared.Plan)
+	// The index sizes are a page walk of the database (dbstat) - minutes on a
+	// large one - and NOTHING has to pay it any more: the build measures them on
+	// the private file it is writing and records them in the database itself
+	// (store.IndexSizesRecorded). The walk stays for a library prepared before
+	// that, where the numbers are simply unknown until it runs once.
+	if !store.IndexSizesRecorded(prepared.Meta) {
+		s.ContainsIndexBytes, s.FullTextIndexBytes = store.MeasureIndexSizes(prepared.TextDB, prepared.Plan)
+	}
 	src := prepared.Meta["source_path"]
 	if src == "" || !isZIMFormat(prepared.Meta["format"]) {
 		// Nothing else can be measured without reading the dictionary itself.

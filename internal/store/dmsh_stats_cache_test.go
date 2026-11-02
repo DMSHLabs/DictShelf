@@ -46,8 +46,14 @@ func TestStatsCacheRoundTrip(t *testing.T) {
 	if fromMeta.Entries != 2 || fromMeta.BodyBytes == 0 || fromMeta.HeadwordBytes == 0 {
 		t.Fatalf("measurements from meta = %+v", fromMeta)
 	}
+	// A build publishes the sidecar now (writeStatsFromMeta), so this test
+	// starts from none on purpose: it is about writing one by hand and reading
+	// it back.
+	if err := os.Remove(StatsPath(dir)); err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := ReadStats(textDB); ok {
-		t.Error("no sidecar has been written yet, so there is nothing to read")
+		t.Error("the sidecar was removed, so there is nothing to read")
 	}
 	if err := WriteStats(dir, fromMeta); err != nil {
 		t.Fatal(err)

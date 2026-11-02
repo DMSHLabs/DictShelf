@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // A prepared folder holds three files: the dictionary itself, the receipt that
@@ -92,6 +94,8 @@ func StatsFromMeta(meta map[string]string) (Stats, bool) {
 	s.BodyBytes = statInt(meta["body_bytes"])
 	s.StoredBodyBytes = statInt(meta["stored_body_bytes"])
 	s.HeadwordBytes = statInt(meta["headword_bytes"])
+	s.ContainsIndexBytes = statInt(meta["contains_index_bytes"])
+	s.FullTextIndexBytes = statInt(meta["full_text_index_bytes"])
 	s.ZIMArticles = statInt(meta["zim_articles"])
 	s.ZIMRedirects = statInt(meta["zim_redirects"])
 	s.ZIMMedia = statInt(meta["zim_media"])
@@ -101,6 +105,20 @@ func StatsFromMeta(meta map[string]string) (Stats, bool) {
 	s.ZIMMixedBytes = statInt(meta["zim_mixed_bytes"])
 	s.ZIMOtherBytes = statInt(meta["zim_other_bytes"])
 	return s, true
+}
+
+// IndexSizesRecorded reports whether the FTS index sizes are among the
+// measurements the build recorded (StatsFromMeta). A build always writes BOTH
+// keys, a zero included, so the KEYS being present is what says "measured at
+// build" - and a database prepared before they were recorded has neither, which
+// is what sends the caller to walk it with dbstat. That walk is the thing to
+// avoid: it costs a page-by-page pass over the whole file, minutes on a large
+// database, and it holds a read lock for as long as it runs - which a listing
+// must not pay and an ingest must not collide with.
+func IndexSizesRecorded(meta map[string]string) bool {
+	_, contains := meta["contains_index_bytes"]
+	_, fullText := meta["full_text_index_bytes"]
+	return contains && fullText
 }
 
 // ReadStats returns a folder's cached measurements when they describe this
@@ -173,6 +191,32 @@ func WriteStats(dir string, s Stats) error {
 		return err
 	}
 	return os.WriteFile(StatsPath(dir), b, 0o644)
+}
+
+// writeStatsFromMeta publishes a folder's measurements from what the database
+// itself records (StatsFromMeta), so a listing has the numbers without measuring
+// anything: no dbstat walk, and no directory walk of an archive either - the
+// ZIM reader records what its directory held in the same meta. Called when a
+// database is published and after a maintenance write, which are the moments the
+// numbers are known.
+//
+// It answers false for a database prepared before these measurements existed;
+// nothing is written then, and the pass measures that one as it always did.
+func writeStatsFromMeta(textDB string) bool {
+	meta, err := ReadMeta(textDB)
+	if err != nil {
+		return false
+	}
+	s, ok := StatsFromMeta(meta)
+	if !ok {
+		return false
+	}
+	s.Version = StatsVersion
+	if err := WriteStats(filepath.Dir(textDB), s); err != nil {
+		logx.V("stats: could not write %s: %v", StatsPath(filepath.Dir(textDB)), err)
+		return false
+	}
+	return true
 }
 
 // ZIMFormOf renders the prepared form for formats that have more than one. A

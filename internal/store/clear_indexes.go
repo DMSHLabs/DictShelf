@@ -8,9 +8,41 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
+
+// recordIndexSizes writes the FTS index sizes of the database it is handed into
+// both places the number lives: the meta inside the database, where a build
+// records them (StatsFromMeta), and the folder's sidecar, which is what a
+// listing reads.
+//
+// A maintenance write is the one thing that changes these sizes - that is what
+// it does - and nothing used to refresh either copy, so the estimate went on
+// describing the index that had just been replaced. The sidecar is rebuilt from
+// the meta rather than measured, the same path a build takes, so the two cannot
+// come to describe different files.
+//
+// Called after the VACUUM: that step relocates pages, and a size taken before it
+// describes a layout that is gone. It runs on its own background context, not
+// the caller's: the write is committed by then, and a caller that gave up must
+// not leave the number describing the old index.
+func recordIndexSizes(db *sql.DB, textDB string) {
+	if db == nil || textDB == "" {
+		return
+	}
+	ctx := context.Background()
+	contains, fullText := searchIndexSizes(db, Inspect(textDB).Plan)
+	if _, err := db.ExecContext(ctx,
+		`INSERT OR REPLACE INTO meta(key, value) VALUES('contains_index_bytes', ?), ('full_text_index_bytes', ?)`,
+		strconv.FormatInt(contains, 10), strconv.FormatInt(fullText, 10)); err != nil {
+		logx.V("stats: could not record index sizes for %s: %v", textDB, err)
+		return
+	}
+	_ = writeStatsFromMeta(textDB)
+}
 
 // RebuildContainsIndex replaces the trigram and token indexes from the prepared
 // headwords. It does not rescan the source or rewrite the base/full-text data.
@@ -167,6 +199,7 @@ func RebuildContainsIndexContext(ctx context.Context, path string, progress Prog
 		return err
 	}
 	_, err = db.ExecContext(ctx, "VACUUM")
+	recordIndexSizes(db, path)
 	if ctx.Err() != nil {
 		return nil // the index is committed and valid; VACUUM is optional cleanup
 	}
@@ -246,9 +279,11 @@ func ClearSearchIndexesContext(ctx context.Context, path string, contains, fullT
 		}
 	}
 	if splitArticles {
+		recordIndexSizes(db, path)
 		return nil
 	}
 	_, err = db.ExecContext(ctx, "VACUUM")
+	recordIndexSizes(db, path)
 	if ctx.Err() != nil {
 		return nil // the index deletion is committed; VACUUM is optional cleanup
 	}
