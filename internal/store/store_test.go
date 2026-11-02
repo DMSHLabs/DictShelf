@@ -1350,6 +1350,98 @@ func TestMaintenanceRefreshesRecordedIndexSizes(t *testing.T) {
 	}
 }
 
+// A build that gives the article index a file of its own must record the size
+// from THAT file. Measuring only text.db would report the full-text index as
+// absent, and the estimate would price a dictionary with a large index as if it
+// had none - which is the same mistake the About line avoids by summing the pair
+// (internal/server/about.go).
+func TestSplitBuildRecordsTheArticleIndexSize(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "text.db")
+	r := &fakeReader{meta: dict.Meta{Name: "split", Format: "test", Path: "/x"}, entries: []dict.Entry{
+		h("Blue heart", "<p>cardiac tissue</p>"),
+		h("Red heart", "<p>cardiac muscle</p>"),
+	}}
+	plan := Plan{Contains: true, FullText: true, SplitArticles: true}
+	if _, err := IngestPlan(r, path, plan, nil); err != nil {
+		t.Fatal(err)
+	}
+	sibling, ok := ArticlesSibling(path)
+	if !ok {
+		t.Fatal("the split build published no articles.db")
+	}
+	meta, err := ReadMeta(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !IndexSizesRecorded(meta) {
+		t.Fatal("the build did not record the index sizes")
+	}
+	s, ok := StatsFromMeta(meta)
+	if !ok {
+		t.Fatal("the build's measurements were not readable back")
+	}
+	// The index is genuinely elsewhere: the database itself owns no article
+	// index, so a size that came from text.db alone would be zero.
+	main, err := openRO(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer main.Close()
+	if inMain := sizeOfTable(context.Background(), main, "article_fts"); inMain != 0 {
+		t.Errorf("article_fts lives in text.db (%d bytes); the split did not move it", inMain)
+	}
+	contains, fullText := MeasureIndexSizes(path, plan)
+	if s.ContainsIndexBytes != contains || s.FullTextIndexBytes != fullText {
+		t.Errorf("recorded (%d, %d) but the pair measures (%d, %d)",
+			s.ContainsIndexBytes, s.FullTextIndexBytes, contains, fullText)
+	}
+	if dbstatAvailable(t, sibling) && s.FullTextIndexBytes <= 0 {
+		t.Errorf("recorded full-text size = %d; it has to come from %s", s.FullTextIndexBytes, filepath.Base(sibling))
+	}
+}
+
+// The working files an ingest leaves behind come in three shapes - the database,
+// its article sibling and its media sibling - and all three carry the infix. A
+// published file beside them must not be touched.
+func TestSweepIngestTempsClearsOnlyWorkingFiles(t *testing.T) {
+	dir := t.TempDir()
+	planted := map[string]int{
+		"text.db.ingest.ab12":           10,
+		"text.db.ingest.ab12-articles":  20,
+		"media.db.ingest.cd34":          30,
+		"articles.db.ingest.ef56-media": 0,
+	}
+	for name, size := range planted {
+		if err := os.WriteFile(filepath.Join(dir, name), make([]byte, size), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, keep := range []string{TextDBName, ArticlesDBName, "icon.cache", "stats.cache"} {
+		if err := os.WriteFile(filepath.Join(dir, keep), []byte("published"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	removed, freed := SweepIngestTemps(dir)
+	if removed != len(planted) || freed != 60 {
+		t.Errorf("removed %d file(s), %d bytes; want %d and 60", removed, freed, len(planted))
+	}
+	for name := range planted {
+		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
+			t.Errorf("%s was not cleared", name)
+		}
+	}
+	for _, keep := range []string{TextDBName, ArticlesDBName, "icon.cache", "stats.cache"} {
+		if _, err := os.Stat(filepath.Join(dir, keep)); err != nil {
+			t.Errorf("%s was removed: %v", keep, err)
+		}
+	}
+	// A folder that is not there is not an error: a source whose prepared folder
+	// never existed is an ordinary state.
+	if removed, freed := SweepIngestTemps(filepath.Join(dir, "absent")); removed != 0 || freed != 0 {
+		t.Errorf("sweeping an absent folder = %d, %d", removed, freed)
+	}
+}
+
 // A maintenance write lands in a database the application is still using, so it
 // has to wait for a reader instead of failing on sight. The reader here stands
 // in for the one that made this real: the measurement pass opens the prepared

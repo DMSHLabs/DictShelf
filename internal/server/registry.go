@@ -1068,7 +1068,42 @@ func NewRegistry(dictDirs []string, useCached bool, opts ...Option) (*Registry, 
 	r.Warm()
 	r.upgradeAbbrev()
 	r.startJanitor()
+	r.startTempSweep()
 	return r, nil
+}
+
+// startTempSweep clears the working files interrupted ingests left behind, off
+// the request path and once per process.
+//
+// A goroutine of its own rather than part of the startup walk: it is a handful
+// of removes in folders that walk has already visited, but each one is a disk
+// operation on a volume that may be slow, sleeping or a phone's FUSE mount, and
+// none of it is needed before the first answer. It is not tied to Warm either,
+// because Warm is desktop-only (warmEnabled) and a phone is where the space is
+// worth having back.
+//
+// Nothing can be indexing yet - the application is single-instance, one mutex
+// over the whole install - so every "<database>.ingest.<random>" file in a
+// library folder is an abandoned attempt (store.SweepIngestTemps).
+func (r *Registry) startTempSweep() {
+	entries := r.all()
+	r.jobs.wg.Add(1)
+	go func() {
+		defer r.jobs.wg.Done()
+		removed, freed := 0, int64(0)
+		for _, e := range entries {
+			dir, ok := store.LookupDir(e.Path)
+			if !ok {
+				continue
+			}
+			n, size := store.SweepIngestTemps(dir)
+			removed += n
+			freed += size
+		}
+		if removed > 0 {
+			logx.V("ingest: cleared %d abandoned working file(s), %.1f MiB", removed, float64(freed)/(1<<20))
+		}
+	}()
 }
 
 // UseCached reports whether prepared dictionaries are included.

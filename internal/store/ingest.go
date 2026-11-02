@@ -444,7 +444,12 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	// writer. Measured AFTER the optimize above, because that step rewrites the
 	// index segments and a size taken before it describes an index that no
 	// longer exists.
-	containsIndex, fullTextIndex := searchIndexSizes(db, plan)
+	//
+	// The article index may be in a file of its own (plan.SplitArticles), whose
+	// temp exists on disk now and is renamed into place a few lines below; the
+	// empty textDB says so, because the directory may still hold an articles.db
+	// from an earlier split build and this one must not be measured as that.
+	containsIndex, fullTextIndex := indexSizesOf(ctx, db, "", articlesTmp, plan)
 	if _, err = db.ExecContext(ctx, "INSERT INTO meta(key, value) VALUES('contains_index_bytes', ?), ('full_text_index_bytes', ?)",
 		fmt.Sprint(containsIndex), fmt.Sprint(fullTextIndex)); err != nil {
 		return rep, err
@@ -695,7 +700,7 @@ func syncFile(path string) {
 func tempDBName(dbPath string) string {
 	b := make([]byte, 6)
 	_, _ = rand.Read(b)
-	return dbPath + ".ingest." + hex.EncodeToString(b)
+	return dbPath + ingestTempInfix + hex.EncodeToString(b)
 }
 
 // NormalizeBody converts an ingest Entry body to HTML. Exported because

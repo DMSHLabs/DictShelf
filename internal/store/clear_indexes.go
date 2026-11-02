@@ -34,7 +34,10 @@ func recordIndexSizes(db *sql.DB, textDB string) {
 		return
 	}
 	ctx := context.Background()
-	contains, fullText := searchIndexSizes(db, Inspect(textDB).Plan)
+	// The article index is not necessarily in this file: when the build gave it
+	// one of its own (articles.db), the size comes from there.
+	plan := Inspect(textDB).Plan
+	contains, fullText := indexSizesOf(ctx, db, textDB, "", plan)
 	if _, err := db.ExecContext(ctx,
 		`INSERT OR REPLACE INTO meta(key, value) VALUES('contains_index_bytes', ?), ('full_text_index_bytes', ?)`,
 		strconv.FormatInt(contains, 10), strconv.FormatInt(fullText, 10)); err != nil {
@@ -55,7 +58,7 @@ func RebuildContainsIndex(path string, progress Progress) (err error) {
 // durability, and no busy timeout either, because an ingest target is a file
 // nobody else has. A prepared database is the opposite case - a search, or the
 // measurement pass walking the whole file through dbstat
-// (store.searchIndexSizes), can hold a read lock while this runs - so the wait
+// (store.MeasureIndexSizesContext), can hold a read lock while this runs - so the wait
 // every other connection the application opens asks for is set here, before the
 // journal-mode change that needs it just as much. The pragma is per connection,
 // which is why the pool is capped at one.

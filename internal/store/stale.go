@@ -211,7 +211,7 @@ func MeasureIndexSizesContext(ctx context.Context, textDB string, plan Plan) (co
 		return 0, 0
 	}
 	defer db.Close()
-	return searchIndexSizesContext(ctx, db, plan)
+	return indexSizesOf(ctx, db, textDB, "", plan)
 }
 
 // SearchIndexSizes returns the on-disk bytes used by the optional FTS5 indexes.
@@ -222,28 +222,66 @@ func SearchIndexSizes(textDB string, plan Plan) (contains, fullText int64) {
 		return 0, 0
 	}
 	defer db.Close()
-	return searchIndexSizesContext(context.Background(), db, plan)
+	return indexSizesOf(context.Background(), db, textDB, "", plan)
 }
 
-func searchIndexSizes(db *sql.DB, plan Plan) (contains, fullText int64) {
-	return searchIndexSizesContext(context.Background(), db, plan)
-}
-
-func searchIndexSizesContext(ctx context.Context, db *sql.DB, plan Plan) (contains, fullText int64) {
-	measure := func(table string) int64 {
-		var size int64
-		if err := db.QueryRowContext(ctx, `SELECT COALESCE(SUM(pgsize), 0) FROM dbstat WHERE name = ? OR name LIKE ?`, table, table+"_%").Scan(&size); err != nil {
-			return 0
-		}
-		return size
+// indexSizesOf measures the optional indexes of the database open on db - the
+// connection that holds it, so an ingest can ask about the file it is writing
+// without opening a second handle for it.
+//
+// The contains index is always in that database. The article index is not: a
+// build may keep it in a file of its own (Plan.SplitArticles), so it is read
+// from whichever file holds it - the published sibling beside the database
+// (articlesFileOf), the temp file a build has not renamed into place yet
+// (articlesDB, which the ingest names), or the database itself, which is where
+// every database built before the split keeps it.
+func indexSizesOf(ctx context.Context, db *sql.DB, textDB, articlesDB string, plan Plan) (contains, fullText int64) {
+	if db == nil {
+		return 0, 0
 	}
 	if plan.Contains {
-		contains = measure("entry_trigram")
+		contains = sizeOfTable(ctx, db, "entry_trigram")
 	}
-	if plan.FullText {
-		fullText = measure("article_fts")
+	if !plan.FullText {
+		return contains, 0
 	}
-	return contains, fullText
+	if file := articlesFileOf(textDB, articlesDB); file == "" || file == textDB {
+		return contains, sizeOfTable(ctx, db, "article_fts")
+	}
+	side, err := openRO(articlesFileOf(textDB, articlesDB))
+	if err != nil {
+		return contains, 0
+	}
+	defer side.Close()
+	return contains, sizeOfTable(ctx, side, "article_fts")
+}
+
+// articlesFileOf answers which file holds the article index of the database at
+// textDB: the one named by the caller (a build's temp file), the sibling the
+// build published, or "" for the database itself. An empty textDB means the
+// caller knows there is no published sibling to look for - the ingest, whose
+// directory may still hold one from an earlier split build.
+func articlesFileOf(textDB, articlesDB string) string {
+	if articlesDB != "" {
+		return articlesDB
+	}
+	if textDB == "" {
+		return ""
+	}
+	if p, ok := ArticlesSibling(textDB); ok {
+		return p
+	}
+	return textDB
+}
+
+// sizeOfTable is one optional index's on-disk bytes: the table and its shadow
+// tables, summed over the pages dbstat says they own.
+func sizeOfTable(ctx context.Context, db *sql.DB, table string) int64 {
+	var size int64
+	if err := db.QueryRowContext(ctx, `SELECT COALESCE(SUM(pgsize), 0) FROM dbstat WHERE name = ? OR name LIKE ?`, table, table+"_%").Scan(&size); err != nil {
+		return 0
+	}
+	return size
 }
 
 // Usable reports that this build can open it: readable, and this schema.
