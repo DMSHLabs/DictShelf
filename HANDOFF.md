@@ -786,6 +786,30 @@ out loud instead of silently searching its first 128 words. (3) Results are deli
 articles per dictionary first, then the search continues in the background to the end, or until the reader
 changes the query or mode.
 
+## Strict readings are declined, not scanned; the caps are gone (2026-11-02)
+
+The user's decisions, implemented: "все ограничения убираем - это зло и неправда" and "искать по статьям
+долго и энергопотребление растёт на телефонах". A dictionary that answers full text from its archive's
+index and has none of ours **no longer scans article texts** for a phrase or a proximity reading: the
+reading is declined and the hit carries `NeedsIndex`, the row says why in one line, and it offers the thing
+that answers the same question from positions - our index - through the existing build window
+(`openFullTextPicker`, preselected on that dictionary). The words reading is untouched: it is what the
+archive's index was built for, and its ranking is the archive's own.
+
+Measured on the live library: Википедия (no index of ours) `phrase` → **0.04 s**, no results,
+`needsIndex`, where it used to spend seconds scanning; the same dictionary `words` → 0.24 s, 20 results;
+Викитека (our index) `phrase` → 0.05 s, 1 result.
+
+`archiveStrictCheck` is 0 (unbounded) and `search`'s scanner helpers stay for the one case that can still
+want them - an explicit "search the texts anyway" in that window, which is NOT built yet: today the scan
+has no caller, and that is deliberate, because the default must not do silently what the reader is being
+offered an alternative to. `ftsq.Parse` also stopped truncating a 128-word query in silence: `Query.TooMany`
+says the query below is a prefix of what was typed, and `rungFor` refuses instead of searching the first
+128 words. The message the reader sees for that is not wired to a catalog key yet (the wire carries the
+fact; the text is English for now).
+
+
+
 ## The strict readings were mostly blind, and one of them lied (2026-11-02)
 
 Reported by the user, with a live example: «ищу джазовый кларнетист, статья „Ниммонс, Фил" содержит эту

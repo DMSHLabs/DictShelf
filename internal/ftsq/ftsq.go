@@ -99,7 +99,14 @@ type Query struct {
 	raw   string
 	words []string // the plain reading: bare tokens, operators not present
 	node  node     // the operator reading, nil unless operator mode was entered
+	more  bool     // the input had more words than maxTokens
 }
+
+// TooMany reports that the input carried more words than maxTokens, so the
+// query below is a PREFIX of what was typed. Silently searching the first 128
+// words of a 200-word paste is the kind of quiet lie a reader cannot see
+// through, so the caller is told and can say so.
+func (q *Query) TooMany() bool { return q != nil && q.more }
 
 // Raw returns the input as typed.
 func (q *Query) Raw() string { return q.raw }
@@ -116,6 +123,7 @@ func Parse(input string) *Query {
 		if w := strings.TrimRight(f, "*"); hasToken(w) {
 			q.words = append(q.words, w)
 			if len(q.words) == maxTokens {
+				q.more = true
 				break
 			}
 		}

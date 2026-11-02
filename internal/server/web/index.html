@@ -7798,6 +7798,19 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
       anchorOnce&&anchorOnce.dict===h.dict&&r===h.results[0]?anchorOnce.frag:""));
     dl.appendChild(dt);dl.appendChild(dd);
   }
+  /* A dictionary that declined the reading: it could answer only by reading
+     article texts one at a time, which over a whole archive is minutes of work
+     and, on a phone, battery. The row therefore says what is missing and offers
+     the thing that answers it - our index, built from the same article text but
+     storing positions - and the window that opens shows the number first. */
+  if(h.needsIndex&&!h.results.length){
+    const note=document.createElement("p");note.className="search-needs-index";
+    const build=document.createElement("button");build.type="button";build.className="btn";
+    build.textContent=tx("search.needsIndexBuild");
+    build.addEventListener("click",()=>openFullTextPicker(h.dict));
+    note.append(document.createTextNode(tx("search.needsIndex")+" "),build);
+    det.appendChild(note);
+  }
   det.open=expandAll;
   det.appendChild(dl);box.appendChild(det);
   observeSearchDictName(det.querySelector(":scope>summary .search-dict-name"));

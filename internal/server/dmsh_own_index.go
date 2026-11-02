@@ -259,9 +259,10 @@ func (u *upgraded) archiveReading(ctx context.Context, mode string, distance int
 	return nil, dict.ErrUnsupported
 }
 
-// archiveStrictCheck is how many articles the strict readings may read while
-// building the complete list for one dictionary. Verifying a phrase means
-// reading articles, so a query with a million candidates cannot be listed to its
-// end in a background pass's time; this is the bound, and the list is marked
-// unfinished when it bites.
-const archiveStrictCheck = 3000
+// A strict reading over an archive index reads article texts, and there is no
+// bound on how many: a list stopped at a bound is not the answer to the question
+// that was asked, and reporting it as "there is more" only hides which part is
+// missing. The path is not the default any more either - the search declines the
+// reading unless the reader asked for it - so the one that remains runs to the
+// end and says so (the reader can stop it by searching for something else).
+const archiveStrictCheck = 0

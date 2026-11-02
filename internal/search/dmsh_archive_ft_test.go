@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/ftsq"
 )
 
 // archiveFake is a prepared-style backend whose full text comes from its source
@@ -53,11 +54,15 @@ func (a *archiveFake) ArchiveNear(context.Context, int, string, int, int) ([]dic
 	return []dict.Result{{Headword: "near", Body: "<p>near</p>"}}, nil
 }
 
-// Every full-text mode asks an archive-backed dictionary for its own reading and
-// gets it: the phrase and the distance are verified by the source, and the rung
-// names which reading answered so the words can be marked. No mode walks a
-// ladder - the fake's expression entry point is never called for an archive,
-// which has no expression language to give it.
+// What an archive-backed dictionary answers, and what it declines.
+//
+// The words reading is answered by the archive's own index - that is what that
+// index is for, and it is the ranking its builder tuned. The strict readings are
+// DECLINED: the index stores no positions, so a phrase or a distance there means
+// reading article texts one at a time, and over a whole archive that is minutes
+// of work and battery on a phone. The hit carries the fact (NeedsIndex) so the
+// reader is offered our index - built from the same article text and storing
+// positions - instead of being told the phrase is absent.
 func TestArchiveReadingsPerMode(t *testing.T) {
 	for _, tc := range []struct {
 		mode      Mode
@@ -65,11 +70,12 @@ func TestArchiveReadingsPerMode(t *testing.T) {
 		words     int
 		phrase    int
 		near      int
+		declined  bool
 		wantFirst string
 	}{
-		{FullText, "words", 1, 0, 0, "beta"},
-		{Phrase, "phrase", 0, 1, 0, "phrase"},
-		{Near, "near", 0, 0, 1, "near"},
+		{FullText, "words", 1, 0, 0, false, "beta"},
+		{Phrase, "", 0, 0, 0, true, ""},
+		{Near, "", 0, 0, 0, true, ""},
 	} {
 		af := &archiveFake{fake: fake{name: "archive.zim", words: []string{"beta"}}}
 		hits := all(context.Background(), []dict.Dictionary{af}, tc.mode, "beta gamma", 10)
@@ -77,10 +83,17 @@ func TestArchiveReadingsPerMode(t *testing.T) {
 			t.Fatalf("%v: hits = %+v", tc.mode, hits)
 		}
 		h := hits[0]
+		if h.NeedsIndex != tc.declined {
+			t.Errorf("%v: NeedsIndex = %v, want %v", tc.mode, h.NeedsIndex, tc.declined)
+		}
 		if h.Rung != tc.wantRung {
 			t.Errorf("%v: Rung = %q, want %q", tc.mode, h.Rung, tc.wantRung)
 		}
-		if len(h.Results) != 1 || h.Results[0].Headword != tc.wantFirst {
+		if tc.declined {
+			if len(h.Results) != 0 || h.Skipped || h.Err != nil {
+				t.Errorf("%v: a declined reading must return nothing and be neither skipped nor an error: %+v", tc.mode, h)
+			}
+		} else if len(h.Results) != 1 || h.Results[0].Headword != tc.wantFirst {
 			t.Errorf("%v: results = %+v", tc.mode, h.Results)
 		}
 		if af.wordsCalls != tc.words || af.phraseCalls != tc.phrase || af.nearCalls != tc.near {
@@ -144,4 +157,29 @@ func (f *recordingFake) Caps() dict.Caps {
 func (f *recordingFake) FullTextMatch(_ context.Context, match string, limit int) ([]dict.Result, error) {
 	f.lastMatch = match
 	return []dict.Result{{Headword: "beta", Body: "<p>beta</p>"}}, nil
+}
+
+// A dictionary that has only the archive's index does not answer a strict
+// reading at all: over that index a phrase or a proximity search means reading
+// article texts, and the reading is declined with the fact on the hit so the
+// reader can be offered our index instead. A dictionary that HAS our index is
+// untouched by this - it answers from positions, which the other test in this
+// file pins.
+func TestStrictReadingIsDeclinedWithoutOurIndex(t *testing.T) {
+	fake := &archiveFake{}
+	h := query(context.Background(), fake, Phrase, "beta gamma", ftsq.Rung{}, false, 5)
+	if !h.NeedsIndex {
+		t.Error("the strict reading was not declined, so the reader would have been told the phrase is absent")
+	}
+	if h.Skipped || h.Err != nil {
+		t.Errorf("declining is neither skipping nor an error: skipped=%v err=%v", h.Skipped, h.Err)
+	}
+	if fake.phraseCalls != 0 || fake.nearCalls != 0 || fake.wordsCalls != 0 {
+		t.Errorf("the archive was read for a reading that must not scan: words=%d phrase=%d near=%d",
+			fake.wordsCalls, fake.phraseCalls, fake.nearCalls)
+	}
+	// The words reading still goes to the archive: that is what its index is for.
+	if h := query(context.Background(), fake, FullText, "beta gamma", ftsq.Rung{Name: "words", Match: `"beta"`}, true, 5); h.NeedsIndex {
+		t.Error("the words reading was declined too; the archive answers it natively")
+	}
 }

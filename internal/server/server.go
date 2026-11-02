@@ -1516,7 +1516,12 @@ type streamMsg struct {
 	// never tried another, so Rung is not a relaxation and the page must not
 	// announce one (search.Hit.OneReading; the shared page reads it from
 	// whichever of the two search handlers answered).
-	OneReading bool   `json:"oneReading,omitempty"`
+	OneReading bool `json:"oneReading,omitempty"`
+
+	// NeedsIndex: this dictionary declined the reading because answering it
+	// would mean reading article texts (search.Hit.NeedsIndex). The page shows
+	// the offer to build our index.
+	NeedsIndex bool   `json:"needsIndex,omitempty"`
 	Term       string `json:"term,omitempty"`
 	CacheID    string `json:"cacheID,omitempty"`
 	Total      int    `json:"total,omitempty"`
@@ -1794,7 +1799,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 			h.Results[j].Body = applyFormat(h.Results[j].Body, format, origin, st)
 		}
 		m := streamMsg{T: "hit", I: i, Dict: id, Name: name, Results: h.Results, Skipped: h.Skipped,
-			Rung: h.Rung, OneReading: h.OneReading, Term: h.Term}
+			Rung: h.Rung, OneReading: h.OneReading, NeedsIndex: h.NeedsIndex, Term: h.Term}
 		if searchDiagnostics {
 			logx.SystemDiagnostic("search result query=%q mode=%q dictionary=%q results=%d skipped=%t", q, mode, name, len(h.Results), h.Skipped)
 		}

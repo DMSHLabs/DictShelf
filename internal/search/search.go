@@ -199,6 +199,14 @@ type Hit struct {
 	// this belongs on the hit and not on the request.
 	Rung string
 
+	// NeedsIndex says the dictionary could answer this reading only by reading
+	// article texts one at a time, and this fork does not do that behind a
+	// reader's back: over a whole archive it is minutes of work and battery on
+	// a phone, so the reading is DECLINED here and the caller is handed the
+	// fact - the row says what is missing and offers to build our index, which
+	// answers the same question from positions in milliseconds.
+	NeedsIndex bool
+
 	// OneReading says the dictionary has exactly one reading of a full-text
 	// query and never tried another, so the rung above is not a fallback and
 	// must not be reported as one. A source that answers full text itself - a
@@ -455,7 +463,14 @@ func rungFor(mode Mode, term string) (ftsq.Rung, bool) {
 	default:
 		return ftsq.Rung{}, false
 	}
-	rungs := ftsq.Parse(term).Rungs()
+	parsed := ftsq.Parse(term)
+	if parsed.TooMany() {
+		// The cap is a guard, not an answer: a query this wide cannot be run as
+		// asked, and pretending the first 128 words were the question is worse
+		// than saying so.
+		return ftsq.Rung{}, false
+	}
+	rungs := parsed.Rungs()
 	for _, r := range rungs {
 		if r.Name == want {
 			return r, true
@@ -485,6 +500,22 @@ type articleIndexer interface{ HasArticleIndex() bool }
 // (server.archiveStrictCheck). An index of ours has positions, so when it is
 // there it answers those two - exactly, quickly, and with the ranking of a
 // phrase index rather than of a scan.
+// archiveStrictDeclined reports the case the strict readings now decline: a
+// source that answers full text by itself and has no article index of ours.
+// Kept as a named predicate because the tests and the wire ask the same
+// question the routing does.
+func archiveStrictDeclined(d dict.Dictionary, mode Mode) bool {
+	if mode != Phrase && mode != Near {
+		return false
+	}
+	af, ok := d.(ArchiveStrict)
+	if !ok || !af.FullTextFromArchive() {
+		return false
+	}
+	ai, ok := d.(articleIndexer)
+	return !ok || !ai.HasArticleIndex()
+}
+
 func archiveAnswersMode(d dict.Dictionary, mode Mode) bool {
 	if mode == FullText {
 		return true
@@ -571,6 +602,17 @@ func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, rung 
 		// with a bounded number of candidates checked and the count reported so
 		// the reader can see what the reading cost (ArchiveStrict).
 		if af, ok := d.(ArchiveStrict); ok && af.FullTextFromArchive() && archiveAnswersMode(d, mode) {
+			// The archive's index stores no positions, so a phrase or a
+			// proximity reading over it means reading article texts until
+			// enough of them have been checked. A prepared database of ours
+			// does it from positions in milliseconds, so the reading is
+			// declined and the dictionary says what it needs (NeedsIndex) -
+			// the caller offers to build that index. Only the words reading,
+			// which is what the archive's own index was built for, is answered.
+			if mode != FullText {
+				h.NeedsIndex = true
+				return h
+			}
 			switch mode {
 			case Phrase:
 				h.Results, h.Err = af.ArchivePhrase(ctx, term, perDict, archiveCheckCandidates(perDict))

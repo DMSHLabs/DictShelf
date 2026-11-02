@@ -322,6 +322,8 @@
   "search.modeHintPhrase": "— слова подряд, в этом порядке",
   "search.modeHintNear": "— не дальше 10 слов друг от друга",
   "search.modeHintWords": "— все слова, где угодно в статье",
+  "search.needsIndex": "По индексу архива «Фраза» и «Рядом» — это чтение текстов статей по одной.",
+  "search.needsIndexBuild": "Построить наш индекс",
   "browse.previousMatch": "Предыдущий найденный заголовок",
   "browse.nextMatch": "Следующий найденный заголовок",
   "browse.noMatches": "Заголовки не найдены",

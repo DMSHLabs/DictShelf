@@ -322,6 +322,8 @@
   "search.modeHintPhrase": "— the words adjacent, in this order",
   "search.modeHintNear": "— within 10 words of each other",
   "search.modeHintWords": "— the words anywhere in the article",
+  "search.needsIndex": "Over the archive's index, \"Phrase\" and \"Near\" mean reading article texts one by one.",
+  "search.needsIndexBuild": "Build our index",
   "browse.previousMatch": "Previous matching headword",
   "browse.nextMatch": "Next matching headword",
   "browse.noMatches": "No matching headwords",

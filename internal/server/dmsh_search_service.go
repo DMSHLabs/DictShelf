@@ -101,7 +101,13 @@ type SearchEvent struct {
 	// OneReading says the dictionary has a single reading and never tried
 	// another, so Rung is not a relaxation and must not be announced as one
 	// (an archive answering from its own index - see search.Hit.OneReading).
-	OneReading bool   `json:"oneReading,omitempty"`
+	OneReading bool `json:"oneReading,omitempty"`
+
+	// NeedsIndex says this dictionary would have to read article texts to
+	// answer the reading, and declined to (search.Hit.NeedsIndex). What the
+	// reader gets instead is an offer to build our index for it: the same
+	// reading, answered from positions.
+	NeedsIndex bool   `json:"needsIndex,omitempty"`
 	Term       string `json:"term,omitempty"`
 	CacheID    string `json:"cacheID,omitempty"`
 	Total      int    `json:"total,omitempty"`
@@ -362,7 +368,7 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 			h.Results[j].Body = applyFormat(h.Results[j].Body, format, origin, st)
 		}
 		m := SearchEvent{T: "hit", I: i, Dict: id, Name: name, Results: h.Results, Skipped: h.Skipped,
-			Rung: h.Rung, OneReading: h.OneReading, Term: h.Term}
+			Rung: h.Rung, OneReading: h.OneReading, NeedsIndex: h.NeedsIndex, Term: h.Term}
 		if request.SearchDiagnostics {
 			logx.SystemDiagnostic("search result query=%q mode=%q dictionary=%q results=%d skipped=%t", q, mode, name, len(h.Results), h.Skipped)
 		}
