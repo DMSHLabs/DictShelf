@@ -115,22 +115,6 @@ type SearchEvent struct {
 	Start      int    `json:"start,omitempty"`
 	HasNext    bool   `json:"hasNext,omitempty"`
 
-	// Deferred: this dictionary was not searched because the fan-out cap
-	// declined to materialise it (see fanout). It is NOT an error and must not
-	// be reported as one: the dictionary is fine, the query was wide, and
-	// asking for this one dictionary by itself answers it. Bytes is what the
-	// open was estimated to cost, for logs and tests - the UI does not show a
-	// number, because a megabyte figure is not a decision the reader can make.
-	Deferred bool  `json:"deferred,omitempty"`
-	Bytes    int64 `json:"bytes,omitempty"`
-
-	// Indexing: this deferred dictionary is already being prepared, because
-	// something asked for it by name. Only ever set beside Deferred, and the
-	// difference matters to the reader: "tap to search" is an offer, and
-	// repeating it at a dictionary that is midway through a ten-minute ingest
-	// reads as nothing having happened the first time.
-	Indexing bool `json:"indexing,omitempty"`
-
 	// Legacy morphology event fields retained for decoding older streams.
 	From string `json:"from,omitempty"`
 	To   string `json:"to,omitempty"`
@@ -304,29 +288,11 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	// time-to-first-byte is one open at most, never the sum of all of them.
 	begin := make([]SearchSlot, len(entries))
 	openers := make([]search.Opener, len(entries))
-	// One budget for this query: what the fan-out may newly materialise before
-	// it starts declining dictionaries instead of opening them (see fanout).
-	// Nil when uncapped, which is the desktop default.
-	//
-	// A query naming ONE dictionary has no fan-out to cap, and is never capped.
-	// The budget bounds the multiplication - N dictionaries materialised at
-	// once by a single `all` query - and a search of one is bounded by that one
-	// dictionary. It is also, always, a direct demand: the user picked it in
-	// the selector, asked for `more…`, or opened a deferred section. Declining
-	// it would leave the dictionary unreachable through EVERY path the app has,
-	// which is worse than the memory by a wide margin - and the steady state is
-	// still held by PREVIEW_MEMORY, the janitor and the relax valve, none of
-	// which this bypasses.
-	fan := s.reg.fanout()
-	demand := len(entries) == 1
-	if demand {
-		fan = nil
-	}
 	for i, e := range entries {
 		e := e
 		begin[i] = SearchSlot{Dict: e.ID, Name: e.ID}
 		openers[i] = func() (dict.Dictionary, error) {
-			d, err := e.openWithin(fan)
+			d, err := e.searchOpen()
 			if err != nil {
 				return d, err
 			}
@@ -386,15 +352,7 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 		if request.SearchDiagnostics {
 			logx.SystemDiagnostic("search result query=%q mode=%q dictionary=%q results=%d skipped=%t", q, mode, name, len(h.Results), h.Skipped)
 		}
-		var heavy tooHeavy
 		switch {
-		case errors.As(h.Err, &heavy):
-			// Deferred, not failed. The client renders a section the user can
-			// open, and opening it re-queries this dictionary alone - which is
-			// uncapped above, and which auto-indexes it so the deferral does
-			// not recur.
-			m.Deferred, m.Bytes = true, heavy.bytes
-
 		case errors.Is(h.Err, context.DeadlineExceeded):
 			// A deadline can only come from below now - a sub-call with its own
 			// bound - since the search itself has none. Never Go's own words, and

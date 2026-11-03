@@ -56,13 +56,11 @@ func MaxProcs() int {
 // at the floor, 128 MB on one at the cap - so a bigger phone gets a bigger
 // budget without a second constant to keep in step with the first.
 //
-// A third, because this is the number the app carries BETWEEN searches, and
-// that residue is what lmkd scores a backgrounded process on. The search itself
-// is bounded by SEARCH_MEMORY (= the ceiling), not by this: during a fan-out
-// the janitor protects recently-used backends, so the preview budget is what
-// memory settles back to, not what the peak is held to. Leaving two thirds of
-// the ceiling free for one query to work in is the trade; spending it all on
-// residue would buy a faster second keystroke and a kill while backgrounded.
+// A third, because this is the number the app carries BETWEEN opens, and that
+// residue is what lmkd scores a backgrounded process on. Nothing bounds a search
+// by memory any more: a search only opens dictionaries that are indexed (the
+// unprepared ones answer nothing), so the fan-out that used to materialise
+// gigabytes of preview backends cannot happen at all.
 //
 // 64 MB holds roughly 180k headwords of direct backends (docs.local/PERF.md
 // §3.1: ~350 B each) - several open dictionaries - and everything past that is
@@ -96,27 +94,6 @@ func morphCacheDefault() int {
 		return 1
 	}
 	return 2
-}
-
-// searchMemoryDefault caps what a SINGLE search may bring into memory.
-//
-// Unset on a desktop. The failure it prevents is real there too - a `dict=all`
-// query over an unprepared library held 6.3 GB against a 64 MB preview budget
-// (docs.local/PERF.md §8.2) - but the cost of preventing it is dictionaries reported
-// as not searched, and on a machine with the RAM to spare that is a worse deal
-// than the memory. The key exists; the default declines to take it.
-//
-// On Android it is the memory ceiling. Not a fraction of it and not a multiple:
-// the ceiling is the number above which this process is in trouble, so letting
-// one query materialise more than that guarantees the relax valve fires, which
-// is a mechanism for surviving an emergency rather than a way to run. Sized in
-// the weight model's own currency, which over-charges by ~1.7× (§8.3), so the
-// real peak this admits is well under the ceiling - deliberately.
-func searchMemoryDefault() int64 {
-	if runtime.GOOS != "android" {
-		return 0
-	}
-	return memoryLimitDefault()
 }
 
 // memoryLimitDefault is the soft heap ceiling.

@@ -96,11 +96,10 @@ A `hit` may carry one of these instead of results:
 | Field | Meaning |
 | --- | --- |
 | `skipped` | the dictionary does not support the mode; `caps` in `/api/dicts` lists the supported modes |
-| `deferred` | not opened: the search reached [`SEARCH_MEMORY`](configuration.md#search_memory). A search of that dictionary alone answers it and moves it to the front of the indexing queue |
-| `indexing` | with `deferred`: the dictionary is being indexed |
-| `error` | this dictionary failed; the others still answer |
+| `error` | this dictionary failed or its index is not ready; the others still answer |
 
-A search ends after 30 seconds. `mode=fuzzy` is read as `prefix`.
+A search runs until it finishes or you stop it: there is no clock on it.
+`mode=fuzzy` is read as `prefix`.
 
 ### Article formats
 

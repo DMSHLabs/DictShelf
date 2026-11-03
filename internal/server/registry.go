@@ -661,135 +661,6 @@ func (e *entry) open() (dict.Dictionary, error) {
 	return d, err
 }
 
-// fanout is one search's materialisation budget: how many bytes of *newly
-// opened* preview backends a single query may bring into memory.
-//
-// The preview budget cannot do this job. It is enforced
-// by the janitor, between bursts, and it deliberately refuses to evict anything
-// used in the last minEvictIdle - which is every dictionary a `dict=all` search
-// just touched. Measured, that means a 64 MB budget coexisting with 6.3 GB held
-// (docs.local/PERF.md §8.2) on a desktop, and 1.71 GB on a 3.8 GB tablet (§8.6): the
-// budget bounds the *steady state* and nothing bounds the burst. This does.
-//
-// The unit is estimated bytes, not dictionaries, for the same reason the budget
-// is: dictionaries in one library differ by two orders of magnitude in headword
-// count, so "open at most N" is 50 MB or 3 GB depending on which N.
-//
-// What it costs is result completeness, and that is the honest name for it: a
-// dictionary the cap refuses is reported to the client as DEFERRED - its
-// section is still there, in preference order, and opening it searches it,
-// because a search naming one dictionary is not capped. That is the whole
-// remedy, and it is a tap: the same open prepares the dictionary in the
-// background, and a prepared dictionary answers from SQLite, weighs nothing
-// here and is never capped again. It is off by default on the
-// desktop, where RAM is the machine's own business, and on by default on
-// Android, where the alternative outcome is not a slower search but a killed
-// process. Preview mode is the transient state before preparation (D15/D20), so
-// on a settled library the cap never fires at all.
-type fanout struct{ left atomic.Int64 }
-
-// fanout opens a budget for one search, or nil when uncapped. Nil is a valid
-// receiver everywhere below: "no cap" costs no allocation and no branching at
-// the call sites.
-func (r *Registry) fanout() *fanout {
-	r.mu.RLock()
-	cap_ := r.searchBudget
-	r.mu.RUnlock()
-	if cap_ <= 0 {
-		return nil
-	}
-	f := &fanout{}
-	f.left.Store(cap_)
-	return f
-}
-
-// admit reserves est bytes, reporting whether the caller may open. A dictionary
-// whose known cost exceeds what is left is refused WITHOUT spending the
-// remainder, so one 961 MB monster early in the user's preference order costs
-// the rest of the list nothing - the fan-out packs what fits instead of
-// stopping at the first thing that does not.
-func (f *fanout) admit(est int64) bool {
-	if f == nil {
-		return true
-	}
-	for {
-		left := f.left.Load()
-		if left <= 0 || est > left {
-			return false
-		}
-		if f.left.CompareAndSwap(left, left-est) {
-			return true
-		}
-	}
-}
-
-// settle corrects the reservation once the real weight is known. A first open
-// reserves nothing (est 0) and is charged in full here, which can drive the
-// budget negative - that is correct, and it is what refuses everything after it.
-func (f *fanout) settle(est, actual int64) {
-	if f == nil {
-		return
-	}
-	if d := actual - est; d != 0 {
-		f.left.Add(-d)
-	}
-}
-
-// tooHeavy is what a refused dictionary reports: deferred, not failed. It
-// carries the estimate so the caller can say what was declined and at what
-// price. This string is a LOG line and a test fixture; it is never rendered.
-// handleSearch matches this type and streams `deferred` instead, because the
-// user-facing statement is "not searched yet - open this to search it", and a
-// megabyte figure over a budget nobody set is not something a reader can act on.
-type tooHeavy struct{ bytes int64 }
-
-func (t tooHeavy) Error() string {
-	if t.bytes > 0 {
-		return fmt.Sprintf("deferred: ~%d MB to open, over this search's materialisation budget", t.bytes>>20)
-	}
-	return "deferred: this search reached its materialisation budget"
-}
-
-// openWithin is open, subject to a fan-out's materialisation budget. A backend
-// that is already resident is free and never refused: the cap exists to stop
-// memory being *created*, and refusing to read what is already in RAM would
-// cost results for no saving whatsoever.
-func (e *entry) openWithin(f *fanout) (dict.Dictionary, error) {
-	if f == nil {
-		return e.open()
-	}
-	e.dMu.RLock()
-	d, err := e.d, e.err
-	e.dMu.RUnlock()
-	if d != nil || err != nil {
-		return e.open() // memoized; open() only refreshes lastUse
-	}
-	est := e.lastWeight.Load()
-	if !f.admit(est) {
-		// A prepared dictionary is never capped: it answers from SQLite, holds
-		// no headword index, and costs this budget nothing. Worth one stat on
-		// the refusal path to be certain, because declining one would drop
-		// results for no memory saved at all - and the refusal path is by
-		// definition the rare one.
-		if _, prepared := validPrepared(e.Path); !prepared {
-			return nil, tooHeavy{bytes: est}
-		}
-		est = 0 // admitted without a reservation: charge whatever it turns out to cost
-	}
-	d, err = e.open()
-	if err != nil {
-		f.settle(est, 0) // nothing was materialised; give the reservation back
-		return d, err
-	}
-	f.settle(est, e.weight.Load())
-	return d, err
-}
-
-// previewWeight estimates the resident cost of an open backend. A PREPARED
-// dictionary answers from SQLite and costs a few MB whatever its size, so it
-// weighs nothing here. A direct ("preview", D15) backend builds an in-memory
-// headword index on first use - measured at 300–500 bytes per headword across
-// MDX and SLOB (docs.local/PERF.md §3.1) - and that is what eviction reclaims.
 func previewWeight(d dict.Dictionary, m dict.Meta) int64 {
 	if _, ok := d.(storeBacked); ok {
 		return 0 // answers from SQLite: the index lives on disk, not in RAM
@@ -987,11 +858,6 @@ type Registry struct {
 	// (PREVIEW_MEMORY; 0 = unlimited). Prepared ones answer from disk and are
 	// never evicted - there would be nothing to reclaim.
 	previewBudget int64
-
-	// searchBudget caps how much preview memory ONE search may materialise
-	// (SEARCH_MEMORY; 0 = uncapped). See the fanout type for why the preview
-	// budget cannot do this.
-	searchBudget int64
 
 	// prefs is the user's enabled set and order (state.json). Never nil: an
 	// in-memory Prefs answers "nothing is disabled", which is the right
@@ -1680,15 +1546,6 @@ func (r *Registry) SetPreviewBudget(bytes int64) {
 	r.previewBudget = bytes
 	r.mu.Unlock()
 	r.nudge() // a budget that just got smaller may already be exceeded
-}
-
-// SetSearchBudget sets how much preview memory a single search may materialise
-// (config SEARCH_MEMORY; 0 = uncapped). Unlike the preview budget this needs no
-// nudge: it applies to the next search, and changes nothing already open.
-func (r *Registry) SetSearchBudget(bytes int64) {
-	r.mu.Lock()
-	r.searchBudget = bytes
-	r.mu.Unlock()
 }
 
 // reclaimable is one thing the janitor can close: an unprepared dictionary's

@@ -211,11 +211,12 @@ paths:
         slot order: each `hit` carries `i`, its index in the `begin` line's
         `slots` array.
 
-        A dictionary that fails, that cannot serve the requested mode, or that
-        was declined by the memory cap reports that on its own line. None of
-        those is a request failure, and the other dictionaries still answer.
+        A dictionary that fails, that cannot serve the requested mode, or whose
+        index is not ready reports that on its own line. None of those is a
+        request failure, and the other dictionaries still answer.
 
-        A search is cancelled after 30 seconds.
+        A search runs until it finishes or the reader stops it: there is no
+        clock on it.
       parameters:
         - name: q
           in: query
@@ -303,7 +304,7 @@ paths:
             `all`, one dictionary id, or a comma-separated list of ids in the
             order you want them back. Ids come from /api/dicts. A list where no
             id resolves is a 404; unknown ids inside a resolving list are
-            skipped. Naming exactly one dictionary bypasses the memory cap.
+            skipped.
           schema: { type: string, default: all }
           example: oxford,webster
         - name: 'n'
@@ -3282,14 +3283,6 @@ components:
         skipped:
           type: boolean
           description: This dictionary does not support the requested mode.
-        deferred:
-          type: boolean
-          description: >
-            Not opened, because the search reached its memory cap. Not an error:
-            asking for this dictionary alone answers it. See SEARCH_MEMORY.
-        bytes:
-          type: integer
-          description: What the declined open was estimated to cost. For logs.
         rung:
           type: string
           enum: [phrase, near, words, query]

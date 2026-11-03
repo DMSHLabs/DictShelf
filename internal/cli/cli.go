@@ -236,13 +236,6 @@ SETTINGS
                           env: PREVIEW_MEMORY toml: PREVIEW_MEMORY
                           default: 1GB (Android: a third of MEMORY_LIMIT)
 
-  SEARCH_MEMORY = "512MB" Memory one search may use to open dictionaries that are
-                          not indexed. Past it, the rest are reported as not
-                          searched. Indexed dictionaries and a search of one
-                          dictionary are not limited. "0": no limit.
-                          env: SEARCH_MEMORY  toml: SEARCH_MEMORY
-                          default: none (Android: MEMORY_LIMIT)
-
   MORPH_CACHE = "2"       How many languages of lemma data stay in memory. A
                           single-word search that finds nothing in a dictionary
                           is retried there with the lemma ("knew" -> "know"),
@@ -1413,9 +1406,6 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		return fmt.Errorf("scanning %s: %w", strings.Join(cfg.DictDirs, ", "), err)
 	}
 	reg, srv := app.Registry, app.Server
-	if cfg.SearchMemory > 0 {
-		logx.V("search memory budget: %d MB per query", cfg.SearchMemory>>20)
-	}
 	useExternalSpeex := cfg.SpeexBackend == "external"
 	srv.UseExternalSpeex = useExternalSpeex
 	// Only look for the external speexdec binary when it will actually be used:
@@ -1881,7 +1871,7 @@ func printStartup(cfg config.Config, in startupInfo) {
 	fmt.Fprintf(out, "  indexing      %s%s\n",
 		logx.Plural(indexconst.IndexDictionaryLimit(runtime.NumCPU()), "dictionary at a time", "dictionaries at a time"),
 		memLimitNote(cfg.MemoryLimit))
-	fmt.Fprintf(out, "  preview memory %s%s\n", budgetNote(cfg.PreviewMemory), searchBudgetNote(cfg.SearchMemory))
+	fmt.Fprintf(out, "  preview memory %s\n", budgetNote(cfg.PreviewMemory))
 	fmt.Fprintf(out, "  serving       %s\n", logx.Plural(in.total, "dictionary", "dictionaries"))
 
 	// what to do next, when there is something to do
@@ -1970,17 +1960,6 @@ func budgetNote(b int64) string {
 		return "unlimited - dictionaries stay open once used"
 	}
 	return fmt.Sprintf("%.1f GB for dictionaries that are not yet prepared", float64(b)/(1<<30))
-}
-
-// searchBudgetNote appends the per-search materialisation cap when one is in
-// force. Said out loud because it is the one setting here that can change what
-// a search *returns* - a dictionary it declines is reported as not searched,
-// and a user seeing that deserves to know a number caused it.
-func searchBudgetNote(b int64) string {
-	if b <= 0 {
-		return ""
-	}
-	return fmt.Sprintf("  ·  %d MB per search", b>>20)
 }
 
 // memLimitNote appends the soft heap ceiling to the startup line when set.

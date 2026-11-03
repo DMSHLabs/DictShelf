@@ -193,8 +193,7 @@ Given both flags, `--no-tray` applies.
 
 ## Tuning
 
-These settings change speed and memory use. Only `SEARCH_MEMORY` changes search
-results.
+These settings change speed and memory use.
 
 Dictionary indexing concurrency is calculated from the machine's logical
 processor count. One processor is left for other work when possible. Every active dictionary
@@ -216,19 +215,6 @@ Memory that dictionaries not yet indexed may hold open.
 An open dictionary that is not indexed holds about 350 bytes per headword.
 Above the limit, the least recently used are closed. Indexed dictionaries are
 read from disk and do not count.
-
-### SEARCH_MEMORY
-
-Memory one search may use to open dictionaries that are not indexed.
-
-| | |
-| --- | --- |
-| Flag | none, environment and file only |
-| Values | a size such as `512MB`; `0`: no limit |
-| Default | `0`; Android: the value of `MEMORY_LIMIT` |
-
-Past the limit, the remaining dictionaries are reported as *not searched*.
-Indexed dictionaries and a search of one dictionary are not limited.
 
 ### MEMORY_LIMIT
 

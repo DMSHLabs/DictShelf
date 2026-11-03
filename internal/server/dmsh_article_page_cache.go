@@ -138,7 +138,7 @@ func (c *articlePageCache) serve(ctx context.Context, r SearchRequest, emit func
 		return nil
 	}
 	for _, event := range events {
-		if event.Error != "" || event.Skipped || event.Deferred {
+		if event.Error != "" || event.Skipped {
 			return nil
 		}
 	}

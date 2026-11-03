@@ -49,8 +49,13 @@ func previewRegistry(t *testing.T) (*Server, *Registry) {
 	}
 	isolatedDBDir(t)
 	reg := unpreparedRegistry(t, []string{dir})
-	s := New(reg) // Search does not start an index job.
-	collectLookupHits(t, s, SearchRequest{Query: "beta", Mode: "prefix", Dictionary: "all"})
+	s := New(reg)
+	// The backend is opened outright, not by a search: a dictionary with no index
+	// is not searched at all (2026-11-03), and this fixture is about the janitor
+	// and the power policy, not about how the backend came to be open.
+	if _, err := reg.all()[0].open(); err != nil {
+		t.Fatal(err)
+	}
 	if len(reg.reclaimables()) != 1 {
 		t.Fatalf("expected one open preview backend, got %d", len(reg.reclaimables()))
 	}
@@ -130,7 +135,7 @@ func TestPowerParallelism(t *testing.T) {
 // used once the user has left.
 func TestPowerShedsOnBackground(t *testing.T) {
 	restorePower(t)
-	s, reg := previewRegistry(t)
+	_, reg := previewRegistry(t)
 
 	reg.SetPower(PowerBackground)
 	if n := len(reg.reclaimables()); n != 0 {
@@ -139,12 +144,13 @@ func TestPowerShedsOnBackground(t *testing.T) {
 	if b := reg.previewBytes(); b != 0 {
 		t.Errorf("background left %d bytes of preview memory", b)
 	}
-	// and the dictionary still answers: eviction is a memory decision, never
-	// a functional one - the next query reopens the file.
+	// and the backend opens again on demand: eviction is a memory decision, never
+	// a functional one. Checked through open() rather than a search because a
+	// search does not open a dictionary whose index is missing (2026-11-03) - the
+	// claim here is about the file, not about what search serves.
 	reg.SetPower(PowerActive)
-	hits := collectLookupHits(t, s, SearchRequest{Query: "beta", Mode: "prefix", Dictionary: "all"})
-	if len(hits) != 1 || len(hits[0].Results) != 1 {
-		t.Fatalf("dictionary stopped answering after a shed: %+v", hits)
+	if _, err := reg.all()[0].open(); err != nil {
+		t.Fatalf("the dictionary stopped opening after a shed: %v", err)
 	}
 }
 
@@ -168,8 +174,11 @@ func TestJanitorIdlesWithNothingToReclaim(t *testing.T) {
 	if reg.needsSweep() {
 		t.Fatal("nothing is open yet - there is nothing to sweep")
 	}
-	s := New(reg)
-	collectLookupHits(t, s, SearchRequest{Query: "beta", Mode: "prefix", Dictionary: "all"})
+	// Opened outright: a search does not open a dictionary whose index is missing
+	// (2026-11-03); what this test needs is a backend open over its budget.
+	if _, err := reg.all()[0].open(); err != nil {
+		t.Fatal(err)
+	}
 	if !reg.needsSweep() {
 		t.Fatal("an open backend over budget must wake the janitor")
 	}

@@ -50,5 +50,5 @@ const (
 // dictionary, its size and the record it stopped on. Where the call is opaque
 // (one SQLite MATCH) there is no progress to watch, so there is no limit there
 // either: the reader has Stop. Resource bounds stay where they belong and in
-// their own currency: bytes for memory (SEARCH_MEMORY, PREVIEW_MEMORY) and lanes
-// for indexing work (IndexDictionaryLimit, the search fan-out width).
+// their own currency: bytes for memory (PREVIEW_MEMORY) and lanes for indexing
+// work (IndexDictionaryLimit, the search fan-out width).

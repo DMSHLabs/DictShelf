@@ -91,7 +91,6 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 		return nil, err
 	}
 	reg.SetPreviewBudget(cfg.PreviewMemory)
-	reg.SetSearchBudget(cfg.SearchMemory)
 	s := New(reg)
 	s.UseUserGroups()
 	s.ConfigPath = configPath

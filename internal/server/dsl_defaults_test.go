@@ -94,14 +94,18 @@ func TestSearchDoesNotPrepareDictionaryWithoutIndex(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	foundUnavailable := false
+	// The row says the dictionary has no index to answer from, and says it
+	// without touching the source: a dictionary without an index is not searched
+	// at all (2026-11-03), which replaced an older "skipped" for the same
+	// situation.
+	foundRefused := false
 	for _, event := range events {
-		if event.T == "hit" && event.Skipped && len(event.Results) == 0 {
-			foundUnavailable = true
+		if event.T == "hit" && event.Error == errIndexNotReady.Error() && len(event.Results) == 0 {
+			foundRefused = true
 		}
 	}
-	if !foundUnavailable {
-		t.Fatalf("search should skip the missing index without querying the source: %+v", events)
+	if !foundRefused {
+		t.Fatalf("search should refuse the missing index without querying the source: %+v", events)
 	}
 	if _, ok := store.LookupDir(e.Path); ok {
 		t.Fatal("search prepared a dictionary whose index was missing")

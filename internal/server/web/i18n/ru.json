@@ -1066,8 +1066,6 @@
   "search.scope": "Переход по ссылке внутри словаря «{name}» — поиск выполнен только в нём.",
   "search.widen": "Искать в «{name}»",
   "search.widened": "«{query}» не найдено в словаре «{name}», из которого ведёт ссылка. Поиск выполнен в «{scope}».",
-  "search.tap": "нажмите для поиска",
-  "search.click": "щёлкните для поиска",
   "search.noResults": "ничего не найдено",
   "search.enableMode": "добавить {what} этому словарю",
   "search.results": {

@@ -1531,16 +1531,6 @@ type streamMsg struct {
 	Start      int    `json:"start,omitempty"`
 	HasNext    bool   `json:"hasNext,omitempty"`
 
-	// Deferred: this dictionary was not searched because the fan-out cap
-	// declined to materialise it (see fanout). It is NOT an error and must not
-	// be reported as one: the dictionary is fine, the query was wide, and
-	// asking for this one dictionary by itself answers it. Bytes is what the
-	// open was estimated to cost, for logs and tests - the UI does not show a
-	// number, because a megabyte figure is not a decision the reader can make.
-	Deferred bool  `json:"deferred,omitempty"`
-	Bytes    int64 `json:"bytes,omitempty"`
-	Indexing bool  `json:"indexing,omitempty"`
-
 	// Legacy morphology event fields retained for decoding older streams.
 	From string `json:"from,omitempty"`
 	To   string `json:"to,omitempty"`
@@ -1555,7 +1545,7 @@ func searchEventToStream(event SearchEvent) streamMsg {
 	for i, slot := range event.Slots {
 		slots[i] = streamSlot{Dict: slot.Dict, Name: slot.Name}
 	}
-	return streamMsg{T: event.T, Slots: slots, I: event.I, Dict: event.Dict, Name: event.Name, Results: event.Results, Skipped: event.Skipped, Error: event.Error, Rung: event.Rung, Term: event.Term, CacheID: event.CacheID, Total: event.Total, Complete: event.Complete, Start: event.Start, HasNext: event.HasNext, Deferred: event.Deferred, Bytes: event.Bytes, Indexing: event.Indexing, From: event.From, To: event.To, Lang: event.Lang}
+	return streamMsg{T: event.T, Slots: slots, I: event.I, Dict: event.Dict, Name: event.Name, Results: event.Results, Skipped: event.Skipped, Error: event.Error, Rung: event.Rung, Term: event.Term, CacheID: event.CacheID, Total: event.Total, Complete: event.Complete, Start: event.Start, HasNext: event.HasNext, From: event.From, To: event.To, Lang: event.Lang}
 }
 
 func searchEventFromStream(event streamMsg) SearchEvent {
@@ -1566,7 +1556,7 @@ func searchEventFromStream(event streamMsg) SearchEvent {
 	for i, slot := range event.Slots {
 		slots[i] = SearchSlot{Dict: slot.Dict, Name: slot.Name}
 	}
-	return SearchEvent{T: event.T, Slots: slots, I: event.I, Dict: event.Dict, Name: event.Name, Results: event.Results, Skipped: event.Skipped, Error: event.Error, Rung: event.Rung, Term: event.Term, CacheID: event.CacheID, Total: event.Total, Complete: event.Complete, Start: event.Start, HasNext: event.HasNext, Deferred: event.Deferred, Bytes: event.Bytes, Indexing: event.Indexing, From: event.From, To: event.To, Lang: event.Lang}
+	return SearchEvent{T: event.T, Slots: slots, I: event.I, Dict: event.Dict, Name: event.Name, Results: event.Results, Skipped: event.Skipped, Error: event.Error, Rung: event.Rung, Term: event.Term, CacheID: event.CacheID, Total: event.Total, Complete: event.Complete, Start: event.Start, HasNext: event.HasNext, From: event.From, To: event.To, Lang: event.Lang}
 }
 
 // queryFlag reads a boolean query parameter, and is where every one of them is
@@ -1739,27 +1729,11 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	// time-to-first-byte is one open at most, never the sum of all of them.
 	begin := make([]streamSlot, len(entries))
 	openers := make([]search.Opener, len(entries))
-	// One budget for this query: what the fan-out may newly materialise before
-	// it starts declining dictionaries instead of opening them (see fanout).
-	// Nil when uncapped, which is the desktop default.
-	//
-	// A query naming ONE dictionary has no fan-out to cap and gets the longer
-	// search budget.
-	fan := s.reg.fanout()
-	single := len(entries) == 1
-	if single {
-		fan = nil
-	}
 	for i, e := range entries {
 		e := e
 		begin[i] = streamSlot{Dict: e.ID, Name: e.ID}
 		openers[i] = func() (dict.Dictionary, error) {
-			if !entryHasSelfIndex(e) {
-				if _, ok := validPrepared(e.Path); !ok {
-					return nil, errIndexNotReady
-				}
-			}
-			d, err := e.openWithin(fan)
+			d, err := e.searchOpen()
 			if err != nil {
 				return d, err
 			}
@@ -1820,13 +1794,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		if searchDiagnostics {
 			logx.SystemDiagnostic("search result query=%q mode=%q dictionary=%q results=%d skipped=%t", q, mode, name, len(h.Results), h.Skipped)
 		}
-		var heavy tooHeavy
 		switch {
-		case errors.As(h.Err, &heavy):
-			// Deferred, not failed. The client renders a section the user can
-			// open, and opening it re-queries this dictionary alone with the
-			// longer search budget.
-			m.Deferred, m.Bytes = true, heavy.bytes
 		case errors.Is(h.Err, context.DeadlineExceeded):
 			// Never Go's own words, and never advice: whatever arrived was a
 			// dictionary that did not finish, not one that needs indexing (a

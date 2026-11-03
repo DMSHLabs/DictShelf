@@ -86,7 +86,6 @@ type Config struct {
 	AllowRemoteDelete bool   // ALLOW_REMOTE_DELETE
 	MemoryLimit       int64  // MEMORY_LIMIT: soft heap ceiling in bytes (0 = none)
 	PreviewMemory     int64  // PREVIEW_MEMORY: cap on RAM held by unprepared dictionaries (0 = unlimited)
-	SearchMemory      int64  // SEARCH_MEMORY: cap on RAM ONE search may materialise (0 = uncapped)
 	MorphCache        int    // MORPH_CACHE: how many lemma packs stay resident (0 = no lemmatization)
 	LemmaDir          string // LEMMA_DIR: folder of installed lemma files (adds/overrides languages)
 	LemmaURL          string // LEMMA_URL: manifest `wudict lemmas` installs languages from
@@ -178,7 +177,6 @@ func defaults() Config {
 		// platform's opinion of us rather than its capability - see tuning.go
 		PreviewMemory: previewMemoryDefault(),
 		MemoryLimit:   memoryLimitDefault(),
-		SearchMemory:  searchMemoryDefault(),
 		MorphCache:    morphCacheDefault(),
 		LemmaDir:      filepath.Join(appHome, "lemmas"),
 		// off by default: see the field comment - loopback deletes regardless,
@@ -303,9 +301,6 @@ func Load(configPath string, flags map[string]string) (Config, error) {
 	}
 	if v := get("PREVIEW_MEMORY"); v != "" {
 		cfg.PreviewMemory = ParseSize(v)
-	}
-	if v := get("SEARCH_MEMORY"); v != "" {
-		cfg.SearchMemory = ParseSize(v)
 	}
 	if v := get("MORPH_CACHE"); v != "" {
 		cfg.MorphCache = ParseCount(v)
@@ -602,7 +597,6 @@ func CleanObsoleteConfig(path string, network bool) (bool, error) {
 	}
 	remove := map[string]bool{
 		"PREVIEW_MEMORY": true,
-		"SEARCH_MEMORY":  true,
 		"AUTO_INDEX":     true,
 		"NO_COMPRESS":    true,
 	}
@@ -1216,8 +1210,6 @@ func (c Config) Effective() map[string]Setting {
 	out := make(map[string]Setting, len(Tunables))
 	val := func(key string) string {
 		switch key {
-		case "SEARCH_MEMORY":
-			return FormatSize(c.SearchMemory)
 		case "PREVIEW_MEMORY":
 			return FormatSize(c.PreviewMemory)
 		case "MEMORY_LIMIT":

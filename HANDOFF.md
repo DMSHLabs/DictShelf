@@ -288,48 +288,54 @@ its value field. Runtime visual verification remains pending.
 - The Dim background and Fade text switches share a measured label column so their On/Off controls align; the measurement follows the visible text size and updates when the panel is laid out.
 - Search-return snapshots and Browse find/filter results are bounded SQLite caches shared by the native and HTTP paths. Browse links retain the originating query and dictionary through article navigation.
 
-## Search parallelism and the fan-out timeout (open)
+## Search parallelism and the two caps that went away (2026-11-03)
 
-Settings → System settings → Search indexes gained a **Максимум потоков поиска** field. Empty means
+Settings → System settings → Search indexes has a **Максимум потоков поиска** field. Empty means
 automatic: 5, then clamped to `min(cores-1, GOMAXPROCS, platform baseline)` — a desktop gets 5, a phone
 keeps the `MaxProcs` policy (≤4), and battery-saver/thermal demotions follow GOMAXPROCS through
 `applyProcs`. The same value bounds the client's Wildcards build (`maskWorkerCount`, ceiling `cores-1`).
-The neighbouring Log file switch **Записывать длительность поиска по словарям** gates `search_fanout`
-(per dictionary, `internal/search`) and `wildcards_append` (cache lock wait vs work, `wildcard_cache.go`).
-Measurements on 42-, 110- and 388-dictionary lists show the setting changes nothing measurable past ~5:
-the run is set by the slowest dictionary and by how the work distributes, not by the cap. The two search
-clocks now live in `internal/indexconst/constants.go` (`SearchFanoutBudget`, `SingleSearchBudget`); the
-dead `demandSearchBudget` was removed.
+This one STAYS: it is a lane count for the work, not a clock on it, and it never changes what a search
+returns. The neighbouring Log file switch **Записывать длительность поиска по словарям** still gates
+`search_fanout` (a per-dictionary duration measurement, `internal/search`) and `wildcards_append`
+(cache lock wait vs work, `wildcard_cache.go`). Measurements on 42-, 110- and 388-dictionary lists show
+the setting changes nothing measurable past ~5: the run is set by the slowest dictionary and by how the
+work distributes, not by the cap.
 
-**The message half is DONE (2026-11-03):** the two situations it conflated - "nothing to answer from" and
-"prepared but late" - now have a message each (`server.searchTimeoutMessage`, decided by
-`searchIndexMissingFor`), both paths use the same pair (the native service and the legacy stream used to
-differ), and both are translated; the decision and the words are pinned by
-`dmsh_search_timeout_test.go`, which drives the wire with a pre-expired request context (no thirty-second
-wait). What the reader saw before was the advice to index dictionaries his own log showed as indexed.
+**Both search clocks are gone.** `SearchFanoutBudget` and `SingleSearchBudget` are deleted from
+`internal/indexconst/constants.go`, and the file now carries the reasoning in place of them: a clock
+cannot tell a slow disk from a wedged backend, and the fan-out one measured how long a dictionary
+*waited for its turn*, so it failed dictionaries that were working — the user's 388-dictionary `contains`
+search, where every row said "timed out" while the same verbose log opened that library as
+`entries contains=true (2ms)`. A search now runs until it finishes or the reader stops it. What the
+user's ideology asks for in place of a clock is a watchdog on PROGRESS: where the loop is ours
+(headwords, article ids, archive records) a thread that stops moving is a bug or a corrupt file and is
+reported with the dictionary's name and size and the record it stopped on; where the call is opaque (one
+SQLite `MATCH`) there is no progress to watch, so there is no limit there either — the reader has Stop.
+**That watchdog is not written yet**; it is the one remaining piece of this section.
 
-**Open: the cause.** A user's `contains` search over 388 dictionaries returned 0 results with every row
-saying "timed out" (388 `search failure … mode="contains"`, all 30 s after the search began). His verbose
-log opens the same library as `entries contains=true (2ms)`, so the dictionaries ARE prepared with the
-trigram index - which is what the split above now says out loud. Most likely the
-shared `SearchFanoutBudget` against 388 dictionaries at `dictionary_worker_limit=7` on an ordinary HDD —
-~540 ms per dictionary does not fit an open plus `entry_trigram MATCH` from a cold disk. Which stage
-dominates is unconfirmed: needs `system.searchArticleDiagnostics` ("Record search results and article
-opening" — the only switch that sends `searchDiagnostics=1`), plus the same query on ONE dictionary as a
-control (no fan-out, `SingleSearchBudget` = 5 min).
+**The fan-out memory cap went with it** (`SEARCH_MEMORY`, `Registry.searchBudget`, the `fanout` /
+`admit` / `settle` / `openWithin` machinery, `tooHeavy`, and the wire's `deferred` / `bytes` /
+`indexing` fields). Its whole job was to bound the burst of *preview* backends one wide query
+materialised, and that burst no longer has a producer — see the rule below. The client's deferred
+section went too (`loadDeferred`, `deferLabel`, `data-deferred`, the `search.tap` / `search.click`
+catalog keys, and the dead `summary .count.hint` rule in `app.css`), and `Expand all` no longer has to
+exclude anything because opening a section fetches nothing. Read the deletion as the rule, not as
+tuning: nothing about a search changes what it *returns* any more.
 
-Separate difference found on the way, and it is a BEHAVIOUR DECISION, not a pending fix (re-read and
-left alone, 2026-11-01): `internal/server/dmsh_search_service.go` (v2 - the desktop bridge and the native
-path) opens a dictionary that has no prepared database, while the legacy streaming `handleSearch`
-declines it first (`validPrepared` -> "dictionary index is not ready"). Both sides look deliberate rather
-than accidental: v2 opens through `openWithin(fan)` under the fan-out budget and spells out why a
-single named dictionary is deliberately uncapped, and its render path even words the timeout as
-"index this dictionary to search it"; the legacy side has a test pinning its rule ("Search does not open
-or index a source when its prepared index is absent", `TestSearchDoesNotIndexOnFirstUse` - note it passes
-in PREFIX mode too, so legacy is not mode-aware and an earlier note here claiming "port it, mode-aware"
-had it backwards). Neither path indexes on first use, so the shared rule is safe; what differs is whether
-a keystroke may open an unprepared source at all. Making them agree means choosing, which is the user's
-call. The self-indexed formats (ZIM, `entryHasSelfIndex`) are exempt on both sides.
+**A dictionary without an index is not searched at all, on either path.** `entry.searchOpen()`
+(`dmsh_search_open.go`) is the one guard, shared by the native service and the legacy streaming
+`handleSearch`: a dictionary that owns no database and is not self-indexed is refused with
+`errIndexNotReady` — *"the dictionary index is not ready yet; it is being prepared"* — and its row shows
+exactly that through `errorText`; the source is never read and never indexed on first use. The legacy
+path already had the narrower rule; v2 (the desktop bridge and the native path) used to open the source
+under the fan-out budget, and the difference is closed by taking the stricter side, which is the user's
+ideology stated flatly: a dictionary is added and indexed, and one with no index takes part nowhere.
+Self-indexed formats (ZIM, `entryHasIndex`) are exempt on both sides, as before.
+
+What is left for the 388-dictionary report is not code: the user's own machine should build our article
+index for the three archives and re-run that `contains` search with `searchArticleDiagnostics` on ("Record
+search results and article opening" — the only switch that sends `searchDiagnostics=1`), so the next
+session starts from a measurement rather than a guess.
 
 ## Lemma files on this machine (Russian installed 2026-11-01)
 

@@ -166,7 +166,6 @@ See [Remove a dictionary](../dictionaries/library.md#remove-a-dictionary).
     [`MEMORY_LIMIT`](../reference/configuration.md#memory_limit) is 1/16 of the
     device's RAM (192–384 MiB),
     [`PREVIEW_MEMORY`](../reference/configuration.md#preview_memory) a third of
-    it, [`SEARCH_MEMORY`](../reference/configuration.md#search_memory) equal to
     it, and [`MORPH_CACHE`](../reference/configuration.md#morph_cache) `1`.
 -   The keyboard hides when you scroll an article.
 

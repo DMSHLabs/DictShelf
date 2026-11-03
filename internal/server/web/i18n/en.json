@@ -1054,8 +1054,6 @@
   "search.scope": "Followed a link inside {name} — only this dictionary was searched.",
   "search.widen": "Search in {name}",
   "search.widened": "“{query}” is not in {name}, where the link came from — {scope} was searched instead.",
-  "search.tap": "tap to search",
-  "search.click": "click to search",
   "search.noResults": "no results",
   "search.enableMode": "add the {what} to this dictionary",
   "search.results": {

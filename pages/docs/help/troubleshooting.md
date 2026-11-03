@@ -85,12 +85,14 @@ dictionaries is calculated from the machine's logical processors, leaving one
 processor for other work when possible and sharing preparation workers across dictionaries.
 Search does not start an index job.
 
-## Some dictionaries are reported as not searched
+## A dictionary says its index is not ready
 
-The search reached [`SEARCH_MEMORY`](../reference/configuration.md#search_memory)
-and did not open the remaining dictionaries that are not indexed. Choose one of
-them in the picker to search it alone. The limit is off by default on the
-desktop and on by default on Android.
+Every dictionary is searched through its index, and a dictionary without one is
+not searched at all — its row says the index is not ready and keeps saying so
+while it is prepared in the background. Nothing is wrong with the dictionary
+file: the library rebuilds a missing index by itself (after the folder was
+deleted from outside, for instance), and the row answers as soon as the build
+finishes. To rebuild now, use the dictionary's index switches in the panel.
 
 ## Contains search misses a headword
 

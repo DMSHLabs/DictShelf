@@ -46,7 +46,7 @@ func TestEveryKeyReadIsKnown(t *testing.T) {
 	// These legacy tuning knobs remain readable from the environment for
 	// compatibility, but are removed from config files and omitted from the
 	// generated template.
-	envOnly := map[string]bool{"PREVIEW_MEMORY": true, "SEARCH_MEMORY": true}
+	envOnly := map[string]bool{"PREVIEW_MEMORY": true}
 	src, err := os.ReadFile("config.go")
 	if err != nil {
 		t.Fatal(err)
