@@ -1,7 +1,7 @@
 # Handoff archive — per-session narrative
 
 The history of agent sessions on this Android fork, moved out of `HANDOFF.md` on
-2026-09-26 so the live file can be read whole. **Nothing here is current state**:
+2026-09-26 and again on 2026-11-03 so the live file can be read whole. **Nothing here is current state**:
 the current state is `HANDOFF.md`, and the build/test recipes are
 `docs/WINDOWS-VERIFY.md`.
 
@@ -14,6 +14,16 @@ narratives, so `git log` is a second copy.
 
 | Section | Date | Was at (old HANDOFF.md) |
 |---|---|---|
+| A ZIM with its own index answers full text itself (2026-11-01) | 2026-11-01 | — (moved from HANDOFF.md 2026-11-03) |
+| Our index on request, for an archive that has its own (2026-11-02) | 2026-11-02 | — (moved from HANDOFF.md 2026-11-03) |
+| Strict readings are declined, not scanned; the caps are gone (2026-11-02) | 2026-11-02 | — (moved from HANDOFF.md 2026-11-03) |
+| The strict readings were mostly blind, and one of them lied (2026-11-02) | 2026-11-02 | — (moved from HANDOFF.md 2026-11-03) |
+| The attached article temp is journaled no more, and the build's cache is real (2026-11-03) | 2026-11-03 | — (moved from HANDOFF.md 2026-11-03) |
+| An index cannot be deleted, and every dictionary has one (2026-11-03) | 2026-11-03 | — (moved from HANDOFF.md 2026-11-03) |
+| The index chip is a measurement, not a door (2026-11-03) | 2026-11-03 | — (moved from HANDOFF.md 2026-11-03) |
+| The article index is a file of its own (2026-11-03; reader 2026-11-02) | 2026-11-03 | — (moved from HANDOFF.md 2026-11-03) |
+| A ZIM without its own index gets ours, without the bodies (2026-11-02) | 2026-11-02 | — (moved from HANDOFF.md 2026-11-03) |
+| Three readings, chosen by the reader, not by the program (2026-11-02) | 2026-11-02 | — (moved from HANDOFF.md 2026-11-03) |
 | Configuration and Lemmatization pages (2026-09-20, this session) | 2026-09-20 | 1362–1394 |
 | Dictionary settings window (2026-09-20, this session) | 2026-09-20 | 1395–1578 |
 | GitHub-facing identity (2026-09-20, this session) | 2026-09-20 | 1579–1602 |
@@ -3280,3 +3290,926 @@ all. The whole round is documentation:
 - Docs only, so nothing was built, installed or published: `go build`,
   `go vet` and the whole Go suite re-ran green in the worktree, and `dev2` was
   fast-forwarded in the user's checkout. Not pushed.
+
+## A ZIM with its own index answers full text itself (2026-11-01)
+
+The product decision, made after the reader, the routing and the ranking were verified: for an archive
+that carries its own Kiwix full-text index, full text is answered from the archive, no index of ours is
+built for it, and its prepared database is the title index - bodies are read through from the archive.
+The archive's index is 2.4-2.9x smaller than ours on the same text (518 MB against 1.29 GB on
+wiktionary_ru, 3.18 GB against 9.21 GB on wikipedia_de) and already built, and the stored bodies bought
+no read speed (tools/zimtime: medians 0.52-0.66 ms either way).
+
+What is in place, and what each piece rests on:
+
+- **The fact is recorded, not probed.** `zim.Dict.HasFullTextIndex` asks the container (a directory
+  lookup and one byte of the cluster info field, no decompression - and an index inside a COMPRESSED
+  cluster answers no, because reading it would mean decompressing 3 GB before the first term), and the
+  ZIM reader writes `own_ft_index=1` beside `index_kind`. So a dictionary row and a search both know
+  where full text comes from without opening a 48 GB container. A store test fails if the two packages
+  spell that key differently.
+- **Routing.** `upgraded.Caps()` advertises FTS when the archive answers it, and
+  `upgraded.archiveFullText` answers from the source; the search skips its FTS5 rungs for such a handle
+  and sets `Rung="words"`, which is also what turns the existing highlight marking back on (marker()
+  returns nothing without a rung). Worth naming: "full text" on a title-only ZIM used to mean full text
+  over TITLES, with the bodies fetched afterwards - this reaches the article text.
+- **Ranking.** Xapian's own BM25 (k1=1, k2=0, k3=1, b=0.5, min_normlen=0.5), which needed the document
+  lengths: a postlist named by an empty term, key `00 e0`, whose per-document "frequency" is the length.
+  It is the one list the term walk cannot read as-is - its chunk keys carry no zero separator, and its
+  first chunk is a placeholder whose entry counts are left at zero even when it holds 713 entries - so
+  the chunk logic became `walkPostings`, which takes the prefix. Verified against the version file: the
+  lengths sum to exactly the total document length for 1 528 188 and for 3 275 258 documents. Summed wdf
+  had put the 410 KB "Liste von Jazzmusikern in Deutschland" above the Jazzmusiker article; BM25 puts
+  the article first, and on the Russian Wiktionary the entry "духовой инструмент" above "инструмент".
+- **The ingest rule**, in the three places the form is chosen (the server's reconcile, the CLI's ingest,
+  the CLI's reindex - the mechanism is single-sourced as `HasOwnFullTextIndex`). An explicit `-fulltext`
+  does not override it, and the CLI says so instead of appearing to obey.
+- **The interface** says which it is: the chip reads "индекс уже внутри архива" and is locked (its "off"
+  would clear an index that is not ours), and the full-text window gives such a row no checkbox, the
+  state "индекс внутри архива", and counts it apart from what we built.
+
+**What is verified, and how.** The reader and the ranking on all four archives through
+`tools/xapian-glass-check` (also through `dict.Open`, which is the one assumption the routing makes);
+the seam tests in the tree; `go build/vet/test` on every package touched. NOT verified: the interface
+changes have never been rendered (no Playwright here, as before), and no database has been rebuilt
+through the new rule yet.
+
+**What the first real rebuild found** (wiktionary_ru, run twice with the CLI, 2026-11-01). 9 644 MB
+became 426 MB in 34-40 s: `entry_fts` 20 MB, `entry_trigram` 22 MB, the headword list and its indexes
+the rest, `article_fts` absent, `info.txt` reading "index = headwords only". Three defects only a real
+run could show, all fixed here:
+
+- **The reader and the plan are two halves of one decision, and the first run pinned only the reader.**
+  The headword reader under the kept plan ("index article text") produced a database with an EMPTY
+  `article_fts`, `ingest_level = text` and a receipt promising full text - 9.6 GB down to 426 MB, but
+  inconsistent. The plan is now pinned where the form is decided: the server's reconcile (only when the
+  caller left it nil), the CLI's reindex (inside the ZIM branch - pinning it for every format dropped
+  full text on a non-ZIM reindex, which `TestReindexOneKeepsPlan` caught), and the CLI's ingest (only
+  where this fork overrides the form).
+- **A stale `stats.cache` stayed valid across the rebuild**, because everything it validates against -
+  the source's uuid, size and mtime - is unchanged by a rebuild: the window would have priced the
+  archive against article bodies that no longer exist. The form is now part of the validity check
+  (`ReadStats`, with a test), so the warm pass re-measures.
+- **`info.txt` said "text.db (articles + search index)"** for a database holding no articles; it now
+  distinguishes the two forms.
+
+The archive's own reader was unaffected throughout, and the re-run left the folder consistent: 426 MB,
+`index_kind = headwords`, `ingest_level = headwords`, `own_ft_index = 1`, no `article_fts`.
+
+**The conversion is in the window, and it was tested by using it** (2026-11-01). The full-text window
+now carries, for a ZIM whose archive answers full text while the database still holds an index of ours, a
+per-row "Convert" button instead of a checkbox: the choice column shows a cycle symbol, the state column
+the button, and its tooltip says what the conversion frees - the article index when this build can
+measure it, and the folder's own size always. The action is the base index re-created
+(`feature:"base", action:"recreate"`), which is exactly the conversion: for such an archive the ingest
+builds the title index, so a reconcile of the old form converts it. Tested by pressing it on the English
+Wiktionary: **25.26 GB to 1.20 GB in 100 seconds**, and the result is consistent -
+`index_kind=headwords`, `ingest_level=headwords`, `own_ft_index=1`, no `article_fts` - with full-text
+search still answering from the archive (Thesaurus:musical instrument, instrument musical, musical
+instrument). The Russian Wiktionary was converted earlier the same way by the CLI.
+
+Two things the live run taught, both now recorded in the code:
+
+- **The archive's single reading was reaching only one of the two search handlers.** `rung` was set, but
+  the page is served by the LEGACY `/api/search` (server.go, `streamMsg`) while the desktop bridge uses
+  `Server.Search` (dmsh_search_service.go, `SearchEvent`) - so the new `oneReading` flag has to be in
+  both, and the header still said "phrase not found · words anywhere" for a dictionary that never tried
+  a phrase. It is honest now: verified in a browser, the header reads just "5+ results", while a
+  dictionary with a real ladder still announces a relaxation when it makes one (the condition is
+  `!h.oneReading`, so nothing else changed).
+- **`sqlite_dbstat` is not the way to make the measured sizes real.** mattn's driver gates dbstat behind
+  that tag and the app's build does not set it, so `searchIndexSizes` has always returned zeros - but
+  enabling it HANGS startup: dbstat has no index of its own, so each query walks every page of the file
+  and the 42-dictionary discovery pass stalls for minutes on the four archives. Checked both ways
+  (measured size 9 213 132 800 bytes for wikipedia_de with the tag, zero without; a tagged build prints
+  no banner at all and is killed at 40 s). The offer therefore quotes the folder size, and the index
+  figure appears only where a build can measure it (the pure-Go modernc build can; this one cannot).
+
+### Why the card says "Complete list unavailable" (2026-11-03)
+
+Seen on the user's two Wikipedias: the results card read "5+ результатов · Полный список недоступен"
+(`search.fullListUnavailable`). The cause is the one above: their full text is answered by the ARCHIVE's
+own index, and at that moment no index of ours existed beside it (the log 50 s later shows the three
+such archives being given one, `feature="fts" action="create"`). The archive's index has no positions, so
+a phrase is answered with the words reading - the plate's rung, and the main plate carries the "needs our
+index / Build" line for it - and a COMPLETE list cannot be paged from anywhere: our list is paged out of
+`articles.db`, and the only other route is decompressing candidates out of a 48 GB container, which is
+what "strict readings are declined, not scanned" refuses. The remedy is our own index; until it exists the
+card says honestly that the count is a head of the answer, and the count keeps its "+".
+
+That admission used to leave no trace at all: the client shows a fixed line and does not log, so a
+failure was reproducible only by guessing. Two traces now exist, in `dmsh_article_result_cache.go`'s
+`build` case - `search_complete_list stage=declined` (gated on the caller's diagnostics flag, like every
+other line in that area) and `stage=failed` with the dictionary, mode, rung, query, cache id and the
+error (unconditional: it is rare and it explains a user-visible message) - and the client now sends the
+message the plate hides through the `search_article`/`search_error` diagnostic it already had. Pinned by
+`TestAFailedCompleteListBuildIsLogged`, which fails when the line is taken away.
+
+## Our index on request, for an archive that has its own (2026-11-02)
+
+The rule "an archive with its own index never gets one of ours" is now "not by DEFAULT": a caller that
+names full text explicitly gets it, in the index-without-bodies form. Two reasons, and the user gave
+both: it is what makes the strict readings (phrase, near) native on such an archive - positions in our
+index instead of a text scan over the candidates theirs returns, with the fast SQL paging that comes
+with it - and it is the only way to build and test the index-only form today, since no archive in the
+library lacks an index. The override in the server's reconcile and in the CLI's ingest now fires only
+when the request left FullText nil; the rebuild paths keep the form a database already has.
+
+Built this way on the converted Russian Wiktionary, with `wudict ingest -fulltext <archive>`: 1 528 188
+entries in 458 seconds, and the result is the form, exactly - `index_kind=headwords` with
+`ingest_level=text`, `stored_body_bytes=0`, `article_fts` present, 1.76 GB (426 MB of headwords plus the
+1.29 GB index, which is what the article index of this archive measured). 26.8 GB of article text was
+read and indexed and none of it was kept: the whole point of the form, on a real archive, for the first
+time.
+
+The receipt now names all three forms (`store.writeInfo`): "headwords + search index", "articles +
+search index", and for this one "headwords + article index (article text stays in the archive)" - the
+rule was two-way while there were two forms, and the third made both of the old answers wrong in opposite
+directions. Pinned by a test on the real fixture, not on the wording alone.
+
+### First index built for an archive that has its own: Викитека (2026-11-02)
+
+The user's decision was "строим индекс", so the smallest archive without one was rebuilt with
+`wudict ingest -fulltext`: 589 871 entries, `text.db` 267 MB -> 3.51 GB, `stored_body_bytes = 0`,
+`index_kind=headwords` + `ingest_level=text` (the third form), and the receipt now says so in the words of
+the form: "text.db (headwords + article index (article text stays in the archive))". The row reads
+`our FTS 2.95 GB` + `in the archive: words`, exactly as the chips decision intends.
+
+The build is a correction to the index-only estimate band: 3.2 GB over 589 871 articles is **5.4 kB per
+article**, above the encyclopedia band (2500-4000 B/article) that was measured on the two Wikipedias and
+the two Wiktionaries. Wiki*source* articles are long texts with few articles, so "encyclopedia" is the
+right family and the band is simply too narrow for it - the next four builds should be measured before the
+band is quoted again.
+
+### ...and it is fixed: a log line was asking the startup path a question (2026-11-02)
+
+The 6.3 s was not the index, not the archive and not the reading of bodies. The probe chain, in order:
+`prefix` on Викитека costs the same as `exact` and as a phrase, and a plain DSL dictionary in the same
+server answers in 0.28 s; the store's own calls on the very same database are `open 2 ms`, `prefix 3.6 ms`,
+`exact 0.6 ms`, `fulltext 3.8 ms` - so the index answers a phrase in 3.8 MILLISECONDS while the request
+took seconds; and instrumenting the request showed the gap sitting between the opener's return and the
+dictionary's own query, with `backend="prepared"` on the right database.
+
+The culprit: `searchLocationForLog`, a helper that exists only to fill the "search database ..." line of
+the diagnostics log, was called UNCONDITIONALLY on every result batch. It calls `validPrepared`, which for
+anything whose entry path is a SOURCE rather than a text.db (every ZIM, every DSL source) resolves the
+prepared database through `store.PreparedFor` - a library-wide lookup - and that is where the seconds went.
+A native dictionary entry is already a text.db, so `validPrepared` returns at the first line: which is why
+only ZIMs and sources paid, and why the cost scaled with the library rather than with the query.
+
+Fixed by asking the helper only when the line will actually be written. Measured after, same server, warm:
+Викитека `prefix` 6.7 s -> **0.15 s**, `phrase` 6.5 s -> **0.04 s**, `exact` 6.3 s -> **0.04 s**; the
+Russian Wiktionary's phrase 5.2 s -> **0.10 s** (its first call is cold disk, the index is 1.29 GB);
+Ushakov unchanged at 0.48 s. The first request after startup still pays the library's warm-up - all 44
+dictionaries opened in series, ~46 s on this machine - and that is the next thing to look at, because it
+is the same class of cost: opening every dictionary to answer a question about one.
+
+Also in this change, because it fell out of the same probe: `internal/store/strip.go` moved to
+`internal/htmlref/plain.go` as `htmlref.PlainText`. The archive reader has to fold the same text our
+article index is built from, and importing `store` from `internal/format/zim` closed a cycle that broke
+`go test ./internal/store` - the move keeps one implementation (the whole point, after the two-stripper
+bug) in a leaf package both sides can import. `internal/format/dsl` no longer imports store for it either.
+Two golden tests in `internal/format/dsl` fail on this checkout at the session's base commit as well; they
+are recorded in `docs/WINDOWS-VERIFY.md` as known failures to look at, not caused by this work.
+
+### And the same shape again: opening a dictionary walked every page of it (2026-11-02)
+
+The first search after startup took **117.9 s**, and the log showed it opening all 44 dictionaries while
+the user waited - "don't wait for all of them" was the request. Instrumented, the chain was exact:
+`store.Open` of the 3.5 GB Wikipedia-source database takes 1.2 ms, while `store.PreparedFor` of the same
+dictionary took 9.3 s - and inside it, `Inspect` **6.5-9.3 s**. `Inspect` ran `searchIndexSizes`, which
+measures the FTS5 index sizes with `SELECT SUM(pgsize) FROM dbstat`: a page-by-page walk of the whole
+database, seconds on a large one, ~1 s on a medium one, and it ran for EVERY dictionary in the path that
+opens a dictionary - to fill the chips that show "contains 22 MB" and "our FTS 1.29 GB".
+
+The fix moves the measurement out of the open path entirely: `Inspect` no longer measures anything,
+`store.MeasureIndexSizes` is exported for the one caller that may pay it (the registry's background
+measurement pass, once per process), the numbers are written into `stats.cache` (`StatsVersion` 2 added
+`ContainsIndexBytes`/`FullTextIndexBytes`), and the row reads them from that cache in `attachEstimate` -
+before its guards, because the dictionary that already HAS our index is exactly the one whose size a
+reader wants, and that is the case the guards return early for. Measured after, same server: first search
+**117.9 s -> 0.16 s**; every size is back in the listing (Викисловарь 1 291 067 392 = the old dbstat
+number, Викитека 3 167 371 264 = its rebuilt index). `TestIndexSizesAreMeasuredOutsideTheOpenPath` pins
+the new contract: Inspect reports none, MeasureIndexSizes answers, and the cache keeps it.
+
+### A ZIM search costs ~6.3 s whatever it is asked (found 2026-11-02, not fixed)
+
+Timed against a running server on the live library:
+
+| what | time |
+|---|---|
+| `exact` one article, Викитека (our index, index-only form) | 6.30 s / 6.35 s |
+| `phrase`, 20 results, Викитека | 6.52 s / 6.52 s |
+| `phrase`, 1 result, Викитека | 6.45 s |
+| `phrase`, ru-wiktionary (our index) | 6.85 s, then 3.38 s |
+| `phrase`, a plain DSL dictionary (Ushakov, our index in text.db) | 0.28 s / 0.27 s |
+| opening the archive directly (`zim.Open` + `Meta`) | **5-7 ms** |
+
+So it is not the index, not the number of results and not the reading of article bodies: it is a FIXED
+cost per request that only ZIM dictionaries pay, and opening the container costs nothing like it. The
+plain dictionary in the same server answers in 0.28 s, which is what the index itself costs. This is the
+thing to measure next, before anything is claimed about the index-only form on a phone: candidates are
+the per-request source plumbing (prepared-database reopen, resource resolution, the article-result cache
+write for a page) and the reading of the archive's own directory. Nothing here is caused by the chips or
+by the strict-reading fixes of the same day - the index-only Russian Wiktionary showed it before them too
+(3.4-6.8 s).
+
+### What the row says now (same day, user's decision)
+
+The archive's index is no longer presented as full text. The chip appears ONLY beside an index of ours,
+and it says what it is: «в архиве: слова», because the archive's index stores words without positions -
+it answers "words" and nothing else, and a phrase or proximity search over it means reading article
+texts, which on a phone is a battery question as much as a time one. A ZIM whose archive has an index and
+which has none of ours therefore shows one chip, "our FTS" (off, with a build estimate), and no claim of
+full text at all; the converted Russian Wiktionary shows both, side by side. The window's state line for
+such a row says the same thing instead of "ours not needed".
+
+**The user's decisions, to implement next** (recorded here because they change the shape, not just the
+wording): (1) strict modes over an archive-only dictionary must not scan article texts at all - they open
+the build offer window, with the estimate, and the row says why it has no answer; the scan stays only as
+an explicit "search the texts anyway" choice in that same window. (2) Every cap that hides results goes:
+`archiveStrictCheck` above all, and the query side's `ftsq.maxTokens` (128) must refuse an absurd query
+out loud instead of silently searching its first 128 words. (3) Results are delivered progressively: five
+articles per dictionary first, then the search continues in the background to the end, or until the reader
+changes the query or mode.
+
+## Strict readings are declined, not scanned; the caps are gone (2026-11-02)
+
+The user's decisions, implemented: "все ограничения убираем - это зло и неправда" and "искать по статьям
+долго и энергопотребление растёт на телефонах". A dictionary that answers full text from its archive's
+index and has none of ours **no longer scans article texts** for a phrase or a proximity reading: the
+reading is declined and the hit carries `NeedsIndex`, the row says why in one line, and it offers the thing
+that answers the same question from positions - our index - through the existing build window
+(`openFullTextPicker`, preselected on that dictionary). The words reading is untouched: it is what the
+archive's index was built for, and its ranking is the archive's own.
+
+Measured on the live library: Википедия (no index of ours) `phrase` → **0.04 s**, no results,
+`needsIndex`, where it used to spend seconds scanning; the same dictionary `words` → 0.24 s, 20 results;
+Викитека (our index) `phrase` → 0.05 s, 1 result.
+
+`archiveStrictCheck` is 0 (unbounded) and `search`'s scanner helpers stay for the one case that can still
+want them - an explicit "search the texts anyway" in that window, which is NOT built yet: today the scan
+has no caller, and that is deliberate, because the default must not do silently what the reader is being
+offered an alternative to. `ftsq.Parse` also stopped truncating a 128-word query in silence: `Query.TooMany` says the query below is
+a prefix of what was typed, `rungFor` refuses instead of searching the first 128 words, and BOTH search
+entry points refuse the request out loud with "the query has more than 128 words to search"
+(`ftsq.MaxTokens` is exported for the sentence). The page shows it in the reader's language through the
+legacy text-match list (`errors.tooManyWords`, ru/en) - deliberately reusing that mechanism rather than
+inventing a code field for one message, since the wire already carries `SearchError.Kind` for the family
+that grows next.
+
+## The strict readings were mostly blind, and one of them lied (2026-11-02)
+
+Reported by the user, with a live example: «ищу джазовый кларнетист, статья „Ниммонс, Фил" содержит эту
+фразу, а поиск не находит». Three defects, all of them in the archive's verifier
+(`internal/format/zim`), all of them silent - and only the first is why the user saw nothing.
+
+1. **`articleTokens` carried its own HTML stripper, and it counted every `</script>` as an OPENING tag.**
+   The skip it kept therefore never ended, and everything in the article after the first `<script>` or
+   `<style>` block was dropped: from a 65 KB article it produced two tokens, "ниммонс" and "фил" - the
+   title. So the strict readings were matching only what the head of the document holds, which is exactly
+   what the evidence showed once it was read properly: the four "hits" for `кларнетист` were all article
+   titles (Кэмпбелл, Джеймс (кларнетист)…), the fourteen for `джазовый` all started with «Джазовый…»,
+   and no phrase of two words could ever verify. The stripper is now `store.StripHTML`, the same function
+   the article index of our own databases is built with (`internal/format/dsl` already imports `store`,
+   so no cycle) - two implementations of "what does this article say" was the whole bug.
+2. **The text was folded with the QUERY folding.** `glass.FoldTerms` drops repeated words, because a query
+   is a set; the article was folded with it too, so a word's *second* occurrence vanished - and the second
+   occurrence is precisely what a phrase needs. «Ниммонс, Фил» names the profession «кларнетист» in its
+   infobox and again in the first sentence, so the one the phrase needed was the one dropped.
+   `glass.FoldText` is the sequence folding now, `FoldTerms` is defined in terms of it, and the strict
+   readings ask with the sequence.
+3. **The bound was not reported.** `StreamHeadwords` returned nil when it stopped at `maxCheck` with
+   candidates unread - indistinguishable from a finished walk - so a bounded list went out as the whole
+   answer. It returns `ErrCheckBound` now: the streaming path finishes without the "done" marker, which
+   the article cache turns into `Complete=false` / `HasNext=true`, the same affordance the reader already
+   uses to fetch more. The collecting form has nowhere to carry it, so `archiveReading` drops the error
+   there (the app streams; that path is the API's).
+
+Verified live on the ru-wikipedia through `/api/search`: phrase «джазовый кларнетист» went from **0
+results to 20**, «Ниммонс, Фил» among them; near likewise; words unchanged. And the cache build event
+carries `"complete":true` for a phrase whose scan ends (71 articles) while one that hits the bound (300
+articles, 12 s of reading) has no `complete` field at all, i.e. false. Both text defects are pinned by
+`dmsh_articles_test.go` on a body with the shape of the real article.
+
+## The attached article temp is journaled no more, and the build's cache is real (2026-11-03)
+
+The user asked why every build leaves THREE temp files in a folder:
+`<name>.ingest.<hex>`, `<name>.ingest.<hex>-articles` and
+`<name>.ingest.<hex>-articles-journal`. The third is not ours - it is SQLite's
+rollback journal for the attached article database, and its presence is the
+proof that the pragmas saying "this file is a throwaway" never reached it:
+`dsnIngest` sets `journal_mode=OFF` and `synchronous=OFF` on the connection at
+open, BEFORE the ATTACH, and they are per DATABASE. So the article index - the
+largest thing a read-through build writes, 1.3 GB for the Russian Wiktionary -
+was written with a rollback journal and a synchronous=FULL commit while the main
+temp was journal-less and synchronous=OFF. The journal's own bytes are small
+(13 KB: pre-images of a brand-new file), but it was created, written and deleted
+per build, and the commit fsynced a file of gigabytes that nothing else fsyncs.
+Fixed in `createArticlesDB`: `PRAGMA articles.{journal_mode,synchronous,cache_size}`
+right after the ATTACH, pinned by `TestTheAttachedArticleFileIsAThrowawayToo`.
+
+Second change in the same area: the ingest connection had no `cache_size` at all,
+so a build that appends to two databases for minutes ran on SQLite's 2 MiB
+default. `ingestCacheKiB` (64 MiB, one value for every platform - the smallest
+phones this fork runs on have 4 GiB, and it is a limit that grows on demand, not
+a reservation; the peak is up to twice it, since each of the two databases gets
+its own) now goes into `dsnIngest` and explicitly onto the attached database.
+
+**How it was measured, and what the numbers actually say.** The bench is
+`internal/store/dmsh_ingest_bench_test.go` (gated on `WUDICT_BENCH_ARTICLES`,
+prints the phases; the recipe is in docs/WINDOWS-VERIFY.md). Five runs each side,
+300 000 synthetic articles of ~1.5 kB with the bodies dropped - the ZIM form:
+**10.893 s -> 10.591 s (-2.8 %)**, with per-phase deltas that repeat: commit
+-0.06 s (-17 %, the journal and its fsync), the contains/trigram optimize
+-0.17 s (-45 %, the cache), the write phase -0.09 s. On the real archive
+(wiktionary_ru, 2.15 GB, 1.53 M entries) four runs were: 495.5 s (before),
+431.3 s (the SAME binary again), 430.7 s (after) - a 15 % spread between two
+identical runs, so that pair settles nothing; the real runs are good for
+checking that the output bytes and the recorded `full_text_index_bytes`
+(1 291 067 392) are identical, which they are.
+
+**Two hypotheses were tested and dropped, with the evidence.** De-interleaving
+the article writes from the entry writes (a bigger, separately flushed buffer for
+the article index) measured 10.46 s against 10.44 s - nothing, because both disks
+here are NVMe SSDs and the interleaving cost it targets is a seek cost; the 16 MiB
+of held-back text was not worth keeping, so it went. Measuring the article index
+through the writing connection (`articles.dbstat`) instead of opening a second
+connection measured faster but was WRONG: in this SQLite build the
+schema-qualified dbstat enumerates the MAIN database's pages, so the build
+recorded `full_text_index_bytes = 0`. Reverted, and
+`TestASplitBuildRecordsTheArticleIndexSize` now pins the recorded size against a
+real walk of the file, so that class of silent zero cannot come back.
+
+**The finding that matters more than either fix:** the same archive took 763 s in
+the user's log while two other encyclopedias were building in the same batch, and
+430-495 s alone. The split is not what makes a build feel slow - concurrency is.
+
+## An index cannot be deleted, and every dictionary has one (2026-11-03)
+
+The headword index is mandatory, so nothing removes it any more. Every door went: the card's "index
+only" button, the bulk panel's `base: delete`, `wudict rm -keep-source`, and the transport under them
+(`DELETE /api/library?prepared=1&source=0`) - `Registry.Remove` now refuses that combination when the
+dictionary has a source, naming the two things that CAN go: the whole dictionary, or its files only
+(which is the decision to keep the prepared copy standing alone). The bulk router answers the old
+operation with a 400 instead of routing it. `canDelete`/`allowBaseDelete` and the per-feature gate
+went with it.
+
+The "this dictionary does not want an index" policy went too: `indexOptions.Index` (and the three
+places that forced it true) is gone, `baseIndexRequired` no longer has the term, the dead branch that
+answered it by deleting the prepared folder is gone, and the setup page no longer draws a
+checked-and-disabled "index" checkbox. No prefs migration was needed: an old `"index": false` is an
+unknown key once the field is gone, and nothing read a false value.
+
+What remains of the old state is "no index right now". `dslRemoved` keeps its name and JSON key (the
+comments say what it means now) and is set only while a dictionary is queued for preparation; the two
+places that treated it as a veto - `queueNewDictionaries` skipping such a dictionary and `rescan`'s
+`fresh` - no longer do, so a library whose index was removed under the old rules gets one built again
+on the next start (`TestAMissingOrRememberedIndexIsPrepared`), and a stale marker beside a complete
+index is cleared where the queue sees it. The user-facing string changed with the meaning:
+"the dictionary index is not ready yet; it is being prepared" (`errors.indexRemoved` →
+`errors.indexNotReady`, both catalogs) - the old wording told the reader to create an index in a
+settings page that no longer offers to.
+
+**What is lost, and it is a real loss:** "index only" existed to reclaim the space of a big index while
+keeping the dictionary. Now the only way to get that space back is to delete the dictionary, or to
+drop its optional indexes (contains/full text - the full-text side of that is cheap, since the split
+made it one file). Accepted by the owner.
+
+Tests: the five whose subject was the removed feature are gone (`TestSingleDSLIndexRemoval`,
+`TestRemovedNonDSLIndexRequiresExplicitIngest`, `TestRescanKeepDoesNotRestoreRemovedBase`,
+`TestRescanDeletesRemovedPreparedIndex`, the two DSL-migration removal tests, and the file
+`dsl_modes_test.go` with them), the fixtures that suppressed the auto-queue with the marker were
+rebuilt (`unpreparedRegistry` now prepares normally and then removes the folder out of band), the
+migration drops the legacy gd key instead of interpreting a removal decision, and four dead
+translation keys were deleted (`dictUI.indexOnly`, `dictUI.bulkDeleteHint`, `dictUI.deleteIndex`,
+`dictUI.deleteIndexConfirm`).
+
+## The index chip is a measurement, not a door (2026-11-03)
+
+On the dictionary card of a prepared DSL the index chip showed the size of the index and its
+title said "delete index": pressing a measurement threw away the prepared database, which for a
+DSL is the only usable form of the dictionary. The chip is now a `span` (a quiet plate with the
+size, tooltip "Indexed: {size} on disk") and carries `data-index-size`, not `data-delete-index`;
+`askDSLIndexRemoval` and the whole `[data-delete-index]` click path are gone.
+
+The locked measurement chips - the index size, the native-index chip, and a ZIM's "built-in: words
+only" - wear the same accent pill as a live switch and read at 55% opacity (same fill, same white
+ink, paler; the hover keeps its own colours, so nothing reacts under the pointer). The fill is what this stylesheet says a
+live switch wears ("press to spend disk on an index"), so a chip that cannot be pressed no longer
+wears it; the appearance contract's white-on-fill exception list is now empty for the same reason.
+The LIVE switches (`contains`, `full-text`) are untouched: still filled, still pressable.
+
+Deliberately left alone: the two other doors to the same deletion - "Index only" in the card's
+Remove flow, and the bulk panel's base `delete`. Both are labelled, deliberate acts in a flow that
+explains what goes; only the silent chip was wrong. Verified live (preview server + the panel in
+Edge): the chip renders as a `span` with a transparent background, `cursor: default`, opacity .75,
+and a real click opens no confirmation and leaves `text.db` on disk; the JS gate
+(`node tools/i18n-test.cjs`) now pins the markup.
+
+## The article index is a file of its own (2026-11-03; reader 2026-11-02)
+
+ON, by the user's four rules: full text is created only as `articles.db`; when that file exists the
+database is not even asked about a full-text index; when it does not exist, the database is (`text.db`
+holds one for every library built before the split); and a full-text rebuild takes the index out of the
+database and creates it as the file, which is the migration.
+
+**How the reader does it, and why not ATTACH.** ATTACH is a per-connection statement and this process
+pools connections without a limit (`pool.go` deliberately sets no `SetMaxOpenConns`), so ATTACH would mean
+either a driver connector or an ATTACH before every query. Instead `Store.articleHandle()` opens the
+sibling as its own read-only handle - lazily, on the first full-text query, validated by `dict_uuid`
+exactly as `media.db` is - and the two read sites ask it for matching rowids (`ORDER BY rank`) and then
+fetch their rows from `entry` by primary key in batches of 400, preserving the rank order in Go. One query
+when the index is inside the database (the JOIN is still there, unchanged, for every dictionary built
+before the split), two when it is in the sibling: `articleMatches(ctx, match, limit, withBodies)`.
+`Close` closes the sibling handle too, which a test caught on the first run: on Windows a handle left open
+makes removing the index - the one operation the split exists for - fail.
+
+Two honest behaviours fell out of writing the tests:
+
+- A split index whose FILE is gone is no index. `Open` and `Inspect` both check, because the meta still
+  says `ingest_level=text`: without the check a search would answer "no such table" and the row would offer
+  a full-text chip for a file the reader deleted. With it, removing the index is exactly what
+  `ClearSearchIndexes` does - delete one file, no VACUUM, no rewrite of tens of gigabytes - and the
+  dictionary afterwards reads as a dictionary without full text, offering to build one.
+- A dictionary that is never searched by text opens nothing extra: that is why the sibling is lazy, same
+  argument as D64 for `media.db`.
+
+**What turning it on needed**, and what it found. `Plan.ArticlesInside` is the OLD shape and the zero Plan
+is the new one, so no caller can get the old one by forgetting a line; the field stays because the old
+shape is not gone - every existing library has it - and a test that has to reproduce one (the migration
+included) asks for it by name. `Plan.SameIndexes` is what "the same indexes" means for a rebuild: the form
+is NOT compared, because it is not content and moves on its own when the full text is rebuilt - comparing
+it would have sent every library built before the split into a full re-ingest, silently, at the first
+request (two sites compared a whole Plan: reconcile.go and restoreIndexContext). `articles_split` is
+volatile meta, for the same reason, or every recorded reader golden would have changed.
+
+The audit found two real defects in the reader, both invisible while the writer was off, and an existing
+test caught each: the sibling branch of `articleMatches` took ids from the article index WITHOUT the
+sub-entry filter the JOIN carries, so hidden `@`-subentries came back as results (`isSubEntry` now filters
+them, and the id prefix grows so the filter does not eat the limit - 59% of LDOCE6's rows are subentries);
+and `hashVocab` created its fts5vocab over `main.article_fts` on the database connection, which no longer
+has that table, so every fingerprint of a split database failed outright.
+
+`ArticlesFilePath` mirrors the owner the way `MediaSibling` does: the bundle is `<dir>/articles.db`, a
+loose `<name>.text.db` carries `<name>.articles.db` beside it, so two databases copied out of their
+folders into one directory do not come to share one index. Everything that handles the pair follows the
+same rule - adoption takes the sibling along, `wudict files` lists it, `clean` reports a lone one as an
+orphan, and a build that wrote no article index clears the stale sibling of any shape `IsTextDB` accepts.
+
+Verified: `make check` exits 0; a live server asked for full text on a dictionary produces a folder with
+`articles.db` holding `article_fts` and a `text.db` with only the headword indexes, same `dict_uuid`, and
+its phrase search answers with marks; and a library prepared by an earlier build - article index still
+inside - keeps answering (rule 3).
+
+**Rebuilding the index is the index's own operation now.** `store.RebuildArticleIndexContext` builds
+`articles.db` from the database's own columns - the key is `entry.id`, the text column is
+`htmlref.PlainText` of the body in `entry.m` - so the ids come from the very table the readers use and
+the alignment between the two files is structural rather than a version promise. Nothing else is
+written: no source is read, no headword table is touched, `text.db` is not replaced, and only a meta row
+(`ingest_level`, `articles_split`) and the recorded size change there. It refuses with
+`ErrArticleNeedsReingest` where the article text is not in the database - a reader that drops body
+columns (a ZIM keeping its articles in the archive, `stored_body_bytes=0`), or an index still inside
+`text.db`, whose migration VACUUMs the file - and callers fall back to the source path. Wired to the
+actions that mean "this index should be there and be current": the panel's per-feature `fts`
+`create`/`update` in its bulk panel (Android/desktop bridge and `/api/index-work`), and the
+"Existing indexes" dialog's `fullText: update` on `/api/rescan`. `recreate` stays the source path by
+name. The first half of the win is wall-clock (no source read, no headword rebuild, no whole-file
+write); the second is that a tokenizer change can no longer change what the headword search finds.
+
+### The removal claims the files (2026-11-03)
+
+Deleting a dictionary (or clearing an index) could fail with "The process cannot access the file
+because it is being used by another process" and leave the folder half removed, because `os.RemoveAll`
+had already unlinked part of it. The holder was ours: `measureStats` released the files
+(`e.walk.end()`) BEFORE it wrote `stats.cache`, so the write - a touch of the very folder being
+deleted - sat outside the fence, and `removeLater`'s goroutine could be inside it at that instant. The
+removal took no fence at all.
+
+Both halves are closed the way the file's other writers do it: the fence now covers the write (the ZIM
+directory numbers are read OUTSIDE it, because that is a read of the SOURCE archive - seconds on a big
+one - and no writer of the database has to wait for it), and both removal paths (`Registry.Remove`,
+`removeCachedFolder`) claim the files first, so a pass yields or never starts before anything is
+unlinked. Nothing schedules `measureLater` after a removal: the dictionary is gone, and there is
+nothing left to measure.
+
+What a fence cannot order is a holder it does not own - a scanner or the system indexer touching a file
+that was just written, or one of our own readers taking a moment with the cache. So `store.removeFolder`
+(`removeall_windows.go`) retries a sharing or lock violation for about a second and then reports the
+real error; off Windows there is nothing to retry, an open file can be unlinked. Verified both ways:
+`TestSingleDSLIndexRemoval` 100 runs clean (2/20 before), and each new test fails when its half of the
+fix is removed - `TestRemovalWaitsForThePassHoldingTheFiles` for the fence,
+`TestRemovingAFolderWaitsForATransientHolder` for the retry.
+
+**The older half, kept for the record:** `Plan.SplitArticles` (recorded as `articles_split=1` ONLY when
+true, so every database built before this keeps exactly the meta it had - the reader golden test caught
+that on the first try);
+
+What is in place: `Plan.SplitArticles` (recorded as `articles_split=1` ONLY when true, so every database
+built before this keeps exactly the meta it had - the reader golden test caught that on the first try);
+the ingest writes the article index into a `<text.db>.tmp-articles` file at the same time as the rest,
+inside the same transaction (SQLite commits across attached databases atomically), detaches it while the
+connection is still open - Windows will not rename an attached file - and renames the pair into place
+together; `ClearSearchIndexes` removes the FILE and skips the VACUUM, which is the point of the split
+(no rewriting 35 GB to return 9); the sibling's size is its file size, so the estimate needs no page
+accounting for it; and a test builds one and checks that the file holds a working index of the same
+articles, that removing it leaves the headword side whole and full text unadvertised.
+
+**What is missing, and why it is not a detail:** reading the article index from the sibling needs the
+file ATTACHed on EVERY connection of the pool. `ATTACH` is per-connection and `sql.DB` is a pool, so the
+first attempt - one `ATTACH` in `store.Open` - left a database whose queries say
+`no such column: articles.article_fts`: the statement ran on a connection that had never attached it.
+The fix is a `driver.Connector` wrapper that attaches as each connection opens
+(`sql.OpenDB(attachingConnector{...})` in `openRO` and in the ingest), which is a change to how the store
+opens databases and deserves its own pass with its own tests.
+
+## A ZIM without its own index gets ours, without the bodies (2026-11-02)
+
+The third form a prepared ZIM database can take, and the one the user asked for: the article text is
+read and INDEXED, and the bodies are not kept. Storing them buys nothing - reading an article out of the
+archive and out of the database are the same (tools/zimtime: medians 0.52-0.66 ms either way) - while
+they are four to five times the size of the index copied for: on the English Wiktionary 19.9 GB of
+bodies and headwords against 4.6 GB of index. So an archive that has no index of its own now gets one of
+ours at about the index's price, and the articles keep coming from the archive.
+
+How it is expressed, with no new meta key: a reader that says so. `zimformat.NewIndexReader` wraps the
+read-through reader (the body it yields is exactly what the index needs to see) and answers
+`DropBodies() bool`; the ingest asks any reader that implements it, indexes the text anyway and writes an
+EMPTY `entry.m` (the column is NOT NULL, and an empty body is what "this database does not carry it"
+looks like). The form is then derivable from what is already recorded: `index_kind=headwords` (no
+bodies) with `ingest_level=text` (a text index) - a combination that did not exist before, which is why
+nothing else had to change to describe it.
+
+The three places that choose the reader ask for the TEXT rather than for the old form: a rebuild must
+keep the index of an index-only database, so the test is `index_kind == "articles" || ingest_level ==
+"text"` (registry.go, cli.go's ingestArticles, reindex.go). An existing read-through database - which no
+longer exists in the user's library - is rebuilt into the new form by the same rule, since the bodies
+are what the rule says not to keep.
+
+Verified by a store test: a reader that drops bodies produces a database that answers a full-text query,
+holds no body at all, and reads back as the title form with a text index, so a later rebuild keeps the
+index. NOT verified live: no archive in the library lacks its own index, so this form has never been
+built from a real ZIM - the first one that arrives (or a copy with its index removed) is the test.
+
+**Still to do, and it is the other half of the plan:** the split of the article index into its own
+`articles.db`. It is worth doing for the reason the user named - instant removal instead of a VACUUM
+over the whole file, and a header file that stays small - and it is additive now that old formats keep
+working: new builds would write the pair, old ones would read as they do. It is filing rather than
+capability, which is why the form above came first.
+
+## Three readings, chosen by the reader, not by the program (2026-11-02)
+
+The search menu now offers the full-text readings as three modes - **Фраза** (the words adjacent, in
+order), **Рядом** (within ten other words, any order) and **Слова** (anywhere) - and NO mode walks a
+ladder. The mode is the promise: a mode that quietly answered a weaker question than the one on screen
+was upstream's design (D102, "the ladder resolves it without asking the user to choose"), and the user
+asked for it to go. The rungs did not disappear; they became the menu items, and the code got smaller:
+`runPlan`, the plan plumbing and the "phrase not found · words anywhere" announcement are gone.
+
+What each mode is answered by:
+
+- **our index** (FTS5, which has positions): the mode's own rung, one expression - the phrase lowered as
+  one quoted phrase, the distance as NEAR(...,10), the words as each word's prefix. Pinned by a test
+  that asserts the three expressions differ and are what their label says.
+- **an archive** (no positions anywhere in its index): "Слова" from the index; "Фраза" and "Рядом" by
+  verifying the reading in the ARTICLE TEXT of the candidates the index returns
+  (internal/format/zim/dmsh_readings.go). The check is literal (folded text, so inflections do not
+  match - which is what "exact" means, and what our own unstemmed index does too) and bounded: the
+  candidate count is the cost of the reading, reported rather than hidden.
+
+Verified live, on both kinds of dictionary, with "музыкальный инструмент": on Ushakov's (our index) the
+readings nest as they must - phrase 51, near 62, words 63 - and on the converted Викисловарь (an archive)
+the strict modes return exactly the one article that contains the phrase, «музыкальный инструмент»,
+while the words mode returns thousands.
+
+Also: marking follows the family, not one member. Both search handlers enabled highlight marks for
+`mode == FullText` only, so the day a reading was added the strict modes answered with rungs set and
+nothing marked; `search.Mode.IsFullText` now says which modes are one family. And the test that pinned
+the old descent (hilite_wire_test.go, "reversed words fall to NEAR") was rewritten to ask each mode for
+the reading it promises - the behaviour changed by decision, so the test changed with it.
+
+**The complete list works too, from the archive** (2026-11-01, asked for after the first test). A
+search on an archive-backed dictionary now finds ALL its occurrences, exactly like a dictionary with an
+index of ours: the header reads "Викисловарь 1–5 (166) Browse" where it said "5+ results · Complete list
+unavailable", page two continues page one, and Browse pages the same list. Three pieces, each where the
+knowledge lives:
+
+- `zim.Dict.StreamFullTextHeadwords` - the archive's answer as headwords, best first, streamed and
+  without reading a body. The naming rule (the title when the file records one, else the path) stays in
+  the package that knows the container, and a hit whose article the archive no longer holds is skipped.
+- `store.EntryIDsForHeadwords` - headwords to prepared entry ids, batched (400 a statement: SQLite's
+  host-parameter limit is 999), keeping the order it is given, first-wins so a duplicate shows once, and
+  dropping what the database does not hold. A test pins all three properties.
+- `upgraded.archiveArticleIDs` - drives the two, emitting pages of indexconst.BrowsePageSize with the
+  running total and the final done flag, exactly as the SQLite path emits them, so the result cache does
+  not know which of the two it is talking to.
+
+Two numbers worth keeping: the archive's rank order is what both the first page and the cache use, so
+paging cannot reshuffle; and the total is the archive's, minus the handwords this database does not hold
+(166 against the reader's 169 for "духовой инструмент" - redirects resolved to targets the prepared
+database already has, and duplicates, both dropped on purpose). A query that matches a million articles
+reads all of them once (about 8 bytes a hit inside glass.Search) - a background pass, not the keystroke
+path.
+
+Also: the paged answer needed the one-reading flag as well, because a paged result is drawn from the
+result cache rather than from the search that started it (dmsh_article_result_cache.go now asks the
+handle), or the header would claim a phrase had been tried and not found.
+
+**The migration of the four existing databases is a click, not a job.** They are in the read-through
+form; nothing rebuilds them by itself - no reconcile runs at startup, deliberately, because a silent
+25 GB rebuild is not something to start behind the user's back. Rescan → "пересоздать" for the base
+index rebuilds one in the title form (the plan difference is what makes the rebuild take the new form),
+which frees the article index and the bodies: 1.3-9.2 GB of index plus 8-25 GB of bodies per archive.
+The window does not yet offer that conversion with a size next to it; the chip and the window only stop
+offering the wrong action for a database that is already in the new form.
+
+**A query is answered as ordinary results** (`internal/format/zim/dmsh_xapian.go`, ours, beside
+upstream's `zim.go` for the usual reason). `Dict.FullText(query, limit)` searches the archive's own index
+and returns `[]dict.Result` - headword and article, converted by this package's own article pipeline - so
+a caller cannot tell a Kiwix hit from a headword hit. Verified on the Russian Wiktionary:
+`"джаз"` comes back as джаз, jazz, джаз-фестиваль, джаз-группа, кул-джаз, which is a sensible order for
+nothing but summed wdf as a ranking; `"кларнетист"` as кларнетист, кларнетистка, Klarinettist, кларнет,
+слёзный. `dict.ErrNotFound` means the archive has no index at all, `dict.ErrUnsupported` (wrapping
+`ErrNoStemmer`) that it has one in a language this reader cannot stem - the two answers a caller needs to
+decide whether to build an index of its own.
+
+**The product wiring is a decision, not a remaining task** (2026-11-01): a Kiwix archive's index is
+2.4-2.9x smaller than one of ours and already built, so a ZIM with one needs no `article_fts` of ours at
+all. What it does NOT give: headwords (the index knows paths, and `FullText` resolves them back through
+the archive's directory), positions (no phrases), Xapian's real ranking, or anything for an archive built
+without `--indexing` - so our own index stays the fallback either way, as the user put it. The parts that
+would change if we take it up: `Caps.FTS` would have to be advertised by something that is not
+`article_fts` (the searcher holds the prepared database, not the archive), the ZIM ingest would stop
+building `article_fts` (and the "remove full text" button would mean something different for these), and
+the estimate window's ZIM rows - "this is what a build would cost" - would become "nothing is needed".
+Each of those is a user-visible behaviour and disk-usage change, which is why it is written down here
+rather than done.
+
+Smaller, still open: `skip_to`, so a rare term's postings drive the intersection instead of first decoding
+a common term's 1.4 M entries (measured: reading such a list whole is tens of milliseconds, so this is a
+comfort, not a blocker); ranking, since what exists is AND-intersection ordered by summed wdf; and
+scale - the intersection is materialised in memory, which 1.4 M hits makes a ~20 MB slice. The oracle for
+correctness used to be "build Xapian 1.4.32 locally and diff"; the archive itself turned out to be a
+stronger one, since the terms, their frequencies and the article text are all independently checkable.
+
+- With the local MinGW GCC 13.1.0, `go test -tags sqlite_fts5 -trimpath ./... -count=1`, `go vet -tags sqlite_fts5 -trimpath ./...`, and `go build -tags sqlite_fts5 -trimpath ./...` pass after removing the duplicate LSD implementation. Real-dictionary integration and Windows/Android UI checks remain unverified.
+- Android runs Go through JNI without an HTTP listener; Windows listenerless desktop uses WebView2 and a native bridge. Build recipes are in `docs/WINDOWS-VERIFY.md`; Android uses `build-android.cmd debug intel`. Do not install APKs or commit unless requested.
+- Windows/Android search, index maintenance and visual checks remain pending. Other open items include portable Windows write-path gaps (`docs/PORTABLE-WRITES-AUDIT.md`), Edit Folders verification, icon visibility and MDX ad-slot reindex/display.
+- No upstream is configured. DSL uses one GoldenDict-compatible reader and article preparation path. The LSD decoder and reader are in this branch; `docs/DSL.md` and `tools/dslcompare/README.md` describe the DSL architecture.
+Earlier Browse/Wildcards controls, diagnostics, icon handling and settings changes are recorded in commit history; their Windows/Android visual checks remain pending.
+
+The Oxford Advanced Learner's Dictionary 10th source MDX now has `Title="Oxford Advanced Learner's
+Dictionary 10th"` instead of `OALDWU`; its UTF-16 header length and Adler-32 were updated, and the reader
+reopened it and looked up `dog`. The original is preserved beside it as `.mdx.title-backup.bak`; prepared
+data will be stale from the source size/mtime change and needs Rebuild.
+
+At commit `f44e7127`, linked-group synchronization cached its last completed
+input snapshot and skips dictionary metadata reads while state.json, groups.ini, dictionary
+entries/generations and root folders are unchanged. The cache version advances only after a successful
+refresh; the diagnostic reports its version and hit/miss. Focused linked-group rescan/edit checks, `go
+build ./internal/server`, and `git diff --check` pass. Android runtime timing is pending. No upstream is
+configured. The application uses one DSL reader with GoldenDict- compatible repair and article
+preparation; there is no Original/GD selection or duplicate DSL index. `docs/DSL.md` and
+`tools/dslcompare/README.md` describe that current architecture. The LSD decoder and reader work is
+present in this branch; upstream review and pending ZIM checks remain as recorded below. The user-owned
+untracked `DictShelf.exe` was preserved. This session adds a saved Combined list dictionary limit
+(default 500, maximum 5,000), a specific over-limit message, and moves Clear browser cache beneath its
+Browser cache description. Desktop System settings no longer show internal config key names. `go build
+./...`, `git diff --check`, and translation JSON parsing pass; tests were not run, and Windows/Android
+settings UI verification remains pending.
+
+Dictionary names now have a shared icon route: a supported adjacent image file wins, then a format icon
+(including OpenZIM Illustration metadata). When no icon is found the UI leaves the name unadorned. Search
+result headings and Dictionary settings show available icons; browser, Windows WebView and Android
+WebView serve them through their local Go resource path. `go build ./...` and `git diff --check` pass; UI
+runtime checks remain pending.
+
+Dictionary icons also appear in dictionary search, export and group lists. A prepared legacy abbreviation
+glossary is excluded from the library list when its discovered parent DSL is compressed (`.dsl.dz`) as
+well as when it is plain. The `TestAbbrevCompanion` check and `go build ./...` pass; UI runtime
+verification remains pending. Dictionary Groups renders each name in its own text span beside the icon;
+the list-search highlighter targets only that span. Its marks therefore remain inline and cannot become
+separate flex items with gaps between letters. The shared list search now removes old marks before
+applying each current query and repaints on both input and search events (including search-field clear
+actions); runtime confirmation remains pending.
+
+The icon request is now dispatched by the Windows WebView resource adapter as well as the HTTP and
+Android paths. DSL abbreviation companions accept both `_abrv` and `_abrev` spellings (plain or dictzip):
+they are absorbed by the parent glossary and excluded from discovery when that parent exists.
+
+Android log 2026-10-23 05:35–05:37 shows the picker repeatedly spending 1.9–3.3 s in its native
+user-groups call, while Browse article paint takes 4.4–5.4 s: startup dependencies wait about 1.6–2.5 s,
+then the 383-dictionary list takes about 2.5 s, while scoped search itself takes under 50 ms. Android now
+passes the existing diagnostic flag into the Go group snapshot and logs native-bridge stages. The picker
+reuses the loaded group snapshot instead of fetching it on every open. Browse headword links carry `from`
+as well as `dict`; startup skips the group read for scoped article links and defers it until after the
+list/search has had two animation frames to paint. Log 2026-10-23 11:21 confirms first Browse article
+paint in ~0.4 s, but also shows a second search after list completion; that retry lost the one-dictionary
+scope and could show all-dictionary results. Scoped searches no longer mark themselves stale just because
+the full dictionary list is still loading, and any necessary retry preserves its scope. Latest log still
+shows group linking at 3.4–3.6 s for 383 dictionaries; optimizing that native snapshot is separate
+follow-up work. Linked-group synchronization reads each dictionary's metadata at most once per refresh,
+even with several linked groups. With Browse/article diagnostics enabled, `dictionary_picker_groups`
+splits metadata, matching, membership updates and total time. The 2026-10-23 21:01 Android log showed
+0.41–0.86 s per refresh, almost entirely metadata reads, before the completed-snapshot cache was added.
+
+The existing Browse/article navigation diagnostics checkbox failed to record direct Browse headword
+clicks because those links carry `dict`, while the main page diagnostic gate required `from`. The gate
+now accepts `dict` and uses it as the article dictionary ID; the Android log confirmed
+`article_transition` stages from the click through first article paint.
+
+Wildcards' combined mode keeps the dictionary field's geometry, displays “Combined list” / «Общий
+список», and removes the dropdown affordance while disabling selection. The merge icon's tooltip
+describes its next action in English and Russian. After a combined SQL-cache stream completes, a missing
+visible page is read again after the stream closes, so the lookup can see the completed cache. Android
+runtime verification remains pending.
+
+Combined Wildcards top-level result rows now store their own result ordinal as the base position, and the
+renderer uses that ordinal when highlighting and scrolling. This fixes match navigation when all
+dictionaries are merged; the merged SQL signature changed to v4 so stale position rows rebuild. `go build
+./...`, inline JavaScript syntax and `git diff --check` pass; Android runtime verification remains
+pending.
+
+Browse and Wildcards ribbon clicks reveal a partly clipped heading and, when it fits, one neighboring
+heading. Clicking the first or last heading aligns to that strip edge; Browse no longer centers each
+selected heading or scrolls when it is already fully visible. Shared ribbon geometry checks and inline
+JavaScript syntax pass; Windows/Android interaction remains to be checked. Wildcards toolbar: the
+merge-books control is fixed to 3.2em with a larger icon; page controls show “Next page” / “Previous
+page” when the row has room, fall back to arrows, then hide before the page counter on narrow rows.
+
+Browse's “Loading headwords” page indicator now waits 500 ms for both ordinary page reads and in-flight
+page prefetches, avoiding a flash on quick Next transitions. Runtime verification is pending.
+
+Browse deep headword jumps spent about 450 ms in `Locate`'s SQL count even when fewer than 100 rows were
+counted. The query now gives SQLite an explicit lower bound at the closest 100-row anchor, and the anchor
+ordinal includes the anchor row; focused position/query-plan checks pass. Wildcards per-dictionary lower
+search retains base offsets. Combined lower search carries both source and upper-mask base positions;
+navigation, highlighting and Find from here now use the latter, with a new indexed cache signature.
+Runtime checks remain pending. Browse diagnostics split anchor lookup, bounded count, page read, HTTP
+response, and Android bridge timings.
+
+Browse `*home*` with trigram enabled failed because the candidate SQL joined two tables that both expose
+`w`, while the shared internal-entry filter used unqualified `w`. The two joined mask-candidate queries
+now qualify the filter as `e.w`; runtime verification is pending.
+
+Selecting Wildcards resets its view to separate dictionaries; explicit URL/history/article-return
+restoration keeps its saved view. View switches restore completed metadata and visited pages from bounded
+memory caches (128 entries, 30-minute TTL). The 17:58 log shows repeated cached switches in 63–77 ms
+without spinner; initial SQL builds remain long.
+
+Browse/Wildcards diagnostics correlate switch and run IDs, requested query/group, FTS/trigram variant,
+exact browser cache key, saved cache ID, alternative index variants, session-write result, SQL page
+reads, build/resume, spinner and task-panel visibility. This distinguishes a new submit from a view
+switch and a settings-key miss from a lost cache entry. Wildcards rows snapshot FTS/trigram settings for
+cache identity; lower rows inherit them. Returning to completed caches reads only a missing visible page
+and keeps the spinner off. The merged signature validator accepts both index flags and the selected
+dictionary IDs; runtime lower `dog` searches succeed.
+
+System Settings → Search now applies optional FTS/trigram indexes to both Wildcards SQL result databases.
+In the separate-dictionaries database, upper-mask words are indexed with their dictionary and base
+positions; the lower search selects FTS candidates for plain token queries, trigram candidates for masks
+with a 3+ literal, and scans blocks otherwise. The index combination is part of server and browser cache
+identity. Focused four-combination tests, index rebuild tests, Go build, JavaScript parse and diff checks
+pass. Runtime timing on Windows/Android is pending.
+
+At the 2026-10-21 stage, branch `dev` was at `5bdb31cf`. Browse's match-count button, “Find from here”
+action and indexed candidate search in the merged Wildcards database are committed. Opt-in Browse
+diagnostics now logs per-request headword search mode/source, first event/word and total timings,
+found/scanned counts; merged search additionally logs cache hit/miss, selected index, candidate count,
+and cache-build time. The existing Settings → System Browse/Wildcards diagnostics checkbox enables it in
+both views. The 2026-10-21 System Log includes an earlier Wildcards run that scanned dictionary indexes
+(up to 61 s) and a later run using the upper-mask SQLite cache. That cache run still took 16.6 s on 197k
+rows because it emitted one event per match; batching now emits the first result immediately and
+subsequent results in batches. Go build passes; runtime timing after this fix is pending. Plain Browse
+`dog` in a 9.1M-entry dictionary took 11 ms; merged Wildcards narrowed `dog` to 6382 FTS candidates and
+built 6249 results in 115 ms. Merged filter caches now resolve each match's base position through the
+unfiltered mask's indexed result cache; their signature changed so old incorrect positions rebuild. This
+addresses “Find from here” after jumping to the middle of the combined list. Ordinary Wildcards' lower
+search for selective top masks now scans completed result blocks in the wildcard SQLite cache, not
+dictionary indexes, and records the same base offsets. Streaming search and later page/position reads now
+require a valid wildcard SQL cache; missing, malformed or unavailable cache data returns an error instead
+of falling back to a dictionary index. Combined mode passes its prepared merged-database ID to the lower
+search, validates the selected dictionary IDs from SQL metadata, and does not reopen dictionaries on that
+path. The Wildcards UI cache-key version changed so an older session cannot restore a combined row
+without that ID. The UI waits for upper mask completion and shows one aggregate word-count progress with
+the currently scanned block's dictionary name. Masks made only of `*` and `?` normalize to a
+minimum-length mask and build the same complete 300-word SQL cache; all-star queries no longer use lazy
+page-only storage. Runtime UI confirmation remains. Earlier Browse/Wildcards, Android UI, and
+task-progress work is included in the checkout. Browse and Wildcards SQL result caches now use indexed
+300-headword blocks, retain files across idle periods/restarts, and share a five-file/age/disk-size
+cleanup policy. Settings → System controls the combined cache disk cap (16 GiB on Windows and Android, 8 GiB
+on other desktops, or No Limit). Old cache schemas are prepared on first open. `go build ./...`, inline
+JavaScript syntax checks, catalog JSON parsing, and `git diff --check` pass; the FOSS debug APK also
+builds successfully. No tests were run, and the APK was not installed. Windows/Android UI and
+long-running cache behavior need runtime verification. Merged Wildcards progress now uses one scale
+across building the combined SQL list and applying its mask, reserving 100% until both caches are
+committed. Switching back to per-dictionary mode reads completed SQL-cache pages without showing a
+full-search task; runtime verification remains pending. Combined Wildcards diagnostics record index
+combination, cache hit/build, row counts and elapsed time. Each combination stays isolated. Android UI
+changes keep the Browse A–Z heading and Find/Filter dock fixed while its dictionary list scrolls; the
+Reading it word by word hint stays with the heading above its divider, and filter mode is selected by
+default. The Wildcards merge button uses a two-state SVG: several books → one book, or one book → several
+books. Its title and accessible name describe the next transition in English and Russian; it sits beside
+Total and block paging in the Wildcards header. The result-count control is visibly button-shaped. The
+normal per-dictionary and merged views use separate SQLite caches; after the initial merged cache is
+built, toggling back and forth reuses each view. The merged list is deduplicated and globally sorted,
+applies the active mask and filter, and retains source positions for paging and “Find from here”. The
+selected view is kept in the search URL and article-return link. The previous/next-match buttons now
+retain the merged flag and source dictionary IDs when creating filter rows; without those fields,
+merged-match requests silently queried a nonexistent dictionary. Cache eviction links both views by
+dictionary group and FTS/trigram setting, including merged find caches; an active member protects the
+whole group. Match pages now also carry a separate ordinal within the masked merged list: the source
+position is still used to highlight the exact headword, while the masked ordinal selects the correct base
+page. Older merged-find SQL caches are rebuilt automatically if they lack this ordinal column. `go build
+./...`, inline JavaScript parsing, catalog JSON parsing and `git diff --check` pass; the FOSS arm64 debug
+APK builds successfully and was not installed. Windows/Android runtime behavior remains unverified. The
+Android-only `A60` header marker is now shown only by debug builds. The wildcards results now use a
+full-width unboxed surface with compact top controls. Browse and wildcard headword searches reveal their
+first matching word as soon as the stream provides it, including searches started by Apply. Wildcard SQL
+cache pages reassemble variable-sized stream events into fixed-size pages within each dictionary,
+preserving the group's dictionary order during parallel search. The wildcard search match counter opens a
+localized Go to match dialog and navigates to the selected result. In Wildcards search mode,
+right-clicking or long-pressing a headword opens “Find from here”; the chosen headword receives a
+rectangular outline and subsequent match navigation starts beside it. Opening an article stores the
+clicked word and restores it to view on return via ← Word.
+
+Browse's bottom match count is now a button that opens the existing customized Go to match dialog. In
+Browse search mode, long-pressing on touch or right-clicking a headword opens “Find from here”; it
+outlines the selected word and uses SQLite NOCASE-compatible binary bounds so Next starts after the word
+and Previous before it. `go build ./...`, inline JavaScript parsing, and `git diff --check` pass;
+Windows/Android interaction still needs runtime verification.
+
+Merged Wildcards search previously scanned every row in the combined SQL table in Go and rebuilt the
+query result cache. The merged database now builds FTS5 and (when supported by SQLite) trigram indexes;
+plain headword queries and masks with a literal run of at least three characters use SQL index candidates
+before the existing exact matcher. A full scan remains for masks without a 3+ character literal or any
+indexed bottom-search term. The base cache signature version changed to rebuild older merged databases.
+Go build and `git diff --check` pass; runtime speed and SQLite index behavior are not yet measured on
+Windows or Android. Windows log 2026-10-21 19:35:28 exposed a slow Wildcards lower `dog` search inside
+`*d*g*`: SQLite ordered the dictionary table before FTS, taking 31 s for 2,045 candidates and over a
+minute for 2,771. The candidate query now forces FTS first with `CROSS JOIN`; the latter query takes ~10
+ms against the saved cache, but app runtime remains unverified. The ordered SQL wildcard cache supports
+seeking to matches before or after a headword position across dictionary boundaries. The live Wildcards
+pane now assembles visible 300-word pages by cumulative result offset, since stream events can be shorter
+than a page; treating one event as a page shifted the outlined match onto unrelated words. A completed
+visible page is reread from the SQL cache. “Find from here” treats the outlined word as a cursor between
+matches: if 100 matches precede it, the counter shows 100 and the first Next/Previous goes to match
+101/100. Explicit Go to match clears that cursor. A single dictionary also wraps match navigation at its
+ends. Position lookup now uses indexed first/last positions and the starting match ordinal of each SQL
+cache block; SQLite selects one block via its B-tree and Go binary-searches that block's positions. The
+unreleased cache has no schema migration; remove existing Wildcards cache files before using this change.
+In-memory search positions use binary search too. Focused position, page-boundary, and SQLite query-plan
+checks passed before migration removal. Android versionCode now uses 941 as a baseline at commit
+`bb2a4b17` and increments for each later commit; all flavours and build types share it. The FOSS debug
+APK for arm64/x86_64 built successfully with manifest versionCode 941. Preserve all other working-tree
+changes. Android uses the in-process Go/JNI bridge and opens no TCP listener.
+
+Startup progress cleanup: successful initial dictionary-list loading now clears its status immediately
+and removes only its transient loading task even when indexing is also active. The independent indexing
+task remains visible with its own progress. The deferred progress asset also initializes its modal-dialog
+tracking before publishing its task API; otherwise an already-running startup load could throw during the
+ready event and prevent progress rendering. Android debug APK rebuilt and installed alongside release on
+the connected phone. The WebView reaches phase `ready` with 21/21 dictionaries, an empty status row, no
+visible server-work notice and zero active UI tasks; the dialog initialization exception no longer
+appears. A follow-up removes the legacy startup status counter entirely, including its unused EN/RU
+catalog entries: the task manager is the only loading indicator, with a plain task label. Release app
+remains installed and untouched.
+
+Windows CI run `39398437050` passed toolchain setup but failed in `runtime/cgo` with `cgo.exe: exit
+status 2`. The checked-in fix for the old local GCC path is present. A local Go 1.26.5 cgo Windows build
+succeeds with Qt GCC 13.1. Both Windows workflows now use the `windows-2022` image's
+`C:\mingw64\bin\gcc.exe` instead of installing a rolling MSYS2 toolchain, and print its version/target.
+The runner image documents GCC 14.2.0 and binutils 2.44. CI rerun is pending.
+
+Windows builds use `build-windows.cmd` for the listenerless WebView app, `cli` for the console CLI
+(no-argument help, no TCP listener), `server` for the console HTTP server, and `installer` to package the
+already-built desktop exe. Both Windows workflows build and upload all four artifacts.
+
+Portable mode includes the active user data under `Data`; dictionary roots inside `Data/Dictionaries`
+become relative paths. The latest Windows write-path audit is in
+[`docs/PORTABLE-WRITES-AUDIT.md`](docs/PORTABLE-WRITES-AUDIT.md); strict confinement still needs
+follow-up. Windows builds provide the standalone GUI, CLI, HTTP server and installer targets. Android
+runs Go in-process through JNI without a TCP listener; its WebView receives app pages and resources
+through the same runtime bridge. ## Remaining manual check Windows System Log export saves directly into
+the user's Downloads folder and opens a localized, compact in-app confirmation showing the full
+saved-file path, with a Show in folder action. Browser and Android export flows retain their existing
+behavior. Runtime verification is pending.
+
+On Windows, verify direct GET resource delivery: Settings/editor assets, preset switching and GD fonts,
+user styles, and background images in the picker. The user has confirmed dictionary images,
+multi-gigabyte video, seeking and background-image thumbnails through the latest direct resource path.
+The user confirmed successful settings migration and that the next launch skips it; only the
+stalled-export timeout branch remains unverified. The user confirmed the three dialogs and startup splash
+on Windows. Also confirm browser and console mode still bind and serve HTTP. Remaining checks: dialog
+appearance with Background Image and Sepia on/off; browser and Android paths for all three dialogs; Edit
+Filters load/save/reset, close prompt, and translations; Edit Folders' layout, current paths, validation,
+index defaults, picker, archive intake, shared progress, save and list refresh; Lemmatization
+list/install/removal, progress polling, directory note and attribution; chunked browser archive upload;
+URL and native-path import; System/English/Русский selection and persistence on Windows and Android;
+System locale behavior on EN/RU devices; orphan actions/removal; About; Browse
+streams/search/filter/Stop/chooser; Wildcards filtering/page turns/prefetch; article CSS; explicit index
+rescan and reindex progress/Stop. Browser file input/drop uploads retain HTTP; verify browser upload
+remains functional and test Android WebView and Java archive imports. Then verify portable startup with
+prepared dictionaries and confirm indexes are reused after copying `Data`. Check the shared dictionary
+picker on Android.
+
