@@ -321,3 +321,38 @@ them are in `docs/handoff-archive.md`.
       contains index. Worth starting from what chooses the first-run plan
       (`prefs.newIndexDefaults` and the registry's first-run ingest), because
       the two halves of the test disagree about it.
+
+## Measuring the ingest write path on this machine
+
+`internal/store/dmsh_ingest_bench_test.go` is a gated measurement (it skips
+unless `WUDICT_BENCH_ARTICLES` is set and asserts nothing about time): it builds
+one synthetic read-through database - bodies dropped, article text indexed, the
+form a ZIM archive gets - and prints the phase timings, so a change to the write
+path can be A/B'd on one machine without touching a real library:
+
+    WUDICT_BENCH_ARTICLES=300000 go test -tags sqlite_fts5,sqlite_dbstat         -run TestIngestSplitThroughput -v -count=5 ./internal/store/
+
+300000 articles of ~1.5 kB each is ~450 MB of text and about 10.5 s per run
+here; five runs give a median with a spread under 1%. To compare against a
+different revision, run the same command in a `git worktree` of that revision
+(the test file is untracked, so copy it in).
+
+For the real thing - one archive, alone, no other builds running - the CLI is
+the driver and its own line is the number:
+
+    wudict ingest -fulltext -contains -o <dir>/text.db <archive.zim>
+
+Measured 2026-11-03 on the NVMe machine, `wiktionary_ru_all_nopic_2026-09.zim`
+(2.15 GB, 1.53 M entries), four runs of the same command back to back:
+
+    495.5 s   before the attached-temp pragmas and the ingest page cache
+    431.3 s   the same binary again, an hour later
+    430.7 s   with the two changes
+
+Two runs of the SAME binary differed by 15 %, so a single pair of real builds
+proves nothing: the bench above is the instrument (its spread is under 1 %), and
+the real archive is for sanity checks - output bytes and recorded sizes must
+match. What the real runs do settle is the comparison that matters for the
+feeling of slowness: the same archive took **763 s** in the log of a
+three-dictionary parallel batch, against 430-495 s alone.
+

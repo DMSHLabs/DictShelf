@@ -7,10 +7,13 @@ package store
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
@@ -254,5 +257,103 @@ func TestAdoptionTakesTheLooseArticleIndexAlong(t *testing.T) {
 	defer s.Close()
 	if !s.HasArticleIndex() {
 		t.Error("the adopted database lost its full text")
+	}
+}
+
+// The attached article temp is a throwaway exactly like the main one: no
+// rollback journal, no synchronous commit. The pragmas that say so are per
+// DATABASE, so a build that sets them on the main temp only leaves the largest
+// file it writes - the article index of a read-through archive - journaled.
+func TestTheAttachedArticleFileIsAThrowawayToo(t *testing.T) {
+	dir := t.TempDir()
+	main, side := filepath.Join(dir, TextDBName), filepath.Join(dir, ArticlesDBName)
+	db, err := sql.Open(driverName, dsnIngest(main))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	if err := createArticlesDB(db, side, "uuid-1"); err != nil {
+		t.Fatal(err)
+	}
+	var mode string
+	if err := db.QueryRow("PRAGMA articles.journal_mode").Scan(&mode); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.EqualFold(mode, "off") {
+		t.Errorf("the attached temp is journaled: journal_mode=%q, want off", mode)
+	}
+	var sync int
+	if err := db.QueryRow("PRAGMA articles.synchronous").Scan(&sync); err != nil {
+		t.Fatal(err)
+	}
+	if sync != 0 {
+		t.Errorf("the attached temp syncs its commits: synchronous=%d, want 0 (OFF)", sync)
+	}
+	var cacheKiB int
+	if err := db.QueryRow("PRAGMA articles.cache_size").Scan(&cacheKiB); err != nil {
+		t.Fatal(err)
+	}
+	if cacheKiB != -ingestCacheKiB {
+		t.Errorf("the attached temp has cache_size=%d, want %d (the ingest cache)", cacheKiB, -ingestCacheKiB)
+	}
+	// Writing to it - inside a transaction, which is what a build does for
+	// minutes - must leave no journal beside it.
+	if _, err := db.Exec(`CREATE VIRTUAL TABLE articles.article_fts USING fts5(
+		w, txt, content='', columnsize=0, tokenize='unicode61 remove_diacritics 2')`); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(`INSERT INTO articles.article_fts(rowid, w, txt) VALUES (1, 'alpha', 'one two')`); err != nil {
+		t.Fatal(err)
+	}
+	if matches, _ := filepath.Glob(filepath.Join(dir, "*-journal")); len(matches) != 0 {
+		t.Errorf("a rollback journal appeared for the attached temp: %v", matches)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A split build records the article index's real size. The measurement is the
+// one place where "which database am I looking at" can go wrong silently: a
+// walk that reads the main database's pages while filtering for the article
+// table's finds nothing, and the dictionary list then shows no index size at
+// all - which is exactly what an attempt to measure through articles.dbstat on
+// the writing connection did, on a SQLite build where that schema-qualified
+// table enumerates the MAIN database.
+func TestASplitBuildRecordsTheArticleIndexSize(t *testing.T) {
+	dir := t.TempDir()
+	textDB := filepath.Join(dir, TextDBName)
+	src := writeSrc(t, filepath.Join(dir, "source.dsl"), "#NAME t\n\nword\n\tbody\n")
+	var entries []dict.Entry
+	for i := 0; i < 40; i++ {
+		entries = append(entries, h(fmt.Sprintf("word%02d", i), "<p>one two three four five six seven eight</p>"))
+	}
+	r := &fakeReader{meta: dict.Meta{Name: "Sized", Format: "dsl", Path: src}, entries: entries}
+	if _, err := IngestPlan(r, textDB, Plan{FullText: true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	side, ok := ArticlesSibling(textDB)
+	if !ok {
+		t.Fatal("the build did not split the article index")
+	}
+	recorded, err := strconv.ParseInt(Inspect(textDB).Meta["full_text_index_bytes"], 10, 64)
+	if err != nil || recorded <= 0 {
+		t.Fatalf("the build recorded full_text_index_bytes=%q, want the index's real size", Inspect(textDB).Meta["full_text_index_bytes"])
+	}
+	if !dbstatAvailable(t, textDB) {
+		return // this build cannot measure it; the recorded number is all we have
+	}
+	sideDB, err := openRO(side)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sideDB.Close()
+	if measured := sizeOfTable(context.Background(), sideDB, "article_fts"); measured != recorded {
+		t.Errorf("the build recorded %d bytes, the article index measures %d", recorded, measured)
 	}
 }

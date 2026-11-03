@@ -46,7 +46,7 @@ func dsnRO(path string) string {
 // dsnIngest is a throwaway-safe bulk-write connection string (the ingest
 // target is a temp file renamed on success, so durability is pointless).
 func dsnIngest(path string) string {
-	return "file:" + uriPath(path) + "?_journal_mode=OFF&_synchronous=OFF"
+	return "file:" + uriPath(path) + "?_journal_mode=OFF&_synchronous=OFF&_cache_size=-" + strconv.Itoa(ingestCacheKiB)
 }
 
 func dsnWildcardCache(path string) string {

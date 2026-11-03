@@ -1014,6 +1014,57 @@ dropped the reader back to the first option in silence, while the menu kept offe
 is now derived from the select's own options (`searchModeExists`), which cannot drift from the control it
 describes. Verified by driving the page: all three readings survive a reload, each wearing its own mark.
 
+## The attached article temp is journaled no more, and the build's cache is real (2026-11-03)
+
+The user asked why every build leaves THREE temp files in a folder:
+`<name>.ingest.<hex>`, `<name>.ingest.<hex>-articles` and
+`<name>.ingest.<hex>-articles-journal`. The third is not ours - it is SQLite's
+rollback journal for the attached article database, and its presence is the
+proof that the pragmas saying "this file is a throwaway" never reached it:
+`dsnIngest` sets `journal_mode=OFF` and `synchronous=OFF` on the connection at
+open, BEFORE the ATTACH, and they are per DATABASE. So the article index - the
+largest thing a read-through build writes, 1.3 GB for the Russian Wiktionary -
+was written with a rollback journal and a synchronous=FULL commit while the main
+temp was journal-less and synchronous=OFF. The journal's own bytes are small
+(13 KB: pre-images of a brand-new file), but it was created, written and deleted
+per build, and the commit fsynced a file of gigabytes that nothing else fsyncs.
+Fixed in `createArticlesDB`: `PRAGMA articles.{journal_mode,synchronous,cache_size}`
+right after the ATTACH, pinned by `TestTheAttachedArticleFileIsAThrowawayToo`.
+
+Second change in the same area: the ingest connection had no `cache_size` at all,
+so a build that appends to two databases for minutes ran on SQLite's 2 MiB
+default. `ingestCacheKiB` (64 MiB desktop, 8 MiB Android) now goes into `dsnIngest`
+and explicitly onto the attached database.
+
+**How it was measured, and what the numbers actually say.** The bench is
+`internal/store/dmsh_ingest_bench_test.go` (gated on `WUDICT_BENCH_ARTICLES`,
+prints the phases; the recipe is in docs/WINDOWS-VERIFY.md). Five runs each side,
+300 000 synthetic articles of ~1.5 kB with the bodies dropped - the ZIM form:
+**10.893 s -> 10.591 s (-2.8 %)**, with per-phase deltas that repeat: commit
+-0.06 s (-17 %, the journal and its fsync), the contains/trigram optimize
+-0.17 s (-45 %, the cache), the write phase -0.09 s. On the real archive
+(wiktionary_ru, 2.15 GB, 1.53 M entries) four runs were: 495.5 s (before),
+431.3 s (the SAME binary again), 430.7 s (after) - a 15 % spread between two
+identical runs, so that pair settles nothing; the real runs are good for
+checking that the output bytes and the recorded `full_text_index_bytes`
+(1 291 067 392) are identical, which they are.
+
+**Two hypotheses were tested and dropped, with the evidence.** De-interleaving
+the article writes from the entry writes (a bigger, separately flushed buffer for
+the article index) measured 10.46 s against 10.44 s - nothing, because both disks
+here are NVMe SSDs and the interleaving cost it targets is a seek cost; the 16 MiB
+of held-back text was not worth keeping, so it went. Measuring the article index
+through the writing connection (`articles.dbstat`) instead of opening a second
+connection measured faster but was WRONG: in this SQLite build the
+schema-qualified dbstat enumerates the MAIN database's pages, so the build
+recorded `full_text_index_bytes = 0`. Reverted, and
+`TestASplitBuildRecordsTheArticleIndexSize` now pins the recorded size against a
+real walk of the file, so that class of silent zero cannot come back.
+
+**The finding that matters more than either fix:** the same archive took 763 s in
+the user's log while two other encyclopedias were building in the same batch, and
+430-495 s alone. The split is not what makes a build feel slow - concurrency is.
+
 ## An index cannot be deleted, and every dictionary has one (2026-11-03)
 
 The headword index is mandatory, so nothing removes it any more. Every door went: the card's "index

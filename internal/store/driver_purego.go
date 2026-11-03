@@ -52,7 +52,7 @@ func dsnRO(path string) string {
 
 // dsnIngest is a throwaway-safe bulk-write connection string.
 func dsnIngest(path string) string {
-	return "file:" + uriPath(path) + "?_pragma=journal_mode(OFF)&_pragma=synchronous(OFF)"
+	return "file:" + uriPath(path) + "?_pragma=journal_mode(OFF)&_pragma=synchronous(OFF)&_pragma=cache_size(-" + strconv.Itoa(ingestCacheKiB) + ")"
 }
 
 func dsnWildcardCache(path string) string {

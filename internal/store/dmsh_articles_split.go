@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -90,6 +91,28 @@ func detachArticles(db *sql.DB) {
 func createArticlesDB(db *sql.DB, path, uuid string) error {
 	if _, err := db.Exec(`ATTACH DATABASE ? AS articles`, path); err != nil {
 		return fmt.Errorf("attach %s: %w", path, err)
+	}
+	// The attached file is a throwaway exactly like the main temp, and the
+	// pragmas that say so are PER DATABASE: dsnIngest sets them on the main one
+	// at connection open, before this file existed, so without these two lines
+	// the article index - the largest thing a read-through build writes - is
+	// written with a rollback journal and synchronous=FULL while everything else
+	// is journal-less and synchronous=OFF. Measured on a real build: the journal
+	// itself stays small (13 KB, pre-images of a brand-new file) but it is
+	// created, written and deleted, and the commit fsyncs a file of gigabytes
+	// that nothing else fsyncs.
+	pragmas := []string{
+		"PRAGMA articles.journal_mode = OFF",
+		"PRAGMA articles.synchronous = OFF",
+		// Explicit rather than inherited: cache_size is a property of each
+		// database in the connection, and this one holds the biggest b-trees the
+		// build writes.
+		"PRAGMA articles.cache_size = " + strconv.Itoa(-ingestCacheKiB),
+	}
+	for _, pragma := range pragmas {
+		if _, err := db.Exec(pragma); err != nil {
+			return fmt.Errorf("configure %s (%s): %w", path, pragma, err)
+		}
 	}
 	stmts := []string{
 		`CREATE TABLE articles.meta (key TEXT PRIMARY KEY, value TEXT)`,
