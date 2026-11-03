@@ -192,6 +192,18 @@ func (d *Dict) Exact(word string, limit int) ([]dict.Result, error) {
 			break
 		}
 	}
+	// A path that misses may carry a namespace: "A/Foo" is how a pre-6.1 file
+	// spells an article (the namespace is its first path segment, see
+	// longPath), and a link written then still reads that way when it is
+	// followed in a later file. It is looked up once more without the prefix,
+	// which is what libzim's Archive::getEntryByPath does - and only after the
+	// lookup above missed, because a later file may hold an article whose path
+	// really begins with "A/", and that one has just been found.
+	if len(idxs) == 0 && len(word) > 2 && word[1] == '/' {
+		if i, de, ok := d.c.find(d.c.contentNS(), word[2:]); ok && d.c.isArticle(i, de) {
+			idxs = append(idxs, i)
+		}
+	}
 	return d.results(idxs, limit)
 }
 

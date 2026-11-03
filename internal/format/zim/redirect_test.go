@@ -133,8 +133,8 @@ func TestRealFileRedirects(t *testing.T) {
 			t.Logf("deepest chain starts at entry %d, namespace %q, path %q", deepest, de.namespace, de.path)
 		}
 	}
-	t.Logf("%d entries, %d redirects (%d outside the content namespace), deepest chain %d hop(s), %d cycles, %d unreadable",
-		n, redirects, otherNS, maxDepth, cycles, unreadable)
+	t.Logf("file version %d.%d, content namespace %q, %d entries, %d redirects (%d outside the content namespace), deepest chain %d hop(s), %d cycles, %d unreadable",
+		c.major, c.minor, c.contentNS(), n, redirects, otherNS, maxDepth, cycles, unreadable)
 	t.Logf("targets: failed=%d html=%d nonHTML=%d notContent=%d samePath=%d", failed, html, nonHTML, notContent, samePath)
 	t.Logf("distinct targets=%d named by >1 path=%d, worst %d paths", len(targets), shared, worst)
 	if len(byMIME) > 0 {
