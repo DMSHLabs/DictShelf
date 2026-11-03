@@ -36,3 +36,15 @@
   padding: 0.375rem 1.1rem;
   border-radius: 999px;
 }
+
+/*
+ * No search. Zensical's search is a built-in plugin whose index is always
+ * built, and the box in the header is drawn by the theme on top of it - there
+ * is no config switch that removes it (checked: an explicit, empty plugin table
+ * changes nothing). The manual has no table of contents worth searching yet, so
+ * the box is hidden here, and this comment is the note that says why. Delete it
+ * when the manual is ready for a search.
+ */
+.md-search {
+  display: none;
+}
