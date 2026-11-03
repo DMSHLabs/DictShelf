@@ -61,6 +61,18 @@ func TestPlayLinks(t *testing.T) {
 		{`<audio src="a.mp3"><a href="x">x</a><img src="spkr.png"></audio>`, `<audio src="a.mp3"><a href="x">x</a><img src="spkr.png"></audio>`},
 		{`<audio src="a.mp3"><div><img src="spkr.png"></div>`, `<audio src="a.mp3"><div><img src="spkr.png"></div>`},
 		{`<audio src="a.mp3"><span>say <b>it</b></span><img src="spkr.png"></audio>`, `<a class="wu-audio" href="a.mp3"><span>say <b>it</b></span><img src="spkr.png"></a>`},
+		// The resource may be named by the first child <source> rather than by
+		// the element itself - the shape an encoder writes for several formats.
+		{`<audio><source src="a.ogg"><source src="b.mp3"><img src="spkr.png"></audio>`, `<a class="wu-audio" href="a.ogg"><source src="a.ogg"><source src="b.mp3"><img src="spkr.png"></a>`},
+		// A present but empty src is what a browser plays (nothing); the link
+		// plays what the author named in the child.
+		{`<audio src=""><source src="b.mp3"><img src="spkr.png"></audio>`, `<a class="wu-audio" href="b.mp3"><source src="b.mp3"><img src="spkr.png"></a>`},
+		// No source anywhere is not a play link: the element is emitted exactly
+		// as it would be without PlayLinks.
+		{`<audio><img src="spkr.png"></audio>`, `<audio><img src="spkr.png"></audio>`},
+		// Only a DIRECT child <source> names the resource: one inside a
+		// phrasing element leaves the element as written.
+		{`<audio><span><source src="a.ogg"></span><img src="spkr.png"></audio>`, `<audio><span><source src="a.ogg"></span><img src="spkr.png"></audio>`},
 	}
 	for _, tc := range cases {
 		if got := rw.Rewrite(tc.in); got != tc.want {

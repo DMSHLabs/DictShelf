@@ -343,7 +343,13 @@ func (rw Rewriter) Rewrite(doc string) string {
 				case "a":
 					inAnchor = true
 				case "audio":
-					if src, ok := playLinkSrc(&t); ok && src != "" && !inAnchor {
+					// An <audio> that names no src of its own is held back
+					// too: its resource may come from a child <source>, which
+					// is only known once the body has been read - that is what
+					// firstDirectSource does at the end tag. Holding it costs
+					// nothing when neither names a playable source: the bytes
+					// are then emitted exactly as written.
+					if src, ok := playLinkSrc(&t); ok && !inAnchor {
 						pa = &pendingAudio{src: src}
 						var open strings.Builder
 						writeTag(&open, &t, changed, z)
