@@ -1,4 +1,4 @@
-# wudict - the HTTP contract, hand-written (see internal/server/openapi.go for
+# DictShelf - the HTTP contract, hand-written (see internal/server/openapi.go for
 # why) and embedded into the binary, which serves it at /api/openapi.yaml.
 #
 # internal/server/openapi_test.go walks this file against the route table in
@@ -10,7 +10,7 @@
 openapi: 3.1.0
 
 info:
-  title: wudict
+  title: DictShelf
   version: "1"
   summary: A local dictionary server for MDX/MDD, StarDict, Slob, DSL and BGL files.
   description: |
@@ -38,7 +38,7 @@ info:
     includes every globally routable IPv6 address the machine holds - `AUTH`
     defaults to requiring one on every endpoint EXCEPT the three read-only ones
     above, which stay open to the extensions already granted them. Send it as
-    `Authorization: Bearer <key>`, or open the link `wudict token` prints once
+    `Authorization: Bearer <key>`, or open the link `dictshelf token` prints once
     and let the browser keep the cookie it sets. Without it: `401`, with
     `{"auth":"required"}`. `AUTH=off` serves everything to anyone who can reach
     the port.
@@ -267,7 +267,7 @@ paths:
             where the match is the headword itself.
 
             Off unless you ask, so an article you fetch is the dictionary's own
-            bytes by default. wudict's own UI sends `hl=1` from a remembered
+            bytes by default. DictShelf's own UI sends `hl=1` from a remembered
             preference, which is why the default here is off and the default
             there is on. Marking is prefix-based and whole-token, matching what
             the full-text index matched, and is capped at 500 marks per article
@@ -645,7 +645,7 @@ paths:
       tags: [internal]
       operationId: howtoCopy
       x-internal: true
-      summary: Put an editable copy of the wudict howto into the import folder
+      summary: Put an editable copy of the built-in howto into the import folder
       description: >
         Copies the built-in guide (`wudict-howto.wudict.md` and its
         `wudict-howto.wudict.files/`) into the folder imports go to - the first
@@ -795,7 +795,7 @@ paths:
         **Irreversible.** Files are unlinked, not moved to a Trash or Recycle
         Bin, and nothing here can be undone.
 
-        From the machine running wudict this is always allowed - it is your
+        From the machine running DictShelf this is always allowed - it is your
         library and your disk. From a browser on another machine it follows
         `ALLOW_REMOTE_DELETE` (default off); with that off, the remote caller
         gets a 403 and `canDelete: false` in `GET /api/config`.
@@ -823,7 +823,7 @@ paths:
             # free the indexes only, keeping the original file
             curl -s -X DELETE 'http://127.0.0.1:6888/api/library?dict=oxford&source=0'
 
-            # There is no dry run here - `wudict rm` is the one that previews.
+            # There is no dry run here - `dictshelf rm` is the one that previews.
       responses:
         '200':
           description: What was removed.
@@ -835,7 +835,7 @@ paths:
         '403':
           description: >
             Deleting from another machine is off (ALLOW_REMOTE_DELETE = "0").
-            Do it on the machine running wudict, or turn the setting on.
+            Do it on the machine running DictShelf, or turn the setting on.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -894,7 +894,7 @@ paths:
         1 MiB.
 
         **Deleting is irreversible.** Files are unlinked, not moved to a Trash
-        or Recycle Bin. Allowed on the machine running wudict; from another
+        or Recycle Bin. Allowed on the machine running DictShelf; from another
         machine only with `ALLOW_REMOTE_DELETE`, which also governs `keep`.
       requestBody:
         required: true
@@ -941,7 +941,7 @@ paths:
         '403':
           description: >
             Deleting from another machine is off (ALLOW_REMOTE_DELETE = "0").
-            Do it on the machine running wudict, or turn the setting on.
+            Do it on the machine running DictShelf, or turn the setting on.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -1059,7 +1059,7 @@ paths:
         one in use, and re-indexes the folder. Deleting English falls back to
         the pack compiled into the binary rather than losing the language.
         Unlike dictionary removal this is offered on every platform: these are
-        files wudict downloaded, not files the user brought.
+        files DictShelf downloaded, not files the user brought.
       parameters:
         - name: code
           in: query
@@ -1994,7 +1994,7 @@ paths:
       x-internal: true
       summary: The user's global stylesheets
       description: >
-        Two CSS files the user owns, applied to everything wuDict renders.
+        Two CSS files the user owns, applied to everything DictShelf renders.
         `app` styles the page itself - its colours, its own layout - and its
         `:root` custom properties reach articles too, because they inherit
         across the shadow boundary. `article` styles what dictionaries render,
@@ -2066,7 +2066,7 @@ paths:
       x-internal: true
       summary: The groups the dictionary picker offers
       description: >
-        `groups.ini`, beside the `wudict.toml` in effect: a `[Section]` line is
+        `groups.ini`, beside the `dictshelf.toml` in effect: a `[Section]` line is
         a "Group by" heading (at most 32, names of at most 64 bytes), and
         `Name = text, text` a group under it that a dictionary joins when one
         of the texts (at least 2 characters) is anywhere in its title or file
@@ -2577,7 +2577,7 @@ paths:
         dictionary that has not been prepared answers `409` instead of a slower
         browse. Browse order is that index's order - case-insensitive by
         headword - and NOT the source file's entry order, which is what
-        `wudict keys` reads.
+        `dictshelf keys` reads.
 
 
         `size` is fixed by the server and is not a parameter: the page number is
@@ -2855,7 +2855,7 @@ paths:
           label: curl
           source: |
             # opens a file manager window on the machine running the server
-            curl -s 'http://127.0.0.1:6888/api/reveal?path=/Users/me/.wudict/db'
+            curl -s 'http://127.0.0.1:6888/api/reveal?path=/Users/me/.dmshlabs/dictshelf/db'
 
             # Loopback only: the request must come from this machine.
       responses:
@@ -3386,7 +3386,7 @@ components:
         dbSize: { type: integer, description: Bytes of text.db. }
         mediaSize: { type: integer, description: Bytes of media.db. }
         hasMedia: { type: boolean, description: 'Packable media exists, so "pack media" is offered.' }
-        builtin: { type: boolean, description: 'Shipped with the app (the wudict howto, id `wudict-howto`), not added by the user; it cannot be removed.' }
+        builtin: { type: boolean, description: 'Shipped with the app (the built-in howto, id `wudict-howto`), not added by the user; it cannot be removed.' }
         groups:
           type: array
           items: { $ref: '#/components/schemas/DictGroup' }
@@ -3489,7 +3489,7 @@ components:
         prepared: { type: integer }
         useCached: { type: boolean }
         configPath: { type: string, description: The config file in effect. }
-        howtoRemoved: { type: boolean, description: 'The user removed the built-in wudict howto; POST /api/howto?restore=1 brings it back.' }
+        howtoRemoved: { type: boolean, description: 'The user removed the built-in howto; POST /api/howto?restore=1 brings it back.' }
         total: { type: integer, description: Dictionaries served. }
         dictDirOrigin:
           type: string
@@ -3503,7 +3503,7 @@ components:
           items: { type: string }
           description: >
             Lines of the config file in effect that set nothing - not `KEY = value`,
-            a key wudict does not know (a misspelling), a list or a string left
+            a key DictShelf does not know (a misspelling), a list or a string left
             open - as "line N: ...". The rest of the file applies. Absent when none.
         revealLabel:
           type: string
@@ -3516,7 +3516,7 @@ components:
           type: boolean
           description: >
             Whether THIS caller may delete a dictionary: always true from the
-            machine running wudict, and from a remote browser only when
+            machine running DictShelf, and from a remote browser only when
             ALLOW_REMOTE_DELETE is on.
         pathAliases:
           type: array
@@ -3556,7 +3556,7 @@ components:
         hlOff:
           type: boolean
           description: >
-            Turns OFF full-text match marking in wudict's own UI. Negated so
+            Turns OFF full-text match marking in DictShelf's own UI. Negated so
             that absent - the state of a file nobody has written - is the
             feature working. It is remembered state for that UI and nothing
             else: the search endpoint never reads it, and marks are applied
@@ -3567,7 +3567,7 @@ components:
             Unfolds whichever dictionary answers first, instead of the first
             dictionary in the user's own order that has a result. Spelled as
             the opt-out, so that absent is the default strategy - the reader's
-            own order. Remembered state for wudict's own UI - the search
+            own order. Remembered state for DictShelf's own UI - the search
             endpoint never reads it.
         openN:
           type: integer
@@ -3576,27 +3576,27 @@ components:
             How many sections open by themselves: the first openN dictionaries
             in the user's own order that have a result. Absent is one, the
             default; values below 2 are stored as absent. No upper limit.
-            Remembered state for wudict's own UI - the search endpoint never
+            Remembered state for DictShelf's own UI - the search endpoint never
             reads it.
         openAll:
           type: boolean
           description: >
             Opens every section that has a result, in the user's own order.
             `fastFirst`, which opens one section, wins over it and over
-            `openN`. Remembered state for wudict's own UI.
+            `openN`. Remembered state for DictShelf's own UI.
         countAllResultsInBackground:
           type: boolean
           description: >
             Enables the background pass that counts all matching articles
             after the initial results. A new app version enables this once;
             later user changes are retained until the next version.
-            Remembered state for wudict's own UI.
+            Remembered state for DictShelf's own UI.
         skipBackgroundResultCount:
           type: boolean
           description: >
             Legacy opt-out key for the background pass. A saved
             `countAllResultsInBackground` value takes precedence.
-            Remembered state for wudict's own UI.
+            Remembered state for DictShelf's own UI.
         speakOff:
           type: boolean
           description: >
@@ -3620,15 +3620,14 @@ components:
           description: >
             Opens the secondary text of an article - Lingvo DSL's [*] zone,
             usually its examples - shown rather than hidden. Absent is the
-            brief view, Lingvo's own default. Remembered state for wudict's
-            own UI - the search endpoint never reads it.
+            brief view, Lingvo's own default. Remembered state for DictShelf's own UI - the search endpoint never reads it.
         mode:
           type: string
           enum: [exact, contains, fts]
           description: >
             The search mode the reader last picked. Absent is prefix, the
             default; prefix and unknown values are stored as absent.
-            Remembered state for wudict's own UI - the search endpoint never
+            Remembered state for DictShelf's own UI - the search endpoint never
             reads it, and a `mode=` in the page's address wins over it.
 
     Groups:
@@ -3733,7 +3732,7 @@ components:
           type: string
           description: >
             The media type served for it, resolved from the extension; empty
-            when the extension is not one wudict knows, in which case it is
+            when the extension is not one DictShelf knows, in which case it is
             served as application/octet-stream.
         url:
           type: string
