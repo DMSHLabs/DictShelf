@@ -707,14 +707,18 @@ type inline struct {
 	space     bool  // a pending space
 	brk       bool  // a pending hard break
 	lead      bool  // space before the first content: the parent writes it
+	indent    bool  // this writer's content starts a line: its leading layout spaces are dropped
+	top       bool  // a paragraph's, heading's or cell's own writer: its end is a line's end
 }
 
-func newInline(m inlineMode) *inline { return &inline{mode: m, lineStart: true} }
+func newInline(m inlineMode) *inline {
+	return &inline{mode: m, lineStart: true, indent: true, top: true}
+}
 
 // sub is a writer for the content of an element inside this one's text.
 func (w *inline) sub() *inline {
 	s := newInline(w.mode)
-	s.st, s.lineStart = w.st, false
+	s.st, s.lineStart, s.indent, s.top = w.st, false, w.atIndent(), false
 	return s
 }
 
@@ -723,6 +727,9 @@ func (w *inline) sub() *inline {
 // line, not per text node: whether `1.` starts a list depends on what follows
 // it, which may come from the next node.
 func (w *inline) done() string {
+	if w.top {
+		w.trimLayout()
+	}
 	s := w.b.String()
 	for i := len(w.starts) - 1; i >= 0; i-- {
 		if at := lineStartEscape(s, w.starts[i]); at >= 0 {
@@ -821,11 +828,44 @@ func (w *inline) syntax(s string) {
 
 func isSpace(r rune) bool { return r == ' ' || r == '\t' || r == '\n' || r == '\r' || r == '\f' }
 
+// layoutSpace reports a space a dictionary types to lay text out - a
+// no-break, fixed-width or zero-width space, a BOM - that a line's start
+// cannot hold as anything but indentation (R6.7).
+func layoutSpace(r rune) bool {
+	switch {
+	case r == 0x00A0, r >= 0x2000 && r <= 0x200B, r == 0x202F, r == 0x205F, r == 0x3000, r == 0xFEFF:
+		return true
+	}
+	return false
+}
+
+// atIndent reports whether text written now starts a line: nothing written
+// yet where the content starts one, or a hard break pending. A heading's break
+// is a space, not a line.
+func (w *inline) atIndent() bool {
+	return w.b.Len() == 0 && w.indent || w.brk && w.mode != inHeading
+}
+
+// trimLayout drops the layout spaces that end the line written so far: at a
+// line's end, as at its start, they are only layout (R6.7).
+func (w *inline) trimLayout() {
+	s := w.b.String()
+	t := strings.TrimRightFunc(s, layoutSpace)
+	if len(t) < len(s) {
+		w.b.Reset()
+		w.b.WriteString(t)
+	}
+}
+
 func (w *inline) text(s string) {
 	for i := 0; i < len(s); {
 		r, n := utf8.DecodeRuneInString(s[i:])
 		if isSpace(r) {
 			w.spaced()
+			i += n
+			continue
+		}
+		if layoutSpace(r) && w.atIndent() {
 			i += n
 			continue
 		}
@@ -898,6 +938,7 @@ func (w *inline) node(n *html.Node) {
 	}
 	switch n.DataAtom {
 	case atom.Br:
+		w.trimLayout()
 		if w.b.Len() > 0 {
 			w.brk = true
 		}
