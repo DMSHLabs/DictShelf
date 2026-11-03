@@ -264,6 +264,49 @@ On 2026-10-28, `build-android.cmd debug intel` passed after recognized reader
 lookups were set to default to `wordLemma` (`·ab·+`) when no explicit mode is
 provided. Emulator verification of the reader handoff remains pending.
 
+### App Links: the recipe, and what an emulator can prove (2026-11-03)
+
+The domain side is `pages/.well-known/assetlinks.json`, published at the origin
+root by `docs.yml`; it names the RELEASE certificate only, so a debug build does
+not open `dictshelf.com` any more, and the keystore itself is never committed
+(`*.jks` is ignored). The fingerprint can be read out of a signed APK with no
+keystore password:
+
+```bat
+apksigner verify --print-certs android\app\build\outputs\apk\foss\release\dictshelf-android-arm64-v8a-foss.apk
+```
+
+(`keytool -printcert -jarfile` does not work on these APKs: the signature is v2
+and there is no v1 block to read.) Install an APK built with the manifest filter,
+then see how Android itself judges the domain:
+
+```bat
+adb shell pm get-app-links com.dmshlabs.dictshelf
+adb shell cmd package query-services -a android.content.pm.action.VERIFY_DOMAIN
+```
+
+On a `google_apis` emulator image the second command answers "No services
+found": that image ships no domain verifier, so verification can never complete
+there — it is not a fault in the file or the manifest. Force the state to test
+the handoff anyway, and undo it afterwards:
+
+```bat
+adb shell pm set-app-links --package com.dmshlabs.dictshelf 1 dictshelf.com www.dictshelf.com
+adb shell pm set-app-links --package com.dmshlabs.dictshelf 0 dictshelf.com www.dictshelf.com
+```
+
+Verified end to end that day on the `720x1600` AVD: the link handed off to the
+app, the app unwrapped the fragment, downloaded a real 38 MB dictionary,
+imported it and indexed it ("Added freedict-eng-deu-1.9-fd1.", 345 000 of
+464 791), and a repeat import answered "already installed". Released APKs predate
+the manifest filter, so they still do not open the domain.
+
+Emulator builds: `build-android.cmd debug intel`, and `intel release` is allowed
+— it names its artifact `…-foss-emu.apk` (arm64-v8a + x86_64), an emulator-only
+artifact that must never be published, which is what the `-emu` suffix says.
+`android/app/build.gradle` reads `src/emuX86/jniLibs` only under `-PemuX86=1`,
+so a stray emulator `.so` in the tree cannot reach a shipping build.
+
 ## Unfinished work
 
 - Install the current DictShelf release on a device and test simultaneous wuDict

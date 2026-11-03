@@ -9,16 +9,21 @@ flavour. `pages/docs` (the published site) still offers the upstream `-purego` d
 `make cross` / `make build-purego` / `make android-go-purego` targets this fork has never had -
 cleaning that page set is open.
 
-The project has a domain: **dictshelf.com** (bought, not hosted yet - its DNS still answers with
-a parking redirect, 2026-11-03). The plan is GitHub Pages with that custom domain on the docs
-site, which makes the ORIGIN OURS and is the only way Android App Links can be verified at all:
-`pages/.well-known/assetlinks.json` is copied to the site root by `docs.yml` (with
-`include-hidden-files: true` - the artifact action drops dot-directories by default), the
-manifest has an `autoVerify` filter for `dictshelf.com` and `www.dictshelf.com` with exact paths
-`/share` + `/share/`, and `pages/docs/share.md` is our own share page (`/share/`).
+The project has a domain: **dictshelf.com**, served by GitHub Pages with that custom domain on the
+docs site, which makes the ORIGIN OURS and is the only way Android App Links can be verified at
+all. `pages/.well-known/assetlinks.json` is copied to the site root by `docs.yml` (with
+`include-hidden-files: true` - the artifact action drops dot-directories by default) and names our
+release certificate
+`B7:DD:C9:5D:EA:6C:16:63:ED:C7:93:70:30:1B:C1:0E:C2:25:50:85:DA:07:AE:B3:C3:E4:E4:91:AB:EB:25:20`
+(read out of the user's signed APK with `apksigner verify --print-certs`; no keystore password is
+needed for that, and none was ever entered in a session); the debug entry was REMOVED from that
+file on purpose, so a debug build no longer opens the domain, and the keystore itself was never
+committed (`*.jks` is ignored and no blob exists in any revision). The manifest has an
+`autoVerify` filter for `dictshelf.com` and `www.dictshelf.com` with exact paths `/share` +
+`/share/`, and `pages/docs/share.md` is our own share page (`/share/`).
 `build-android.yml` fails a signed release whose keystore SHA-256 is not named in that file, so a
 rotated key cannot silently stop opening links; the Play App Signing certificate is added by hand
-from the Play Console.
+from the Play Console (there is no Play build yet, so there is nothing to add).
 
 **The domain is wired up as of 2026-11-03** (Porkbun, done through the in-app browser with the
 user's own login - no credentials ever entered the session): the parking `ALIAS @` and wildcard
@@ -28,8 +33,8 @@ alone on purpose (Porkbun email forwarding), as were two stale `_acme-challenge`
 The authoritative nameserver answers with the GitHub addresses and the parking 302 is gone.
 On GitHub: **Pages was DISABLED in this repository** (`Source: Deploy from a branch / None`) -
 it is now enabled with Source = **GitHub Actions** (what `docs.yml` deploys through), the custom
-domain `dictshelf.com` is saved and its **DNS check is successful**; the certificate was still
-being issued at the time of writing, so `Enforce HTTPS` was not tickable yet.
+domain `dictshelf.com` is saved, its **DNS check is successful**, the certificate has been issued
+and **`Enforce HTTPS` is on**.
 
 **The docs site had never been published at all** (`dmshlabs.github.io/DictShelf/` answered 404,
 so every link to it in README and in the manual was dead), because EVERY docs workflow run died at
@@ -48,10 +53,29 @@ lint is clean rather than merely passable.
 `-purego`), `/share/` is the share page, and `/.well-known/assetlinks.json` answers
 `200 application/json` at the origin root; Google's Digital Asset Links API lists
 `com.dmshlabs.dictshelf` with its certificate fingerprint, so the App Link data is in place.
-App Links open the app only once an APK built with the new manifest filter is installed - the
-released APKs predate it. `Enforce HTTPS` is on. Verified with the same commands CI runs:
+App Links were verified END TO END on the emulator (2026-11-03): a real share link
+(`#https://download.freedict.org/…/freedict-eng-deu-1.9-fd1.slob`) handed off to the app, which
+downloaded the 38 MB dictionary and indexed it ("Added freedict-eng-deu-1.9-fd1.", then indexing
+345 000 of 464 791), and a repeat import answered "already installed"; the user then confirmed an
+import on their own phone. What CANNOT be verified on a `google_apis` emulator image is the
+network half - `cmd package query-services -a android.content.pm.action.VERIFY_DOMAIN` answers
+"No services found" there, so the domain state has to be forced (`pm set-app-links --package
+com.dmshlabs.dictshelf 1 dictshelf.com www.dictshelf.com`; 0 undoes it). The recipe is in
+`docs/ANDROID-FORK.md`. Released APKs predate the manifest filter and still do not open the
+domain. Verified with the same commands CI runs:
 `redocly lint` (valid), `redocly build-docs`, and `zensical build --strict` over `pages/`
 ("No issues found") - the first time that site build has completed anywhere.
+
+The Android intake path had three defects that made a share link die in the app; each is fixed and
+was reproduced on the emulator before and after. The bridge sent the bare link and the bare path
+where the Go dispatcher wants a JSON request, so every import answered "invalid import request"
+(`32cd21a9`; `internal/server/dmsh_intake_request_test.go` pins the shape on the Go side). The
+start checked the Go runtime once instead of waiting for it, so a cold start killed its own runtime
+and showed "Go runtime is unavailable" over a working app (`58a59653`). An omitted bridge argument
+arrived as `null` and a call that answered nothing claimed the runtime was missing rather than
+naming itself (`0dd8469f`). Emulator build rule: `build-android.cmd debug intel`; `intel release` is
+allowed and produces `…-foss-emu.apk` (arm64-v8a + x86_64) - an emulator-only artifact, which is
+what the `-emu` suffix exists to say, and it must never be published.
 
 The switches are DONE (they had been held until the domain answered): `site_url` in
 `pages/zensical.toml` and `cli.SiteURL` are `https://dictshelf.com/`, the CLI help's MANUAL
