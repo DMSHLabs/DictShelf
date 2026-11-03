@@ -518,6 +518,38 @@ on a device.
 - the two **UI items below**, both found by the user's eye and neither covered by a test; the
   third section under them is finished work, kept because those two touch the same code.
 
+### Upstream reviewed on 2026-11-04, and what was left
+
+The whole upstream delta since `bf4e83cd` — the 2026-10-11 sync, 42 commits, up
+to `5b646bbe` — was read against this fork's code, and the review cursor
+`upstream-reviewed-2026-11-04` now sits on `5b646bbe`. Eight changes were taken,
+one commit each, all dated 2026-11-04: the CI runners and the release NDK, the
+`IMPORT_INSECURE` hints in both catalogues, a child `<source>` as an audio link,
+layout spaces at a line's ends in the wmd writer, read-aloud language and the
+Other-languages menu, the headword's speaker button, the hidden bar coming back
+on focus, and the browser address with the escaped key. What was left, and why:
+
+- **`65325a4d`, MDict parser correctness and speed** — the biggest single item,
+  and it needs its own session: `internal/gomdict` here has no
+  `block.go`/`DecodeText`, no plain/StyleSheet semantics, no lazy MDD, and
+  `internal/format/mdx` has no `.css`/`.js` precedence rule.
+- **`96e9a334`, the wmd half only** — two parses instead of three, `refLabels`
+  instead of every definition, and the end of the quadratic case on many link
+  definitions (an ingest that can look hung). The store and parallel halves are
+  this fork's own already.
+- **P6 of the transfer plan** (`c8b92dda`, `f1c5fb27`) — `internal/limits`, the
+  `MAX_*` keys and the intake free-space checks are still not ported.
+- **`2376d239`, in pieces** — the metadata-redirect follow, robustness against
+  damaged ZIM records, and the namespace strip in `Exact`.
+- **Product decisions, not work**: MEGA links (`c9fcb3d3`), favorites
+  (`81949eda`), CLI globbing (`4b00e48b`), live Browse progress (`8a48536d`) —
+  each is cheap once it is decided, and each wants this fork's own CLI or UI
+  rather than a port.
+- **Already ours, so nothing to do**: `34541b56` (the undeclared-mime ZIM fix),
+  the panel's rename/collapse/placeholder items, `groups.ini`, the macOS
+  deployment target and the systray crash. Upstream's wildcard search and the
+  panel's pin model stay dead per `AGENTS.md`.
+
 ### Two more from the user's screenshots, to implement (2026-11-02)
 
 1. **The article find dialog needs the other two readings.** For the `[A … B]` (words) mode it already
