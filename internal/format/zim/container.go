@@ -98,6 +98,12 @@ const (
 	// A sequential path-pointer walk reads 4 KiB at a time instead of keeping
 	// the full pointer list in memory.
 	ptrPageLen = 512
+
+	// redirectHops bounds a redirect chain. 50 is the writer's own bound:
+	// libzim follows a redirect with `watchdog = 50U` in Entry::getRedirect
+	// (src/entry.cpp), so an archive that a reader here refuses was still
+	// readable there. Real files contain chains, and cycles.
+	redirectHops = 50
 )
 
 // dirent is one directory entry: an article, a resource, or a redirect.
@@ -598,10 +604,10 @@ func (c *container) entry(i int) (dirent, error) {
 }
 
 // resolve follows a redirect chain to the entry that actually holds content.
-// Real files contain cycles, so the walk is depth-bounded rather than trusting
-// termination.
+// Real files contain cycles, so the walk is bounded rather than trusting
+// termination - at the same 50 hops libzim's own resolver allows.
 func (c *container) resolve(i int) (int, dirent, error) {
-	for hop := 0; hop < 8; hop++ {
+	for hop := 0; hop < redirectHops; hop++ {
 		d, err := c.entry(i)
 		if err != nil {
 			return 0, dirent{}, err
