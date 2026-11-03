@@ -4,12 +4,16 @@ description: Share a dictionary as a link - any address with the dictionary link
 ---
 
 <style>
-/* This page is an address to hand out, not an article to read through: the
-   manual's sidebar, its "On this page" list, the breadcrumb and the prev/next
-   links would all be answering questions nobody arrives here with. The search
-   box is hidden site-wide (stylesheets/extra.css). */
-body:has(.share-page) .md-sidebar--primary,
+/* This page is an address to hand out, not an article to read through: its "On
+   this page" list, the breadcrumb and the prev/next links would all be answering
+   questions nobody arrives here with. The SIDEBAR STAYS - it is the menu the
+   header's "Navigation" button opens, and hiding it left that button opening an
+   empty panel, which is exactly what the reader hit. The page sections go with
+   it: the theme renders them as a nested md-nav--secondary INSIDE the
+   primary nav, so hiding the sidebar alone left them in the menu. The
+   search box is hidden site-wide (stylesheets/extra.css). */
 body:has(.share-page) .md-sidebar--secondary,
+body:has(.share-page) .md-nav--primary .md-nav--secondary,
 body:has(.share-page) .md-path,
 body:has(.share-page) .md-footer__inner{display:none}
 </style>

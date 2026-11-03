@@ -13,11 +13,11 @@ description: "DictShelf - a dictionary application for your own machine: diction
 .md-typeset .features li{margin:.7rem 0;padding-left:1.3rem;position:relative;line-height:1.6}
 .md-typeset .features li::before{content:"—";position:absolute;left:0;color:var(--md-primary-fg-color)}
 .md-typeset .cta{text-align:center;margin:0 0 2rem}
-/* A landing page, not an article. The theme's reading chrome - the manual's
-   sidebar, its prev/next pagination, and the copy/edit actions - belongs to the
-   manual's pages; this page has none of it. Without :has() the rules simply do
-   not apply and nothing breaks. */
-body:has(.hero) .md-sidebar--primary,
+/* A landing page, not an article: "On this page", the prev/next pair and the
+   copy/edit actions all belong to an article, and none of them is here. The
+   SIDEBAR STAYS - it is the menu the header's "Navigation" button opens, and
+   hiding it left that button opening an empty panel. Without :has() the rules
+   simply do not apply and nothing breaks. */
 body:has(.hero) .md-sidebar--secondary,
 body:has(.hero) .md-footer__inner,
 body:has(.hero) .md-content__button{display:none}
