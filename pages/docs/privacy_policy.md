@@ -75,8 +75,9 @@ Advertising ID.
 DictShelf makes a network request only in these cases:
 
 - **Lemma data.** The Lemmatization page reads the language catalogue from
-  `raw.githubusercontent.com/wuweidict/lemmas`, and installing a language
-  downloads its file from there.
+  this project's own `raw.githubusercontent.com/DMSHLabs/DictShelf/lemmas` (a
+  mirror on `dmshlabs.github.io` is tried if that one does not answer), and
+  installing a language downloads its file from there.
 - **Dictionaries from a link.** A link you paste, drop or share into the app,
   pointing to a dictionary, an archive, a web folder or a Nextcloud share, is
   downloaded from the server it names.

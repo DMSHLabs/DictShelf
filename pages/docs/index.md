@@ -11,7 +11,7 @@ single executable with no dependencies.
 
 [Install](start/install.md){ .md-button .md-button--primary }
 [First run](start/first-run.md){ .md-button }
-[Browser extension](extension.md){ .md-button }
+[Browser extensions](extension.md){ .md-button }
 
 ---
 

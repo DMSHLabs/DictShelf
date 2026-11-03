@@ -58,11 +58,17 @@ import (
 // future one would mean installing bytes on the strength of a field that may
 // have changed meaning.
 const Version = 1
-const defaultLemmaURL = "https://raw.githubusercontent.com/wuweidict/lemmas/main/manifest.json"
 
-// MirrorURLs are checked after the primary catalogue host. Keep the mirror
-// list explicit: fallback is part of the published data policy, not discovery.
-var MirrorURLs = []string{"https://raw.githubusercontent.com/DmShAl/lemmas/main/manifest.json"}
+// The catalogue is this project's own: the manifest and the language files live
+// in the repository's `lemmas` branch, and the published documentation site
+// carries the same tree as the fallback. Both are ours, and both are checked
+// after download (scheme for the mirror, scheme/host/path for the primary), so
+// a substituted URL cannot install bytes the manifest did not describe.
+const defaultLemmaURL = "https://raw.githubusercontent.com/DMSHLabs/DictShelf/lemmas/manifest.json"
+
+// MirrorURLs are checked after the primary catalogue. Keep the mirror list
+// explicit: fallback is part of the published data policy, not discovery.
+var MirrorURLs = []string{"https://dmshlabs.github.io/DictShelf/lemmas/manifest.json"}
 
 func manifestURLs(primary string) []string {
 	urls := []string{primary}
@@ -335,16 +341,17 @@ func (s source) open(ctx context.Context, name string) (io.ReadCloser, error) {
 	return httpGet(ctx, &u)
 }
 
-// fallbackURLs maps a published upstream asset URL to the same path on the
-// user's mirror. It applies only to the built-in upstream host.
+// fallbackURLs maps an asset of the built-in catalogue to the same path on a
+// mirror. It applies only when the catalogue IS the built-in one: a custom
+// LEMMA_URL is used on its own, with no second host implied for it.
 func (s source) fallbackURLs(name string) []string {
-	if s.manifest == nil || s.manifest.Scheme != "https" || s.manifest.Host != "raw.githubusercontent.com" || s.manifest.Path != "/wuweidict/lemmas/main/manifest.json" || name == "" {
+	if s.manifest == nil || s.manifest.Scheme != "https" || s.manifest.Host != "raw.githubusercontent.com" || s.manifest.Path != "/DMSHLabs/DictShelf/lemmas/manifest.json" || name == "" {
 		return nil
 	}
 	urls := make([]string, 0, len(MirrorURLs))
 	for _, raw := range MirrorURLs {
 		p, err := parseSource(raw)
-		if err != nil || p.manifest == nil || p.manifest.Host != "raw.githubusercontent.com" {
+		if err != nil || p.manifest == nil || p.manifest.Scheme != "https" {
 			continue
 		}
 		u := *p.manifest

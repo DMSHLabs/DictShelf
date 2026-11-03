@@ -304,7 +304,7 @@ The catalogue lemma data is installed from.
 | --- | --- |
 | Flag | `-url` on the `dictshelf lemmas` commands |
 | Values | a URL, or the path of a `manifest.json` |
-| Default | `https://raw.githubusercontent.com/wuweidict/lemmas/main/manifest.json` |
+| Default | `https://raw.githubusercontent.com/DMSHLabs/DictShelf/lemmas/manifest.json` |
 
 Used by `dictshelf lemmas` and the Lemmatization page. A local path installs
 without a network, e.g. from a copy of the catalogue repository:

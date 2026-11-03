@@ -63,5 +63,6 @@ it started on, and does not require the access key.
 
 ## Browser extension on another device
 
-[wudict Hover](extension.md) uses only the three read-only endpoints and needs
-no access key: set the server's address in its options.
+A browser extension uses only the three read-only endpoints and needs no
+access key: set the server's address in its options. See
+[Browser extensions](extension.md).

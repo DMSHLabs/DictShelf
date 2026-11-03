@@ -1265,7 +1265,7 @@ func (c Config) EditableInFile(key string) bool {
 // listener parses.
 func (c Config) Addr() string { return net.JoinHostPort(c.IP, c.Port) }
 
-// DefaultLemmaURL is the catalogue `wudict lemmas` installs languages from
+// DefaultLemmaURL is the catalogue `dictshelf lemmas` installs languages from
 // (LEMMA_URL). It is a static file, deliberately: enumerating a repository
 // through a code-hosting API would put a 60-request-per-hour, per-IP rate
 // limit in front of `wudict lemmas list`, and a user sharing an address with
@@ -1278,7 +1278,7 @@ func (c Config) Addr() string { return net.JoinHostPort(c.IP, c.Port) }
 // published here is DERIVED from those lists (grouped, deduplicated, gzipped)
 // and carries digests and measured memory costs the raw lists do not have;
 // `tools/lemmafiles` is the only thing that ever reads michmech.
-const DefaultLemmaURL = "https://raw.githubusercontent.com/wuweidict/lemmas/main/manifest.json"
+const DefaultLemmaURL = "https://raw.githubusercontent.com/DMSHLabs/DictShelf/lemmas/manifest.json"
 
 // isOff reads a boolean written the way a person writes one in a config file.
 // Every boolean key goes through it, so there is exactly one answer to "does

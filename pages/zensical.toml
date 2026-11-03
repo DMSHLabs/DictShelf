@@ -52,7 +52,7 @@ nav = [
     "dictionaries/override.md",
     "dictionaries/styles.md",
   ] },
-  { "Browser extension" = [
+  { "Browser extensions" = [
     "extension.md",
   ] },
   { "Run at startup" = [
@@ -194,10 +194,6 @@ icon = "fontawesome/brands/github"
 link = "https://github.com/DMSHLabs/DictShelf"
 name = "DictShelf"
 
-[[project.extra.social]]
-icon = "fontawesome/brands/github"
-link = "https://github.com/wuweidict/wudict-browser-extension"
-name = "wuDict Browser Extension"
 # ----------------------------------------------------------------------------
 # Markdown extensions - the working set: callouts, cards, tabs, annotations,
 # formatting, keys, task lists, and Mermaid diagrams. Nothing exotic.

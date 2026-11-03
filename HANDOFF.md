@@ -9,6 +9,15 @@ flavour. `pages/docs` (the published site) still offers the upstream `-purego` d
 `make cross` / `make build-purego` / `make android-go-purego` targets this fork has never had -
 cleaning that page set is open.
 
+The lemma catalogue is ours since 2026-11-03: `config.DefaultLemmaURL` and the built-in default
+in `internal/lemmas` point at `raw.githubusercontent.com/DMSHLabs/DictShelf/lemmas/manifest.json`,
+the fallback mirror at `dmshlabs.github.io/DictShelf/lemmas/`, and the scheme/host/path pin in
+`fallbackURLs` follows them. **The `lemmas` branch and the site copy do not exist yet**, so
+`dictshelf lemmas download` reports an unreachable catalogue until the files are built (the
+Makefile lemma target) and pushed there. `pages/docs/extension.md` is now the contract only - we
+publish no browser extension, and the upstream store links and the upstream social link in
+`pages/zensical.toml` are gone.
+
 Dictionary management defaults to Contains for new profiles, and its setup and
 Edit Folders views explain the search-speed benefit and one-time indexing cost.
 
