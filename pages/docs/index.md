@@ -39,6 +39,7 @@ nothing sent anywhere.
 
 [GitHub](https://github.com/DMSHLabs/DictShelf){ .md-button .md-button--primary }
 [Releases](https://github.com/DMSHLabs/DictShelf/releases/latest){ .md-button }
+[Share a dictionary](share.md){ .md-button }
 
 </div>
 
