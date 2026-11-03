@@ -1828,12 +1828,10 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 			// longer search budget.
 			m.Deferred, m.Bytes = true, heavy.bytes
 		case errors.Is(h.Err, context.DeadlineExceeded):
-			// Never Go's own words. "context deadline exceeded" is what an
-			// unindexed dictionary looked like from the outside while a preview
-			// search crawled through its source format, and it told the user
-			// nothing they could act on - which is the whole content of the
-			// message they need.
-			m.Error = "timed out — search this dictionary alone to allow more time"
+			// Never Go's own words, and never one message for two situations: the
+			// same helper as the native path (searchTimeoutMessage), so a reader
+			// is not told to index a dictionary that is already indexed.
+			m.Error = searchTimeoutMessage(searchIndexMissingFor(entries[i], mode))
 		case errors.Is(h.Err, context.Canceled):
 			m.Error = "search cancelled"
 		case h.Err != nil:

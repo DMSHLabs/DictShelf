@@ -284,10 +284,17 @@ the run is set by the slowest dictionary and by how the work distributes, not by
 clocks now live in `internal/indexconst/constants.go` (`SearchFanoutBudget`, `SingleSearchBudget`); the
 dead `demandSearchBudget` was removed.
 
-Open: a user's `contains` search over 388 dictionaries returned 0 results with every row saying
-"timed out — index this dictionary to search it" (388 `search failure … mode="contains"`, all 30 s after
-the search began). The message is wrong for this case: his verbose log opens the same library as
-`entries contains=true (2ms)`, so the dictionaries are prepared with the trigram index. Most likely the
+**The message half is DONE (2026-11-03):** the two situations it conflated - "nothing to answer from" and
+"prepared but late" - now have a message each (`server.searchTimeoutMessage`, decided by
+`searchIndexMissingFor`), both paths use the same pair (the native service and the legacy stream used to
+differ), and both are translated; the decision and the words are pinned by
+`dmsh_search_timeout_test.go`, which drives the wire with a pre-expired request context (no thirty-second
+wait). What the reader saw before was the advice to index dictionaries his own log showed as indexed.
+
+**Open: the cause.** A user's `contains` search over 388 dictionaries returned 0 results with every row
+saying "timed out" (388 `search failure … mode="contains"`, all 30 s after the search began). His verbose
+log opens the same library as `entries contains=true (2ms)`, so the dictionaries ARE prepared with the
+trigram index - which is what the split above now says out loud. Most likely the
 shared `SearchFanoutBudget` against 388 dictionaries at `dictionary_worker_limit=7` on an ordinary HDD —
 ~540 ms per dictionary does not fit an open plus `entry_trigram MATCH` from a cold disk. Which stage
 dominates is unconfirmed: needs `system.searchArticleDiagnostics` ("Record search results and article
