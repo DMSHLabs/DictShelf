@@ -87,7 +87,6 @@ extra_css = ["stylesheets/extra.css"]
 # ----------------------------------------------------------------------------
 [project.theme]
 variant = "modern"
-custom_dir = "overrides"
 logo = "assets/logo.svg"
 favicon = "assets/favicon.svg"
 language = "en"
