@@ -14,6 +14,7 @@ narratives, so `git log` is a second copy.
 
 | Section | Date | Was at (old HANDOFF.md) |
 |---|---|---|
+| Progressive results: the user's three decisions (2026-11-02) | 2026-11-02 | — (moved from HANDOFF.md 2026-11-03) |
 | A ZIM with its own index answers full text itself (2026-11-01) | 2026-11-01 | — (moved from HANDOFF.md 2026-11-03) |
 | Our index on request, for an archive that has its own (2026-11-02) | 2026-11-02 | — (moved from HANDOFF.md 2026-11-03) |
 | Strict readings are declined, not scanned; the caps are gone (2026-11-02) | 2026-11-02 | — (moved from HANDOFF.md 2026-11-03) |
@@ -4213,3 +4214,87 @@ remains functional and test Android WebView and Java archive imports. Then verif
 prepared dictionaries and confirm indexes are reused after copying `Data`. Check the shared dictionary
 picker on Android.
 
+## Progressive results: the user's three decisions, to implement (2026-11-02)
+
+Recorded before the work, because each one changes which part of the flow moves.
+
+1. **RETRACTED 2026-11-02: the first portion IS five already.** This file claimed otherwise because the
+   server's default (`n <= 0 -> 20`) was read as the answer; the page does not use that default at all. It
+   sends its own size: `perDict=5` for both the group and the single-dictionary case (index.html:9740-9741)
+   and `n=String(perDict)` in the request (9820). Verified on a live page: the request that goes out is
+   `n=5`, the first paint shows exactly five headwords, the total (27) is already on the header, and the
+   remainder arrives as a portion when the section is opened. Nothing to change here. The original claim
+   follows, struck through by this note:
+
+1. **The first portion is five, for every dictionary and every mode**, and the remainder arrives in the
+   SECOND portion - uniform on purpose, "чтобы не было вопросов почему разное поведение". Today the first
+   paint is however much the first answer carried: the state is created with
+   `initial: msg.results.length` (index.html:1436) and the main search's size comes from the request's `n`
+   (the page's own call was NOT located with confidence - the three `"&n="` sites are the suggestions
+   (1691), the deferred search (7606) and `fetchSearchPortion` (10052), so the initial size for the
+   cache-driven path is set server-side: `Search`'s `n := request.Limit; if n <= 0 { n = 20 }` and the
+   legacy handler's equivalent). Setting this is the first edit, and it is where the next session starts.
+2. **The background continuation is always on, and the setting is hidden.** DONE (2026-11-02):
+   `search()` sets `activeSearchCountsInBackground=true` unconditionally (the one-line gate it replaced is
+   quoted in the comment there), the checkbox is hidden both in the markup and by script while its saved
+   value is still read and written so an older library's preference survives, and the interrupt - the part
+   the user stressed - is the existing `stopArticleResultCaches` plus the stream's AbortController, which a
+   new search runs before anything else. Verified on a live page: a phrase search creates an article-result
+   cache (`details.dict[data-search-cache-id]`) with no preference set, and typing a different query
+   replaces it with a new one. NOT verified: the status-bar task chip for the counting pass (my automation
+   could not observe it; the chip is driven by the same queue that the flag now always fills). The gate today is
+   `state.background` (`if(state.background){articleCacheQueue.push(state)}`, index.html:1440) and the
+   control is `countAllResultsInBackground` with its checkbox (index.html:1532). "Главное, чтобы фоновый
+   поток мгновенно прерывался и начинал искать при поиске другого слова": that part already holds -
+   a new search calls `cancelArticleResultCaches()` and aborts the `AbortController`, and the cache task
+   in the status bar has a stop button.
+3. **Where the total is known exactly, no background pass runs - and that already holds.**
+   Verified: a prefix search paints five headwords with `total=27` on the header and creates NO
+   article-result cache at all (the counting pass is driven by that cache). The cache is created for the
+   modes whose total is unknown until the articles have been counted, which is the full-text family and
+   the mask view. The original note follows:
+
+3. **Where the total is known exactly (headword modes), no background pass runs at all**: the first block
+   is five and the rest is plain arithmetic - the block count and the number of words - which the paging
+   controls already speak. The article-result cache (a SQLite store of the blocks the reader switches
+   between, `articlePageCache`/`wildcardPages`) is for the modes whose total is NOT known until the
+   articles have been counted, which is exactly the full-text family.
+
+**Two things the user's screenshots caught the same day**, both of them consequences of that change:
+
+- The archive's chip was still hidden when an index of ours was absent (a decision from earlier the same
+  day, when the chip was the only claim of full text). With the new line on the plate the search DOES use the
+  archive's index, so hiding it made a plate that answers from the archive look like a dictionary with no
+  index at all. The chip is shown whenever the archive has one, and its label already says what that index
+  can do ("in the archive: words") - there is no claim to withdraw any more.
+- The words were NOT highlighted. The marks are built from the rung NAME (`marker`, server.go), and a phrase
+  request carried `rung="phrase"` into the marking even when the answer was the words reading, so the marks
+  looked for a phrase that is not in the article. Both marking sites now use the reading that ANSWERED
+  (`words` when `NeedsIndex`), and the cache path carries that name to the page as well. Verified in the
+  server's own answer: `mode=phrase&hl=1` on the Wikipedia gives `rung=words needsIndex=true` and 8 marks -
+  «кларнетист», «джазовый», «кларнетисты»… The live page could not confirm it: articles render in a Shadow
+  DOM or an iframe, and a plain `querySelectorAll('mark')` in the page context cannot see inside them.
+
+### ...and the plate is not left empty: it answers with the words and says what is missing (2026-11-02)
+
+The user's refinement, and better than what I had built: a strict reading on a dictionary whose archive has
+its own index still is NOT verified by scanning, but the plate is not left empty either - it answers with
+what that index can do (the words reading, its own ranking) and carries a line, on the plate's own row in
+the accent colour, naming what is missing: "the archive's index found all the words. The exact phrase needs
+our index: [Build]". The line is the substitution said out loud, next to the count, which is what makes it
+not the silent relaxation this fork removed.
+
+Three places had to agree, and the third is the one that took the test to find:
+
+- `search.query`'s archive branch answers `FullTextContext` (words), sets `Rung="words"`, `OneReading` and
+  keeps `NeedsIndex` (search.go).
+- the plate renders the line whenever `h.needsIndex`, regardless of whether results came (index.html), with
+  `.search-needs-index` in app.css: its own row, `var(--accent)`, wrapping instead of fighting the count.
+- **the article-result cache path had to carry it too**: once the cache is running the page is drawn from
+  it, not from the search that started it, so `needsIndex` was lost and the line never appeared (found by
+  driving the page, not by reading the code). `dmsh_article_result_cache.go` recomputes it from
+  `HasArticleIndex()` exactly as `search.archiveStrictDeclined` does.
+
+Verified on the live page, scoped to the Wikipedia: phrase «джазовый кларнетист» -> 5 words results, one
+`.search-needs-index` line in `rgb(224,134,0)` (the accent), text "found all the words. The exact phrase
+needs our index: Build", and the API answer carries `rung=words, needsIndex, oneReading` in 0.15 s.
