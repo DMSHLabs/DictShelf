@@ -21,8 +21,25 @@ successful Browse diagnostics. Windows GUI builds now verify startup by exit
 code because `windowsgui` executables have no capturable stdout; the cgo build
 and `--version` startup check pass. Tray hides clear hot-key capture state;
 global restore dispatches through the WebView window thread and moves the
-window to the top of the normal Z order. Live tray/focus verification remains
-pending.
+window to the top of the normal Z order.
+
+Windows tray behavior is read from the saved settings when the window is
+created (`desktopApplySavedTraySettings`), not only when System Settings
+renders: until that page was opened the native side kept its built-in defaults,
+so a saved Minimize-to-system-tray did nothing after a restart and a disabled
+close-to-tray kept hiding. The show hot key decides from the window's real
+visibility and `IsIconic` rather than `desktopWindowHidden`, which records only
+what this process did and went stale whenever the tray or a second launch
+restored the window. A second launch finds the reader window by class and by
+the executable of the process owning it (`desktopOwnReaderWindow`), not by
+title: Windows 11 mirrors the title onto a shell-owned
+`Windows.Internal.Shell.TabProxyWindow` that `FindWindowW` returns first, so
+double-clicking the icon while the window was hidden appeared to do nothing.
+Verified live on this machine: minimize-to-tray hides, a second launch brings
+the window back, close-to-tray keeps the process alive and hidden, and the show
+hot key restores and activates it (`visible=foreground=hwnd`). The hot key's
+visibility-based branch is reasoned from those measurements, not measured
+directly.
 
 Release workflows now handle concurrent tag creation: after a rejected push they continue only when the remote tag resolves to the same commit; Android, Windows, and native-release workflows share this guard. `dictshelf-v1.02.17` already exists remotely.
 

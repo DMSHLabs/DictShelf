@@ -317,6 +317,9 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	webviewStarted := time.Now()
 	initialAppIconIndex, initialTaskbarIconIndex := desktopInitialWindowsIcons(desktopRequest)
 	desktopCurrentTaskbarIcon.Store(int32(initialTaskbarIconIndex))
+	// Both tray behaviors must be in force before the window can be minimized or
+	// closed, so they are read here rather than from the settings page.
+	desktopApplySavedTraySettings(desktopRequest)
 	w := webview.NewWithOptions(webview.WebViewOptions{
 		DataPath:  profile,
 		AutoFocus: true,
@@ -348,39 +351,18 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	log.Printf("WebView2 startup: window and runtime initialized in %s", time.Since(webviewStarted).Round(time.Millisecond))
 	w.Init(`window.__wudictDocumentFirstScriptMs=performance.now()`)
 	_ = w.Bind("wudictGetCloseToTray", func() bool {
-		if desktopRequest == nil {
-			logx.SystemDiagnostic("desktop close-to-tray setting source=default enabled=true")
-			return true
-		}
-		value, err := desktopRequest(context.Background(), "storageRead", "")
-		if err != nil {
-			logx.SystemDiagnostic("desktop close-to-tray setting read failed; enabled=true error=%q", err.Error())
-			return true
-		}
-		values, ok := value.(map[string]string)
-		enabled := !ok || values["wudict_close_to_tray"] != "0"
-		desktopCloseToTray.Store(enabled)
-		logx.SystemDiagnostic("desktop close-to-tray setting enabled=%t value_present=%t", enabled, ok && values["wudict_close_to_tray"] != "")
-		return enabled
+		closeToTray, _ := desktopReadTraySettings(desktopRequest)
+		desktopCloseToTray.Store(closeToTray)
+		return closeToTray
 	})
 	_ = w.Bind("wudictSetCloseToTray", func(enabled bool) error {
 		desktopCloseToTray.Store(enabled)
 		return nil
 	})
 	_ = w.Bind("wudictGetMinimizeToTray", func() bool {
-		if desktopRequest == nil {
-			desktopMinimizeToTray.Store(false)
-			return false
-		}
-		value, err := desktopRequest(context.Background(), "storageRead", "")
-		if err != nil {
-			logx.SystemDiagnostic("desktop minimize-to-tray setting read failed; enabled=false error=%q", err.Error())
-			return false
-		}
-		values, ok := value.(map[string]string)
-		enabled := ok && values["wudict_minimize_to_tray"] == "1"
-		desktopMinimizeToTray.Store(enabled)
-		return enabled
+		_, minimizeToTray := desktopReadTraySettings(desktopRequest)
+		desktopMinimizeToTray.Store(minimizeToTray)
+		return minimizeToTray
 	})
 	_ = w.Bind("wudictSetMinimizeToTray", func(enabled bool) error {
 		desktopMinimizeToTray.Store(enabled)
@@ -880,6 +862,38 @@ func desktopInitialWindowsIcons(request func(context.Context, string, string) (a
 		}
 	}
 	return appIconIndex, taskbarIconIndex
+}
+
+// desktopReadTraySettings resolves both tray behaviors from the saved settings.
+// Close-to-tray defaults to on and minimize-to-tray to off; a failed read keeps
+// those defaults rather than switching a behavior off behind the user's back.
+func desktopReadTraySettings(request func(context.Context, string, string) (any, error)) (closeToTray, minimizeToTray bool) {
+	closeToTray, minimizeToTray = true, false
+	if request == nil {
+		return closeToTray, minimizeToTray
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	value, err := request(ctx, "storageRead", "")
+	if err != nil {
+		logx.Warn("could not read the tray settings: %v", err)
+		return closeToTray, minimizeToTray
+	}
+	values, ok := value.(map[string]string)
+	closeToTray = !ok || values["wudict_close_to_tray"] != "0"
+	minimizeToTray = ok && values["wudict_minimize_to_tray"] == "1"
+	return closeToTray, minimizeToTray
+}
+
+// desktopApplySavedTraySettings installs both tray behaviors before the window
+// exists. Reading them only from the settings page left the native side on its
+// built-in defaults until that page was opened, so a saved "Minimize to system
+// tray" did nothing after a restart and a disabled close-to-tray kept hiding.
+func desktopApplySavedTraySettings(request func(context.Context, string, string) (any, error)) {
+	closeToTray, minimizeToTray := desktopReadTraySettings(request)
+	desktopCloseToTray.Store(closeToTray)
+	desktopMinimizeToTray.Store(minimizeToTray)
+	logx.SystemDiagnostic("desktop tray settings applied close_to_tray=%t minimize_to_tray=%t", closeToTray, minimizeToTray)
 }
 
 func validWindowHexColor(value string) bool {
@@ -1386,7 +1400,13 @@ func desktopHandleHotkey(hwnd uintptr, id, lparam uintptr) bool {
 	desktopHotkeyMu.Unlock()
 	switch action.action {
 	case 0:
-		if desktopWindowHidden.Swap(false) || func() bool { iconic, _, _ := procIsIconic.Call(hwnd); return iconic != 0 }() {
+		// The window's own state decides. desktopWindowHidden only records what
+		// THIS process did, so the tray, a second launch or Explorer restoring the
+		// window leave it stale - and a stale flag spent the press on a restore
+		// nobody could see. Minimized counts as hidden here, exactly as before.
+		visible, _, _ := procIsWindowVisible.Call(hwnd)
+		iconic, _, _ := procIsIconic.Call(hwnd)
+		if visible == 0 || iconic != 0 {
 			desktopRestoreAndFocusWindow(hwnd)
 		} else {
 			desktopSetHotkeyCapture(hwnd, false)

@@ -16,6 +16,8 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 var (
@@ -59,17 +61,79 @@ func acquireProcessLock() (func(), error) {
 
 var processLockUser32 = syscall.NewLazyDLL("user32.dll")
 
+const desktopReaderWindowClass = "webview"
+
+var (
+	desktopEnumWindows   = processLockUser32.NewProc("EnumWindows")
+	desktopClassName     = processLockUser32.NewProc("GetClassNameW")
+	desktopWindowProcess = processLockUser32.NewProc("GetWindowThreadProcessId")
+	desktopEnumCallback  = syscall.NewCallback(desktopWindowSearchProc)
+	desktopSearchImage   string
+	desktopSearchResult  uintptr
+)
+
+// desktopWindowSearchProc keeps the first top-level reader window that belongs
+// to another process running this same program.
+func desktopWindowSearchProc(hwnd, _ uintptr) uintptr {
+	name := make([]uint16, 64)
+	count, _, _ := desktopClassName.Call(hwnd, uintptr(unsafe.Pointer(&name[0])), uintptr(len(name)))
+	runtime.KeepAlive(name)
+	if count == 0 || syscall.UTF16ToString(name[:count]) != desktopReaderWindowClass {
+		return 1
+	}
+	var pid uint32
+	desktopWindowProcess.Call(hwnd, uintptr(unsafe.Pointer(&pid)))
+	if pid == 0 || pid == uint32(os.Getpid()) {
+		return 1
+	}
+	// The executable's name, not its full path: one user runs one DictShelf (the
+	// lock guarantees it), and a second copy in another folder is the same program
+	// and must still be able to bring the window back.
+	if !strings.EqualFold(filepath.Base(desktopProcessImage(pid)), desktopSearchImage) {
+		return 1
+	}
+	desktopSearchResult = hwnd
+	return 0
+}
+
+// desktopOwnReaderWindow returns the reader window owned by the running copy of
+// this program, or 0.
+//
+// It must not be found by TITLE: the reader is titled "DictShelf", and Windows 11
+// mirrors a window's title onto a shell-owned proxy of its own
+// (Windows.Internal.Shell.TabProxyWindow) that FindWindow returns first and that
+// restoring does nothing for. Finding it by title therefore left a second launch
+// looking like it had done nothing at all.
+func desktopOwnReaderWindow() uintptr {
+	exe, err := os.Executable()
+	if err != nil {
+		return 0
+	}
+	desktopSearchImage = filepath.Base(exe)
+	desktopSearchResult = 0
+	desktopEnumWindows.Call(desktopEnumCallback, 0)
+	return desktopSearchResult
+}
+
+func desktopProcessImage(pid uint32) string {
+	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
+	if err != nil {
+		return ""
+	}
+	defer windows.CloseHandle(handle)
+	buffer := make([]uint16, 1024)
+	size := uint32(len(buffer))
+	if err := windows.QueryFullProcessImageName(handle, 0, &buffer[0], &size); err != nil {
+		return ""
+	}
+	return syscall.UTF16ToString(buffer[:size])
+}
+
 // activateRunningDesktopWindow waits briefly because the first process can
 // own the mutex while WebView2 is still creating its top-level window.
 func activateRunningDesktopWindow() {
-	title, err := syscall.UTF16PtrFromString("DictShelf")
-	if err != nil {
-		return
-	}
-	findWindowW := processLockUser32.NewProc("FindWindowW")
 	for deadline := time.Now().Add(4 * time.Second); ; {
-		hwnd, _, _ := findWindowW.Call(0, uintptr(unsafe.Pointer(title)))
-		if hwnd != 0 {
+		if hwnd := desktopOwnReaderWindow(); hwnd != 0 {
 			restoreAndFocusWindow(hwnd)
 			return
 		}
