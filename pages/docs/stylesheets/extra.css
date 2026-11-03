@@ -45,6 +45,7 @@
  * the box is hidden here, and this comment is the note that says why. Delete it
  * when the manual is ready for a search.
  */
-.md-search {
+.md-search,
+label[for="__search"] {
   display: none;
 }
