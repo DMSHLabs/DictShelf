@@ -186,7 +186,7 @@ class GoRuntime {
             return;
         }
         nativeOwned = true;
-        if (runtimeReady(app)) {
+        if (waitUntilReady(app)) {
             Shell.prepareOrigin(app);
             SystemLog.record("in-process Go runtime ready");
             Log.i(TAG, "in-process Go runtime ready");
@@ -244,6 +244,34 @@ class GoRuntime {
             // appPrivate - reachable, just without the shared folder.
             SystemLog.warn(TAG, "could not seed " + cfg, e);
         }
+    }
+
+    // How long a start waits for the Go side to publish its own snapshot.
+    // This is a bound on STARTING A PROCESS, not on any work it does: the
+    // runtime is either coming up or the start failed, and a single sample
+    // taken in the middle of the former used to be read as the latter.
+    private static final long START_WAIT_MS = 10_000;
+
+    /** Waits for the start this caller just asked for, then judges once.
+     *
+     * <p>A native call answers NULL while the Go side is still coming up (its
+     * own app == nil), which runtimeReady below reads as "not ready" - and a
+     * single sample of that raced the start and then threw the runtime away
+     * with stopRuntime(), so a working app could answer "Go runtime is
+     * unavailable" about a runtime it had just killed itself. Waiting is the
+     * difference between "starting" and "failed". */
+    private static boolean waitUntilReady(Context app) {
+        final long deadline = System.currentTimeMillis() + START_WAIT_MS;
+        do {
+            if (runtimeReady(app)) return true;
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        } while (System.currentTimeMillis() < deadline);
+        return false;
     }
 
     // RuntimeStart returns only after the shared Go runtime and library exist.

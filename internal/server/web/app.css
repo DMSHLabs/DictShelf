@@ -1144,7 +1144,15 @@ html[data-styled-selects] #mode{display:none}
 html[data-styled-selects] #modeChip{display:none}
 html[data-styled-selects] #modeMenuBtn{display:flex;flex:none;width:auto;min-width:5em}
 @media(max-width:600px){
-  html[data-styled-selects] #modeMenuBtn{min-width:40px;max-width:none;padding:.45em .3em;font-size:11.5px}
+  /* In the phone's pill the mode button is a bare label, not a second box: the
+     pill already wears the frame, and a bordered .choice-btn inside it read as
+     a button in a button. It keeps the .choice-btn caret (::after) as its only
+     mark, stretches to the row so the whole height stays tappable, and the
+     seg's hairline (.pill>*+*) is what divides it from the field. The mark is
+     set at the field's own reading size rather than the 11.5px the chip wore,
+     so "[A … B]" is legible instead of cramped. */
+  html[data-styled-selects] #modeMenuBtn{width:auto;min-width:0;max-width:none;height:auto;
+    align-self:stretch;padding:.2em 0 .2em .1em;font-size:15px;background:none;border:0;border-radius:0}
 }
 .themed-select-menu{min-width:0}
 /* The custom mode button wears the same mark as the menu's left column. The
