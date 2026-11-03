@@ -1207,11 +1207,35 @@ final class Intake {
 
     // ── the Go intake API ────────────────────────────────────────────────
 
+    /** The two intake actions that name a source carry a JSON request, not the
+     * bare source: the Go side takes a destination folder beside it (`dir`,
+     * empty for the configured one). Sending the bare string made every import
+     * from a link or a shared file fail with "invalid import request" - the
+     * Go side parses JSON there and nothing else, exactly as it does for
+     * fileStart and confirm, which this screen has always sent as JSON. */
+    private static String goArgument(String action, String argument) {
+        switch (action) {
+            case "url": return json("url", argument);
+            case "path": return json("path", argument);
+            default: return argument;
+        }
+    }
+
+    private static String json(String field, String value) {
+        JSONObject request = new JSONObject();
+        try {
+            request.put(field, value);
+        } catch (Exception e) {
+            return "";   // unreachable: JSONObject.put throws on a null key only
+        }
+        return request.toString();
+    }
+
     /** Calls the in-process Go importer and presents failures in the shape
      * this screen already understands. */
     private static JSONObject bridge(String action, String argument) {
         try {
-            JSONObject envelope = new JSONObject(GoBridge.intake(action, argument));
+            JSONObject envelope = new JSONObject(GoBridge.intake(action, goArgument(action, argument)));
             if (!envelope.optBoolean("ok")) {
                 JSONObject failure = error(envelope.optString("error", "Archive import failed"));
                 if (envelope.optBoolean("busy")) failure.put("busy", true);
