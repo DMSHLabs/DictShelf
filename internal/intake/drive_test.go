@@ -200,6 +200,13 @@ func TestSharePageIsNotALink(t *testing.T) {
 	for _, s := range []string{
 		"https://legbehindneck.com/wudict#https://x.org/a.mdx", "https://legbehindneck.com/wudict#/dict/eu/",
 		"https://legbehindneck.com/dict/euskera/", "https://example.org/wudict",
+		// A page that is NOT a page of dictionary links is read as a folder
+		// page, however it is addressed - our own manual is one of these, and
+		// listing it among SharePages would turn a documentation link into
+		// "that is a page of dictionary links".
+		"https://dmshlabs.github.io/DictShelf/",
+		"https://dmshlabs.github.io/DictShelf/#https://x.org/a.mdx",
+		"https://a.org/page#https://x.org/a.mdx",
 	} {
 		if IsSharePage(s) {
 			t.Errorf("IsSharePage(%q) = true", s)

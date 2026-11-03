@@ -26,13 +26,23 @@ func TestUnwrap(t *testing.T) {
 		// the short form: a path on the share link's own site
 		{"https://legbehindneck.com/wudict/#/dict/euskera/", "https://legbehindneck.com/dict/euskera/"},
 		{"https://legbehindneck.com/wudict#/dict/euskera/list.txt", "https://legbehindneck.com/dict/euskera/list.txt"},
-		// ...never another host without its scheme
-		{"https://legbehindneck.com/wudict#//evil.org/x.zip", "//evil.org/x.zip"},
+		// ...never another host without its scheme: "#//evil.org/x.zip" is a
+		// host in disguise, so the address is not read as a share link at all
+		// rather than resolved to the other host.
+		{"https://legbehindneck.com/wudict#//evil.org/x.zip", "https://legbehindneck.com/wudict#//evil.org/x.zip"},
 		// the inner link keeps its own escapes
 		{"https://legbehindneck.com/wudict#https://a.org/%E8%8B%B1.mdx", "https://a.org/%E8%8B%B1.mdx"},
-		// not ours: left exactly as given
-		{"https://a.org/page#https://b.org/x.zip", "https://a.org/page#https://b.org/x.zip"},
-		{"https://legbehindneck.com/wudictionary#https://b.org/x.zip", "https://legbehindneck.com/wudictionary#https://b.org/x.zip"},
+		// ANY address can carry a share link - that is the format, and it is
+		// what keeps this from depending on a host we do not own.
+		{"https://dmshlabs.github.io/DictShelf/#https://a.org/x.zip", "https://a.org/x.zip"},
+		{"https://a.org/page#https://b.org/x.zip", "https://b.org/x.zip"},
+		{"https://a.org/page#/dicts/x.zip", "https://a.org/dicts/x.zip"},
+		// The path no longer has to be a share page's: any page wraps.
+		{"https://legbehindneck.com/wudictionary#https://b.org/x.zip", "https://b.org/x.zip"},
+		// ...but an ordinary anchor is not a share link: the fragment has to
+		// be a link or a path, and anything else leaves the address alone.
+		{"https://a.org/x.zip#top", "https://a.org/x.zip#top"},
+		{"https://a.org/wiki/Foo#section-3", "https://a.org/wiki/Foo#section-3"},
 		{"https://a.org/x.zip", "https://a.org/x.zip"},
 		{"not a link", "not a link"},
 	} {

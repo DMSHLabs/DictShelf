@@ -47,10 +47,11 @@ For problems, see [Troubleshooting](troubleshooting.md).
 
     Use your own dictionary files, or get free dictionaries:
 
-    -   [legbehindneck.com/DictShelf](https://legbehindneck.com/DictShelf/): free
-        dictionaries as [share links](../dictionaries/add.md#share-links). On
-        Android, a share link starts the import in DictShelf. On a desktop, paste
-        the link on the setup page.
+    -   [Kiwix](https://library.kiwix.org): Wikipedia, Wiktionary and other
+        reference works as `.zim` files.
+    -   Any link to a dictionary, wrapped as a
+        [share link](../dictionaries/add.md#share-links) - a link in a chat or a
+        forum post works as it is, without a page of our own behind it.
     -   [Kiwix](https://library.kiwix.org): Wikipedia, Wiktionary and other
         reference works as `.zim` files.
     -   Your own dictionary: write it as a

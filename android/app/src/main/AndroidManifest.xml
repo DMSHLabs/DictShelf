@@ -177,9 +177,14 @@
                 <data android:host="mdx.mdict.org" />
             </intent-filter>
 
-            <!-- wuDict's own share link: https://legbehindneck.com/wudict#<link>
-                 opens here, whatever the link after "#" is - a dictionary, a
-                 web folder of them, or a list (internal/intake/collection.go).
+            <!-- The share link of the wudict project's page:
+                 https://legbehindneck.com/wudict#<link> opens here, whatever the
+                 link after "#" is - a dictionary, a web folder of them, or a list
+                 (internal/intake/collection.go). The FORMAT is host-agnostic - any
+                 page with the link after "#" is a share link, and DictShelf imports
+                 it when it is pasted - so this filter is about the one page that is
+                 VERIFIED to open the app on Android 12+ (see below), not about
+                 what a share link may be.
                  Unlike the hosts above this one is VERIFIED: the site serves
                  /.well-known/assetlinks.json naming this package and its
                  signing certificates, so on Android 12+ the link opens the app

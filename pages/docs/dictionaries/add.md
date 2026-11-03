@@ -46,15 +46,22 @@ the hosts. A folder page or list may name up to 500 files.
 
 ## Share links
 
-A share link carries a link to a dictionary, an archive or a collection after
-`#`:
+A share link is any address with the link to a dictionary, an archive or a
+collection after `#`:
 
 ``` text
-https://legbehindneck.com/dictshelf#https://example.org/dicts/oxford.zip
+https://dmshlabs.github.io/DictShelf/#https://example.org/dicts/oxford.zip
 ```
 
-On Android with DictShelf installed, opening a share link starts the import in the
-app. Elsewhere, paste it on the setup page.
+The part after `#` is the dictionary; the page in front of it is only where a
+browser goes when DictShelf does not open the link, and a browser never sends
+the fragment to a server - so any page can carry one, and the page needs to
+know nothing about dictionaries. A single leading slash is short for a path on
+the sharing site itself (`#/dict/x/`), and several links may follow the `#`,
+separated by a comma, a semicolon, a bar or a space.
+
+On Android with DictShelf installed, opening such a link starts the import in
+the app; elsewhere, paste it on the setup page.
 
 ## Android
 

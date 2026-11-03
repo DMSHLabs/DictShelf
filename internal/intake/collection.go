@@ -46,13 +46,29 @@ import (
 // either is ignored, so a directory index, a README-like list or a pasted
 // forum post all work, and nobody has a syntax to learn.
 
-// The share link: https://legbehindneck.com/wudict#<link>. The part after
-// "#" is the link; the page at that address is only what a browser shows when
-// Android did not hand the link to the app, and it never sees the fragment.
-const (
-	ShareHost = "legbehindneck.com"
-	SharePath = "/wudict"
-)
+// The share link: any address with the link after "#" -
+//
+//	https://dmshlabs.github.io/DictShelf/#https://example.org/dicts/oxford.zip
+//
+// The fragment is the whole point. A browser never sends it to the server, so
+// the page in front of it is only what a reader sees when nothing opened the
+// link as a dictionary (Android handing it to the app, or the setup page after
+// a paste) - and that page needs to know nothing about dictionaries at all. Any
+// host can carry one, which is what makes it a format rather than an address,
+// and "#/dict/x/", one leading slash, is short for a path on the sharing site
+// itself. Our own page of dictionaries does not exist yet; when it does, it is
+// a page like any other here.
+//
+// SharePages are the pages whose BARE address is such a page of links rather
+// than something to read: its rows are drawn by script, so reading it as a
+// folder finds nothing ("no dictionaries found" about a page full of them), and
+// saying what it is instead is the whole point of listing it. Only the wudict
+// project's page is listed: the links already in the wild point at it, and the
+// site verifies THIS app through /.well-known/assetlinks.json, so on Android 12+
+// they open DictShelf with no setting to find (android/…/AndroidManifest.xml).
+var SharePages = []struct{ Host, Path string }{
+	{"legbehindneck.com", "/wudict"},
+}
 
 const (
 	// maxListBytes bounds a folder page or a list. Real ones are kilobytes;
@@ -70,13 +86,12 @@ const (
 	sniffHeadBytes = 64 << 10
 )
 
-// ErrSharePage is the share link with nothing after "#": wudict's own page of
-// dictionary links, not a link to any dictionary. Read as a folder page it
-// lists nothing (its rows are drawn by script), which said "no dictionaries
-// found" about a page that is full of them.
-var ErrSharePage = errors.New("that is wudict's page of dictionary links: open it in a browser and choose a dictionary there")
+// ErrSharePage is a share link with nothing after "#": the page itself, a page
+// of dictionary links rather than a link to any dictionary.
+var ErrSharePage = errors.New("that is a page of dictionary links, not a dictionary: open it in a browser and choose one there")
 
-// IsSharePage reports the share link that carries no link: the page itself.
+// IsSharePage reports the address of a share page with no link after "#" - a
+// listed page, whose bare address is a page of links (see SharePages).
 func IsSharePage(s string) bool {
 	s = strings.TrimSpace(s)
 	page, frag, _ := strings.Cut(s, "#")
@@ -92,8 +107,19 @@ func IsSharePage(s string) bool {
 	default:
 		return false
 	}
+	return isSharePage(u)
+}
+
+// isSharePage matches a parsed address against the listed share pages.
+func isSharePage(u *url.URL) bool {
 	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
-	return host == ShareHost && strings.TrimSuffix(u.Path, "/") == SharePath
+	page := strings.TrimSuffix(u.Path, "/")
+	for _, sp := range SharePages {
+		if host == sp.Host && page == sp.Path {
+			return true
+		}
+	}
+	return false
 }
 
 // ErrNoLinks is a folder page or list that names no dictionary this build
@@ -102,9 +128,19 @@ func IsSharePage(s string) bool {
 var ErrNoLinks = errors.New("no dictionaries found at that link")
 
 // Unwrap returns the link a share link carries, or s unchanged when s is not
-// one. The fragment is taken as written: the link inside keeps its own
-// %-escapes, and one that arrived escaped whole ("https%3A%2F%2F…", as some
-// senders re-encode a fragment) is decoded once.
+// one. ANY http(s) address can be a share link - that is the format, and it is
+// what keeps this from depending on a host we do not own - and what decides is
+// the fragment:
+//
+//   - a link ("#https://…", or the same %-escaped whole, as some senders
+//     re-encode a fragment) is the link;
+//   - one leading slash ("#/dict/x/") is a path on the sharing site itself;
+//   - anything else is not a share link: an ordinary URL that happens to carry
+//     an anchor ("…/dict.mdx#top") is returned as it came, and the fragment is
+//     not consulted again.
+//
+// The link inside keeps its own %-escapes: only a fragment escaped as a whole
+// is decoded.
 func Unwrap(s string) string {
 	s = strings.TrimSpace(s)
 	i := strings.IndexByte(s, '#')
@@ -115,13 +151,10 @@ func Unwrap(s string) string {
 	if err != nil {
 		return s
 	}
-	switch strings.ToLower(u.Scheme) {
+	scheme := strings.ToLower(u.Scheme)
+	switch scheme {
 	case "https", "http":
 	default:
-		return s
-	}
-	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
-	if host != ShareHost || strings.TrimSuffix(u.Path, "/") != SharePath {
 		return s
 	}
 	inner := strings.TrimSpace(s[i+1:])
@@ -130,19 +163,22 @@ func Unwrap(s string) string {
 			inner = d
 		}
 	}
-	// The short form: "#/dict/euskera/" is a path on the share link's own
-	// site. One leading slash only - "//other.org/x" is a link to another
-	// host written without its scheme, and the short form must never be a way
-	// to point somewhere the long form would have had to name.
-	if strings.HasPrefix(inner, "/") && !strings.HasPrefix(inner, "//") {
-		inner = strings.ToLower(u.Scheme) + "://" + u.Host + inner
+	if l := strings.ToLower(inner); strings.HasPrefix(l, "https://") || strings.HasPrefix(l, "http://") {
+		return inner
 	}
-	return inner
+	// The short form: "#/dict/euskera/" is a path on the share link's own site.
+	// One leading slash only - "//other.org/x" is a link to another host
+	// written without its scheme, and the short form must never be a way to
+	// point somewhere the long form would have had to name.
+	if strings.HasPrefix(inner, "/") && !strings.HasPrefix(inner, "//") {
+		return scheme + "://" + u.Host + inner
+	}
+	return s
 }
 
 // UnwrapAll is Unwrap for a share link that carries several links:
 //
-//	https://legbehindneck.com/wudict#https://a.org/x.mdx,https://b.org/x.mdd
+//	https://dmshlabs.github.io/DictShelf/#https://a.org/x.mdx,https://b.org/x.mdd
 //
 // The fragment is split where a new link begins - "http://" or "https://"
 // right after a separator: a comma, a semicolon, a bar or whitespace, written

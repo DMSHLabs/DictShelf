@@ -196,9 +196,10 @@ hostile — the code must survive `lang.Normalize`, the file name must be a plai
 known extension, the declared size must be within `morph.MaxPackBytes`, the manifest body is read
 through a 1 MB limit, and the **local** name is constructed as `<code><ext>` rather than taken
 from the catalogue, so a broken or malicious manifest cannot choose where DictShelf writes. The
-catalogue is this project's own: the built-in default is its `lemmas` branch and the published
-documentation site is the fallback for both the manifest and its assets; a custom `LEMMA_URL`
-is used on its own. A
+catalogue is this project's own: the built-in default is its `lemmas` branch and a second
+raw.githubusercontent.com repository is the fallback for both the manifest and its assets (raw,
+not a Pages site: it is what a downloader reads without the site's own limits); a custom
+`LEMMA_URL` is used on its own. A
 download streams to a dot-prefixed temporary in the destination folder — a name `scanDir` cannot
 match — and is renamed only after its length and digest both agree, so an interrupted install is
 invisible rather than half-applied. Enumerating a repository through a code-hosting API was
@@ -390,16 +391,19 @@ the reader pooled for it.
   `nextcloud.go`), and its files download from their WebDAV URLs. A list is one file name
   (resolved against the list's own URL after redirects) or link per line; the first `# `
   line is the title, and everything else is ignored. Several links **pasted at once** are the
-  same thing with nothing to fetch first, and `https://legbehindneck.com/dictshelf#<link>`, the
-  **share link**, stands for the link after `#` (`#/dict/x/`, a single leading slash, is short for a path on
-  legbehindneck.com itself; `//host` is refused as a host in disguise), or for several links after `#`
+  same thing with nothing to fetch first, and the **share link** - any address with the link after
+  `#` (`Unwrap`; the wudict project's page is only the one whose BARE address is a page of links,
+  `SharePages`) - stands for the link after `#` (`#/dict/x/`, a single leading slash, is short for a
+  path on the sharing host itself; `//host` is refused as a host in disguise, and a fragment that is
+  neither a link nor a path leaves the address alone), or for several links after `#`
   (`UnwrapAll`: split where `http(s)://` follows a comma, semicolon, bar or whitespace, plain or %-escaped;
   a link inside another's query stays whole). **Google Drive** file links (`/file/d/<id>`, `open?id=`, `uc?id=`)
   are rewritten in `Fetcher.Check` to `drive.usercontent.google.com/download?id=…&export=download&confirm=t`
   (`drive.go`); a Drive file, whose URL names no file, is named by the HEAD's Content-Disposition, its `.part`/`.done` keyed
   `gdrive-<id>`, and no siblings are probed.
   A Drive page where the file should be is `ErrDriveRefused`. Drive folders are not supported (only the Drive API lists them). The page at the share address is only what a
-  browser shows when Android did not open the app, and it never sees the fragment. There is
+  browser shows when Android did not open the app, and it never sees the fragment - which is why any
+  page can carry one. There is
   no manifest format. Only names a dictionary, companion or archive could have are kept
   (dict's tables, `SupportedArchive`), each is re-checked against the host policy, and each
   is described by a `HEAD` (4 at a time; ≤ 500 files; page ≤ 1 MiB). A file the site no

@@ -60,15 +60,16 @@ import (
 const Version = 1
 
 // The catalogue is this project's own: the manifest and the language files live
-// in the repository's `lemmas` branch, and the published documentation site
-// carries the same tree as the fallback. Both are ours, and both are checked
-// after download (scheme for the mirror, scheme/host/path for the primary), so
-// a substituted URL cannot install bytes the manifest did not describe.
+// in the repository's `lemmas` branch, and a second repository of the same
+// author carries the same tree as the fallback. Both are raw.githubusercontent.com
+// on purpose - it is the address a downloader can read without a site's own
+// limits - and both are checked after download (scheme/host/path), so a
+// substituted URL cannot install bytes the manifest did not describe.
 const defaultLemmaURL = "https://raw.githubusercontent.com/DMSHLabs/DictShelf/lemmas/manifest.json"
 
 // MirrorURLs are checked after the primary catalogue. Keep the mirror list
 // explicit: fallback is part of the published data policy, not discovery.
-var MirrorURLs = []string{"https://dmshlabs.github.io/DictShelf/lemmas/manifest.json"}
+var MirrorURLs = []string{"https://raw.githubusercontent.com/DmShAl/lemmas/main/manifest.json"}
 
 func manifestURLs(primary string) []string {
 	urls := []string{primary}
@@ -351,7 +352,7 @@ func (s source) fallbackURLs(name string) []string {
 	urls := make([]string, 0, len(MirrorURLs))
 	for _, raw := range MirrorURLs {
 		p, err := parseSource(raw)
-		if err != nil || p.manifest == nil || p.manifest.Scheme != "https" {
+		if err != nil || p.manifest == nil || p.manifest.Host != "raw.githubusercontent.com" {
 			continue
 		}
 		u := *p.manifest

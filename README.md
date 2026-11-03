@@ -203,7 +203,7 @@ BROWSER_EXTENSIONS = ["chrome-extension://bknaaoffefipfnpefmkbipcdemljbhjh"]
 (Firefox generates a fresh `moz-extension://` id for every installation, so
 there is no stable origin to pin there.)
 
-See also: [chrome/firefox browser extension](https://dmshlabs.github.io/DictShelf/extension/)
+See also: [browser extensions](https://dmshlabs.github.io/DictShelf/extension/)
 
 Config file search order: `--config` / `CONFIG_PATH`, then
 `<exe-dir>/dictshelf.toml`, `~/.dmshlabs/dictshelf/dictshelf.toml`,

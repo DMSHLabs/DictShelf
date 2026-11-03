@@ -11,12 +11,18 @@ cleaning that page set is open.
 
 The lemma catalogue is ours since 2026-11-03: `config.DefaultLemmaURL` and the built-in default
 in `internal/lemmas` point at `raw.githubusercontent.com/DMSHLabs/DictShelf/lemmas/manifest.json`,
-the fallback mirror at `dmshlabs.github.io/DictShelf/lemmas/`, and the scheme/host/path pin in
+the fallback catalogue at `raw.githubusercontent.com/DmShAl/lemmas` (raw, not a Pages site: it is
+what a downloader reads without the site's own limits), and the scheme/host/path pin in
 `fallbackURLs` follows them. **The `lemmas` branch and the site copy do not exist yet**, so
 `dictshelf lemmas download` reports an unreachable catalogue until the files are built (the
 Makefile lemma target) and pushed there. `pages/docs/extension.md` is now the contract only - we
 publish no browser extension, and the upstream store links and the upstream social link in
-`pages/zensical.toml` are gone.
+`pages/zensical.toml` are gone. Share links are a FORMAT since 2026-11-03, not an address:
+`intake.Unwrap` reads the link after `#` on ANY page (only the wudict project's page stays in
+`SharePages`, because its bare address is a page of dictionary links and its links open the app
+on Android 12+ through its assetlinks.json). Hosting OUR OWN page of dictionaries is still open;
+the asset for one - upstream's, unwired - is `ext/server/wudict/index.html`, and the dead-upstream
+registry says it stays unwired until that decision is made.
 
 Dictionary management defaults to Contains for new profiles, and its setup and
 Edit Folders views explain the search-speed benefit and one-time indexing cost.
