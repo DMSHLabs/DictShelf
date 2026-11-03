@@ -90,10 +90,19 @@ func (s *Store) StreamArticleIDs(ctx context.Context, query, mode, fullTextMatch
 			}
 		}
 		if (mode == "suffix" || mode == "contains") && s.hasTrigram && !s.staleFold {
-			if literal := headwordTrigramLiteral(query); literal != "" {
+			// One trigram, built by trigramMatch like every other trigram read
+			// in this package - never the whole word. The trigram index is
+			// detail=none, and a quoted literal of four runes or more is a
+			// multi-token PHRASE to the trigram tokenizer, which that table
+			// refuses outright ("phrase queries are not supported
+			// (detail!=full)"): the complete list then failed for every
+			// dictionary holding a Contains index, for every query whose
+			// longest word was that long. The whole word is the matcher's job,
+			// below; the index only has to narrow the candidates.
+			if candidate := trigramMatch(headwordTrigramLiteral(query)); candidate != "" {
 				statement = `SELECT e.id,e.w FROM entry_trigram t JOIN entry e ON e.id=t.rowid
 					WHERE entry_trigram MATCH ? AND e.w NOT LIKE '@_%' ORDER BY e.w COLLATE NOCASE,e.w,e.id`
-				args = []any{`"` + strings.ReplaceAll(literal, `"`, `""`) + `"`}
+				args = []any{candidate}
 			}
 		}
 		if ctx.Value(ignoreDiacriticsKey{}) != true && mode != "wildcards" {

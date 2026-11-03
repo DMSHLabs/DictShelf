@@ -331,6 +331,16 @@ Summarised here because the narrative of how each arrived is now in
   `articles.db`), which is what the card's "Complete list unavailable" means - now traced in the system
   log (`search_complete_list stage=declined|failed`) and reported by the client through
   `search_article`/`search_error`.
+- **The Contains index is `detail=none`, so a candidate is ONE trigram and never the whole word.** Every
+  trigram read narrows with `trigramMatch` and lets the matcher decide the rest; that table answers a
+  quoted literal of four runes or more with `fts5: phrase queries are not supported (detail!=full)`,
+  because the trigram tokenizer reads it as a PHRASE of several trigrams. The complete-list pass was the
+  one caller that quoted the whole word, so a Contains search whose longest word was four runes or longer
+  (`home`) lost its complete list on EVERY dictionary holding a Contains index, while three-rune queries
+  (`dog`) were fine - the headword searches themselves and the Browse A-Z list were never affected, as
+  they always asked for one trigram. Found 2026-11-04 from a live system log and fixed in
+  `StreamArticleIDs`, pinned by a test that fails on the old line with the error above. `entry_fts` and
+  `article_fts` stay `detail=full`, which is why phrases are legal there.
 - **The build is journal-less on both files and asks for a real page cache.** `createArticlesDB` sets
   `PRAGMA articles.{journal_mode,synchronous,cache_size}` right after the ATTACH, because `dsnIngest`
   sets those per database at connection open - before the attached file existed (`ingestCacheKiB`, 64 MiB,
