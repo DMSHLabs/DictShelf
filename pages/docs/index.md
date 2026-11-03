@@ -29,9 +29,9 @@ body:has(.hero) .md-content__button{display:none}
 
 # DictShelf
 
-A dictionary application that lives on your own machine. DictShelf indexes the
-dictionaries you already have and answers your searches in the browser: no
-account, no upload, nothing sent anywhere.
+A dictionary application for your own machine. DictShelf indexes the
+dictionaries you already own and searches them locally: no account, no upload,
+nothing sent anywhere.
 
 </div>
 
@@ -54,7 +54,9 @@ account, no upload, nothing sent anywhere.
 -   **Full text** — search the bodies of the articles, not only their headwords,
     with phrase and proximity readings when the exact wording is not what you
     remember.
--   **Your formats** — MDict (`.mdx`/`.mdd`), StarDict, Aard 2, Lingvo DSL,
-    Babylon, ZIM and wudict markdown, on Windows, macOS, Linux and Android.
+-   **Supported formats** — MDict (`.mdx`), StarDict (`.ifo`), AARD2 (`.slob`),
+    Babylon (`.bgl`), ZIM (`.zim`), Lingvo (`.lsd`/`.dsl`/`.dsl.dz`/`.dsl.dz2`),
+    Wudict Markdown (`.wudict.md`).
+-   **OS** — Android, Windows.
 
 </div>
