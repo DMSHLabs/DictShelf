@@ -15,7 +15,6 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/ftsq"
 	"github.com/DMSHLabs/DictShelf/internal/htmlref"
-	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 	"github.com/DMSHLabs/DictShelf/internal/lang"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
 	"github.com/DMSHLabs/DictShelf/internal/search"
@@ -397,13 +396,11 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 			m.Deferred, m.Bytes = true, heavy.bytes
 
 		case errors.Is(h.Err, context.DeadlineExceeded):
-			// Never Go's own words. "context deadline exceeded" is what an
-			// unindexed dictionary looked like from the outside while a preview
-			// search crawled through its source format, and it told the user
-			// nothing they could act on - which is the whole content of the
-			// message they need. WHICH message is a question about the dictionary,
-			// not about the clock (searchTimeoutMessage).
-			m.Error = searchTimeoutMessage(searchIndexMissingFor(entries[i], mode))
+			// A deadline can only come from below now - a sub-call with its own
+			// bound - since the search itself has none. Never Go's own words, and
+			// never advice: this dictionary has an index (one without is not
+			// searched at all), it just did not finish.
+			m.Error = searchDidNotFinish
 		case errors.Is(h.Err, context.Canceled):
 			m.Error = "search cancelled"
 		case h.Err != nil:
@@ -416,14 +413,9 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	}
 
 	// The ceiling exists to stop ONE slow dictionary from holding a wide
-	// fan-out open. It is the wrong shape for a search of a single named
-	// dictionary: there is nothing to fan out, the user chose this one, and an
-	// unprepared dictionary searched through its own format on a phone can
-	// legitimately take longer than that to answer. Cutting it off there
-	// produced a timeout instead of a result - see indexconst for both clocks.
-	budget := indexconst.SearchFanoutBudget
-	ctx, cancel := context.WithTimeout(ctx, budget)
-	defer cancel()
+	// No deadline: the search runs until every dictionary has answered, and what
+	// ends it early is the reader (Stop, or a new search) - never a clock. See
+	// indexconst for why the fan-out clock is gone and what replaces it.
 	if request.Suggestions && mode == search.Wildcards {
 		search.StreamHeadwordSuggestions(ctx, openers, q, n, func(i int, h search.Hit) {
 			writeLine(renderHit(i, h))
@@ -437,58 +429,14 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	return emitErr
 }
 
-// searchTimeoutMessage is what a dictionary that ran out of the fan-out clock is
-// told - and there are TWO situations behind that clock, which shared one message
-// until 2026-11-03 (found in the user's log: 388 dictionaries all told to index
-// themselves while the same log showed them indexed). One is a dictionary with
-// nothing to answer from - no prepared database, or the index this mode needs not
-// built - which fell back to crawling its own source and does need indexing before
-// this mode can be quick. The other is a dictionary that HAS its data and simply
-// did not get its turn before the shared clock ran out, which is what a wide
-// search over a slow disk looks like; the advice fitted only the first, and for
-// the second it told the reader to redo work already done.
-func searchTimeoutMessage(indexMissing bool) string {
-	if indexMissing {
-		return "timed out — index this dictionary to search it"
-	}
-	return "timed out — search this dictionary alone to allow more time"
-}
-
-// searchIndexMissingFor answers which of those two situations this dictionary is
-// in: whether the mode it was asked in has anything prepared to answer from. It is
-// asked only once a search has already run out of time, so it may read the
-// folder's meta - and it must not OPEN the database, because a search of this
-// dictionary is exactly what did not finish.
-func searchIndexMissingFor(e *entry, mode search.Mode) bool {
-	textDB, prepared := validPrepared(e.Path)
-	if !prepared {
-		return true
-	}
-	p := store.Inspect(textDB)
-	if !p.Usable() {
-		return true
-	}
-	switch mode {
-	case search.FullText, search.Phrase, search.Near:
-		// Full text is answered by our article index - inside the database or in
-		// the sibling beside it (the split form) - or by the archive itself.
-		if store.OwnFullText(p.Meta) {
-			return false
-		}
-		if p.Plan.FullText && p.Plan.ArticlesInside {
-			return false
-		}
-		if _, ok := store.ArticlesSibling(textDB); ok {
-			return false
-		}
-		return true
-	case search.Contains:
-		return !p.Plan.Contains
-	}
-	// Every headword mode is answered by the prepared database itself, which is
-	// already in hand.
-	return false
-}
+// searchDidNotFinish is what a dictionary whose search produced a deadline is
+// told: it did not finish, and that is all the reader needs. It is deliberately
+// NOT advice - a dictionary without an index is not searched at all (the opener
+// refuses it with its own message), so "index this dictionary" was advice that
+// could only ever be wrong here. It used to be two messages because one fan-out
+// clock covered two situations: a dictionary with nothing prepared, and one that
+// merely waited too long for its turn. Both are gone with the clock (indexconst).
+const searchDidNotFinish = "timed out — the search of this dictionary did not finish"
 
 // searchTermFor adds the lemma to the same dictionary query only in the two
 // explicit lemma modes. The store searches both alternatives together.

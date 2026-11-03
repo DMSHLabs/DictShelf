@@ -41,6 +41,13 @@ import (
 // out; every other dictionary in the fan-out is unaffected.
 var errReindexing = errors.New("dictionary is being re-indexed")
 
+// errIndexNotReady answers anything asked of a dictionary whose index is not there
+// yet - still being prepared, or prepared and not yet published. It is ONE string
+// because the client translates it by exact text (errors.indexNotReady,
+// web/i18n.js), and it is deliberately not advice: the queue is already building
+// that index.
+var errIndexNotReady = errors.New("the dictionary index is not ready yet; it is being prepared")
+
 // upgraded serves queries from an ingested text.db while resolving
 // resources media.db → original source (D2 resolution order). The direct
 // source backend (`src`) is opened lazily - only when a resource actually
@@ -595,7 +602,7 @@ func (e *entry) noPackableMedia() bool {
 // media.db) exists for it, wraps it into the upgraded view.
 func (e *entry) open() (dict.Dictionary, error) {
 	if e.indexBlocked() {
-		return nil, errors.New("the dictionary index is not ready yet; it is being prepared")
+		return nil, errIndexNotReady
 	}
 	e.lastUse.Store(time.Now().UnixNano())
 	if e.rebuilding.Load() {
@@ -613,7 +620,7 @@ func (e *entry) open() (dict.Dictionary, error) {
 	e.openMu.Lock()
 	defer e.openMu.Unlock()
 	if e.indexBlocked() {
-		return nil, errors.New("the dictionary index is not ready yet; it is being prepared")
+		return nil, errIndexNotReady
 	}
 	if e.rebuilding.Load() {
 		return nil, errReindexing
@@ -2299,12 +2306,12 @@ func (e *entry) indexing() bool { return e.demanded.Load() }
 
 func (e *entry) ensureBaseIndex(progress store.Progress) error {
 	if e.indexBlocked() {
-		return errors.New("the dictionary index is not ready yet; it is being prepared")
+		return errIndexNotReady
 	}
 	e.ingestMu.Lock()
 	defer e.ingestMu.Unlock()
 	if e.indexBlocked() {
-		return errors.New("the dictionary index is not ready yet; it is being prepared")
+		return errIndexNotReady
 	}
 	defer e.rebuilding.Store(false)
 	if _, ok := validPrepared(e.Path); ok {
@@ -2334,7 +2341,7 @@ func (e *entry) setContainsIndexContext(ctx context.Context, action string, prog
 	}
 	defer e.rebuilding.Store(false)
 	if e.indexBlocked() {
-		return errors.New("the dictionary index is not ready yet; it is being prepared")
+		return errIndexNotReady
 	}
 
 	textDB, prepared := validPrepared(e.Path)
@@ -2409,7 +2416,7 @@ func (e *entry) setFullTextIndexContext(ctx context.Context, action string, prog
 	}
 	defer e.rebuilding.Store(false)
 	if e.indexBlocked() {
-		return errors.New("the dictionary index is not ready yet; it is being prepared")
+		return errIndexNotReady
 	}
 
 	textDB, prepared := validPrepared(e.Path)

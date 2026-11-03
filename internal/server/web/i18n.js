@@ -110,7 +110,6 @@
     "errors.archiveRatio",
     "errors.collectionMissing",
     "errors.indexNotReady",
-    "errors.searchTimedOutNoIndex",
     "errors.searchTimedOutLate",
     "errors.tooManyWords",
     "errors.collectionFileMissing",

@@ -4,8 +4,6 @@
 // Package indexconst holds shared sizes and intervals for prepared indexes and their views.
 package indexconst
 
-import "time"
-
 const (
 	// SearchDebounceMS is the idle interval after typing before Browse and result-filter searches.
 	SearchDebounceMS = 500
@@ -39,26 +37,18 @@ const (
 	IngestBatchSize = 5000
 )
 
-// The two search clocks. They are separate numbers because they answer separate
-// questions - a fan-out over the whole library, and one dictionary the reader
-// named - and they live here rather than inline in the handlers so the places
-// that use each cannot drift apart.
-const (
-	// SearchFanoutBudget bounds ONE search of many dictionaries. It exists to stop
-	// a single slow dictionary from holding a wide fan-out open.
-	//
-	// It is a REPORTING bound, not a resource bound: the fan-out shares this one
-	// clock, so every dictionary still unanswered at the end reports a timeout -
-	// including a dictionary that is merely not indexed, which is why the reader
-	// is told "index this dictionary" and not "too slow". The real limits are
-	// expressed in their own currency elsewhere: bytes for a search's memory
-	// (SEARCH_MEMORY, PREVIEW_MEMORY, the fan-out budget) and lanes for indexing
-	// work (IndexDictionaryLimit, the search fan-out width).
-	SearchFanoutBudget = 30 * time.Second
-
-	// SingleSearchBudget is how long a search of ONE named dictionary may take
-	// before it is cut off. Generous rather than unlimited: the request still
-	// holds a goroutine and an open backend, so it needs an end, but the end is
-	// there to catch a wedged backend, not to police a slow one.
-	SingleSearchBudget = 5 * time.Minute
-)
+// There are no search clocks. A search ends when the reader stops it or asks
+// something else, and that is the whole of it: a clock cannot tell a slow disk
+// from a wedged backend, and the one that measured the FAN-OUT measured how long
+// a dictionary waited for its turn, so it failed dictionaries that were working -
+// the user's 388-dictionary 'contains' search, where every row said "timed out"
+// while the same log showed them indexed (2026-11-03).
+//
+// What replaces it, for the wedged case, is a watchdog on PROGRESS: where the
+// loop is ours - headwords, article ids, archive records - a thread that stops
+// moving for a long while is a bug or a corrupt file, and it is reported with the
+// dictionary, its size and the record it stopped on. Where the call is opaque
+// (one SQLite MATCH) there is no progress to watch, so there is no limit there
+// either: the reader has Stop. Resource bounds stay where they belong and in
+// their own currency: bytes for memory (SEARCH_MEMORY, PREVIEW_MEMORY) and lanes
+// for indexing work (IndexDictionaryLimit, the search fan-out width).

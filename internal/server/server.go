@@ -1756,7 +1756,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		openers[i] = func() (dict.Dictionary, error) {
 			if !entryHasSelfIndex(e) {
 				if _, ok := validPrepared(e.Path); !ok {
-					return nil, errors.New("dictionary index is not ready")
+					return nil, errIndexNotReady
 				}
 			}
 			d, err := e.openWithin(fan)
@@ -1828,10 +1828,10 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 			// longer search budget.
 			m.Deferred, m.Bytes = true, heavy.bytes
 		case errors.Is(h.Err, context.DeadlineExceeded):
-			// Never Go's own words, and never one message for two situations: the
-			// same helper as the native path (searchTimeoutMessage), so a reader
-			// is not told to index a dictionary that is already indexed.
-			m.Error = searchTimeoutMessage(searchIndexMissingFor(entries[i], mode))
+			// Never Go's own words, and never advice: whatever arrived was a
+			// dictionary that did not finish, not one that needs indexing (a
+			// dictionary without an index is not searched at all).
+			m.Error = searchDidNotFinish
 		case errors.Is(h.Err, context.Canceled):
 			m.Error = "search cancelled"
 		case h.Err != nil:
@@ -1843,14 +1843,9 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return m
 	}
 
-	// A fan-out over the library and a search of one named dictionary answer
-	// different questions, so they get different clocks - see indexconst.
-	budget := indexconst.SearchFanoutBudget
-	if single {
-		budget = indexconst.SingleSearchBudget
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), budget)
-	defer cancel()
+	// No clock, for a fan-out or for one named dictionary: the search answers, or
+	// the reader stops it (indexconst has the whole argument).
+	ctx := r.Context()
 	if ignore, _ := queryFlag(r.URL.Query(), "ignoreDiacritics"); ignore {
 		ctx = store.WithIgnoreDiacritics(ctx)
 	}
