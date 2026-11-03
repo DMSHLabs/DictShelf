@@ -88,7 +88,7 @@ func (s *Server) aboutSourceFor(e *entry) aboutSource {
 			return aboutSource{
 				name: m.Name, format: m.Format, desc: m.Description,
 				srcPath: e.Path, indexLang: m.IndexLang, contentsLang: m.ContentsLang,
-				headwords: m.EntryCount, entries: m.EntryCount,
+				headwords: m.EntryCount, entries: declaredArticles(m),
 			}
 		}
 	}
@@ -112,8 +112,22 @@ func (s *Server) aboutSourceFor(e *entry) aboutSource {
 	return aboutSource{
 		name: m.Name, format: strings.TrimPrefix(m.Format, "wudict:"), desc: m.Description,
 		srcPath: e.Path, indexLang: m.IndexLang, contentsLang: m.ContentsLang,
-		headwords: m.EntryCount, entries: m.EntryCount,
+		headwords: m.EntryCount, entries: declaredArticles(m),
 	}
+}
+
+// declaredArticles is the article count to show beside the entry count: the
+// source's own claim when it makes one and it is smaller - a ZIM lists every
+// alias as an entry, so EntryCount counts NAMES - and the entry count itself
+// otherwise, which leaves the UI showing one figure rather than two identical
+// ones. A claim that is not smaller than the entry count is not believed: the
+// two numbers can only be printed side by side when they differ, and inventing
+// a difference from a bad field would be worse than showing one number.
+func declaredArticles(m dict.Meta) int {
+	if n := m.DeclaredArticles; n > 0 && n < m.EntryCount {
+		return n
+	}
+	return m.EntryCount
 }
 
 func parseAboutCount(value string) int {

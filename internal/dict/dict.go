@@ -39,6 +39,14 @@ type Meta struct {
 	Path        string // source path (or .text.db path for ingested)
 	Description string
 	EntryCount  int
+	// DeclaredArticles is what the SOURCE ITSELF says its article count is,
+	// when it says anything: a ZIM states one in its metadata. 0 means it
+	// states nothing and the article count is unknown. It exists because for
+	// such a source EntryCount is the number of NAMES - every redirect, every
+	// alias is an entry - so a reader given one figure cannot tell how much of
+	// it is aliases. This is the source's own answer to that, the way a
+	// prepared index answers it with entry_count beside headword_count.
+	DeclaredArticles int
 	// HeadwordsOnly marks a prepared ZIM title index: article text is fetched
 	// from the original source after a headword match.
 	HeadwordsOnly bool

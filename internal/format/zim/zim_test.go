@@ -488,10 +488,19 @@ func TestRealFile(t *testing.T) {
 	}
 	defer d.Close()
 	m := d.Meta()
-	t.Logf("%s: %d entries, lang %q, %d articles claimed, %d MiB preview",
-		m.Name, m.EntryCount, m.IndexLang, d.c.articleCount(), d.PreviewBytes()>>20)
+	t.Logf("%s: %d names, %d articles the archive claims, lang %q, %d MiB preview",
+		m.Name, m.EntryCount, m.DeclaredArticles, m.IndexLang, d.PreviewBytes()>>20)
 	if m.Name == "" || m.EntryCount == 0 {
 		t.Fatalf("meta looks empty: %+v", m)
+	}
+	// What About discloses for a ZIM: EntryCount counts NAMES - every redirect
+	// is an entry - so the archive's own article count has to be smaller, and
+	// has to have been read.
+	if m.DeclaredArticles <= 0 {
+		t.Errorf("the archive states no article count: %+v", m)
+	}
+	if m.DeclaredArticles >= m.EntryCount {
+		t.Errorf("declared articles %d are not below the %d names", m.DeclaredArticles, m.EntryCount)
 	}
 	kws := d.Keywords(m.EntryCount/2, 20)
 	if len(kws) == 0 {

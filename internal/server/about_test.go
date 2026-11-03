@@ -15,6 +15,31 @@ import (
 
 const aboutBase = "http://127.0.0.1:6888"
 
+// About prints two counts when a source states an article count of its own and
+// it is SMALLER than the entry count (a ZIM lists every alias as an entry, so
+// the entry count is names) - and one count otherwise, because two identical
+// numbers in the popup would look like a distinction that is not there.
+func TestDeclaredArticles(t *testing.T) {
+	cases := []struct {
+		name string
+		meta dict.Meta
+		want int
+	}{
+		{"a source that states nothing", dict.Meta{EntryCount: 100}, 100},
+		{"a ZIM: articles below names", dict.Meta{EntryCount: 100, DeclaredArticles: 40}, 40},
+		{"a claim equal to the entry count is not a second number", dict.Meta{EntryCount: 100, DeclaredArticles: 100}, 100},
+		{"a claim above the entry count is not believed", dict.Meta{EntryCount: 100, DeclaredArticles: 250}, 100},
+		{"a negative claim is nothing stated", dict.Meta{EntryCount: 100, DeclaredArticles: -1}, 100},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := declaredArticles(c.meta); got != c.want {
+				t.Errorf("declaredArticles(%+v) = %d, want %d", c.meta, got, c.want)
+			}
+		})
+	}
+}
+
 func TestRenderAboutPlainText(t *testing.T) {
 	got := renderAbout(dict.About{Sections: []dict.Section{
 		{Lang: "English", Text: "A dictionary.\nBy <Someone> & Co."},

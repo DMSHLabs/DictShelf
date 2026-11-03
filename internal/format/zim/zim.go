@@ -92,7 +92,12 @@ func Open(path string) (*Dict, error) {
 		Path:        path,
 		Description: dict.DisplayText(strings.TrimSpace(c.metadata("Description"))),
 		EntryCount:  d.hi - d.lo,
-		IndexLang:   lang.FromDeclared(c.metadata("Language")),
+		// Every redirect is an entry here, so the range above counts NAMES.
+		// The archive's own article count is what tells a reader how many of
+		// them are aliases; it is checked at open (claimed > 0) and disclosed
+		// by About.
+		DeclaredArticles: c.articleCount(),
+		IndexLang:        lang.FromDeclared(c.metadata("Language")),
 	}
 	for _, k := range headerKeys {
 		if k == "Name" && nameFromName {
