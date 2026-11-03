@@ -124,6 +124,11 @@ type dirent struct {
 
 func (d dirent) isRedirect() bool { return d.mimetype == mimeRedirect }
 
+// isContent reports an entry that stores a blob: neither a redirect nor a
+// deletion marker. The writer leaves a marker where it removed an entry, and
+// reading one is not an error in the file but a request for nothing.
+func (d dirent) isContent() bool { return d.mimetype < mimeDeleted }
+
 // headword is the title when the file records one, else the path. An empty
 // title means "same as the path" and is how ZIM avoids storing it twice - so
 // the path is used VERBATIM, never with '_' turned back into a space, which

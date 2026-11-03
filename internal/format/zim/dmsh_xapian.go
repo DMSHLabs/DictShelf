@@ -169,7 +169,7 @@ func (d *Dict) FullText(query string, limit int) ([]dict.Result, error) {
 		}
 		name := strings.TrimPrefix(path, "C/")
 		i, de, ok := d.c.find(d.c.contentNS(), name)
-		if !ok || !d.c.isArticle(de) || seen[i] {
+		if !ok || !d.c.isArticle(i, de) || seen[i] {
 			continue
 		}
 		seen[i] = true

@@ -157,13 +157,19 @@ func (c *container) metadata(name string) string {
 }
 
 // isArticle reports whether an entry is something a search may return: a
-// stored HTML page, or a redirect (whose target is resolved before rendering).
-func (c *container) isArticle(d dirent) bool {
+// stored HTML page, or a redirect that ENDS at one.
+//
+// A redirect is decided by resolving it, not by its being one: a chain that
+// ends nowhere, at a deletion marker or at a non-HTML entry is not an article,
+// and treating it as one puts a row in a listing that opens as nothing. The
+// index is needed for that walk - a redirect's target is another entry.
+func (c *container) isArticle(i int, d dirent) bool {
 	if d.namespace != c.contentNS() {
 		return false
 	}
 	if d.isRedirect() {
-		return true
+		_, tgt, err := c.resolve(i)
+		return err == nil && c.htmlMIME[tgt.mimetype]
 	}
 	return c.htmlMIME[d.mimetype]
 }
@@ -176,7 +182,7 @@ func (d *Dict) Exact(word string, limit int) ([]dict.Result, error) {
 	var idxs []int
 	for _, v := range pathVariants(word) {
 		i, de, ok := d.c.find(d.c.contentNS(), v)
-		if ok && d.c.isArticle(de) {
+		if ok && d.c.isArticle(i, de) {
 			idxs = append(idxs, i)
 			break
 		}
@@ -207,7 +213,7 @@ func (d *Dict) Prefix(word string, limit int) ([]dict.Result, error) {
 		// and it must be able to walk past them without walking the namespace.
 		budget := limit*4 + 64
 		err := d.c.prefixScan(d.c.contentNS(), v, budget, func(i int, de dirent) bool {
-			if d.c.isArticle(de) {
+			if d.c.isArticle(i, de) {
 				idxs = append(idxs, i)
 			}
 			return len(idxs) < limit
@@ -275,7 +281,7 @@ func (d *Dict) Keywords(offset, n int) []string {
 		if err != nil {
 			break
 		}
-		if !d.c.isArticle(de) {
+		if !d.c.isArticle(i, de) {
 			continue
 		}
 		out = append(out, de.headword())
@@ -304,7 +310,7 @@ func (d *Dict) Page(offset, n int) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		if !d.c.isArticle(de) {
+		if !d.c.isArticle(i, de) {
 			continue
 		}
 		out = append(out, de.headword())
@@ -395,7 +401,7 @@ func (d *Dict) buildAlphabetStream(ctx context.Context, emit func([]dict.Letter,
 			if err != nil {
 				return nil, err
 			}
-			if d.c.isArticle(de) {
+			if d.c.isArticle(d.lo+slot, de) {
 				first = de.headword()
 				break
 			}
@@ -475,6 +481,11 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 			if _, de, err = d.c.resolve(i); err != nil {
 				return nil, "", err
 			}
+		}
+		// A deletion marker is not a missing file: the writer removed this
+		// entry, so there is nothing here and nothing to read.
+		if !de.isContent() {
+			return nil, "", dict.ErrNotFound
 		}
 		rc, err := d.c.contentReader(de)
 		if err != nil {

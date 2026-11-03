@@ -115,7 +115,7 @@ func (d *Dict) verifiedFullText(query string, limit, maxCheck int, keep func(tok
 		}
 		name := strings.TrimPrefix(path, "C/")
 		i, de, ok := d.c.find(d.c.contentNS(), name)
-		if !ok || !d.c.isArticle(de) {
+		if !ok || !d.c.isArticle(i, de) {
 			continue
 		}
 		if de.isRedirect() {
@@ -314,7 +314,7 @@ func (d *Dict) streamHeadwords(query string, maxCheck int, keep func(tokens []st
 		}
 		name := strings.TrimPrefix(path, "C/")
 		i, de, ok := d.c.find(d.c.contentNS(), name)
-		if !ok || !d.c.isArticle(de) {
+		if !ok || !d.c.isArticle(i, de) {
 			continue
 		}
 		if de.isRedirect() {
