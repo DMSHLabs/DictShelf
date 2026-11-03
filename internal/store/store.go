@@ -652,7 +652,7 @@ func (s *Store) ContainsContext(ctx context.Context, word string, limit int) ([]
 	n := clamp(limit)
 	if !s.hasCaseKey {
 		if len([]rune(folded)) >= 3 {
-			match := trigramMatch(folded)
+			match := trigramCandidates(folded)
 			res, err := s.collect(s.db.QueryContext(ctx, `
 				SELECT e.w, e.m FROM entry_trigram t JOIN entry e ON e.id = t.rowid
 				WHERE entry_trigram MATCH ?1 AND instr(e.wf, ?2) > 0`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?3`, match, folded, n))
@@ -665,7 +665,7 @@ func (s *Store) ContainsContext(ctx context.Context, word string, limit int) ([]
 	}
 	column, key := s.headwordSearchKey(ctx, word)
 	if len([]rune(folded)) >= 3 {
-		match := trigramMatch(folded)
+		match := trigramCandidates(folded)
 		query := strings.ReplaceAll(`
 			SELECT e.w, e.m FROM entry_trigram t JOIN entry e ON e.id = t.rowid
 			WHERE entry_trigram MATCH ?1 AND instr(e.@KEY@, ?2) > 0`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?3`, "@KEY@", column)

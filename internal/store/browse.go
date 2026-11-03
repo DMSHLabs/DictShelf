@@ -180,7 +180,7 @@ func (s *Store) streamBrowseHeadwords(ctx context.Context, query string, mask bo
 			return stream.finish()
 		}
 		if literal := maskTrigramLiteral(query); strategy == "trigram" && literal != "" {
-			match := trigramMatch(literal)
+			match := trigramCandidates(literal)
 			rows, queryErr := s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_trigram t
 				JOIN entry e ON e.id=t.rowid WHERE entry_trigram MATCH ? AND e.w NOT LIKE '@_%'
 				ORDER BY e.w COLLATE NOCASE`, match)
@@ -399,7 +399,7 @@ func (s *Store) FindHeadwordsMode(ctx context.Context, query, mode string, offse
 		}
 		if s.hasTrigram && !s.staleFold {
 			if literal := headwordTrigramLiteral(query); literal != "" {
-				match := trigramMatch(literal)
+				match := trigramCandidates(literal)
 				rows, err = s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_trigram t
 					JOIN entry e ON e.id=t.rowid WHERE entry_trigram MATCH ? AND e.w NOT LIKE '@_%'
 					ORDER BY e.w COLLATE NOCASE`, match)
@@ -482,7 +482,7 @@ func (s *Store) StreamBrowseHeadwordsMode(ctx context.Context, query, mode strin
 		}
 		if s.hasTrigram && !s.staleFold {
 			if literal := headwordTrigramLiteral(query); literal != "" {
-				match := trigramMatch(literal)
+				match := trigramCandidates(literal)
 				rows, err = s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_trigram t
 					JOIN entry e ON e.id=t.rowid WHERE entry_trigram MATCH ? AND e.w NOT LIKE '@_%'
 					ORDER BY e.w COLLATE NOCASE`, match)
@@ -652,7 +652,7 @@ func (s *Store) FindHeadwordsMaskWithinMode(ctx context.Context, query, within, 
 			return nil, 0, nil, nil, err
 		}
 	} else if literal := maskTrigramLiteral(query); strategy == "trigram" && literal != "" {
-		match := trigramMatch(literal)
+		match := trigramCandidates(literal)
 		rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_trigram t
 			JOIN entry e ON e.id=t.rowid WHERE entry_trigram MATCH ? AND e.w NOT LIKE '@_%'
 			ORDER BY e.w COLLATE NOCASE`, match)

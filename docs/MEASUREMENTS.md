@@ -170,3 +170,39 @@ the real archive is for sanity checks - output bytes and recorded sizes must
 match. What the real runs do settle is the comparison that matters for the
 feeling of slowness: the same archive took **763 s** in the log of a
 three-dictionary parallel batch, against 430-495 s alone.
+
+## What a substring candidate narrows to, one trigram against three (2026-11-04)
+
+`entry_trigram` is `detail=none`, so a Contains read narrows by single trigrams of the query term,
+ANDed, and the matcher decides the rest. Measured on the user's own library, read-only, with
+`StreamArticleIDs` (the complete-list path) built once with one window and once with three: candidates
+are rows the index handed over, "list" is the whole path in milliseconds. Absolute times move with the
+page cache, so the pair to read is old against new inside one run.
+
+| dictionary (entries) | query | candidates 1 → 3 windows | list 1 → 3 windows |
+|---|---|---|---|
+| wiktionary en (9.09 M) | revolution | 21 027 → 575 | 93 → 12 ms |
+| | information | 23 319 → 364 | 101 → 10 ms |
+| | station | 123 051 → 1 806 | 405 → 28 ms |
+| | nation | 45 699 → 4 890 | 218 → 73 ms |
+| | ation | 158 740 → 46 613 | 884 → 581 ms |
+| | house | 11 037 → 2 767 | 77 → 42 ms |
+| | tion (3 runes, 2 windows) | 128 440 → 117 049 | 1 633 → 1 558 ms |
+| | ost (3 runes, 1 window) | 51 390 → 51 390 | 622 → 629 ms |
+| wiktionary ru (1.53 M) | революция | 4 262 → 46 | 23 → 2 ms |
+| | привет | 14 086 → 60 | 60 → 2 ms |
+| | ость | 17 712 → 8 064 | 149 → 115 ms |
+| | ство | 8 948 → 6 427 | 106 → 97 ms |
+| wikipedia ru (2.20 M) | информация | 1 604 → 64 | 13 → 3 ms |
+| wikipedia de (3.28 M) | information | 7 127 → 1 296 | 45 → 20 ms |
+| | nation | 56 774 → 29 699 | 507 → 424 ms |
+| OED 2 (259 k) | revolution | 635 → 14 | 23 → 1 ms |
+| | information | 655 → 9 (8 answers) | 22 → 1 ms |
+| Collins (102 k) | revolution | 205 → 27 (27 answers) | 11 → 0 ms |
+
+No measured query is slower with three windows. The narrowing query alone (SQL, the same two runs as the
+table above) falls with it: on wiktionary en `station` 241 → 15 ms, `nation` 122 → 27 ms, `information`
+70 → 5 ms, `revolution` 83 → 7 ms; on wiktionary ru `привет` 33 → 2 ms; on wikipedia de `information`
+25 → 7 ms. The worst case is a term whose windows are all common: `tion` keeps 91 % of its candidates and
+`ость` 46 %, and both are still faster than before. Three windows are therefore the choice; a term of
+three runes has exactly one and is unchanged.

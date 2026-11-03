@@ -77,12 +77,13 @@ func TestEntryIDsForHeadwordsKeepsOrderAndDropsTheUnknown(t *testing.T) {
 
 // The complete list of a Contains search asks the trigram index for candidates
 // and the matcher for the answer, and the two must not be confused: the index is
-// detail=none, so the candidate has to be ONE trigram. Handing it the whole word
-// instead made every word of four runes or more a phrase query, which that table
-// refuses - the complete list failed for every dictionary with a Contains index.
-// Three runes and more than three are both here because it was the length that
-// decided whether the list worked.
-func TestStreamArticleIDsContainsAsksTheTrigramIndexForOneTrigram(t *testing.T) {
+// detail=none, so the candidate is trigrams of the term, never the word as a
+// PHRASE. Handing it the whole word made every query whose longest term was four
+// runes or more fail - the complete list refused on every dictionary with a
+// Contains index. Three runes and more than three are both here because it was
+// the length that decided whether the list worked; the candidate itself is
+// pinned in trigram_candidates_test.go.
+func TestStreamArticleIDsContainsListsLongTerms(t *testing.T) {
 	dir := t.TempDir()
 	textDB := filepath.Join(dir, TextDBName)
 	src := filepath.Join(dir, "source.dsl")
