@@ -31,6 +31,27 @@ final class GoBridge {
 
     private GoBridge() {}
 
+    /** An argument the bridge was not given. A page that omits an optional
+     * argument hands this side null, and a NULL C string is what the Go side
+     * reads as a call from a dead runtime - so the call answered NULL, and a
+     * working app reported "Go runtime is unavailable" about itself. An
+     * omitted argument is an empty one here, which the Go side already
+     * understands as "not given". */
+    private static String or(String value) {
+        return value == null ? "" : value;
+    }
+
+    /** A native call that answered nothing - and NOT the same statement as
+     * the runtime being absent, which is what the old wording claimed while the
+     * app went on answering searches and indexing dictionaries. A call has
+     * several honest ways to answer nothing (a payload it could not marshal, a
+     * NULL argument it refuses, a Go side that is not up yet), and only the
+     * call knows which, so the message names it and the log carries it too. */
+    private static IllegalStateException noAnswer(String call) {
+        SystemLog.warn(TAG, "no answer from Go: " + call);
+        return new IllegalStateException("DictShelf did not answer (" + call + ")");
+    }
+
     private static native int nativeProtocol();
     private static native String nativeConfigSummary(String path, String flagsJSON);
     private static native boolean nativeInstallBusyObserver();
@@ -92,23 +113,23 @@ final class GoBridge {
     static int startRescanIndexes(String origin, String request) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         refreshPowerForWork();
-        return nativeRescanIndexesStart(origin, request);
+        return nativeRescanIndexesStart(or(origin), or(request));
     }
 
     static int startIngest(String origin, String query) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         refreshPowerForWork();
-        return nativeIngestStart(origin, query);
+        return nativeIngestStart(or(origin), or(query));
     }
 
     static int startSearchStream(String origin, String request) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        return nativeSearchStreamStart(origin, request);
+        return nativeSearchStreamStart(or(origin), or(request));
     }
 
     static int startBrowseStream(String method, String query) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        return nativeBrowseStreamStart(method, query);
+        return nativeBrowseStreamStart(or(method), or(query));
     }
 
     static String pollDictStream(int id) {
@@ -125,90 +146,90 @@ final class GoBridge {
     static String configSnapshot() {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         String result = nativeConfigSnapshot();
-        if (result == null) throw new IllegalStateException("Go runtime is unavailable");
+        if (result == null) throw noAnswer("configSnapshot");
         return result;
     }
 
     static String prefsSnapshot() {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         String result = nativePrefsSnapshot();
-        if (result == null) throw new IllegalStateException("Go runtime is unavailable");
+        if (result == null) throw noAnswer("prefsSnapshot");
         return result;
     }
 
     static String browsePage(String query) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeBrowsePage(query);
-        if (result == null) throw new IllegalStateException("Go runtime is unavailable");
+        String result = nativeBrowsePage(or(query));
+        if (result == null) throw noAnswer("browsePage");
         return result;
     }
 
     static String browseFindPage(String query) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeBrowseFindPage(query);
+        String result = nativeBrowseFindPage(or(query));
         if (result == null) throw new IllegalStateException("Browse results are unavailable");
         return result;
     }
 
     static String browseDiagnostic(String payload) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeBrowseDiagnostic(payload);
+        String result = nativeBrowseDiagnostic(or(payload));
         if (result == null) throw new IllegalStateException("Could not record Browse timing");
         return result;
     }
 
     static String about(String origin, String dictionary) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeAbout(origin, dictionary);
+        String result = nativeAbout(or(origin), or(dictionary));
         if (result == null) throw new IllegalStateException("Dictionary description is unavailable");
         return result;
     }
 
     static String orphans(String action, String body) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeOrphans(action, body);
+        String result = nativeOrphans(or(action), or(body));
         if (result == null) throw new IllegalStateException("Could not load missing dictionaries");
         return result;
     }
 
     static String removeLibrary(String query) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeRemoveLibrary(query);
+        String result = nativeRemoveLibrary(or(query));
         if (result == null) throw new IllegalStateException("Could not remove dictionary");
         return result;
     }
 
     static String looks(String argument) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeLooks(argument);
+        String result = nativeLooks(or(argument));
         if (result == null) throw new IllegalStateException("Saved appearances are unavailable");
         return result;
     }
 
     static String groups(String action, String argument) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeGroups(action, argument);
+        String result = nativeGroups(or(action), or(argument));
         if (result == null) throw new IllegalStateException("Could not edit filters");
         return result;
     }
 
     static String lemmas(String action, String code) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeLemmas(action, code);
+        String result = nativeLemmas(or(action), or(code));
         if (result == null) throw new IllegalStateException("Lemmatization is unavailable");
         return result;
     }
 
     static String setup(String action, String argument) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeSetup(action, argument);
+        String result = nativeSetup(or(action), or(argument));
         if (result == null) throw new IllegalStateException("Folder setup is unavailable");
         return result;
     }
 
     static String headwordExport(String action, String argument) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeHeadwordExport(action, argument);
+        String result = nativeHeadwordExport(or(action), or(argument));
         if (result == null) throw new IllegalStateException("Headword export is unavailable");
         return result;
     }
@@ -216,7 +237,7 @@ final class GoBridge {
 
     static String intake(String action, String argument) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeIntake(action, argument);
+        String result = nativeIntake(or(action), or(argument));
         if (result == null) throw new IllegalStateException("Archive import is unavailable");
         return result;
     }
@@ -233,8 +254,8 @@ final class GoBridge {
     static String reindex(String action) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         if ("start".equals(action)) refreshPowerForWork();
-        String result = nativeReindex(action);
-        if (result == null) throw new IllegalStateException("Go runtime is unavailable");
+        String result = nativeReindex(or(action));
+        if (result == null) throw noAnswer("reindex");
         return result;
     }
 
@@ -242,35 +263,35 @@ final class GoBridge {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         if ("start".equals(action) || "startSingle".equals(action) || "priority".equals(action))
             refreshPowerForWork();
-        String result = nativeIndexWork(action, id, body);
-        if (result == null) throw new IllegalStateException("Go runtime is unavailable");
+        String result = nativeIndexWork(or(action), id, or(body));
+        if (result == null) throw noAnswer("indexWork");
         return result;
     }
 
     static String presetsSnapshot() {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         String result = nativePresetsSnapshot();
-        if (result == null) throw new IllegalStateException("Go runtime is unavailable");
+        if (result == null) throw noAnswer("presetsSnapshot");
         return result;
     }
 
     static String savePreset(String body) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeSavePreset(body);
+        String result = nativeSavePreset(or(body));
         if (result == null) throw new IllegalStateException("Could not save preset");
         return result;
     }
 
     static String savePrefs(String body) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeSavePrefs(body);
+        String result = nativeSavePrefs(or(body));
         if (result == null) throw new IllegalStateException("Could not save preferences");
         return result;
     }
 
     static String saveLanguage(String body) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeSaveLanguage(body);
+        String result = nativeSaveLanguage(or(body));
         if (result == null) throw new IllegalStateException("Could not save language");
         return result;
     }
@@ -278,7 +299,7 @@ final class GoBridge {
     static String systemLogSnapshot() {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         String result = nativeSystemLogSnapshot();
-        if (result == null) throw new IllegalStateException("Go runtime is unavailable");
+        if (result == null) throw noAnswer("systemLogSnapshot");
         return result;
     }
 
@@ -291,14 +312,14 @@ final class GoBridge {
 
     static String webResource(String rawURL, String headers) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeWebResource(rawURL, headers);
+        String result = nativeWebResource(or(rawURL), or(headers));
         if (result == null) throw new IllegalStateException("Web resource is unavailable");
         return result;
     }
 
     static String mediaOpen(String rawURL, String headers) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        return nativeMediaOpen(rawURL, headers);
+        return nativeMediaOpen(or(rawURL), or(headers));
     }
 
     static InputStream mediaStream(long handle, long contentLength) {
@@ -345,13 +366,13 @@ final class GoBridge {
     static String styleSnapshot() {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         String result = nativeStyleSnapshot();
-        if (result == null) throw new IllegalStateException("Go runtime is unavailable");
+        if (result == null) throw noAnswer("styleSnapshot");
         return result;
     }
 
     static String saveStyle(String argument) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeSaveStyle(argument);
+        String result = nativeSaveStyle(or(argument));
         if (result == null) throw new IllegalStateException("Could not save style");
         return result;
     }
@@ -359,20 +380,20 @@ final class GoBridge {
     static String userFilesSnapshot() {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         String result = nativeUserFilesSnapshot();
-        if (result == null) throw new IllegalStateException("Go runtime is unavailable");
+        if (result == null) throw noAnswer("userFilesSnapshot");
         return result;
     }
 
     static String userFileOperation(String method, String argument) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeUserFileOperation(method, argument);
+        String result = nativeUserFileOperation(or(method), or(argument));
         if (result == null) throw new IllegalStateException("Could not update user file");
         return result;
     }
 
     static String userStorage(String method, String argument) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        String result = nativeUserStorage(method, argument);
+        String result = nativeUserStorage(or(method), or(argument));
         if (result == null) throw new IllegalStateException("Could not access saved settings");
         return result;
     }
@@ -435,8 +456,7 @@ final class GoBridge {
             flags.put("USE_CACHED", "1");
             flags.put("NO_BROWSER", "1");
             File path = new File(new File(home, ".dmshlabs/dictshelf"), "dictshelf.toml");
-            return nativeRuntimeStart(path.getAbsolutePath(), flags.toString(),
-                    BuildConfig.VERSION_NAME);
+            return nativeRuntimeStart(path.getAbsolutePath(), flags.toString(), BuildConfig.VERSION_NAME);
         } catch (Exception | UnsatisfiedLinkError error) {
             Log.e(TAG, "Go runtime start failed", error);
             return -9;
