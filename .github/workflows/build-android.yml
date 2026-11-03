@@ -139,6 +139,33 @@ jobs:
           echo "KEYSTORE=$KS" >> "$GITHUB_ENV"
           echo "enabled=true" >> "$GITHUB_OUTPUT"
 
+      # The published App Link file must name the certificate that signs THIS
+      # APK. Android checks https://<host>/.well-known/assetlinks.json against
+      # the installed app's own signature, and a rotated key stops opening links
+      # with nothing in the build to notice - the file is data
+      # (pages/.well-known, copied to the site root by docs.yml), so the check
+      # belongs here, where the certificate is in hand.
+      #
+      # The Play App Signing certificate is NOT checked here: Play re-signs the
+      # bundle, so it is a different certificate and is added to the file by
+      # hand from the Play Console (Release > Setup > App integrity).
+      - name: Verify the App Link file names this keystore
+        if: steps.signing.outputs.enabled == 'true'
+        run: |
+          fp=$(keytool -list -v -keystore "$KEYSTORE" -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" \
+                 | sed -n 's/.*SHA256: *//p' | head -1 | tr -d '[:space:]')
+          if [ -z "$fp" ]; then
+            echo "::error::could not read the keystore's SHA-256 fingerprint"
+            exit 1
+          fi
+          if ! grep -qiF "$fp" pages/.well-known/assetlinks.json; then
+            echo "::error::pages/.well-known/assetlinks.json does not name the certificate that signs this APK, so no App Link would be verified"
+            echo "keystore SHA-256: $fp"
+            echo "Add it to sha256_cert_fingerprints for com.dmshlabs.dictshelf in pages/.well-known/assetlinks.json, and rebuild the site (docs.yml publishes that file at the origin root)."
+            exit 1
+          fi
+          echo "the App Link file names this keystore"
+
       - name: Assemble
         run: |
           cd android

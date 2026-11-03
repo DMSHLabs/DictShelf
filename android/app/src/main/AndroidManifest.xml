@@ -203,6 +203,30 @@
                 <data android:path="/wudict/" />
             </intent-filter>
 
+            <!-- Our own share page: https://dictshelf.com/share/#<link>
+                 (pages/docs/share.md). VERIFIED the same way and for the same
+                 reason as the filter above, except that this origin root is
+                 ours: Pages serves the documentation site at dictshelf.com and
+                 docs.yml copies pages/.well-known/assetlinks.json to the root
+                 of what it publishes. One filter per host, never a prefix: only
+                 /share/ opens the app, and the rest of the manual keeps opening
+                 in the browser. www is the same site, so it is the same filter
+                 - Android verifies each origin on its own, and both hosts serve
+                 the same file.
+                 The file is data, and a rotated signing key silently stops
+                 opening links; build-android.yml fails a release whose keystore
+                 is not named in it. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="dictshelf.com" />
+                <data android:host="www.dictshelf.com" />
+                <data android:path="/share" />
+                <data android:path="/share/" />
+            </intent-filter>
+
             <!-- Sharing an archive, from a browser's download list or a file
                  manager. In src/main because an archive is handled by the
                  flavour-neutral Intake, which needs no storage permission and

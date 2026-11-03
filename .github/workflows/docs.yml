@@ -64,9 +64,23 @@ jobs:
       - name: Build the site
         run: make docs
 
+      # The Android App Link file has to be served from the ORIGIN ROOT -
+      # https://dictshelf.com/.well-known/assetlinks.json - and nowhere else:
+      # Android looks under no other path, a redirect fails the check, and the
+      # content type must be application/json. It lives outside docs_dir
+      # (pages/.well-known) so that no site generator can decide a
+      # dot-directory is not part of the site.
+      - name: Put the App Link file at the root of the site
+        run: |
+          mkdir -p pages/site/.well-known
+          cp pages/.well-known/assetlinks.json pages/site/.well-known/assetlinks.json
+
+      # include-hidden-files: the artifact action skips dot-directories by
+      # default, and that default would silently drop the file above.
       - uses: actions/upload-pages-artifact@v5
         with:
           path: pages/site
+          include-hidden-files: true
 
   deploy:
     needs: build

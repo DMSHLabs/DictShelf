@@ -55,6 +55,9 @@ nav = [
   { "Browser extensions" = [
     "extension.md",
   ] },
+  { "Share a dictionary" = [
+    "share.md",
+  ] },
   { "Run at startup" = [
     "running.md",
   ] },

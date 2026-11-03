@@ -50,7 +50,7 @@ A share link is any address with the link to a dictionary, an archive or a
 collection after `#`:
 
 ``` text
-https://dmshlabs.github.io/DictShelf/#https://example.org/dicts/oxford.zip
+https://dictshelf.com/share/#https://example.org/dicts/oxford.zip
 ```
 
 The part after `#` is the dictionary; the page in front of it is only where a
@@ -61,7 +61,8 @@ the sharing site itself (`#/dict/x/`), and several links may follow the `#`,
 separated by a comma, a semicolon, a bar or a space.
 
 On Android with DictShelf installed, opening such a link starts the import in
-the app; elsewhere, paste it on the setup page.
+the app; elsewhere, paste it on the setup page. [Share a dictionary](../share.md)
+keeps the one address a link can carry, and anyone can use any other page.
 
 ## Android
 

@@ -9,6 +9,22 @@ flavour. `pages/docs` (the published site) still offers the upstream `-purego` d
 `make cross` / `make build-purego` / `make android-go-purego` targets this fork has never had -
 cleaning that page set is open.
 
+The project has a domain: **dictshelf.com** (bought, not hosted yet - its DNS still answers with
+a parking redirect, 2026-11-03). The plan is GitHub Pages with that custom domain on the docs
+site, which makes the ORIGIN OURS and is the only way Android App Links can be verified at all:
+`pages/.well-known/assetlinks.json` is copied to the site root by `docs.yml` (with
+`include-hidden-files: true` - the artifact action drops dot-directories by default), the
+manifest has an `autoVerify` filter for `dictshelf.com` and `www.dictshelf.com` with exact paths
+`/share` + `/share/`, and `pages/docs/share.md` is our own share page (`/share/`).
+`build-android.yml` fails a signed release whose keystore SHA-256 is not named in that file, so a
+rotated key cannot silently stop opening links; the Play App Signing certificate is added by hand
+from the Play Console. **Held until the domain answers**: `site_url` in `pages/zensical.toml`, the
+clickable `dmshlabs.github.io/DictShelf/...` links in README.md, and `cli.SiteURL` - switching
+them now would point the published manual at a parking page. Note also that
+`ext/server/.well-known/assetlinks.json` is NOT verbatim upstream (master names
+`com.legbehindneck.wudict`, the fork edited it to our package in `7bcac814`), while the
+dead-upstream registry claims that directory is taken verbatim.
+
 The lemma catalogue is ours since 2026-11-03: `config.DefaultLemmaURL` and the built-in default
 in `internal/lemmas` point at `raw.githubusercontent.com/DMSHLabs/DictShelf/lemmas/manifest.json`,
 the fallback catalogue at `raw.githubusercontent.com/DmShAl/lemmas` (raw, not a Pages site: it is
