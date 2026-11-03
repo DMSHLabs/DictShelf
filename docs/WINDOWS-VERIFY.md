@@ -378,3 +378,27 @@ on 2026-11-03: the gated bench (`WUDICT_BENCH_ARTICLES`), the real-archive
 `DictShelf ingest -fulltext -contains` runs and what their spread means are all
 numbers, and numbers live in one file now.
 
+## ZIM archives on this machine (the reader's fixtures)
+
+`D:\Dictionaries\wuDict\Dictionaries\zim\` holds six real archives: the two
+`maxi` Wikipedias (46 GiB de, 35 GiB ru), `wikipedia_ru_all_mini_2026-10.zim`
+(5.7 GiB), `wikisource_ru_all_nopic_2026-10.zim` (3.6 GiB), and the two
+`nopic` Wiktionaries — `wiktionary_ru_all_nopic_2026-09.zim` (2.0 GiB) and
+`wiktionary_en_all_nopic_2026-08.zim` (8.7 GiB).
+
+`internal/format/zim`'s integration test skips unless an archive is named, and
+the Makefile's own default (`~/Downloads/Language/ZIM/wiktionary_ro_all_nopic_2026-07.zim`)
+does not exist here. Use the Russian Wiktionary for a default run: it is the
+smallest dictionary in the folder, and the test opens it, reads its meta, draws
+twenty keywords from the middle of the file and finds each one by `Exact`.
+
+    WUDICT_TEST_ZIM="D:/Dictionaries/wuDict/Dictionaries/zim/wiktionary_ru_all_nopic_2026-09.zim" \
+      CGO_ENABLED=1 go test -tags sqlite_fts5,sqlite_dbstat ./internal/format/zim/ -run TestRealFile -count=1 -v
+
+Measured 2026-11-04: `Викисловарь: 2 527 809 entries, lang "ru", 1 528 188 articles
+claimed, 16 MiB preview`, and `TestRealFile` passes — the smoke test this fork
+had never run against a real archive. Note what it does NOT cover: decompressing
+a large stored cluster, a seek into a media resource, and the read-through
+prepared form are the invariants the large `maxi` files are needed for, and they
+have to be exercised by hand, not by this test.
+
