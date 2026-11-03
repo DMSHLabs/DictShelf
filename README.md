@@ -28,7 +28,7 @@ Runs on Android, macOS, Linux, Windows.
 
 One native golang binary, no dependencies and minimum configuration — just set the folders with your `.mdx/.slob/.bgl/.zim/.ifo` dictionary collections, and you are good to go.
 
-Runs natively on [android](https://dmshlabs.github.io/DictShelf/apps/android/), [mac](https://dmshlabs.github.io/DictShelf/apps/macos/), [windows](https://dmshlabs.github.io/DictShelf/apps/windows/), [linux](https://dmshlabs.github.io/DictShelf/running/#__tabbed_1_2), and even raspberry pi.
+Runs natively on [android](https://dictshelf.com/apps/android/), [mac](https://dictshelf.com/apps/macos/), [windows](https://dictshelf.com/apps/windows/), [linux](https://dictshelf.com/running/#__tabbed_1_2), and even raspberry pi.
 
 **Supported formats**
 
@@ -48,7 +48,7 @@ Runs natively on [android](https://dmshlabs.github.io/DictShelf/apps/android/), 
 1. Download the standalone binary for your OS from
    [releases](https://github.com/DMSHLabs/DictShelf/releases), rename to `dictshelf`,
    `chmod +x dictshelf` (macOS/Linux) and move to a folder in `$PATH`, e.g. `/usr/local/bin`.
-2. Run `dictshelf` or `./dictshelf` if the file is in the current folder. For Windows, use the `dictshelf-windows-x64-setup-<version>.exe` installer or the `DictShelf.exe` desktop build. For macOS an app bundle is provided (it is not signed with a commercial Apple Developer Certificate, macOS flags it as unverified, and extra steps are needed to de-quarantine the app as described in the [manual](https://dmshlabs.github.io/DictShelf/apps/macos/)).
+2. Run `dictshelf` or `./dictshelf` if the file is in the current folder. For Windows, use the `dictshelf-windows-x64-setup-<version>.exe` installer or the `DictShelf.exe` desktop build. For macOS an app bundle is provided (it is not signed with a commercial Apple Developer Certificate, macOS flags it as unverified, and extra steps are needed to de-quarantine the app as described in the [manual](https://dictshelf.com/apps/macos/)).
 3. By default `dictshelf` searches for dictionaries under `~/Dictionaries` (including subfolders);
    if the dictionary folder is missing or empty, a setup page opens where you can configure your dictionary folders.
 
@@ -140,7 +140,7 @@ window. The same executable handles terminal commands, for example
 It also shows a tray icon; closing the window leaves the server running
 in the tray. **Exit** in Settings or **Quit** in the tray stops the server. If
 the WebView2 Runtime is absent, it opens the default browser instead. Logs go to
-`%USERPROFILE%\.dmshlabs\dictshelf\db.logs\dictshelf.log`. See also [running on Windows](https://dmshlabs.github.io/DictShelf/apps/windows/).
+`%USERPROFILE%\.dmshlabs\dictshelf\db.logs\dictshelf.log`. See also [running on Windows](https://dictshelf.com/apps/windows/).
 
 
 ## Run as a service (Linux)
@@ -203,7 +203,7 @@ BROWSER_EXTENSIONS = ["chrome-extension://bknaaoffefipfnpefmkbipcdemljbhjh"]
 (Firefox generates a fresh `moz-extension://` id for every installation, so
 there is no stable origin to pin there.)
 
-See also: [browser extensions](https://dmshlabs.github.io/DictShelf/extension/)
+See also: [browser extensions](https://dictshelf.com/extension/)
 
 Config file search order: `--config` / `CONFIG_PATH`, then
 `<exe-dir>/dictshelf.toml`, `~/.dmshlabs/dictshelf/dictshelf.toml`,
@@ -256,7 +256,7 @@ dictshelf res ~/Dicts/Oxford.mdd audio/a.mp3
 ```
 
 For more on command line usage see the manual:
-- [DictShelf Command Line](https://dmshlabs.github.io/DictShelf/reference/cli/)
+- [DictShelf Command Line](https://dictshelf.com/reference/cli/)
 
 ## Sharing dictionaries (one folder each)
 
@@ -410,7 +410,7 @@ builds the cgo flavour with the internal speex decoder and optimized sqlite3,
 on each platform's own runner (cgo cannot cross the host arch/OS).
 Supported OS's: macOS (arm64/amd64), Linux (amd64/arm64) and Windows (amd64).
 
-More details: https://dmshlabs.github.io/DictShelf/reference/building/
+More details: https://dictshelf.com/reference/building/
 
 ### Building the macOS bundle from source
 
@@ -425,7 +425,7 @@ make mac-app-install    # copy it to ~/Applications (APP_DEST= to relocate)
 ```
 
 The bundle is the same binary as console `dictshelf` which spawns no terminal window, and
-additionally adds a **menu-bar icon** with common actions. See more about [running on macOS](https://dmshlabs.github.io/DictShelf/apps/macos/).
+additionally adds a **menu-bar icon** with common actions. See more about [running on macOS](https://dictshelf.com/apps/macos/).
 
 
 ## Acknowledgements

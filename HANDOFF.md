@@ -18,9 +18,30 @@ manifest has an `autoVerify` filter for `dictshelf.com` and `www.dictshelf.com` 
 `/share` + `/share/`, and `pages/docs/share.md` is our own share page (`/share/`).
 `build-android.yml` fails a signed release whose keystore SHA-256 is not named in that file, so a
 rotated key cannot silently stop opening links; the Play App Signing certificate is added by hand
-from the Play Console. **Held until the domain answers**: `site_url` in `pages/zensical.toml`, the
-clickable `dmshlabs.github.io/DictShelf/...` links in README.md, and `cli.SiteURL` - switching
-them now would point the published manual at a parking page. Note also that
+from the Play Console.
+
+**The domain is wired up as of 2026-11-03** (Porkbun, done through the in-app browser with the
+user's own login - no credentials ever entered the session): the parking `ALIAS @` and wildcard
+`CNAME *` to `uixie.porkbun.com` are DELETED, and 4 A + 4 AAAA (GitHub's) at the apex plus
+`CNAME www -> dmshlabs.github.io` are added; the two MX records and the SPF record were left
+alone on purpose (Porkbun email forwarding), as were two stale `_acme-challenge` TXT records.
+The authoritative nameserver answers with the GitHub addresses and the parking 302 is gone.
+On GitHub: **Pages was DISABLED in this repository** (`Source: Deploy from a branch / None`) -
+it is now enabled with Source = **GitHub Actions** (what `docs.yml` deploys through), the custom
+domain `dictshelf.com` is saved and its **DNS check is successful**; the certificate was still
+being issued at the time of writing, so `Enforce HTTPS` was not tickable yet.
+
+**The docs site had never been published at all**: `dmshlabs.github.io/DictShelf/` is a 404, so
+every link to it in README and in the manual was dead until now. Nothing is published yet -
+both hosts still answer GitHub's 404 - and the first deploy is a PUBLISHING decision: `docs.yml`
+runs on a push to `dev`, while the rebranding, `pages/docs/share.md` and the `pages/.well-known`
+copy step exist only on this task branch, so a deploy from `dev` would publish the old
+`wudict`-named manual and no App Link file.
+
+The switches that were held until the domain answered are DONE: `site_url` in
+`pages/zensical.toml` and `cli.SiteURL` are `https://dictshelf.com/`, the CLI help's MANUAL
+address with them, and every `dmshlabs.github.io/DictShelf/...` link in README (10 of them) and
+in the intake examples now names the domain. Note also that
 `ext/server/.well-known/assetlinks.json` is NOT verbatim upstream (master names
 `com.legbehindneck.wudict`, the fork edited it to our package in `7bcac814`), while the
 dead-upstream registry claims that directory is taken verbatim.

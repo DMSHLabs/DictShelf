@@ -11,7 +11,7 @@
 site_name = "DictShelf"
 site_description = "DictShelf searches MDict, StarDict, Aard 2, Lingvo DSL, Babylon, ZIM and wudict markdown dictionaries on Windows, macOS, Linux and Android."
 site_author = "DMSH Labs"
-site_url = "https://dmshlabs.github.io/DictShelf/"
+site_url = "https://dictshelf.com/"
 
 copyright = """
 Copyright &copy; 2026 DMSH Labs

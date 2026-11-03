@@ -34,7 +34,7 @@ func TestUnwrap(t *testing.T) {
 		{"https://legbehindneck.com/wudict#https://a.org/%E8%8B%B1.mdx", "https://a.org/%E8%8B%B1.mdx"},
 		// ANY address can carry a share link - that is the format, and it is
 		// what keeps this from depending on a host we do not own.
-		{"https://dmshlabs.github.io/DictShelf/#https://a.org/x.zip", "https://a.org/x.zip"},
+		{"https://dictshelf.com/share/#https://a.org/x.zip", "https://a.org/x.zip"},
 		{"https://a.org/page#https://b.org/x.zip", "https://b.org/x.zip"},
 		{"https://a.org/page#/dicts/x.zip", "https://a.org/dicts/x.zip"},
 		// The path no longer has to be a share page's: any page wraps.

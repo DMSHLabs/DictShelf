@@ -75,7 +75,7 @@ var Notices string
 // About box, setup page - sources its wording from here or mirrors it.
 const (
 	ProductName = "DictShelf"
-	SiteURL     = "https://dmshlabs.github.io/DictShelf/"
+	SiteURL     = "https://dictshelf.com/"
 	RepoURL     = "https://github.com/DMSHLabs/DictShelf"
 )
 
@@ -423,7 +423,7 @@ EXAMPLES
   SERVER_PORT=9000 dictshelf
 
 MANUAL
-  https://dmshlabs.github.io/DictShelf/
+  https://dictshelf.com/
 
 ABOUT
   %s %s

@@ -204,8 +204,9 @@ func TestSharePageIsNotALink(t *testing.T) {
 		// page, however it is addressed - our own manual is one of these, and
 		// listing it among SharePages would turn a documentation link into
 		// "that is a page of dictionary links".
-		"https://dmshlabs.github.io/DictShelf/",
-		"https://dmshlabs.github.io/DictShelf/#https://x.org/a.mdx",
+		"https://dictshelf.com/",
+		"https://dictshelf.com/share/",
+		"https://dictshelf.com/share/#https://x.org/a.mdx",
 		"https://a.org/page#https://x.org/a.mdx",
 	} {
 		if IsSharePage(s) {

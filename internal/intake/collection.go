@@ -48,7 +48,7 @@ import (
 
 // The share link: any address with the link after "#" -
 //
-//	https://dmshlabs.github.io/DictShelf/#https://example.org/dicts/oxford.zip
+//	https://dictshelf.com/share/#https://example.org/dicts/oxford.zip
 //
 // The fragment is the whole point. A browser never sends it to the server, so
 // the page in front of it is only what a reader sees when nothing opened the
@@ -178,7 +178,7 @@ func Unwrap(s string) string {
 
 // UnwrapAll is Unwrap for a share link that carries several links:
 //
-//	https://dmshlabs.github.io/DictShelf/#https://a.org/x.mdx,https://b.org/x.mdd
+//	https://dictshelf.com/share/#https://a.org/x.mdx,https://b.org/x.mdd
 //
 // The fragment is split where a new link begins - "http://" or "https://"
 // right after a separator: a comma, a semicolon, a bar or whitespace, written
