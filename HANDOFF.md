@@ -1033,8 +1033,10 @@ right after the ATTACH, pinned by `TestTheAttachedArticleFileIsAThrowawayToo`.
 
 Second change in the same area: the ingest connection had no `cache_size` at all,
 so a build that appends to two databases for minutes ran on SQLite's 2 MiB
-default. `ingestCacheKiB` (64 MiB desktop, 8 MiB Android) now goes into `dsnIngest`
-and explicitly onto the attached database.
+default. `ingestCacheKiB` (64 MiB, one value for every platform - the smallest
+phones this fork runs on have 4 GiB, and it is a limit that grows on demand, not
+a reservation; the peak is up to twice it, since each of the two databases gets
+its own) now goes into `dsnIngest` and explicitly onto the attached database.
 
 **How it was measured, and what the numbers actually say.** The bench is
 `internal/store/dmsh_ingest_bench_test.go` (gated on `WUDICT_BENCH_ARTICLES`,

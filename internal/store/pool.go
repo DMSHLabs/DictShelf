@@ -41,17 +41,17 @@ var pageCacheKiB = func() int {
 // ingestCacheKiB is the page cache the WRITE path asks for, in KiB, and it is
 // deliberately not the same decision as pageCacheKiB above: an ingest is the one
 // place where throughput IS what we are buying - a single connection appending
-// to b-trees for minutes - and it is also the one place that now writes TWO
+// to b-trees for minutes - and it is also the one place that writes TWO
 // databases (the main temp and, for a split build, its attached article file),
-// each of which gets a cache of this size. SQLite's 2 MiB default leaves almost
-// nothing for the upper pages of either. Android gets less because its memory is
-// the scarce thing there.
-var ingestCacheKiB = func() int {
-	if runtime.GOOS == "android" {
-		return 8 << 10
-	}
-	return 1 << 16
-}()
+// each of which gets a cache of this size, so the peak is up to twice this.
+// SQLite's 2 MiB default leaves almost nothing for the upper pages of either.
+//
+// One value for every platform, Android included: the smallest phones this fork
+// runs on have 4 GiB (2026-11-03), where a 128 MiB peak during a user-visible
+// ingest is affordable - and it is a limit that grows on demand, not a
+// reservation. pageCacheKiB above stays halved on Android because it is per
+// READER, and readers can be numerous; this one is one connection per build.
+const ingestCacheKiB = 1 << 16
 
 // openRO opens a wudict database read-only with the pool bounded.
 //
