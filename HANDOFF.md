@@ -31,14 +31,29 @@ it is now enabled with Source = **GitHub Actions** (what `docs.yml` deploys thro
 domain `dictshelf.com` is saved and its **DNS check is successful**; the certificate was still
 being issued at the time of writing, so `Enforce HTTPS` was not tickable yet.
 
-**The docs site had never been published at all**: `dmshlabs.github.io/DictShelf/` is a 404, so
-every link to it in README and in the manual was dead until now. Nothing is published yet -
-both hosts still answer GitHub's 404 - and the first deploy is a PUBLISHING decision: `docs.yml`
-runs on a push to `dev`, while the rebranding, `pages/docs/share.md` and the `pages/.well-known`
-copy step exist only on this task branch, so a deploy from `dev` would publish the old
-`wudict`-named manual and no App Link file.
+**The docs site had never been published at all** (`dmshlabs.github.io/DictShelf/` answered 404,
+so every link to it in README and in the manual was dead), because EVERY docs workflow run died at
+`make api-lint`: `internal/server/web/openapi.yaml` did not parse. Three pre-existing faults, all
+invisible to `go test` (api-test scans routes, it does not parse YAML): a folded block in the
+`groupwithin` description ended early; the `application/x-ndjson` media type of `/api/browse/find`
+had been spliced into `IntakeExtra.properties.size` (its events - a block of words, progress, the
+final count, an error after the stream has started - are browse-find's); and six lint errors hid
+behind the parse failure (`nullable: true`, which OpenAPI 3.1 has no such keyword for, and three
+unquoted descriptions whose commas split their flow mapping, leaving a bogus property named after
+the rest of the sentence). Repaired in `9fc05ed7`, with the six missing `operationId`s added so the
+lint is clean rather than merely passable.
 
-The switches that were held until the domain answered are DONE: `site_url` in
+**The site IS LIVE since 2026-11-03**: <https://dictshelf.com/> (www 301s to it), deployed from
+`dev` - the manual says DictShelf (the install and building pages carry zero `wudict` and zero
+`-purego`), `/share/` is the share page, and `/.well-known/assetlinks.json` answers
+`200 application/json` at the origin root; Google's Digital Asset Links API lists
+`com.dmshlabs.dictshelf` with its certificate fingerprint, so the App Link data is in place.
+App Links open the app only once an APK built with the new manifest filter is installed - the
+released APKs predate it. `Enforce HTTPS` is on. Verified with the same commands CI runs:
+`redocly lint` (valid), `redocly build-docs`, and `zensical build --strict` over `pages/`
+("No issues found") - the first time that site build has completed anywhere.
+
+The switches are DONE (they had been held until the domain answered): `site_url` in
 `pages/zensical.toml` and `cli.SiteURL` are `https://dictshelf.com/`, the CLI help's MANUAL
 address with them, and every `dmshlabs.github.io/DictShelf/...` link in README (10 of them) and
 in the intake examples now names the domain. Note also that
