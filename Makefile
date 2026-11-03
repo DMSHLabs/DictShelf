@@ -228,7 +228,7 @@ endif
 .PHONY: android-go
 android-go: ## Cross-compile the in-process Go library into Android jniLibs
 	@test -n "$(ANDROID_NDK)" || { echo "error: no Android NDK found."; \
-	  echo "  install one: $(ANDROID_SDK)/cmdline-tools/latest/bin/sdkmanager 'ndk;30.0.15729638'"; \
+	  echo "  install one: $(ANDROID_SDK)/cmdline-tools/latest/bin/sdkmanager 'ndk;30.0.16248370'"; \
 	  echo "  or set ANDROID_NDK_HOME / ANDROID_NDK"; exit 2; }
 	@mkdir -p $(dir $(ANDROID_BRIDGE))
 	CC="$(NDK_BIN)/aarch64-linux-android$(ANDROID_API)-clang" \
