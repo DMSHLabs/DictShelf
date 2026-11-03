@@ -3346,14 +3346,14 @@ components:
           enum: [mdx, stardict, slob, dsl, dsl-gd, bgl, zim, wmd, wudict]
         unavailable:
           type: boolean
-          description: Dictionary with a deliberately removed index; retained in settings but not searched.
+          description: Dictionary whose index is not ready yet (queued or being built); not searched until it exists.
         dsl:
           type: object
           description: DSL source and index availability.
           properties:
             source: { type: string }
-            sourceAvailable: { type: boolean, description: Shared DSL source exists and can rebuild deleted indexes. }
-            indexRemoved: { type: boolean, description: Explicitly removed index stays unavailable until explicit ingest; persists across restart. }
+            sourceAvailable: { type: boolean, description: Shared DSL source exists and can rebuild a missing index. }
+            indexRemoved: { type: boolean, description: No index right now - queued or being prepared; cleared when the build finishes. The name is historical. }
         path:
           type: string
           description: The source file, or the text.db of a prepared dictionary.

@@ -295,11 +295,15 @@ type prefsFile struct {
 	IndexMigrated   map[string]bool         `json:"indexMigrated,omitempty"` // completed legacy receipt migrations, per source
 	DSLKnown        map[string]bool         `json:"dslKnown,omitempty"`
 	DSLPending      map[string]indexOptions `json:"dslPending,omitempty"`
-	DSLRemoved      map[string]bool         `json:"dslRemoved,omitempty"`
-	Damaged         map[string]string       `json:"damagedSources,omitempty"` // source path → size:mtime signature
-	Language        string                  `json:"language,omitempty"`       // interface language choice: system, en or ru; never the dictionary language
-	DesktopHotkeys  desktopHotkeys          `json:"desktopHotkeys,omitempty"`
-	DesktopWindow   desktopWindowSize       `json:"desktopWindow,omitempty"`
+	// DSLRemoved is "this dictionary has no index right now": queued, being
+	// prepared, or waiting for a retry. The name and the JSON key are historical
+	// (the state once meant "the user removed the index", which is no longer
+	// something the app can do) and are kept for the state file's sake.
+	DSLRemoved     map[string]bool   `json:"dslRemoved,omitempty"`
+	Damaged        map[string]string `json:"damagedSources,omitempty"` // source path → size:mtime signature
+	Language       string            `json:"language,omitempty"`       // interface language choice: system, en or ru; never the dictionary language
+	DesktopHotkeys desktopHotkeys    `json:"desktopHotkeys,omitempty"`
+	DesktopWindow  desktopWindowSize `json:"desktopWindow,omitempty"`
 
 	Groups  []DictionaryGroup `json:"groups,omitempty"`
 	Version int               `json:"version"`
@@ -422,9 +426,8 @@ func (p *Prefs) recordAppVersion(version string) error {
 	f.UI.CountAllResultsInBackground = &on
 	f.UI.SkipBackgroundResultCount = false
 	if f.IndexDefaults == nil {
-		f.IndexDefaults = &indexOptions{Index: true}
+		f.IndexDefaults = &indexOptions{Contains: true}
 	}
-	f.IndexDefaults.Index = true
 	f.IndexDefaults.Contains = true
 	return p.saveRecord(f)
 }

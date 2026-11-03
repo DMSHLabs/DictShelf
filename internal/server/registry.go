@@ -595,7 +595,7 @@ func (e *entry) noPackableMedia() bool {
 // media.db) exists for it, wraps it into the upgraded view.
 func (e *entry) open() (dict.Dictionary, error) {
 	if e.indexBlocked() {
-		return nil, errors.New("dictionary index was removed; create an index in Dictionary settings")
+		return nil, errors.New("the dictionary index is not ready yet; it is being prepared")
 	}
 	e.lastUse.Store(time.Now().UnixNano())
 	if e.rebuilding.Load() {
@@ -613,7 +613,7 @@ func (e *entry) open() (dict.Dictionary, error) {
 	e.openMu.Lock()
 	defer e.openMu.Unlock()
 	if e.indexBlocked() {
-		return nil, errors.New("dictionary index was removed; create an index in Dictionary settings")
+		return nil, errors.New("the dictionary index is not ready yet; it is being prepared")
 	}
 	if e.rebuilding.Load() {
 		return nil, errReindexing
@@ -2292,12 +2292,12 @@ func (e *entry) indexing() bool { return e.demanded.Load() }
 
 func (e *entry) ensureBaseIndex(progress store.Progress) error {
 	if e.indexBlocked() {
-		return errors.New("dictionary index was removed; create an index in Dictionary settings")
+		return errors.New("the dictionary index is not ready yet; it is being prepared")
 	}
 	e.ingestMu.Lock()
 	defer e.ingestMu.Unlock()
 	if e.indexBlocked() {
-		return errors.New("dictionary index was removed; create an index in Dictionary settings")
+		return errors.New("the dictionary index is not ready yet; it is being prepared")
 	}
 	defer e.rebuilding.Store(false)
 	if _, ok := validPrepared(e.Path); ok {
@@ -2327,7 +2327,7 @@ func (e *entry) setContainsIndexContext(ctx context.Context, action string, prog
 	}
 	defer e.rebuilding.Store(false)
 	if e.indexBlocked() {
-		return errors.New("dictionary index was removed; create an index in Dictionary settings")
+		return errors.New("the dictionary index is not ready yet; it is being prepared")
 	}
 
 	textDB, prepared := validPrepared(e.Path)
@@ -2402,7 +2402,7 @@ func (e *entry) setFullTextIndexContext(ctx context.Context, action string, prog
 	}
 	defer e.rebuilding.Store(false)
 	if e.indexBlocked() {
-		return errors.New("dictionary index was removed; create an index in Dictionary settings")
+		return errors.New("the dictionary index is not ready yet; it is being prepared")
 	}
 
 	textDB, prepared := validPrepared(e.Path)

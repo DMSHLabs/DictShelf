@@ -166,17 +166,16 @@ COMMANDS
                                           A dictionary moved within the dictionary
                                           folders is linked to its new place; one
                                           kept with -keep-index is not listed.
-  rm [-f] [-keep-source|-keep-index] <name|path>
-                                          Remove a dictionary: its library folder
+  rm [-f] [-keep-index] <name|path>       Remove a dictionary: its library folder
                                           and its dictionary files. <name|path>: a
                                           library name or folder, a text.db, or a
-                                          dictionary file. -keep-source deletes only
-                                          the library folder (indexed again on the
-                                          next search if the files are still in a
-                                          dictionary folder); -keep-index only the
-                                          dictionary files, refused while media is
-                                          not in a media pack. Without -f, rm lists
-                                          what it would delete.
+                                          dictionary file. -keep-index deletes only
+                                          the dictionary files, leaving the
+                                          prepared copy standing alone - refused
+                                          while media is not in a media pack. The
+                                          index alone cannot be removed: delete the
+                                          dictionary, or its files only. Without
+                                          -f, rm lists what it would delete.
   reindex [-all] [<name|path>…]           Rebuild outdated indexes: built by an older
                                           version of wudict, from dictionary files
                                           changed since, or unreadable. Indexes and

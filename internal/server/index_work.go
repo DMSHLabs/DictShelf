@@ -293,7 +293,7 @@ func (s *Server) handleIndexWork(w http.ResponseWriter, r *http.Request) {
 			httpErr(w, 400, "invalid index operation list")
 			return
 		}
-		status, err := s.startIndexWork(raw, r.URL.Query().Get("single") == "1", s.removalOffered(r))
+		status, err := s.startIndexWork(raw, r.URL.Query().Get("single") == "1")
 		if err != nil {
 			var workErr indexWorkError
 			if errors.As(err, &workErr) {
@@ -320,7 +320,7 @@ type indexWorkError struct {
 
 func (e indexWorkError) Error() string { return e.message }
 
-func (s *Server) startIndexWork(raw []byte, single, allowBaseDelete bool) (indexWorkStatus, error) {
+func (s *Server) startIndexWork(raw []byte, single bool) (indexWorkStatus, error) {
 	if len(raw) > 1<<20 {
 		return indexWorkStatus{}, indexWorkError{http.StatusRequestEntityTooLarge, "invalid index operation list"}
 	}
@@ -338,8 +338,13 @@ func (s *Server) startIndexWork(raw []byte, single, allowBaseDelete bool) (index
 		if op.Action != "create" && op.Action != "update" && op.Action != "recreate" && op.Action != "delete" {
 			return indexWorkStatus{}, indexWorkError{http.StatusBadRequest, "invalid index action"}
 		}
-		if op.Action == "delete" && op.Feature == "base" && !allowBaseDelete {
-			return indexWorkStatus{}, indexWorkError{http.StatusForbidden, "deleting from another machine is off"}
+		if op.Action == "delete" && op.Feature == "base" {
+			// The index of a dictionary cannot be deleted: the prepared database
+			// is what makes the dictionary usable, and wanting the space back is
+			// not a reason to lose it. The whole dictionary is the thing that can
+			// be removed (from the library), or its files only.
+			return indexWorkStatus{}, indexWorkError{http.StatusBadRequest,
+				"a dictionary's index cannot be removed on its own"}
 		}
 	}
 	key := bulkIndexKey
@@ -420,14 +425,7 @@ func (s *Server) startIndexWork(raw []byte, single, allowBaseDelete bool) (index
 						updateJobDictionaryProgress(j, op.Dict, e.probeName(), feature, action, int64(done), int64(total))
 					}
 				}
-				if op.Feature == "base" && op.Action == "delete" {
-					if ctx.Err() != nil || j.canceled() {
-						return
-					}
-					var result removal
-					result, err = s.reg.Remove(op.Dict, true, false)
-					j.update(func(st *jobStatus) { st.Result = result })
-				} else if op.Feature == "contains" && !e.indexBlocked() {
+				if op.Feature == "contains" && !e.indexBlocked() {
 					err = e.setContainsIndexContext(ctx, op.Action, progress)
 				} else if op.Feature == "fts" && !e.indexBlocked() {
 					err = e.setFullTextIndexContext(ctx, op.Action, progress)

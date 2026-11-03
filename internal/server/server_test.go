@@ -736,40 +736,38 @@ func isolatedDBDir(t *testing.T) string {
 	return dir
 }
 
-// unpreparedRegistry builds a source-only fixture without racing the registry's
-// automatic first-index queue. The test starts with that queue suppressed, then
-// clears the suppression before returning so direct opens behave normally.
+// unpreparedRegistry builds a source-only fixture: a dictionary with its source
+// and no prepared index. The registry is created normally first (the automatic
+// first-index queue runs and finishes, or fails for a source this build cannot
+// read), and the prepared folders are then removed out of band - which leaves
+// every entry with no index and nothing queued, since only a rescan or an
+// explicit request prepares a dictionary.
+//
+// It used to suppress the queue by writing the "index removed" marker into the
+// prefs. That marker means "no index right now" now, and the queue no longer
+// treats it as a veto: a dictionary without an index is exactly what the queue
+// is for.
 func unpreparedRegistry(t *testing.T, roots []string) *Registry {
 	t.Helper()
-	paths, _, err := dict.DiscoverAll(roots)
+	reg, err := NewRegistry(roots, false, WithComparisons(false))
 	if err != nil {
 		t.Fatal(err)
 	}
-	prefs := LoadPrefs(filepath.Join(t.TempDir(), StateFile))
-	blocked := make(map[string]bool, len(paths))
-	for _, path := range paths {
-		key := cleanAbs(path) + "\noriginal"
-		if source, variant := dslIdentity(path); source != "" {
-			key = source + "\n" + variant
+	waitNewDictionaryIndexing(t, reg)
+	for _, e := range reg.all() {
+		dir, ok := store.LookupDir(e.Path)
+		if !ok {
+			continue // never prepared: this build cannot read the source
 		}
-		blocked[key] = true
-	}
-	if err := prefs.store(prefsFile{DSLRemoved: blocked}); err != nil {
-		t.Fatal(err)
-	}
-	reg, err := NewRegistry(roots, false, WithPrefs(prefs), WithComparisons(false))
-	if err != nil {
-		t.Fatal(err)
-	}
-	prefs.editMu.Lock()
-	err = prefs.mutate(func(f *prefsFile) {
-		for key := range blocked {
-			delete(f.DSLRemoved, key)
+		e.ingestMu.Lock()
+		e.openMu.Lock()
+		e.closeNow()
+		_, removeErr := store.RemovePrepared(dir)
+		e.openMu.Unlock()
+		e.ingestMu.Unlock()
+		if removeErr != nil {
+			t.Fatal(removeErr)
 		}
-	})
-	prefs.editMu.Unlock()
-	if err != nil {
-		t.Fatal(err)
 	}
 	closeBackends(t, reg)
 	return reg

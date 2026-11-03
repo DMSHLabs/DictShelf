@@ -80,7 +80,7 @@ func (r *Registry) migrateDSLPreferences(selected map[string]string) error {
 	if changed && f.IndexDefaults == nil {
 		// The single index is mandatory for new dictionaries. Old split
 		// Original/GD defaults do not choose contains or full-text for it.
-		defaults := indexOptions{Index: true, Contains: true}
+		defaults := indexOptions{Contains: true}
 		f.IndexDefaults = &defaults
 	}
 	enhanced := map[string]bool{}
@@ -167,40 +167,14 @@ func (r *Registry) migrateDSLPreferences(selected map[string]string) error {
 		key := source + "\noriginal"
 		gdKey := source + "\ngd"
 		firstMigration := !f.IndexMigrated[source]
-		gdRemoved := f.DSLRemoved[gdKey]
-		// Prefer the enhanced variant's explicit removal decision if it existed.
-		if gdRemoved || firstMigration && enhanced[source] {
-			if f.DSLRemoved == nil {
-				f.DSLRemoved = map[string]bool{}
-			}
-			removed := gdRemoved
-			if f.DSLRemoved[key] != removed {
-				changed = true
-			}
-			if removed {
-				f.DSLRemoved[key] = true
-			} else {
-				delete(f.DSLRemoved, key)
-			}
+		// The legacy enhanced variant had its own pending/removal key. It is not
+		// a decision to carry over any more: a dictionary whose index is missing
+		// is queued for preparation, and one whose index is there is left alone
+		// (queueNewDictionaries clears a stale marker when it sees a complete
+		// index). So the legacy key is simply dropped.
+		if _, legacy := f.DSLRemoved[gdKey]; legacy {
 			delete(f.DSLRemoved, gdKey)
 			changed = true
-		}
-		// A successful explicit removal deletes its prepared folder. A current
-		// native index still present behind a removal flag is the old variant's
-		// stale state, so make that usable again. Pending work keeps its block.
-		if firstMigration && f.DSLRemoved[key] && !gdRemoved && path == source {
-			_, nativePending := f.DSLPending[key]
-			_, gdPending := f.DSLPending[gdKey]
-			if !nativePending && !gdPending {
-				if prepared, ok := store.FindPrepared(source); ok && len(prepared.TextStale(source)) == 0 {
-					delete(f.DSLRemoved, key)
-					if f.IndexMigrated == nil {
-						f.IndexMigrated = map[string]bool{}
-					}
-					f.IndexMigrated[source] = true
-					changed = true
-				}
-			}
 		}
 		needsNative := false
 		if enhanced[source] && path == source {
@@ -214,7 +188,7 @@ func (r *Registry) migrateDSLPreferences(selected map[string]string) error {
 			if f.DSLRemoved == nil {
 				f.DSLRemoved = map[string]bool{}
 			}
-			f.DSLPending[key] = indexOptions{Index: true, Contains: plan.Contains, FullText: plan.FullText}
+			f.DSLPending[key] = indexOptions{Contains: plan.Contains, FullText: plan.FullText}
 			f.DSLRemoved[key] = true
 			changed = true
 		}

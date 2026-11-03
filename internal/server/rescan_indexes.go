@@ -43,7 +43,10 @@ type rescanIndexProgress struct {
 }
 
 func baseIndexRequired(selfIndexed bool, options indexOptions) bool {
-	return options.Index && (!selfIndexed || options.Contains || options.FullText)
+	// The headword index is mandatory, so it is always built - except for a
+	// format whose own index already serves the app, where it is built only when
+	// one of the optional indexes needs it.
+	return !selfIndexed || options.Contains || options.FullText
 }
 
 func rescanTargetNeedsWork(e *entry, fresh, selfIndexed bool, options indexOptions, req rescanIndexesRequest) bool {
@@ -104,7 +107,7 @@ func (s *Server) desktopRescanIndexes(ctx context.Context, raw []byte, emit func
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return fmt.Errorf("bad request body: %w", err)
 	}
-	if body.New == nil || !body.New.Index || !validRescanAction(body.Existing.Index, true) || !validRescanAction(body.Existing.Contains, false) || !validRescanAction(body.Existing.FullText, false) {
+	if body.New == nil || !validRescanAction(body.Existing.Index, true) || !validRescanAction(body.Existing.Contains, false) || !validRescanAction(body.Existing.FullText, false) {
 		return errors.New("invalid index actions")
 	}
 	release, admitted := s.admitWork("exclusive-request")
@@ -234,7 +237,7 @@ func (s *Server) handleRescanIndexes(w http.ResponseWriter, req *http.Request) {
 		httpErr(w, 400, "bad request body: %v", err)
 		return
 	}
-	if body.New == nil || !body.New.Index || !validRescanAction(body.Existing.Index, true) || !validRescanAction(body.Existing.Contains, false) || !validRescanAction(body.Existing.FullText, false) {
+	if body.New == nil || !validRescanAction(body.Existing.Index, true) || !validRescanAction(body.Existing.Contains, false) || !validRescanAction(body.Existing.FullText, false) {
 		httpErr(w, 400, "invalid index actions")
 		return
 	}
@@ -333,11 +336,13 @@ func (r *Registry) updateDictionaryIndexesContext(ctx context.Context, req resca
 		}
 		_, prepared := store.LookupDir(e.Path)
 		_, pending := rec.DSLPending[e.indexRemovalKey()]
-		fresh := pending || (!prepared && (!previous[dict.CanonPath(e.Path)] || !e.indexBlocked())) ||
-			isZIMPath(e.Path) && !hasBrowseIndex(e.Path)
+		// A dictionary with no prepared index is fresh, full stop: the index is
+		// mandatory, so there is no remembered state that would make its absence
+		// something to leave alone.
+		fresh := pending || !prepared || isZIMPath(e.Path) && !hasBrowseIndex(e.Path)
 		options := defaults
 		t := target{e: e, fresh: fresh, nativeOnly: nativeIndexOnly(e), options: options}
-		store.IndexDiagnostic("rescan index candidate source=%q dictionary=%q fresh=%v self_indexed=%v native_only=%v index=%v contains=%v fulltext=%v", e.Path, e.probeName(), fresh, entryHasSelfIndex(e), t.nativeOnly, options.Index, options.Contains, options.FullText)
+		store.IndexDiagnostic("rescan index candidate source=%q dictionary=%q fresh=%v self_indexed=%v native_only=%v contains=%v fulltext=%v", e.Path, e.probeName(), fresh, entryHasSelfIndex(e), t.nativeOnly, options.Contains, options.FullText)
 		if t.nativeOnly {
 			store.IndexDiagnostic("rescan index skipped source=%q dictionary=%q reason=native-index", e.Path, e.probeName())
 		}
@@ -494,29 +499,6 @@ func (r *Registry) updateDictionaryIndexesContext(ctx context.Context, req resca
 				report(state)
 				last = time.Now()
 			}
-		}
-		if t.fresh && !t.options.Index {
-			if dictCtx.Err() != nil {
-				return
-			}
-			if err := e.setIndexRemoved(true); err != nil {
-				addFailure(err.Error())
-				return
-			}
-			if dir, ok := store.LookupDir(e.Path); ok {
-				e.ingestMu.Lock()
-				e.rebuilding.Store(true)
-				e.openMu.Lock()
-				e.closeNow()
-				_, removeErr := store.RemovePrepared(dir)
-				e.openMu.Unlock()
-				e.rebuilding.Store(false)
-				e.ingestMu.Unlock()
-				if removeErr != nil {
-					addFailure(removeErr.Error())
-				}
-			}
-			return
 		}
 		want := clearDatabaseRequest{progress: articleProgress, ctx: dictCtx}
 		if t.fresh {

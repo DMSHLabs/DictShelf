@@ -422,7 +422,10 @@ func TestRemovalWaitsForThePassHoldingTheFiles(t *testing.T) {
 	}
 	done := make(chan error, 1)
 	go func() {
-		_, err := reg.Remove(e.ID, true, false)
+		// The whole dictionary goes: an index alone cannot be removed (that is
+		// the rule this file's fence test happens to exercise), and the folder is
+		// what the pass holds.
+		_, err := reg.Remove(e.ID, true, true)
 		done <- err
 	}()
 	deadline := time.Now().Add(time.Second)

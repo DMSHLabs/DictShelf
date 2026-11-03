@@ -23,8 +23,12 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
+// indexOptions is what the optional indexes are set to. There is no field for
+// the headword index: it is not optional (a dictionary always has one, which is
+// why nothing can delete it either). The API still ACCEPTS "index" in a request
+// body and ignores it, so a client written against the older contract keeps
+// working (rescanIndexesRequest / handleIndexDefaults).
 type indexOptions struct {
-	Index    bool `json:"index"`
 	Contains bool `json:"contains"`
 	FullText bool `json:"fullText"`
 }
@@ -240,11 +244,9 @@ func orderAutomaticIndexes(items []pendingDictionaryIndex, budget int, strategy 
 func (p *Prefs) newIndexDefaults() indexOptions {
 	f, _ := p.data()
 	if f.IndexDefaults != nil {
-		v := *f.IndexDefaults
-		v.Index = true
-		return v
+		return *f.IndexDefaults
 	}
-	return indexOptions{Index: true, Contains: true}
+	return indexOptions{Contains: true}
 }
 
 func (s *Server) handleIndexDefaults(w http.ResponseWriter, req *http.Request) {
@@ -262,7 +264,6 @@ func (s *Server) handleIndexDefaults(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) saveIndexDefaults(next indexOptions) (indexOptions, error) {
-	next.Index = true
 	p := s.reg.prefs
 	p.editMu.Lock()
 	defer p.editMu.Unlock()
@@ -364,9 +365,9 @@ func (r *Registry) queueNewDictionaries() error {
 				}
 				continue
 			}
-			if f.DSLRemoved[key] {
-				continue
-			}
+			// A dictionary with no index is queued, whether it never had one or
+			// had one that is now gone: the headword index is mandatory, so
+			// "there is no index" is a state to leave, never a state to respect.
 			if hasBrowseIndex(other.Path) {
 				// The base headword index already exists. Queue only the missing
 				// optional indexes, and leave the working base index available
@@ -379,6 +380,12 @@ func (r *Registry) queueNewDictionaries() error {
 				wanted.Contains = wanted.Contains || prepared.Plan.Contains
 				wanted.FullText = wanted.FullText || prepared.Plan.FullText
 				if preparedHasIndexes(other.Path, wanted) {
+					// The index is complete: whatever the marker said about this
+					// dictionary, there is an index now, so nothing is pending.
+					if f.DSLRemoved[key] {
+						delete(f.DSLRemoved, key)
+						changed = true
+					}
 					continue
 				}
 				f.DSLPending[key] = wanted

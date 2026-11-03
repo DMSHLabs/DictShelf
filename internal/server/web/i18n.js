@@ -109,7 +109,7 @@
     "errors.archiveSize",
     "errors.archiveRatio",
     "errors.collectionMissing",
-    "errors.indexRemoved",
+    "errors.indexNotReady",
     "errors.tooManyWords",
     "errors.collectionFileMissing",
     "errors.notDownload"

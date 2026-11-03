@@ -28,7 +28,7 @@ func TestWorkAdmissionIndividualAndExclusive(t *testing.T) {
 		{"GET", "/api/setup?path=test", "", true},
 		{"DELETE", "/api/index-work?id=all", "", true},
 		{"GET", "/api/rescan?status=1", "", true},
-		{"POST", "/api/index-work?single=1", `[{"dict":"beta","feature":"base","action":"delete"}]`, true},
+		{"POST", "/api/index-work?single=1", `[{"dict":"beta","feature":"contains","action":"delete"}]`, true},
 	} {
 		reached := false
 		handler := s.withWorkAdmission(func(w http.ResponseWriter, r *http.Request) { reached = true })

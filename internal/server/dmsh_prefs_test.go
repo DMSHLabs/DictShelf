@@ -12,9 +12,9 @@ import (
 func TestPrefsFailedMutationKeepsActiveRecord(t *testing.T) {
 	p := LoadPrefs("")
 	original := prefsFile{
-		IndexDefaults: &indexOptions{Index: true, Contains: true},
+		IndexDefaults: &indexOptions{Contains: true},
 		IndexMigrated: map[string]bool{"source": true},
-		DSLKnown:      map[string]bool{"source": true}, DSLPending: map[string]indexOptions{"source": {Index: true}},
+		DSLKnown:      map[string]bool{"source": true}, DSLPending: map[string]indexOptions{},
 		DSLRemoved: map[string]bool{"source": true},
 		UI:         &UIPrefs{GroupsOff: []string{"lang"}},
 		Groups:     []DictionaryGroup{{ID: "g", Name: "Reading", Order: []groupOrder{{ID: "d"}}}},

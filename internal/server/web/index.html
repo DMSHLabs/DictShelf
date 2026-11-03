@@ -6207,26 +6207,21 @@ function renderBulkIndexes(){
   window.wudictThemedSelects?.bulk?.forEach(control=>control.destroy());
   $("bulkIndexes").innerHTML='<section class="bulk-index-section"><h3>'+esc(tx("dictUI.allActions"))+'</h3><div class="bulk-index-table" role="group">'+
     [["base","dictUI.indexPlain"],["contains","dictUI.contains"],["fts","dictUI.fts"]].map(([feat,label])=>
-      '<label class="bulk-index-setting"><span>'+esc(tx(label))+'</span><select data-bulk-feat="'+feat+'" aria-label="'+escAttr(tx(label))+'">'+["keep","create","update","recreate","delete"].map(action=>'<option value="'+action+'"'+(action==='delete'&&feat==='base'&&!cfgInfo?.canDelete?' disabled':'')+'>'+esc(bulkActionLabel(action))+'</option>').join('')+'</select></label>').join('')+'</div><button type="button" class="btn" data-bulk-start disabled>'+esc(tx("dictUI.bulkStart"))+'</button></section>';
+      '<label class="bulk-index-setting"><span>'+esc(tx(label))+'</span><select data-bulk-feat="'+feat+'" aria-label="'+escAttr(tx(label))+'">'+(feat==="base"?["keep","create","update","recreate"]:["keep","create","update","recreate","delete"]).map(action=>'<option value="'+action+'">'+esc(bulkActionLabel(action))+'</option>').join('')+'</select></label>').join('')+'</div><button type="button" class="btn" data-bulk-start disabled>'+esc(tx("dictUI.bulkStart"))+'</button></section>';
   window.wudictThemedSelects.bulk=[...$("bulkIndexes").querySelectorAll("select[data-bulk-feat]")].map(themedSelectCreate);
 }
 $("bulkIndexes").addEventListener("change",e=>{
   const input=e.target.closest("select[data-bulk-feat]");if(!input)return;
-  const deletingBase=$("bulkIndexes").querySelector('[data-bulk-feat="base"]').value==="delete";
-  $("bulkIndexes").querySelectorAll('select:not([data-bulk-feat="base"])').forEach(other=>{other.disabled=deletingBase;if(deletingBase)other.value="keep"});
   window.wudictThemedSelects?.bulk?.forEach(control=>control.sync());
   $("bulkIndexes").querySelector("[data-bulk-start]").disabled=![...$("bulkIndexes").querySelectorAll("select")].some(select=>select.value!=="keep");
 });
 $("bulkIndexes").addEventListener("click",async e=>{
   const button=e.target.closest("[data-bulk-start]");if(!button||bulkIndexBusy)return;
   const actions=[...$("bulkIndexes").querySelectorAll("select")].filter(input=>input.value!=="keep").map(input=>({feat:input.dataset.bulkFeat,action:input.value,remove:input.value==="delete"}));
-  // Removing the base index also removes optional indexes.
-  const baseDelete=actions.find(a=>a.feat==="base"&&a.remove);
-  if(baseDelete){actions.splice(actions.indexOf(baseDelete),1);actions.unshift(baseDelete)}
   const todo=actions.flatMap(action=>bulkIndexCandidates("selected",action.feat,action.action).map(d=>({d,...action})));
   if(!todo.length){setIndexStatus(esc(tx("dictUI.bulkNoChanges")));return}
   const dialog=$("bulkIndexDialog");
-  dialog.innerHTML=`<h2 id="bulkIndexDialogTitle">${esc(tx("dictUI.allActions"))}</h2>${actions.map(({feat,action})=>'<p>'+esc(tx(feat==="base"?"dictUI.indexPlain":feat==="contains"?"dictUI.contains":"dictUI.fts"))+': '+esc(bulkActionLabel(action))+' · '+todo.filter(job=>job.feat===feat).length+'</p>').join('')}${baseDelete?'<p>'+esc(tx("dictUI.bulkDeleteHint"))+'</p>':''}<div><button type="button" class="btn" data-bulk-go>${esc(tx("dictUI.bulkStart"))}</button> <button type="button" class="btn" data-bulk-cancel autofocus>${esc(tx("panel.cancel"))}</button></div>`;
+  dialog.innerHTML=`<h2 id="bulkIndexDialogTitle">${esc(tx("dictUI.allActions"))}</h2>${actions.map(({feat,action})=>'<p>'+esc(tx(feat==="base"?"dictUI.indexPlain":feat==="contains"?"dictUI.contains":"dictUI.fts"))+': '+esc(bulkActionLabel(action))+' · '+todo.filter(job=>job.feat===feat).length+'</p>').join('')}<div><button type="button" class="btn" data-bulk-go>${esc(tx("dictUI.bulkStart"))}</button> <button type="button" class="btn" data-bulk-cancel autofocus>${esc(tx("panel.cancel"))}</button></div>`;
   dialog.showModal();
   dialog.querySelector("[data-bulk-cancel]").onclick=()=>dialog.close();
   dialog.querySelector("[data-bulk-go]").onclick=async()=>{
@@ -6620,8 +6615,10 @@ function askRemoval(pd){
   // The server enforces this too (D24 §4) — this only avoids offering what
   // would be refused.
   const canDropSource=!!d.source&&prepared&&(!!d.mediaDB||!d.hasMedia);
+  // Two things can go: the whole dictionary, or its files only (which leaves the
+  // prepared copy standing on its own). The index between them is not a choice -
+  // a dictionary always has one, and rebuilding it would cost the whole source.
   let btns=`<span class="rmgo" data-rm="all">💥 ${esc(tx(d.source?"dictUI.deleteAll":"dictUI.delete"))}</span>`;
-  if(d.source&&prepared)btns+=`<span class="rmgo" data-rm="index">${esc(tx("dictUI.indexOnly"))}${idx?" · "+mb(idx):""}</span>`;
   if(canDropSource)btns+=`<span class="rmgo" data-rm="source">${esc(tx("dictUI.sourceOnly"))}</span>`;
   // The heading states the irreversibility once, at the top, in the danger
   // colour — the buttons below it say WHAT goes, not how bad it is.
@@ -6638,18 +6635,12 @@ async function runRemove(id,kind,node){
   node.textContent=tx("dictUI.deleting");
   setIndexStatus('<span class="spin"></span>'+esc(tx("dictUI.deletingName",{name})));
   const q="/api/library?dict="+encodeURIComponent(id)+
-    "&prepared="+(kind==="source"?0:1)+"&source="+(kind==="index"?0:1);
+    "&prepared="+(kind==="source"?0:1)+"&source=1";
   let rep;
   try{
-    if(kind==="index"){
-      const result=await window.wudictWork.start([{dict:id,feature:"base",action:"delete"}],true);
-      if(result.error)throw new Error(result.error);
-      rep=result.result||{};
-    }else{
     const r=await apiFetch(q,{method:"DELETE"});
     rep=await r.json();
     if(!r.ok)throw new Error(window.wudictI18n.errorText(rep&&rep.error)||("HTTP "+r.status));
-    }
   }catch(err){
     node.classList.remove("busy");delete node.dataset.busy;
     node.textContent=tx("dictUI.failed");

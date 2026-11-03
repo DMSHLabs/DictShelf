@@ -13,6 +13,11 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
+// dslView describes a DSL dictionary's source and index. IndexRemoved is the
+// JSON name this field has always had - the state used to mean "the user took
+// this dictionary's index away", and it means "there is no index right now" now
+// that an index cannot be removed at all. It stays while the dictionary is
+// queued for preparation, and it is cleared by the build that finishes it.
 type dslView struct {
 	Source          string `json:"source"`
 	SourceAvailable bool   `json:"sourceAvailable"`
@@ -50,6 +55,12 @@ func (r *Registry) dslView(e *entry) *dslView {
 
 func (r *Registry) dslAvailable(e *entry) bool { return !e.indexBlocked() }
 
+// indexBlocked reports that this dictionary has no index right now - one is
+// queued or being built, or a build failed and the marker has not been cleared
+// yet. It is NOT a state the user can put a dictionary into: the headword index
+// is mandatory, nothing deletes it, and the queue prepares any dictionary whose
+// index is missing (a failed build clears the marker so the source preview can
+// serve it meanwhile).
 func (e *entry) indexBlocked() bool {
 	if e.reg == nil {
 		return false

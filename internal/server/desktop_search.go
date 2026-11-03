@@ -663,7 +663,7 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 	case "indexWork":
 		return s.indexWorkStatus(argument), nil
 	case "startIndexWork", "startSingleIndexWork":
-		return s.startIndexWork([]byte(argument), method == "startSingleIndexWork", true)
+		return s.startIndexWork([]byte(argument), method == "startSingleIndexWork")
 	case "stopIndexWork":
 		if strings.TrimSpace(argument) != "" {
 			var request struct {

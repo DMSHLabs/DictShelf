@@ -43,14 +43,14 @@ function androidIntakeCall(action,argument=""){
 }
 let indexDefaultsWrite=Promise.resolve(true);
 function syncIndexDefaults(){
-  $("newIndexIndex").checked=true;
-  $("newIndexIndex").disabled=true;
   $("indexDefaultsError").hidden=true;
   return true;
 }
 function saveIndexDefaults(){
   if(!syncIndexDefaults())return Promise.resolve(false);
-  const body={index:true,contains:$("newIndexContains").checked,fullText:$("newIndexFullText").checked};
+  // No "index" key: the headword index is not optional, and the older contract's
+  // flag is accepted-and-ignored on the way in rather than sent back out.
+  const body={contains:$("newIndexContains").checked,fullText:$("newIndexFullText").checked};
   indexDefaultsWrite=indexDefaultsWrite.then(async()=>{
     try{
       if(window.wudictAndroidGo)androidSetupCall("indexDefaults",JSON.stringify(body));

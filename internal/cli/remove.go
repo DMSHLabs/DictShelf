@@ -20,11 +20,15 @@ import (
 // `wudict rm` - the CLI half of D63.
 //
 // `clean` removes what the library should not contain; this removes what it
-// should, on purpose, by name. It is the one place where the two objects a
-// dictionary consists of - the prepared folder and the original files - are
-// both deletable, and it is dry-run by default for exactly that reason: the
-// user names a dictionary, sees the concrete file list and the bytes, and then
-// repeats the command with -f.
+// should, on purpose, by name. It is dry-run by default for exactly that
+// reason: the user names a dictionary, sees the concrete file list and the
+// bytes, and then repeats the command with -f.
+//
+// Two things can go, and only two: the whole dictionary (its prepared folder
+// and its original files), or the original files alone - which is the decision
+// to keep the prepared copy standing on its own. The index BETWEEN those two is
+// not something this command removes: it is what makes the dictionary usable,
+// and building it again would cost the whole source.
 //
 // It deliberately does not talk to a running server: this is a local file
 // operation, and a running instance rescans on its own. Deleting a prepared
@@ -35,16 +39,12 @@ func cmdRemove(args []string) error {
 	applyLibrarySettings()
 	fs := flag.NewFlagSet("rm", flag.ExitOnError)
 	force := fs.Bool("f", false, "actually delete (default: dry run, list only)")
-	keepSource := fs.Bool("keep-source", false, "delete the prepared folder only, leaving the original files")
 	keepIndex := fs.Bool("keep-index", false, "delete the original files only, leaving the prepared dictionary")
 	fs.Parse(args)
 	if fs.NArg() != 1 {
-		return fmt.Errorf("usage: wudict rm [-f] [-keep-source|-keep-index] <name|path>")
+		return fmt.Errorf("usage: wudict rm [-f] [-keep-index] <name|path>")
 	}
-	if *keepSource && *keepIndex {
-		return fmt.Errorf("-keep-source and -keep-index cancel each other out - that would delete nothing")
-	}
-	dropPrepared, dropSource := !*keepIndex, !*keepSource
+	dropPrepared, dropSource := !*keepIndex, true
 
 	preparedDir, allSources, name, err := resolveRemoval(fs.Arg(0))
 	if err != nil {
@@ -123,9 +123,6 @@ func cmdRemove(args []string) error {
 		}
 	}
 	fmt.Printf("deleted - %s freed\n", logx.Size(total))
-	if dropPrepared && !dropSource && len(allSources) > 0 {
-		fmt.Println("note: the original files are still in place, so this dictionary will be indexed again the next time it is searched")
-	}
 	return nil
 }
 

@@ -248,7 +248,7 @@
     const targets=new Set();
     const mark=selector=>document.querySelectorAll(selector).forEach(el=>targets.add(el));
     if(any)mark('#bulkIndexes button,#bulkIndexes select,#clearDatabaseGo,#clearDatabaseDialog input,#rescanActions button,#rescanActions input,#rescanActions select,#reindexGo,.pd .rm,.pd [data-rm="all"],.pd [data-rm="source"],#addRow,#rows input,#rows button,#save,#indexDefaults input,#choose,#fetch,#install,#file,#url,#howtoCopy,#howtoBack');
-    document.querySelectorAll('.pd [data-feat],.pd [data-delete-index],.pd [data-rm="index"],.upgrade').forEach(el=>{
+    document.querySelectorAll('.pd [data-feat],.pd [data-index-size],.upgrade').forEach(el=>{
       const id=el.dataset.target||el.dataset.id||el.closest('.pd')?.dataset.id;
       if(s.exclusive||ids.has(id))targets.add(el);
     });

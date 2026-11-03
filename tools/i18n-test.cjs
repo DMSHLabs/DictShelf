@@ -285,7 +285,10 @@ for (const language of ['en', 'ru']) {
   cardContext.dicts=[{id:'ordinary',source:'a.mdx',dbSize:20,caps:{}},{id:'dsl',source:'b.dsl',dbSize:30,dsl:{sourceAvailable:true},caps:{FTS:true}},{id:'missing',source:'c.dsl',dbSize:0,dsl:{sourceAvailable:true},caps:{}}];
   vm.runInNewContext(main.match(/function bulkIndexCandidates\(scope,feat,action\)\{[\s\S]*?\n\}/)[0],cardContext);
   assert.equal(cardContext.bulkIndexCandidates('selected','fts','create').map(d=>d.id).join(','),'ordinary,missing');
-  assert.equal(cardContext.bulkIndexCandidates('selected','base','delete').map(d=>d.id).join(','),'ordinary,dsl');
+  // The base index has no "delete" among its bulk actions any more: it is the
+  // one index a dictionary cannot lose (renderBulkIndexes builds the option list
+  // from this literal, so the pin is on the source).
+  assert.match(main, /feat==="base"\?\["keep","create","update","recreate"\]/);
   assert.equal(cardContext.bulkIndexCandidates('selected','base','create').map(d=>d.id).join(','),'missing');
   for (const g of manifest.groups) {
     assert.equal(fallback['layers.group.' + g.dir], g.title);

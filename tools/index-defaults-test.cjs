@@ -23,11 +23,11 @@ for (const [, attrs, body] of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>
 new vm.Script(script, {filename: 'setup.js'});
 
 const section = html.match(/<section id="indexDefaults">([\s\S]*?)<\/section>/)[1];
-assert.equal([...section.matchAll(/type="checkbox"/g)].length, 3);
-assert.match(section, /id="newIndexIndex" checked disabled/);
+assert.equal([...section.matchAll(/type="checkbox"/g)].length, 2);
+assert.doesNotMatch(section, /newIndexIndex/, 'the mandatory headword index is not a checkbox');
 assert.doesNotMatch(section, /dslGD|pages.dslParser|dictUI.dslOriginal/);
 
-const fields = Object.fromEntries(['newIndexIndex', 'newIndexContains', 'newIndexFullText', 'indexDefaultsError'].map(id => [id, {}]));
+const fields = Object.fromEntries(['newIndexContains', 'newIndexFullText', 'indexDefaultsError'].map(id => [id, {}]));
 fields.newIndexContains.checked = true;
 fields.newIndexFullText.checked = false;
 const writes = [];
@@ -48,8 +48,6 @@ const source = ['syncIndexDefaults', 'saveIndexDefaults']
 vm.runInNewContext('let indexDefaultsWrite=Promise.resolve(true);\n' + source, context);
 (async () => {
   assert.equal(await context.saveIndexDefaults(), true);
-  assert.equal(fields.newIndexIndex.checked, true);
-  assert.equal(fields.newIndexIndex.disabled, true);
-  assert.deepEqual(writes, [{url: '/api/index-defaults', body: {index: true, contains: true, fullText: false}}]);
+  assert.deepEqual(writes, [{url: '/api/index-defaults', body: {contains: true, fullText: false}}]);
   console.log('Folder index defaults: markup, syntax and saving passed.');
 })().catch(error => {console.error(error); process.exitCode = 1;});

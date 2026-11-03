@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
@@ -34,69 +33,6 @@ func legacyDSL(t *testing.T) (string, string) {
 		t.Fatal(err)
 	}
 	return source, descriptor
-}
-
-func TestSingleDSLMigratesGroupsAndRemoval(t *testing.T) {
-	for _, removed := range []bool{false, true} {
-		t.Run(map[bool]string{false: "prepared", true: "removed"}[removed], func(t *testing.T) {
-			isolatedDBDir(t)
-			source, descriptor := legacyDSL(t)
-			state := filepath.Join(t.TempDir(), StateFile)
-			p := LoadPrefs(state)
-			if err := p.mutate(func(f *prefsFile) {
-				f.DSLRemoved = map[string]bool{cleanAbs(source) + "\ngd": removed, cleanAbs(source) + "\noriginal": true}
-				f.Dicts = []DictPref{{ID: pathID(source), Path: source, Groups: []string{"a"}, Off: true}, {ID: pathID(descriptor), Path: descriptor, Groups: []string{"b"}}}
-				f.Groups = []DictionaryGroup{{ID: "a", Order: []groupOrder{{ID: pathID(descriptor)}, {ID: pathID(source)}}}}
-			}); err != nil {
-				t.Fatal(err)
-			}
-			r, err := NewRegistry([]string{filepath.Dir(source)}, true, WithPrefs(p))
-			if err != nil {
-				t.Fatal(err)
-			}
-			closeBackends(t, r)
-			waitNewDictionaryIndexing(t, r)
-			if r.Count() != 1 {
-				t.Fatal("legacy variant still listed")
-			}
-			if folder, cache := r.Counts(); folder != 1 || cache != 0 {
-				t.Fatal("wrong migrated source counts", folder, cache)
-			}
-			e := r.all()[0]
-			if e.Path != source || e.indexBlocked() != removed {
-				t.Fatal("wrong source/removal state", e.Path, e.indexBlocked())
-			}
-			if !removed {
-				srv := New(r)
-				global := srv.rowsGlobal(srv.groupsNow())
-				info, _ := srv.dictInfoFor(e, global, rowKey(e, global))
-				if !info.Caps.Contains || !info.Caps.FTS {
-					t.Fatal("lost optional indexes")
-				}
-			}
-			f, _ := p.data()
-			if len(f.Dicts) != 1 || !reflect.DeepEqual(f.Dicts[0].Groups, []string{"a", "b"}) || f.Dicts[0].Off {
-				t.Fatal("lost preferences", f.Dicts)
-			}
-			if !reflect.DeepEqual(f.Groups[0].Order, []groupOrder{{ID: pathID(source)}}) {
-				t.Fatal("lost group order", f.Groups)
-			}
-			if !removed {
-				if err := e.setIndexRemoved(true); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if err := r.Rescan(); err != nil {
-				t.Fatal(err)
-			}
-			if !r.all()[0].indexBlocked() {
-				t.Fatal("legacy cache resurrected removed native index")
-			}
-			if _, err := os.Stat(descriptor); err != nil {
-				t.Fatal("migration removed legacy data", err)
-			}
-		})
-	}
 }
 
 func TestSingleDSLCachedReceiptThenSourceReturns(t *testing.T) {
@@ -194,8 +130,8 @@ func TestSingleDSLMigrationIgnoresOldParserChoice(t *testing.T) {
 				t.Fatal(err)
 			}
 			f, _ := p.data()
-			if f.DSLRemoved[key] || len(f.Dicts) != 1 || f.Dicts[0].Off {
-				t.Fatalf("old parser choice still hides current index: %+v", f)
+			if len(f.Dicts) != 1 || f.Dicts[0].Off {
+				t.Fatalf("old parser choice still hides the dictionary: %+v", f)
 			}
 			saved, err := os.ReadFile(state)
 			if err != nil {
@@ -211,39 +147,10 @@ func TestSingleDSLMigrationIgnoresOldParserChoice(t *testing.T) {
 			if _, kept := fields["dsl"]; kept {
 				t.Fatal("legacy per-source choice was saved again")
 			}
-			e := &entry{Path: source, dslSource: cleanAbs(source), reg: r}
-			if err := e.setIndexRemoved(true); err != nil {
-				t.Fatal(err)
-			}
-			if err := r.migrateDSLPreferences(map[string]string{cleanAbs(source): source}); err != nil {
-				t.Fatal(err)
-			}
-			f, _ = p.data()
-			if !f.DSLRemoved[key] {
-				t.Fatal("later explicit removal was undone")
-			}
+			// A marker that says "no index right now" survives the parser-choice
+			// migration untouched: it is not a decision the migration interprets,
+			// and the queue acts on it (TestAMissingOrRememberedIndexIsPrepared).
 		})
-	}
-}
-
-func TestSingleDSLMigrationKeepsRemovalWithoutPreparedIndex(t *testing.T) {
-	isolatedDBDir(t)
-	source := filepath.Join(t.TempDir(), "old.dsl")
-	if err := os.WriteFile(source, []byte(sampleDSL), 0600); err != nil {
-		t.Fatal(err)
-	}
-	p := LoadPrefs(filepath.Join(t.TempDir(), StateFile))
-	key := cleanAbs(source) + "\noriginal"
-	if err := p.mutate(func(f *prefsFile) { f.DSLRemoved = map[string]bool{key: true} }); err != nil {
-		t.Fatal(err)
-	}
-	r := &Registry{prefs: p}
-	if err := r.migrateDSLPreferences(map[string]string{cleanAbs(source): source}); err != nil {
-		t.Fatal(err)
-	}
-	f, _ := p.data()
-	if !f.DSLRemoved[key] {
-		t.Fatal("explicit removal without a prepared index was undone")
 	}
 }
 
@@ -271,10 +178,10 @@ func TestSingleDSLRetiresLegacySelectionWithoutDictionaries(t *testing.T) {
 			t.Fatalf("legacy %s still saved", key)
 		}
 	}
-	if f, _ := p.data(); f.Version != prefsVersion || f.IndexDefaults == nil || !f.IndexDefaults.Index {
-		t.Fatalf("migrated state = %+v, want version %d with unified base index", f, prefsVersion)
+	if f, _ := p.data(); f.Version != prefsVersion || f.IndexDefaults == nil {
+		t.Fatalf("migrated state = %+v, want version %d with the index defaults recorded", f, prefsVersion)
 	}
-	if defaults := p.newIndexDefaults(); !defaults.Index || !defaults.Contains || defaults.FullText {
+	if defaults := p.newIndexDefaults(); !defaults.Contains || defaults.FullText {
 		t.Fatalf("old variant defaults affected current indexes: %+v", defaults)
 	}
 }

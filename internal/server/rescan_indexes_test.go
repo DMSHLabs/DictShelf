@@ -18,13 +18,13 @@ import (
 )
 
 func TestZIMCanBuildPreparedTitleIndex(t *testing.T) {
-	if baseIndexRequired(true, indexOptions{Index: true}) {
+	if baseIndexRequired(true, indexOptions{}) {
 		t.Fatal("native-only format requested a duplicate base index")
 	}
-	if !baseIndexRequired(true, indexOptions{Index: true, Contains: true}) {
+	if !baseIndexRequired(true, indexOptions{Contains: true}) {
 		t.Fatal("contains index did not request the prepared database it needs")
 	}
-	if !baseIndexRequired(false, indexOptions{Index: true}) {
+	if !baseIndexRequired(false, indexOptions{}) {
 		t.Fatal("ZIM title index was not selected for preparation")
 	}
 }
@@ -41,7 +41,7 @@ func TestZIMPreparedIndexIsRebuildable(t *testing.T) {
 func TestZIMTitleIndexCountsAsBaseIndexWork(t *testing.T) {
 	e := &entry{Path: "manual.zim"}
 	req := rescanIndexesRequest{Existing: rescanIndexActions{Index: "recreate"}}
-	if !rescanTargetNeedsWork(e, true, false, indexOptions{Index: true}, req) {
+	if !rescanTargetNeedsWork(e, true, false, indexOptions{}, req) {
 		t.Fatal("new ZIM did not enter the rescan index queue")
 	}
 }
@@ -144,7 +144,7 @@ func TestBackgroundPreparationReusesAndDeduplicates(t *testing.T) {
 				if f.DSLPending == nil {
 					f.DSLPending = make(map[string]indexOptions)
 				}
-				f.DSLPending[e.indexRemovalKey()] = indexOptions{Index: true, Contains: plan.Contains, FullText: plan.FullText}
+				f.DSLPending[e.indexRemovalKey()] = indexOptions{Contains: plan.Contains, FullText: plan.FullText}
 			}); err != nil {
 				t.Fatal(err)
 			}
@@ -204,7 +204,7 @@ func TestRescanIndexActionsPreserveExactFeatures(t *testing.T) {
 					if err := e.setFeatures(features{Contains: present, FullText: present}, nil); err != nil {
 						t.Fatal(err)
 					}
-					updateIndexesReq(t, s, rescanIndexesRequest{New: &indexOptions{Index: true}, Existing: rescanIndexActions{Index: base, Contains: action, FullText: action}})
+					updateIndexesReq(t, s, rescanIndexesRequest{New: &indexOptions{}, Existing: rescanIndexActions{Index: base, Contains: action, FullText: action}})
 					check := func() {
 						t.Helper()
 						have := store.KeptPlan(store.TextDBPath(dir))
@@ -239,14 +239,14 @@ func TestRescanNewDictionariesUseOnlySelectedIndexes(t *testing.T) {
 				s := New(reg)
 				// Existing defaults must not override the requested result.
 				if err := reg.prefs.mutate(func(f *prefsFile) {
-					f.IndexDefaults = &indexOptions{Index: true, Contains: true, FullText: true}
+					f.IndexDefaults = &indexOptions{Contains: true, FullText: true}
 				}); err != nil {
 					t.Fatal(err)
 				}
 				if err := os.WriteFile(filepath.Join(dir, "new.dsl"), []byte(sampleDSL), 0600); err != nil {
 					t.Fatal(err)
 				}
-				updateIndexesReq(t, s, rescanIndexesRequest{New: &indexOptions{Index: true, Contains: contains, FullText: fts}, Existing: rescanIndexActions{Index: "keep", Contains: "keep", FullText: "keep"}})
+				updateIndexesReq(t, s, rescanIndexesRequest{New: &indexOptions{Contains: contains, FullText: fts}, Existing: rescanIndexActions{Index: "keep", Contains: "keep", FullText: "keep"}})
 				check := func(r *Registry) {
 					t.Helper()
 					for _, e := range r.all() {
@@ -281,73 +281,5 @@ func TestRescanNewDictionariesUseOnlySelectedIndexes(t *testing.T) {
 				check(restarted)
 			})
 		}
-	}
-}
-
-func TestRescanKeepDoesNotRestoreRemovedBase(t *testing.T) {
-	s := newTestServer(t)
-	state := filepath.Join(t.TempDir(), StateFile)
-	s.reg.prefs = LoadPrefs(state)
-	preparedDSL(t, s)
-	id := idOf(t, s, "test.dsl")
-	if _, err := s.reg.Remove(id, true, false); err != nil {
-		t.Fatal(err)
-	}
-	updateIndexesReq(t, s, rescanIndexesRequest{New: &indexOptions{Index: true, Contains: true, FullText: true}, Existing: rescanIndexActions{Index: "keep", Contains: "update", FullText: "update"}})
-	e, err := s.reg.get(id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := store.LookupDir(e.Path); ok || !e.indexBlocked() {
-		t.Fatal("removed base was restored")
-	}
-	restarted, err := NewRegistry(s.reg.Dirs(), false, WithPrefs(LoadPrefs(state)), WithComparisons(false))
-	if err != nil {
-		t.Fatal(err)
-	}
-	waitNewDictionaryIndexing(t, restarted)
-	for _, other := range restarted.all() {
-		if _, ok := store.LookupDir(other.Path); ok || !other.indexBlocked() {
-			t.Fatal("restart restored a removed base")
-		}
-	}
-	updateIndexesReq(t, s, rescanIndexesRequest{New: &indexOptions{Index: true}, Existing: rescanIndexActions{Index: "recreate", Contains: "update", FullText: "update"}})
-	dir, ok := store.LookupDir(e.Path)
-	if !ok || e.indexBlocked() {
-		t.Fatal("explicit recreate did not restore base")
-	}
-	if plan := store.KeptPlan(store.TextDBPath(dir)); plan.Contains || plan.FullText {
-		t.Fatal("update created missing optional indexes")
-	}
-}
-
-func TestRescanDeletesRemovedPreparedIndex(t *testing.T) {
-	isolatedDBDir(t)
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "demo.dsl"), []byte(sampleDSL), 0600); err != nil {
-		t.Fatal(err)
-	}
-	reg, err := NewRegistry([]string{dir}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	waitNewDictionaryIndexing(t, reg)
-	s := New(reg)
-	var unwanted string
-	for _, e := range reg.all() {
-		if _, err := e.open(); err != nil {
-			t.Fatal(err)
-		}
-		if e.dslSource != "" {
-			path, _ := store.LookupDir(e.Path)
-			unwanted = path
-			if err := e.setIndexRemoved(true); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-	updateIndexesReq(t, s, rescanIndexesRequest{New: &indexOptions{Index: true}, Existing: rescanIndexActions{Index: "keep", Contains: "keep", FullText: "keep"}})
-	if _, err := os.Stat(unwanted); !os.IsNotExist(err) {
-		t.Fatalf("unselected variant's data remains: %v", err)
 	}
 }

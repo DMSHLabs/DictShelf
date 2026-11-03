@@ -60,7 +60,9 @@ func TestNewDictionariesGetContainsIndexWithoutSavedDefaults(t *testing.T) {
 	if !index.Caps().Exact || !index.Caps().Prefix || !index.Caps().Contains || index.Caps().FTS {
 		t.Fatalf("unexpected first-run index features: %+v", index.Caps())
 	}
-	if defaults := reg.prefs.newIndexDefaults(); !defaults.Index || !defaults.Contains || defaults.FullText {
+	// There is no "index" flag to check: the headword index is not optional, so
+	// the defaults say what the OPTIONAL indexes are and nothing else.
+	if defaults := reg.prefs.newIndexDefaults(); !defaults.Contains || defaults.FullText {
 		t.Fatalf("unsaved defaults do not select the contains index: %+v", defaults)
 	}
 }
@@ -115,9 +117,9 @@ func TestNewDictionariesGetQueuedIndexWithOptionalDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := New(reg)
-	// Index cannot be disabled, even by an older or malformed client.
+	// A body carrying the older contract's "index" flag is accepted and ignored.
 	groupCall(t, s, "PUT", "/api/index-defaults", indexOptions{Contains: true, FullText: true}, 200)
-	if got := LoadPrefs(state).newIndexDefaults(); !got.Index || !got.Contains || !got.FullText {
+	if got := LoadPrefs(state).newIndexDefaults(); !got.Contains || !got.FullText {
 		t.Fatalf("defaults not persisted: %+v", got)
 	}
 	for name, body := range map[string]string{
@@ -142,7 +144,7 @@ func TestNewDictionariesGetQueuedIndexWithOptionalDefaults(t *testing.T) {
 	if seen != 2 {
 		t.Fatalf("expected DSL and Markdown, got %d", seen)
 	}
-	groupCall(t, s, "PUT", "/api/index-defaults", indexOptions{Index: true}, 200)
+	groupCall(t, s, "PUT", "/api/index-defaults", indexOptions{}, 200)
 	if err := reg.Rescan(); err != nil {
 		t.Fatal(err)
 	}

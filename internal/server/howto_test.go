@@ -58,7 +58,9 @@ func TestBuiltinGuide(t *testing.T) {
 		return rec
 	}
 
-	// Removed whole, and it stays removed.
+	// Removed whole, and it stays removed. "The index alone" is not one of the
+	// things that can go - for any dictionary (the rule lives in Remove) - so the
+	// request is refused before it is even about the guide.
 	if rec := local(http.MethodDelete, "/api/library?dict="+howto.ID+"&prepared=1&source=0"); rec.Code == 200 {
 		t.Error("the guide's index alone was removable")
 	}

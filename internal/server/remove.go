@@ -114,6 +114,15 @@ func (r *Registry) Remove(id string, dropPrepared, dropSource bool) (removal, er
 		// not a request that cannot be met.
 		dropSource = false
 	}
+	if dropPrepared && !dropSource && len(sources) > 0 {
+		// The prepared index of a dictionary is not a thing to delete on its own.
+		// It is what makes the dictionary usable, and building it again costs the
+		// whole source; the whole dictionary may go, or its files only (which is
+		// the decision to leave the prepared copy standing alone) - the index
+		// between those two does not exist as a choice.
+		return rep, fmt.Errorf(
+			"the index of %q cannot be removed on its own: delete the dictionary, or delete its files only", rep.Name)
+	}
 	if dropPrepared && prepared == "" && !dropSource {
 		return rep, fmt.Errorf("%q has nothing prepared to remove", rep.Name)
 	}
@@ -152,28 +161,20 @@ func (r *Registry) Remove(id string, dropPrepared, dropSource bool) (removal, er
 	}
 
 	if dropPrepared && prepared != "" {
-		if !dropSource {
-			if err := e.setIndexRemoved(true); err != nil {
-				return rep, err
-			}
-		}
 		// A measurement pass may have the folder open - walking it, or writing
 		// stats.cache into it - and Windows refuses to delete a file anything
 		// holds. So the removal claims the files the way every other writer does:
 		// the pass yields here instead of colliding with the unlink, and no new
 		// one starts while the folder is going.
+		//
+		// Nothing records a removal here any more: the marker that used to be
+		// written meant "the user took this dictionary's index away", and the
+		// whole dictionary is what goes now (or its files only) - see the guard
+		// above. The entry is closed and rebuilding while the bytes come off.
 		release := e.walk.own()
 		n, err := store.RemovePrepared(prepared)
 		release()
 		if err != nil {
-			// RemoveAll can fail after removing some files. Do not make a
-			// possibly partial text.db searchable again; only restore the
-			// previous unblocked state when its database is still readable.
-			if !dropSource {
-				if _, readErr := store.ReadMeta(store.TextDBPath(prepared)); readErr == nil {
-					_ = e.setIndexRemoved(false)
-				}
-			}
 			return rep, err
 		}
 		rep.Folder, rep.Freed = prepared, rep.Freed+n

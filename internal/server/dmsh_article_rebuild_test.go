@@ -67,7 +67,7 @@ func TestFullTextUpdateRebuildsTheIndexOnly(t *testing.T) {
 	}
 
 	updateIndexesReq(t, s, rescanIndexesRequest{
-		New:      &indexOptions{Index: true},
+		New:      &indexOptions{},
 		Existing: rescanIndexActions{Index: "keep", Contains: "keep", FullText: "update"},
 	})
 
