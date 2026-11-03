@@ -538,20 +538,50 @@ one commit each, all dated 2026-11-04: the CI runners and the release NDK, the
 `IMPORT_INSECURE` hints in both catalogues, a child `<source>` as an audio link,
 layout spaces at a line's ends in the wmd writer, read-aloud language and the
 Other-languages menu, the headword's speaker button, the hidden bar coming back
-on focus, and the browser address with the escaped key. What was left, and why:
+on focus, and the browser address with the escaped key. The MDict port
+(`65325a4d`) followed the same day and is DONE — see the first bullet. What was
+left, and why:
 
-- **`65325a4d`, MDict parser correctness and speed** — the biggest single item,
-  and it needs its own session: `internal/gomdict` here has no
-  `block.go`/`DecodeText`, no plain/StyleSheet semantics, no lazy MDD, and
-  `internal/format/mdx` has no `.css`/`.js` precedence rule.
-- **`96e9a334`, the wmd half only** — two parses instead of three, `refLabels`
-  instead of every definition, and the end of the quadratic case on many link
-  definitions (an ingest that can look hung). The store and parallel halves are
-  this fork's own already.
-- **P6 of the transfer plan** (`c8b92dda`, `f1c5fb27`) — `internal/limits`, the
-  `MAX_*` keys and the intake free-space checks are still not ported.
-- **`2376d239`, in pieces** — the metadata-redirect follow, robustness against
-  damaged ZIM records, and the namespace strip in `Exact`.
+- **`65325a4d`, MDict parser correctness and speed — TAKEN 2026-11-04.** It is
+  the one item a wholesale take-over worked for, and the reason is worth keeping:
+  this fork's `gomdict` differed from upstream's parent by ~35 lines, and 30 of
+  them were a single consequence of `internal/limits` being absent here
+  (`maxLZOBlock` as a constant, plain errors instead of `limits.Exceeded`). So
+  the port takes upstream's package whole and ADDS that package (103 lines,
+  stdlib-only, `MDictBlock: 256 << 20` — the same number the constant carried),
+  which deletes the adaptation rather than preserving it. `internal/format/mdx`
+  keeps only its own `offline.go` and the `Contains` caps line. MDX
+  `ReaderVersion` went 2 to 3 with the parser, so prepared MDX libraries read as
+  outdated and rebuild once. `git diff 65325a4d -- internal/gomdict
+  internal/limits` shows the module path and nothing else.
+- **`2376d239` (ZIM), and this one is NOT a copy job.** Measured 2026-11-04: this
+  fork's `internal/format/zim` differs from that commit's parent by 4678 added
+  and 1540 removed lines over 38 files, i.e. it is a fork-owned implementation —
+  its own `glass/` package (Xapian full text: bm25, postlist, query, stem,
+  inflate, preserving), `dmsh_index_reader.go`, `dmsh_readings.go`,
+  `dmsh_stats.go`, `dmsh_xapian.go`, `icon.go`, `cluster_layout_test.go` — while
+  the upstream commit rewrites `container.go` (620 lines) and DELETES `title.go`,
+  `title_test.go`, `split_test.go` and `suite_test.go`, which this fork still has
+  and its own code may call. Never copy upstream's `container.go` over ours.
+  Take the three behaviours one at a time — the metadata-redirect follow,
+  robustness against damaged records, the namespace strip in `Exact` — each its
+  own commit, each gated on the ZIM package suite AND the real archive
+  (`docs/WINDOWS-VERIFY.md` → "ZIM archives on this machine"), and bump
+  `internal/format/zim`'s `ReaderVersion` (4 today) whenever what an ingest
+  writes changes.
+- **`96e9a334` is two commits in one.** The wmd half (`internal/format/wmd`:
+  `index.go` +626, `units.go`, `labels.go`, `source.go`, `read.go`) is a format
+  package that reads no `config` at all, so it can be taken on its own. The other
+  half refactors `internal/store/pipeline.go`, `ingest.go` and `compress.go` —
+  the package this fork's own `ingest_pipeline.go` lives in, and where the
+  trigram/contains work of 2026-11-04 is happening. Leave the store half to that
+  work; the two halves are separable because the format half imports `store`, not
+  `config`.
+- **P6 of the transfer plan** (`c8b92dda`, `f1c5fb27`) — `internal/limits` itself
+  now exists (it came in with the MDict port), so what remains is WIRING it: the
+  `MAX_*` config keys, and the bounds at ZIM cluster decompression, slob bins,
+  StarDict indexes and the intake's space checks. Mind the ZIM one — it is the
+  same package as the bullet above.
 - **Product decisions, not work**: MEGA links (`c9fcb3d3`), favorites
   (`81949eda`), CLI globbing (`4b00e48b`), live Browse progress (`8a48536d`) —
   each is cheap once it is decided, and each wants this fork's own CLI or UI
