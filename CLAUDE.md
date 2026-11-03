@@ -7,6 +7,7 @@
 Go web dictionary app supporting MDX/MDD, StarDict, Aard2 Slob, Lingvo DSL, Babylon BGL, openZIM; wudict markdown (`.wudict.md`: standard CommonMark, read by `internal/format/wmd` and written by `wudict dump -format md`). Web search uses a prepared library folder — `<db dir>/<name>/{text.db, media.db, info.txt}` (D20), with an optional `icon.cache` sidecar — or ZIM's validated native index. New non-ZIM dictionaries enter the background index queue when added; search never starts indexing and skips dictionaries whose prepared index is not ready. *Contains* builds headword trigram and token FTS together; *full-text* independently indexes articles. Both are per-dictionary switches, and media packing is a third (D24). Main search shares Browse's headword modes and keeps article full-text separate.
 
 ## Read this first (token discipline)
+- `docs/INDEX.md` — the map: one row per question, "what to read for what". Start there instead of guessing which document holds a fact, and keep its rows true when a fact moves.
 - `docs/SPEC.md` — architecture, schema, query engine. Read before writing any code.
 - `docs/FORMATS.md` — per-format facts + exact reference-code pointers. Read the section for the format you touch, nothing more.
 - `docs/WUDICT-MARKDOWN.md` — normative spec of wudict markdown (reader + writer). Read only when touching that format or its export. `entry://` is the canonical lookup link; `bword://` is a legacy alias: parse, never emit.
@@ -30,8 +31,8 @@ This repository is the whole project (`github.com/DMSHLabs/DictShelf`); there is
 - `internal/server` — registry, HTTP API, embedded UI (`web/index.html`, `web/setup.html`, `web/frame.js`).
 - `internal/gomdict` — inlined MDX/MDD parser. `internal/speex` — in-process .spx decoder (D18).
 - `internal/howto` — the **wudict howto**, the app's guide as an embedded wudict markdown dictionary (`wudict-howto.wudict.md` + `.files/`). Every headword starts with `wudict `; `howto_test.go` holds it to the format (gate, zero warnings, links resolve, a clean dump reproduces it byte for byte). Edit the guide there; `pages/` is the website and is not part of the app.
-- `android/` — the Android app (D52): a dependency-free Java WebView shell that execs the android/arm64 binary shipped inside the APK as `libwudict.so`. `make android-go` rebuilds the Go side (cgo flavour, D53: mattn FTS5 + built-in speex, needs the NDK), `make apk` the whole app; CI signs via repo secrets. The port adds no Go code and no build tags.
-- **The Makefile is the developer UI (D10): every action has a target, `make help` lists them, `make check` before declaring work done.**
+- `android/` — the Android app (D52): a dependency-free Java WebView shell that execs the android/arm64 binary shipped inside the APK as `libwudict.so`. `make android-go` rebuilds the Go side (cgo flavour, D53: mattn FTS5 + built-in speex, needs the NDK), `make apk-foss-debug` / `make apk-play-release` the whole app (there is no bare `apk` target); CI signs via repo secrets. The port adds no Go code and no build tags.
+- **The Makefile is the developer UI (D10): every action has a target, `make help` lists them, `make check` before declaring work done.** On this Windows machine GNU Make is not on PATH as `make` — call `mingw32-make` (inside Qt, from Git Bash); see `thirdpartytools.md`.
 
 The reference projects this was built from (`mdict-go-web`, `draego`, `pyglossary`, the speex sources) have been **removed from disk**. `docs/FORMATS.md` still cites their file and function names: read those as provenance for where a rule came from, not as paths you can open.
 

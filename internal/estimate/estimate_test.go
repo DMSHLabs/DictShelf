@@ -6,7 +6,7 @@ package estimate
 
 import "testing"
 
-// following are the measurements out of HANDOFF.md, one row per dictionary:
+// following are the measurements out of docs/MEASUREMENTS.md, one row per dictionary:
 // what it weighed before full text, what its contains index measured, and what
 // full text actually added. The estimate is checked against them, so narrowing
 // a band below what the corpus shows fails here rather than in a dialog.

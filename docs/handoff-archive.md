@@ -14,6 +14,9 @@ narratives, so `git log` is a second copy.
 
 | Section | Date | Was at (old HANDOFF.md) |
 |---|---|---|
+| GitHub links, release tags and the update catalog (2026-10, branch `codex/self-hosted-github-links` at `cc65d7e`) | 2026-10 | - (moved from HANDOFF.md 2026-11-03) |
+| Two server test failures fixed, and the five-article first section (2026-10, `da540c7`) | 2026-10 | - (moved from HANDOFF.md 2026-11-03) |
+| The per-dictionary reader/writer pipeline, and what it cost (2026-10, `da540c7`) | 2026-10 | - (moved from HANDOFF.md 2026-11-03) |
 | Progressive results: the user's three decisions (2026-11-02) | 2026-11-02 | — (moved from HANDOFF.md 2026-11-03) |
 | A ZIM with its own index answers full text itself (2026-11-01) | 2026-11-01 | — (moved from HANDOFF.md 2026-11-03) |
 | Our index on request, for an archive that has its own (2026-11-02) | 2026-11-02 | — (moved from HANDOFF.md 2026-11-03) |
@@ -4298,3 +4301,27 @@ Three places had to agree, and the third is the one that took the test to find:
 Verified on the live page, scoped to the Wikipedia: phrase «джазовый кларнетист» -> 5 words results, one
 `.search-needs-index` line in `rgb(224,134,0)` (the accent), text "found all the words. The exact phrase
 needs our index: Build", and the API answer carries `rung=words, needsIndex, oneReading` in 0.15 s.
+
+
+Moved out of `HANDOFF.md` on 2026-11-03 with the rest of the session
+narrative: these three sat in the live file as "Historical snapshot" paragraphs
+long after their work had landed, and the file is now state only.
+
+## GitHub links, release tags and the update catalog (2026-10, branch `codex/self-hosted-github-links` at `cc65d7e`)
+
+Historical snapshot: branch `codex/self-hosted-github-links` from `dev` at `cc65d7e`. This branch updates the Go module path and product links to `github.com/DMSHLabs/DictShelf`, and points the documentation site at DMSHLabs GitHub Pages. `build-windows.cmd` now reuses the checked-in `dictshelf_windows_amd64.syso` by default; `--update-icon` regenerates it from `packaging/windows/dictshelf.ico`. Before replacing an executable, the script force-stops it and waits for it to disappear, up to 60 seconds. Release workflow dispatch offers `release`, `pre-release`, and `beta` for Android, Windows, and Linux/macOS native builds. New tags use `dictshelf-vMAJOR.MINOR.PATCH`; previews add `-pre-release.N` or `-beta.N` and are GitHub pre-releases. The Update panel stores the selected channel and an enabled-by-default notification preference in `state.json`; it checks the static `update-catalog.json` on the dedicated `update-catalog` branch after settings load on every page start without blocking the UI, then daily while the page remains open; requests time out after 10 seconds (Beta includes Pre-release and Release; Pre-release includes Release) and marks ☰ plus the Update section heading when it finds an update. The action stays Install update, downloads when needed, and asks for confirmation after download; Cancel preserves the file. The confirmed target version is acknowledged once after the new version next starts. The version links to the release page. During downloads, Windows streams byte progress from the release asset and Android polls DownloadManager; the Update section shows a localized percentage and the ☰ control shows a matching accent ring, or an indeterminate ring if size is unknown. Update actions download first and offer installation afterward: Windows installers go to Downloads; portable builds stage `_DictShelf.exe` beside the running executable and launch a separate temporary copy of the GUI EXE in helper mode. The helper waits for the main process using Windows APIs, verifies the staged digest again, keeps the old executable as `.bak`, replaces only the executable, and relaunches without PowerShell or a console window; the new app removes the helper copy after it exits. Android saves and verifies an ABI-matched APK under a version/hash-specific unique filename; it reuses a DownloadManager item only when its version and SHA-256 match the current catalogue, then asks before installation. Publishing workflows regenerate the catalog from non-draft GitHub Releases; client checks do not call the GitHub API or change version history. Windows and native workflows load the tag resolver from the workflow revision while using the selected source checkout for tag history. The DownloadManager completion notification remains available for manual APK installation if DictShelf lacks permission. Play omits install permission and the APK update action. Windows and Android updater behavior remains unverified at runtime or in Actions. Both build scripts show command-line help for `-?`, `--?`, `-h`, `--h`, `-help`, and `--help`. Older notes below are historical snapshots.
+
+## Two server test failures fixed, and the five-article first section (2026-10, `da540c7`)
+
+Historical snapshot at `da540c7`. The two previously reported server
+test failures are fixed: `TestDictsRunningJobIsNotKept` now waits for the
+first stable dictionary-list validator instead of assuming a fixed number of
+requests is enough, and the EN/RU full-text mode hint catalogs no longer have
+empty values. Both targeted tests passed five repetitions, and
+`go test ./internal/server -count=1` passes on Windows; search keeps five articles in the first populated section, later sections use Settings → Results, and later pages in that first section start after its five-result first page.
+
+## The per-dictionary reader/writer pipeline, and what it cost (2026-10, `da540c7`)
+
+Historical snapshot at `da540c7`. Settings checkboxes use one shared customizable control, and the bottom status bar is always visible; preserve untracked `help/changelog.txt`. pipeline from `8b3ee97e` merged. Per active dictionary, it runs a source-reader goroutine and a coordinator/writer; CPU preparation uses a shared pool sized from logical processors and concurrent indexing sessions, with 16 outstanding batches per dictionary. `INDEX_WORKERS` is now obsolete and ignored; per-dictionary and global worker limits derive from logical processors. `Contains` creates and inserts both `entry_fts` (headword token FTS) and `entry_trigram`; `article_fts` is independent FullText and remains absent when disabled. Verified in generated DB schemas. Full `go test -tags sqlite_fts5 ./... -count=1` passes. Old `dev` (`c79732e4`) does one sequential read/prepare/write pass per dictionary, with only cross-dictionary parallelism. With `-headwords -contains`, single-run dev/DictShelf2 times: Oxford DSL 9.4/7.3 s (71,293 rows); Urban DSL 107.3/78.3 s (1,418,551); Longman MDX 10.2/8.0 s (69,172); Russian Wiktionary ZIM first run 39.4/47.7 s. Three ZIM runs gave medians 38.8/47.4 s (dev/DictShelf2); new pipeline is slower on this title-only ZIM case. Entry row counts match; DB byte sizes differ slightly due to layout. LSD Longman DOCE 5 on DictShelf2: 54,819 entries in 3.9 s; dev has no LSD ingest Reader. Output DBs are under `D:\Dictionaries\wuDict\Test\index-contains-{dev,dictshelf2}-2026-10-25`.
+
+

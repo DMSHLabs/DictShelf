@@ -1,11 +1,16 @@
 # Windows verification recipes
 
 This machine's recipes for building, testing, previewing and poking the app,
-moved out of `HANDOFF.md` on 2026-09-26. Scope: Windows x64, Git Bash, no
-`node`, and no `gcc` **on PATH** — a mingw-w64 GCC does exist here, inside Qt
-(build-windows.cmd finds it by itself, and it is what made cgo and `-race`
-possible). Commands and traps, not the history — the sessions that produced
-them are in `docs/handoff-archive.md`.
+moved out of `HANDOFF.md` on 2026-09-26. Scope: Windows x64, Git Bash, and no
+`gcc` or `make` **on PATH** — a mingw-w64 GCC and GNU Make do exist here, inside
+Qt (build-windows.cmd finds the GCC by itself, and it is what made cgo and
+`-race` possible; `make` has to be called as `mingw32-make.exe`). The tool paths
+themselves are in `thirdpartytools.md`, together with the local override files
+`build-windows.local.bat` / `build-android.local.bat` that hold the values.
+`node` IS installed now (`C:\Program Files\nodejs`, v24.21.0) — earlier notes
+here said otherwise; nothing in the build needs it, and the checks that do are
+listed in `translation.md`. Commands and traps, not the history — the sessions
+that produced them are in `docs/handoff-archive.md`.
 
 ## Windows verification recipes (this machine)
 
@@ -120,24 +125,36 @@ them are in `docs/handoff-archive.md`.
 - Android Java: from `android/`,
   `ANDROID_HOME="$LOCALAPPDATA/Android/Sdk" ./gradlew.bat :app:compileFossDebugJavaWithJavac --offline`.
   No ANDROID_HOME in the bash environment by default.
-- No `node` in this shell: JS syntax checks by hand/`vm`, and — since
-  2026-10-07 — the ZCode in-app browser (the `browser-use` skill's
-  `control-browser`) against a local preview, which is the way to check the
-  page actually runs: build the server with `CGO_ENABLED=1 go build -tags
+- **Checking the page in a browser.** `node` IS in this shell now (`C:\Program Files\nodejs\node`,
+  v24.21.0 — earlier notes here said "no node"; nothing in the build needs it), and Playwright is
+  installed OUTSIDE the repository at `/d/Temp/pw` (`NODE_PATH=/d/Temp/pw/node_modules`, launch with
+  `channel: 'msedge'`). Use it for scripted checks; for reading the page state, the ZCode in-app
+  browser (the `browser-use` skill's `control-browser`) is quicker. Either way, against a local
+  preview: build the server with `CGO_ENABLED=1 go build -tags
   sqlite_fts5,sqlite_dbstat -o <tmp>/DictShelf.exe .`,
   start it with isolated dirs and no auth —
   `DictShelf.exe serve -dict-dir <test_data> -db-dir <tmp>/lib -config <tmp>/dictshelf.toml
   -port 6925 -auth off -no-browser -no-tray` (the `-config` file must EXIST,
-  even empty) — then load `http://127.0.0.1:6925/` in the browser and read the
-  page's own state with `evaluate` (tokens, `localStorage`, element `hidden`
-  flags) while installing `window.__errs` listeners to catch page errors. This
-  is how v0.10.0's Fonts tokens, search-mode persistence, group-editor
-  create/hint/filter paths and a real search were verified with no console
-  errors; a device run is still owed. Two traps: this shell's `grep` is
+  even empty) — then load `http://127.0.0.1:6925/` and read the page's own state with `evaluate`
+  (tokens, `localStorage`, element `hidden` flags) while installing `window.__errs` listeners to
+  catch page errors. `?dict=<id>` opens a named dictionary straight away. This is how v0.10.0's Fonts
+  tokens, search-mode persistence, group-editor create/hint/filter paths and a real search were
+  verified with no console errors; a device run is still owed. **Articles are drawn in a Shadow DOM or
+  an iframe, so `querySelectorAll('mark')` from the page context finds no highlights** — check
+  highlighting in the server's own answer (`mode=phrase&hl=1`, look for the marks in `Body`), or walk
+  the shadow roots. That trap has already cost one wrong conclusion. Two more: this shell's `grep` is
   `ugrep`, whose `-c`/`-a` do not count binary matches — count strings in a
   packaged `.so` with `python3` (`data.count(b"...")`); and `go build -o
   /tmp/x.exe` writes where MSYS/Win32 disagree about `/tmp` — pass
   `"$(cygpath -w /tmp/x.exe)"`.
+- **Starting the server against the user's OWN library** (the one with the archives and the built
+  indexes) needs the mutex out of the way, so run it with a throwaway `USERPROFILE`; add
+  `-db-dir C:\Users\shepe\.dmshlabs\dictshelf\db -config C:\Users\shepe\.dmshlabs\dictshelf\dictshelf.toml`
+  and, as above, `-use-cached -auth off -no-browser -no-tray`. The first request after a start no
+  longer opens the whole library, but it is still a cold read. Library contents worth knowing when
+  picking a case: `Викитека` (our index built, 3.17 GB), `Викисловарь` (ours, 1.29 GB), and
+  `Википедия` ×2 / `Wikipedia` / `Wiktionary` with no index of ours — those last are where the
+  archive-answered plate and the "declined reading" behaviour are checked.
 - **`-race` runs here now** (2026-09-28): it needs cgo, and a compiler exists —
   point CC at it the way `build-windows.cmd` does, e.g.
   `CC="C:/Qt/Tools/mingw1310_64/bin/gcc.exe" CGO_ENABLED=1 go test -race …`,
@@ -159,14 +176,28 @@ them are in `docs/handoff-archive.md`.
 - **`build-android.cmd debug intel` builds for the emulator.** It cross-builds
   the server for `GOARCH=amd64` too and ships both ABIs in
   `dictshelf-android-arm64-v8a-x86_64-foss-debug.apk`. The token may be written in
-  either position (`intel debug` too, a bare `intel` means debug) and `release
-  intel` is refused. The x86_64 lib lands in `android/app/src/emuX86/jniLibs/`
-  — a default source dir for NO source set — and only `-PemuX86=1` (which
-  build.gradle wires to the DEBUG source set alone) makes AGP read it, so a
-  release APK is arm64 whatever is on disk. Verified 2026-09-24: both ABIs in
-  the APK, the x86_64 one taken back OUT of the APK runs on the emulator and
-  prints its version stamp, plain `debug`/`release` stay arm64-only, and both
-  refusals fire.
+  either position (`intel debug` too, a bare `intel` means debug). The x86_64 lib
+  lands in `android/app/src/emuX86/jniLibs/` — a default source dir for NO source
+  set — and only `-PemuX86=1`, which the script passes, makes AGP read it, so a
+  stray emulator `.so` in the tree cannot reach a shipping build. Verified
+  2026-09-24: both ABIs in the APK, the x86_64 one taken back OUT of the APK runs
+  on the emulator and prints its version stamp, and plain `debug`/`release` stay
+  arm64-only.
+- **`intel release` is allowed since 2026-11-03** (it used to be refused): a
+  signing key is configured for it, `build.gradle` reads `src/emuX86/jniLibs`
+  under `-PemuX86=1` for the release variant too, and the artifact is renamed
+  `dictshelf-android-arm64-v8a-x86_64-foss-emu.apk`. The `-emu` suffix is the
+  warning: an emulator ABI is never published, and the closing summary says so.
+  Both AVDs here are x86_64 (see the note above on why an arm64-only APK cannot
+  run there).
+- **Launching one**: `"%LOCALAPPDATA%\Android\Sdk\emulator\emulator" -avd <name>`
+  — the AVD used for the 2026-11-03 checks is `720x1600` (a phone geometry with
+  the app's own breakpoints); `Small` is the older one. Wake a black screen with
+  `adb shell input keyevent KEYCODE_WAKEUP` before believing a screenshot.
+  Installing over a running app (`adb install -r`) leaves the old process
+  alive and can answer with a stale error - force-stop the app first. The App
+  Links handoff recipe (installing, forcing the domain state, opening a real
+  share link) is in `docs/ANDROID-FORK.md`.
 - **The NDK recipe for a second ABI**: the Windows NDK has no Unix-style
   `x86_64-linux-android26-clang` wrapper, so name the target on `clang.exe`
   itself — `CC="$NDK_BIN/clang.exe --target=x86_64-linux-android26"`, `CXX`
@@ -213,8 +244,10 @@ them are in `docs/handoff-archive.md`.
     callback began accepting `*windowsExceptionPointers` directly instead of
     converting its `uintptr` argument back into a pointer. Home-path test
     expectations compare `filepath.Clean` values, matching the normalization in
-    `ExpandHome` and `pathAliases`; BusyBox `make check` from Git Bash passes
-    through vet and the full cgo suite with local dictionary fixtures.
+    `ExpandHome` and `pathAliases`; a `mingw32-make check` run from Git Bash
+    passes through vet and the full cgo suite with local dictionary fixtures.
+    (GNU Make is here — 4.2.1, inside Qt — but it is not on PATH as `make`, so
+    `make check` typed as such is "command not found"; see `thirdpartytools.md`.)
   - The fourth upstream sync (2026-10-04) rechecked the whole suite in its fresh
     LF worktree: `go build`, `go vet`, `gofmt -l` clean and `go test -count=1
     ./...` green, 0 failures. Its one Windows-relevant change is upstream's
@@ -278,8 +311,9 @@ them are in `docs/handoff-archive.md`.
     "let self-preparing fixtures settle" first call is what it races).
     TestSingleDSLIndexRemoval used to fail here the same way (`unlinkat
     .../demo/stats.cache: ... being used by another process`); it was our own
-    stats pass holding the file, and it is fixed - see HANDOFF.md, "The removal
-    claims the files" - 100 runs on 2026-11-03 pass.
+    stats pass holding the file, and it is fixed - see
+    `docs/handoff-archive.md`, "The removal claims the files" - 100 runs on
+    2026-11-03 pass.
   - `internal/intake`: TestJobDisposesSource and
     TestSpooledSourceIsAlwaysRemoved USED to fail here (dispose ran before
     the archive reader closed, so Windows kept the "delete the source"
@@ -289,8 +323,8 @@ them are in `docs/handoff-archive.md`.
     item 2 (`2675563`) fixed it — if they regress, look at
     `internal/server/registry_windows.go`.
   - Four tests USED to fail in every run here and no longer do - all four pass
-    alone and in the suite on 2026-11-03, and `make check` has exited 0 on this
-    machine repeatedly that day:
+    alone and in the suite on 2026-11-03, and a `mingw32-make check` has exited 0
+    on this machine repeatedly that day:
     - `TestConfigEndpointAndSetupPage` - the probe looked for a `<title>` the
       page had stopped carrying; the probe was corrected.
     - `TestReaderGolden` (internal/format/bgl) and `TestReaderGolden` /
@@ -301,38 +335,46 @@ them are in `docs/handoff-archive.md`.
       the contains index; the queue now asks `prefs.newIndexDefaults`.
     They stayed in this list long after they were fixed, which is its own
     lesson: re-run a "known failure" before believing it.
+  - `TestI18nPagesAndCache`, `TestRemoveTakesTheEmptiedFolderWithIt` and
+    `TestDictsRevalidation` were reported failing during the 2026-11-03 sessions
+    and **all three pass now** (re-run together on 2026-11-03, cgo +
+    `sqlite_fts5,sqlite_dbstat`: `ok ... 0.804s`). `TestDictsRevalidation` was
+    already known to be flaky in a loaded full-suite run; the other two were
+    reported as solid failures, so the report outlived the defect. Same lesson.
+
+## Lemma files on this machine (Russian installed 2026-11-01)
+
+Moved here from `HANDOFF.md` on 2026-11-03: this is what is installed on this
+machine, not a property of the product.
+
+`~/.dmshlabs/dictshelf/lemmas/ru.tsv.gz` (1.9 MB) is what `internal/morph` reads: `.tsv` + optional
+`.gz`, the stem resolved through `internal/lang`, so the name needs no guessing. Verified by loading it
+and lemmatizing, not by reading it: человека/людей -> человек, года -> год, статьями -> статья, времени ->
+время, кларнетиста -> кларнетист, джазового -> джазовый, and the ё case works both ways (идёт and идет ->
+идти), which is what `yoRetry` in morph.go exists for. The built-in English still answers (running -> run).
+Data: 48 213 lines, 566 275 forms. The whole retry path is covered by `TestSharedSearchMorphology` in
+internal/server, which passes.
+
+What it costs on this machine, measured: 266 ms to load and first answer, **+82 MB heap** resident
+(morph.go's comment says the ru pack is 65 MB, so that upper bound is low for Russian - it matters where
+the budget is 64 MB, which is Android's PREVIEW_MEMORY default). 1000 further lookups take under a
+millisecond in total: the load is the cost, not the use.
+
+Two things about the data that are not bugs, so nobody re-finds them: a word that is both a form and a
+lemma keeps golem's single answer - "домашние" is a form of "домашний" AND a lemma of its own (the
+plural-only noun), and since the file lists the noun line first, the answer is "домашние" itself, which
+`Lemma` reports as no useful answer; and 4 610 forms are prefixed with `*` (golem's own English pack has
+none), the source list's mark for "in the paradigm but not a word" - golem keeps the mark as part of the
+key, so those forms simply never match, which is the same outcome by accident.
+
+A file dropped into the folder while the app is running is picked up on the next start or by the lemma
+installer in the app (`internal/server/lemmas.go` calls `Morph.Rescan`); `wudict lemmas list` cannot run
+while the app is up, because every non-informational command takes the single-instance mutex.
 
 ## Measuring the ingest write path on this machine
 
-`internal/store/dmsh_ingest_bench_test.go` is a gated measurement (it skips
-unless `WUDICT_BENCH_ARTICLES` is set and asserts nothing about time): it builds
-one synthetic read-through database - bodies dropped, article text indexed, the
-form a ZIM archive gets - and prints the phase timings, so a change to the write
-path can be A/B'd on one machine without touching a real library:
-
-    WUDICT_BENCH_ARTICLES=300000 go test -tags sqlite_fts5,sqlite_dbstat         -run TestIngestSplitThroughput -v -count=5 ./internal/store/
-
-300000 articles of ~1.5 kB each is ~450 MB of text and about 10.5 s per run
-here; five runs give a median with a spread under 1%. To compare against a
-different revision, run the same command in a `git worktree` of that revision
-(the test file is untracked, so copy it in).
-
-For the real thing - one archive, alone, no other builds running - the CLI is
-the driver and its own line is the number:
-
-    DictShelf ingest -fulltext -contains -o <dir>/text.db <archive.zim>
-
-Measured 2026-11-03 on the NVMe machine, `wiktionary_ru_all_nopic_2026-09.zim`
-(2.15 GB, 1.53 M entries), four runs of the same command back to back:
-
-    495.5 s   before the attached-temp pragmas and the ingest page cache
-    431.3 s   the same binary again, an hour later
-    430.7 s   with the two changes
-
-Two runs of the SAME binary differed by 15 %, so a single pair of real builds
-proves nothing: the bench above is the instrument (its spread is under 1 %), and
-the real archive is for sanity checks - output bytes and recorded sizes must
-match. What the real runs do settle is the comparison that matters for the
-feeling of slowness: the same archive took **763 s** in the log of a
-three-dictionary parallel batch, against 430-495 s alone.
+Moved to [`MEASUREMENTS.md`](MEASUREMENTS.md) (#measuring-the-ingest-write-path-on-this-machine)
+on 2026-11-03: the gated bench (`WUDICT_BENCH_ARTICLES`), the real-archive
+`DictShelf ingest -fulltext -contains` runs and what their spread means are all
+numbers, and numbers live in one file now.
 

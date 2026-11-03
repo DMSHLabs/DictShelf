@@ -1,5 +1,29 @@
 # Agent handoff — current state
 
+Contents - read the section you need, not the whole file:
+
+- [The build](#the-build)
+- [Domain, site and App Links](#domain-site-and-app-links)
+- [The Android bridge and the app on a device](#the-android-bridge-and-the-app-on-a-device)
+- [The lemma catalogue](#the-lemma-catalogue)
+- [State by area, newest first](#state-by-area-newest-first)
+- [The index and the readings, as rules](#the-index-and-the-readings-as-rules)
+- [Removal, as rules](#removal-as-rules)
+- [Windows close-to-tray change](#windows-close-to-tray-change)
+- [Product identity](#product-identity)
+- [Search and menu state](#search-and-menu-state)
+- [Search parallelism and the two caps that went away](#search-parallelism-and-the-two-caps-that-went-away)
+- [ZIM prepared databases now have two forms](#zim-prepared-databases-now-have-two-forms)
+- [The work panel's rows are a function of the job state](#the-work-panels-rows-are-a-function-of-the-job-state)
+- [What remains](#what-remains)
+- [What left this file on 2026-11-03](#what-left-this-file-on-2026-11-03)
+
+Numbers (index sizes, build costs, timings) are in `docs/MEASUREMENTS.md`; how to
+build, test and poke the app on this machine is `docs/WINDOWS-VERIFY.md`; the
+per-session narrative is `docs/handoff-archive.md`. `docs/INDEX.md` is the map.
+
+## The build
+
 The build has one flavour since 2026-11-03: cgo, `-tags sqlite_fts5,sqlite_dbstat` (MinGW on
 Windows, the NDK on Android, a native runner per platform in CI). The pure-Go SQLite driver
 (`modernc.org/sqlite`, `-tags purego`) was removed with its dependency, its notices and its
@@ -8,6 +32,8 @@ build-tag prose; a build that selects no driver fails by name (`internal/store/d
 flavour. `pages/docs` (the published site) still offers the upstream `-purego` downloads and the
 `make cross` / `make build-purego` / `make android-go-purego` targets this fork has never had -
 cleaning that page set is open.
+
+## Domain, site and App Links
 
 The project has a domain: **dictshelf.com**, served by GitHub Pages with that custom domain on the
 docs site, which makes the ORIGIN OURS and is the only way Android App Links can be verified at
@@ -66,6 +92,8 @@ domain. Verified with the same commands CI runs:
 `redocly lint` (valid), `redocly build-docs`, and `zensical build --strict` over `pages/`
 ("No issues found") - the first time that site build has completed anywhere.
 
+## The Android bridge and the app on a device
+
 The Android intake path had three defects that made a share link die in the app; each is fixed and
 was reproduced on the emulator before and after. The bridge sent the bare link and the bare path
 where the Go dispatcher wants a JSON request, so every import answered "invalid import request"
@@ -85,6 +113,8 @@ in the intake examples now names the domain. Note also that
 `com.legbehindneck.wudict`, the fork edited it to our package in `7bcac814`), while the
 dead-upstream registry claims that directory is taken verbatim.
 
+## The lemma catalogue
+
 The lemma catalogue is ours since 2026-11-03: `config.DefaultLemmaURL` and the built-in default
 in `internal/lemmas` point at `raw.githubusercontent.com/DMSHLabs/DictShelf/lemmas/manifest.json`,
 the fallback catalogue at `raw.githubusercontent.com/DmShAl/lemmas` (raw, not a Pages site: it is
@@ -99,6 +129,18 @@ publish no browser extension, and the upstream store links and the upstream soci
 on Android 12+ through its assetlinks.json). Hosting OUR OWN page of dictionaries is still open;
 the asset for one - upstream's, unwired - is `ext/server/wudict/index.html`, and the dead-upstream
 registry says it stays unwired until that decision is made.
+
+## State by area, newest first
+
+- A run of state paragraphs follows, newest work first, with the areas interleaved:
+  **Android** System Settings geometry and the indexing CPU limits; **System Log** and
+  the Windows start-up check; **Windows** tray, close-to-tray and hot keys; **release
+  workflows**; group and status-bar counts; the **Android bridge** call shapes;
+  **Wildcards** concurrency; then the longer UI paragraphs - the shared System Settings
+  dialog, the updater, taskbar icons, style layers, index-size display, the bottom dock
+  and Find in articles, indexing modes, the boot screen. Each one says at its end what
+  is verified and what is not. History and measurements are not here: see the last
+  section of this file.
 
 Dictionary management defaults to Contains for new profiles, and its setup and
 Edit Folders views explain the search-speed benefit and one-time indexing cost.
@@ -149,7 +191,7 @@ Android's Browse chooser, Dictionary Groups page, and Filters dialog now pass `f
 
 Wildcards dictionary-search concurrency no longer reuses the much smaller indexing concurrency limit. It runs up to four dictionary workers, bounded by available hardware threads while leaving one available for the rest of the app.
 
-Canonical checkout: `D:\Projects\Android\DictShelf\`, branch `xapian-glass` (created from `dev`; `dev` is the integration branch, `master` is upstream only). Edit Folders now has **Dictionary folders** and **Download Dictionary** tabs in the same window; import is available when an install folder exists. Main search suggestions now follow the selected headword mode, including wildcards, cancel on edits or scope changes, rank matches before applying the 40-per-dictionary and 500-overall defaults, and identify these limits in Results. The dropdown expands to available viewport height and scrolls internally at the window edge. For every headword mode, suggestions with equal spelling and match quality prefer shorter headwords before match position. Search history supports up to 1000 entries, and Find in articles has its own filtered recent-query list under the shared history limit. Dictionary groups and Browse A–Z show headword counts — the group editor and Browse's chooser print both counts when they differ (articles / headwords, `dictUI.articleAndHeadwordCounts`, drawn by `dictCounts` in `index.html` with a copy in `browse.html`), one when they agree or when an older library has only the article count; the A–Z list itself holds article headwords, which is why both numbers are shown for a dictionary with many aliases; the settings card and the information popup print the same two counts as labelled lines (`dictUI.numberOfHeadwords` / `dictUI.numberOfEntries`, the card's under the chip row and the meta line no longer repeating the article count), and every count is formatted with the reader's own separators through `window.wudictI18n.number`, not `en-US`; the full-text chips read `full-text` (our FTS5 index, which stores positions, with its size beside the name once built) and `built-in: words only` (the archive's own index) on every dictionary — the built-in one carries the qualifier, so the same index is named the same way on a ZIM and on any other format; the status-bar dictionary picker shows found-versus-total article counts, with a plus while provisional, and marks the dictionary at the current reading position. Long-pressing dictionary names opens an information popup with source files (including attached `_abrv` companions), localized headword/article counts, and About text; prepared database paths are omitted. That popup now prints the dictionary's source size and its index size above the headword count — each a human-readable figure with the exact byte count, from `/api/about`'s `fileSize` and `indexSize`. The source size is summed over the files the endpoint already stats (a folder contributes nothing: About stays stats, never a walk); the index size is `text.db` plus `articles.db` when the build split the article index into its own file, so it is one file or two. The Browse A–Z chooser also opens this popup on long press or right-click; in Browse's word-list view, tapping the dictionary name opens it, with long press and right-click supported too. New indexes persist the source headword count separately from article count: since `IngestVersion` 8 both are COUNTED at ingest — `entry_count` is the articles, `headword_count` is those plus every alias pointing at one (`SELECT count(*) FROM alias`) — where 7 and earlier recorded what the source had declared, which Lingvo DSL declares as nothing at all. A library built by an older build therefore reads as outdated and shows the old (or missing) headword number until it is rebuilt. The group toolbar starts multi-selection with a Multi button; A–Z and pin are outlined buttons separated by one button height. Membership editing uses minus buttons to remove and plus buttons to add dictionaries. Long press and right-click on names continue to open dictionary information. Article headers support left-button hold and right-click on Windows. Full-text remains excluded. Wildcard suggestions stream the first headword immediately and flush more candidates every 250 ms without loading article bodies. Selecting a suggestion keeps *? as the input mode and shows exact+lemma results; the checkmark opens the Wildcards view. Runtime UI verification is pending.
+Canonical checkout: `D:\Projects\Android\DictShelf\`, branch `dev` (the integration branch; `master` is upstream only, and the glass work lives on `xapian-glass`). Edit Folders now has **Dictionary folders** and **Download Dictionary** tabs in the same window; import is available when an install folder exists. Main search suggestions now follow the selected headword mode, including wildcards, cancel on edits or scope changes, rank matches before applying the 40-per-dictionary and 500-overall defaults, and identify these limits in Results. The dropdown expands to available viewport height and scrolls internally at the window edge. For every headword mode, suggestions with equal spelling and match quality prefer shorter headwords before match position. Search history supports up to 1000 entries, and Find in articles has its own filtered recent-query list under the shared history limit. Dictionary groups and Browse A–Z show headword counts — the group editor and Browse's chooser print both counts when they differ (articles / headwords, `dictUI.articleAndHeadwordCounts`, drawn by `dictCounts` in `index.html` with a copy in `browse.html`), one when they agree or when an older library has only the article count; the A–Z list itself holds article headwords, which is why both numbers are shown for a dictionary with many aliases; the settings card and the information popup print the same two counts as labelled lines (`dictUI.numberOfHeadwords` / `dictUI.numberOfEntries`, the card's under the chip row and the meta line no longer repeating the article count), and every count is formatted with the reader's own separators through `window.wudictI18n.number`, not `en-US`; the full-text chips read `full-text` (our FTS5 index, which stores positions, with its size beside the name once built) and `built-in: words only` (the archive's own index) on every dictionary — the built-in one carries the qualifier, so the same index is named the same way on a ZIM and on any other format; the status-bar dictionary picker shows found-versus-total article counts, with a plus while provisional, and marks the dictionary at the current reading position. Long-pressing dictionary names opens an information popup with source files (including attached `_abrv` companions), localized headword/article counts, and About text; prepared database paths are omitted. That popup now prints the dictionary's source size and its index size above the headword count — each a human-readable figure with the exact byte count, from `/api/about`'s `fileSize` and `indexSize`. The source size is summed over the files the endpoint already stats (a folder contributes nothing: About stays stats, never a walk); the index size is `text.db` plus `articles.db` when the build split the article index into its own file, so it is one file or two. The Browse A–Z chooser also opens this popup on long press or right-click; in Browse's word-list view, tapping the dictionary name opens it, with long press and right-click supported too. New indexes persist the source headword count separately from article count: since `IngestVersion` 8 both are COUNTED at ingest — `entry_count` is the articles, `headword_count` is those plus every alias pointing at one (`SELECT count(*) FROM alias`) — where 7 and earlier recorded what the source had declared, which Lingvo DSL declares as nothing at all. A library built by an older build therefore reads as outdated and shows the old (or missing) headword number until it is rebuilt. The group toolbar starts multi-selection with a Multi button; A–Z and pin are outlined buttons separated by one button height. Membership editing uses minus buttons to remove and plus buttons to add dictionaries. Long press and right-click on names continue to open dictionary information. Article headers support left-button hold and right-click on Windows. Full-text remains excluded. Wildcard suggestions stream the first headword immediately and flush more candidates every 250 ms without loading article bodies. Selecting a suggestion keeps *? as the input mode and shows exact+lemma results; the checkmark opens the Wildcards view. Runtime UI verification is pending.
 
 Windows and Android now open one shared, collapsible System Settings dialog. Android reveals its System section through the early WebView Java bridge, so a late shell flag or missing canExit value cannot hide the entry. Its Windows-only tray/icon controls and Android-only lookup/launcher-icon controls are rendered from platform state; the old `sysSettings` markup remains hidden as the source of bridge-bound controls. Android System Settings offers two Icon 2 launcher choices: dark (default) and light; the selected variant is now always manual and no longer follows the Android theme. The former standard icon is hidden from the picker; its launcher alias remains for migration and is disabled when an old saved choice is loaded. A connected phone screenshot showed the active light PNG foreground cropped the star and book. All three launcher foregrounds now use Android VectorDrawables generated from the SVG sources by `tools/make-android-launcher-vectors.py`, with artwork inside the adaptive icon safe zone. Resource processing passes; rebuilt APK appearance still needs device verification. Three launcher aliases target a transient LauncherEntryActivity, which opens MainActivity in its own task; alias switching no longer targets the running window. The active alias retains the Settings long-press shortcut. The light icon now uses a dark blue tile (#172A40). In the System Settings picker, the dark-icon preview now has a full cream adaptive tile and safe-zone artwork scaled like the light option; launcher resources and desktop icons are unchanged. Alias changes now use DONT_KILL_APP in the Android 13+ atomic update as well as the older path, so selecting an icon does not terminate the running app; Java compilation passes, phone verification awaits a rebuilt APK. Android System Settings has an opt-in diagnostic checkbox that stays available if config loading fails and records open, native-state, config-read and render errors in System Log. Phone diagnostics found repeated openings failed because previously moved controls were not restored to hidden `sysSettings`; the renderer now returns cached controls before clearing/rebuilding the dialog. Android Java compile and embedded JavaScript syntax checks pass; APK rebuild and device verification of this fix are pending.
 
@@ -190,7 +232,6 @@ The Windows executable cross-build succeeds; GUI runtime verification remains
 pending.
 
 Style layers now have visual sections Appearance, Layout, Typography and Dictionary content. Section grouping is separate from the preset asset/conflict groups. Wikipedia full-width is available for MediaWiki Vector; Hide examples remains Settings-only, and the redundant Quiet labels and Quiet examples layers were removed. Changes are not runtime-verified. Portable Windows update logs showed the replacement process starting, with WebView startup ready after about 26 seconds; a manual relaunch was ready in about 1 second. `startWindowsExecutable` no longer sets `HideWindow` for the GUI app, while the helper still starts hidden. Windows now verifies the expected installer or portable EXE and its SHA-256 for the current launch path; a WebView localStorage marker alone no longer selects Install Update. The action stays Install Update and downloads when needed. After a newly completed download, a themed EN/RU dialog asks whether to install; Cancel preserves the verified file. Confirmation records the target version; the exact version shows a one-time success dialog after the next ready startup, while an old version clears the marker. The Update section heading now shares the orange alert mark with ☰. Android reuses a saved DownloadManager item only when its version and APK SHA-256 match the current catalogue; stale entries are removed and retry filenames are unique. Windows icons now use six SVG variants under `packaging/brand/source/icon*`; `tools/make-icons.sh` exports them with Inkscape. System Settings → Window presents the six application and tray icon choices in two separate grids, each showing 32px and 48px previews; both default to `icon2_transparent`, and the matching desktop shortcut follows the application choice when writable. Runtime verification remains pending.
-
 
 Dictionary Settings now show measured Contains and Full-text index sizes from
 SQLite dbstat when supported; the measurement is included in prepared-row
@@ -242,16 +283,11 @@ selected. Focused indexing tests and `go build ./...` pass. The full server
 package test has an unrelated reproducible Windows failure in
 `TestRemoveTakesTheEmptiedFolderWithIt`; device timing remains unverified.
 
-Historical snapshot: branch `codex/self-hosted-github-links` from `dev` at `cc65d7e`. This branch updates the Go module path and product links to `github.com/DMSHLabs/DictShelf`, and points the documentation site at DMSHLabs GitHub Pages. `build-windows.cmd` now reuses the checked-in `dictshelf_windows_amd64.syso` by default; `--update-icon` regenerates it from `packaging/windows/dictshelf.ico`. Before replacing an executable, the script force-stops it and waits for it to disappear, up to 60 seconds. Release workflow dispatch offers `release`, `pre-release`, and `beta` for Android, Windows, and Linux/macOS native builds. New tags use `dictshelf-vMAJOR.MINOR.PATCH`; previews add `-pre-release.N` or `-beta.N` and are GitHub pre-releases. The Update panel stores the selected channel and an enabled-by-default notification preference in `state.json`; it checks the static `update-catalog.json` on the dedicated `update-catalog` branch after settings load on every page start without blocking the UI, then daily while the page remains open; requests time out after 10 seconds (Beta includes Pre-release and Release; Pre-release includes Release) and marks ☰ plus the Update section heading when it finds an update. The action stays Install update, downloads when needed, and asks for confirmation after download; Cancel preserves the file. The confirmed target version is acknowledged once after the new version next starts. The version links to the release page. During downloads, Windows streams byte progress from the release asset and Android polls DownloadManager; the Update section shows a localized percentage and the ☰ control shows a matching accent ring, or an indeterminate ring if size is unknown. Update actions download first and offer installation afterward: Windows installers go to Downloads; portable builds stage `_DictShelf.exe` beside the running executable and launch a separate temporary copy of the GUI EXE in helper mode. The helper waits for the main process using Windows APIs, verifies the staged digest again, keeps the old executable as `.bak`, replaces only the executable, and relaunches without PowerShell or a console window; the new app removes the helper copy after it exits. Android saves and verifies an ABI-matched APK under a version/hash-specific unique filename; it reuses a DownloadManager item only when its version and SHA-256 match the current catalogue, then asks before installation. Publishing workflows regenerate the catalog from non-draft GitHub Releases; client checks do not call the GitHub API or change version history. Windows and native workflows load the tag resolver from the workflow revision while using the selected source checkout for tag history. The DownloadManager completion notification remains available for manual APK installation if DictShelf lacks permission. Play omits install permission and the APK update action. Windows and Android updater behavior remains unverified at runtime or in Actions. Both build scripts show command-line help for `-?`, `--?`, `-h`, `--h`, `-help`, and `--help`. Older notes below are historical snapshots.
-
-Historical snapshot at `da540c7`. The two previously reported server
 test failures are fixed: `TestDictsRunningJobIsNotKept` now waits for the
 first stable dictionary-list validator instead of assuming a fixed number of
 requests is enough, and the EN/RU full-text mode hint catalogs no longer have
 empty values. Both targeted tests passed five repetitions, and
 `go test ./internal/server -count=1` passes on Windows; search keeps five articles in the first populated section, later sections use Settings → Results, and later pages in that first section start after its five-result first page.
-
-Historical snapshot at `da540c7`. Settings checkboxes use one shared customizable control, and the bottom status bar is always visible; preserve untracked `help/changelog.txt`. pipeline from `8b3ee97e` merged. Per active dictionary, it runs a source-reader goroutine and a coordinator/writer; CPU preparation uses a shared pool sized from logical processors and concurrent indexing sessions, with 16 outstanding batches per dictionary. `INDEX_WORKERS` is now obsolete and ignored; per-dictionary and global worker limits derive from logical processors. `Contains` creates and inserts both `entry_fts` (headword token FTS) and `entry_trigram`; `article_fts` is independent FullText and remains absent when disabled. Verified in generated DB schemas. Full `go test -tags sqlite_fts5 ./... -count=1` passes. Old `dev` (`c79732e4`) does one sequential read/prepare/write pass per dictionary, with only cross-dictionary parallelism. With `-headwords -contains`, single-run dev/DictShelf2 times: Oxford DSL 9.4/7.3 s (71,293 rows); Urban DSL 107.3/78.3 s (1,418,551); Longman MDX 10.2/8.0 s (69,172); Russian Wiktionary ZIM first run 39.4/47.7 s. Three ZIM runs gave medians 38.8/47.4 s (dev/DictShelf2); new pipeline is slower on this title-only ZIM case. Entry row counts match; DB byte sizes differ slightly due to layout. LSD Longman DOCE 5 on DictShelf2: 54,819 entries in 3.9 s; dev has no LSD ingest Reader. Output DBs are under `D:\Dictionaries\wuDict\Test\index-contains-{dev,dictshelf2}-2026-10-25`.
 
 The boot screen reports dictionary-file checks and metadata reads. The native
 WebView2 splash says `DictShelf`, then updates with localized dictionary-check
@@ -260,8 +296,6 @@ arrives, the separate status line does not duplicate the indexing task shown in
 the work panel. The indexing panel shows active dictionaries in start order,
 per-dictionary and overall elapsed time, completed dictionaries of the total,
 and progress units. These UI changes are not runtime-verified yet.
-
-Transferred indexer work was verified in its source worktree: full Windows cgo/FTS5 tests, focused race tests, Android Java/arm64 bridge builds, and Android/macOS pure-Go cross-builds passed. The opt-in Wildcards cache benchmark used Longman MDX + Oxford 10: upper `*a*` took 7.82 s with FTS/trigram indexes and 2.98 s without; lower `*e*` was 2.94/2.78 s; Combined base was 2.70/1.10 s. This is one workload; these checks have not been rerun on the current DictShelf2 checkout. A later three-dictionary Wildcards run (Longman MDX, Oxford 10 MDX, Wiktionary ZIM; `*d*g*`/`*home*`) took 28.68 s for the upper stage with result-cache FTS/trigram and 23.99 s without; lower group filtering took 27/114 ms. Batching 128 index rows per SQL statement cut index insert calls from 675,492 to 6,309 but the upper stage still took 28.48 s on this small result set. On the 9.13M-word mask `*`, batching cut both-index creation from 4m23s to 2m52s and index insert calls from 27.39M to 219,168, so it is now retained. The real UI now defaults both Wildcards cache indexes off; explicit on choices persist as `1`. The opt-in benchmark now selects FTS and trigram separately: on the same three dictionaries, FTS only took 27.11 s upper / 115 ms lower, trigram only 28.61 s upper / 27 ms lower, and neither 24.91 s upper / 121 ms lower. The corresponding Combined-base times were 1.83, 2.13 and 1.19 s. The app defaults both Wildcards cache indexes off. The full-match mask `*` on Wiktionary ZIM returned 9,129,950 words: upper-cache creation took 4m23s with both indexes and 36.7s without (27,389,850 per-row index INSERTs; peak observed temporary cache was 1.55 GiB). This run stopped after upper-cache creation; lower filtering and Combined mode on all 9.1M rows were not measured. The performance harness and BAT now support `UPPER_ONLY=1` for this case. With batching, trigram-only creation took 2m21.5s, about 31s less than both indexes; parallel FTS construction within the one SQLite database cannot bypass its single writer. On the same ZIM, the lower `**home**` filter took 230ms with indexes (2,317 matches from 2,474 trigram candidates) versus 5.2s without; FTS prefix `h` took 4.8s versus 9.6s without (243,637 matches).
 
 ## The index and the readings, as rules (2026-11-03)
 
@@ -314,24 +348,6 @@ Summarised here because the narrative of how each arrived is now in
   violation or ACCESS_DENIED - Windows reports 5 as well as 32 for "in use", and a held file inside a
   folder being MOVED reports 5 - are retried for about a second, then the real error is reported
   unchanged. `TestARemovalThatCannotMoveTheFolderLeavesItWhole` and the sweep test pin it.
-
-## Session narratives moved to the archive (2026-11-03)
-
-The dated sections below were session narratives of finished work; they now live in
-`docs/handoff-archive.md` (grep there, or read the commit messages - they carry the same
-stories). Titles, for grep:
-
-- Progressive results: the user's three decisions and what became of each (2026-11-02; all resolved - one retracted, two verified)
-- A ZIM with its own index answers full text itself (2026-11-01)
-- Our index on request, for an archive that has its own (2026-11-02)
-- Strict readings are declined, not scanned; the caps are gone (2026-11-02)
-- The strict readings were mostly blind, and one of them lied (2026-11-02)
-- The attached article temp is journaled no more, and the build's cache is real (2026-11-03)
-- An index cannot be deleted, and every dictionary has one (2026-11-03)
-- The index chip is a measurement, not a door (2026-11-03)
-- The article index is a file of its own (2026-11-03; reader 2026-11-02)
-- A ZIM without its own index gets ours, without the bodies (2026-11-02)
-- Three readings, chosen by the reader, not by the program (2026-11-02)
 
 ## Windows close-to-tray change
 
@@ -437,32 +453,6 @@ index for the three archives and re-run that `contains` search with `searchArtic
 search results and article opening" — the only switch that sends `searchDiagnostics=1`), so the next
 session starts from a measurement rather than a guess.
 
-## Lemma files on this machine (Russian installed 2026-11-01)
-
-`~/.dmshlabs/dictshelf/lemmas/ru.tsv.gz` (1.9 MB) is what `internal/morph` reads: `.tsv` + optional
-`.gz`, the stem resolved through `internal/lang`, so the name needs no guessing. Verified by loading it
-and lemmatizing, not by reading it: человека/людей -> человек, года -> год, статьями -> статья, времени ->
-время, кларнетиста -> кларнетист, джазового -> джазовый, and the ё case works both ways (идёт and идет ->
-идти), which is what `yoRetry` in morph.go exists for. The built-in English still answers (running -> run).
-Data: 48 213 lines, 566 275 forms. The whole retry path is covered by `TestSharedSearchMorphology` in
-internal/server, which passes.
-
-What it costs on this machine, measured: 266 ms to load and first answer, **+82 MB heap** resident
-(morph.go's comment says the ru pack is 65 MB, so that upper bound is low for Russian - it matters where
-the budget is 64 MB, which is Android's PREVIEW_MEMORY default). 1000 further lookups take under a
-millisecond in total: the load is the cost, not the use.
-
-Two things about the data that are not bugs, so nobody re-finds them: a word that is both a form and a
-lemma keeps golem's single answer - "домашние" is a form of "домашний" AND a lemma of its own (the
-plural-only noun), and since the file lists the noun line first, the answer is "домашние" itself, which
-`Lemma` reports as no useful answer; and 4 610 forms are prefixed with `*` (golem's own English pack has
-none), the source list's mark for "in the paradigm but not a word" - golem keeps the mark as part of the
-key, so those forms simply never match, which is the same outcome by accident.
-
-A file dropped into the folder while the app is running is picked up on the next start or by the lemma
-installer in the app (`internal/server/lemmas.go` calls `Morph.Rescan`); `wudict lemmas list` cannot run
-while the app is up, because every non-informational command takes the single-instance mutex.
-
 ## ZIM prepared databases now have two forms (read-through full text)
 
 A ZIM's prepared database was always title-only (SPEC §24), so an `article_fts` built over it could
@@ -513,258 +503,20 @@ header's "active operations" count is deliberately wider than the task (it can r
 indexes 1). `tools/work-progress-ui-test.cjs` covers layout and locking but needs Playwright, which is
 not installed on this machine.
 
-## What a read-through ZIM costs, measured on the user's four archives
+## What remains
 
-Measured 2026-10-31 by walking only the ZIM directory (header, MIME list, cluster pointers, dirents -
-never a cluster payload) and, for the prepared databases, `sum(length(entry.m))` plus `dbstat` per
-table. The directory walk agrees with the prepared database's entry count to a handful of rows on all
-four (the readers drop articles whose body is empty, which is the difference), so the parse is checked
-against the library, not assumed. All figures bytes.
+Three things are open, in the order they were asked for. Everything else in this
+file is state: what the code does today, and how far each area has been verified
+on a device.
 
-| archive | source | text clusters | articles | redirects | media entries | text db | stored markup | article FTS |
-|---|---|---|---|---|---|---|---|---|
-| wiktionary_ru nopic | 2.15 G | 1.079 G | 1 528 188 | 999 439 | 182 | 9.64 G | 6.90 G | 1.29 G |
-| wiktionary_en nopic | 9.16 G | 4.363 G | 9 087 944 | 42 006 | 56 | 25.26 G | 15.64 G | 4.56 G |
-| wikipedia_ru maxi | 37.1 G | 13.775 G | 2 199 375 | 2 825 093 | 2.88 M | 33.44 G | 22.78 G | 7.41 G |
-| wikipedia_de maxi | 48.6 G | 13.624 G | 3 275 258 | 1 878 526 | 4.84 M | 35.04 G | 22.29 G | 9.21 G |
+- the **progress watchdog** - the one piece missing where the search clocks were
+  removed (see [Search parallelism and the two caps that went away](#search-parallelism-and-the-two-caps-that-went-away));
+- the **`lemmas` branch is not published**, so `dictshelf lemmas download` reports an
+  unreachable catalogue (see [The lemma catalogue](#the-lemma-catalogue));
+- the two **UI items below**, both found by the user's eye and neither covered by a test; the
+  third section under them is finished work, kept because those two touch the same code.
 
-Three things the numbers settle. **Bodies dominate, the FTS does not**: the article index is 19, 29,
-33 and 41 % of the stored markup, so the body copy is 69-97 % of everything a read-through build adds
-and the searchable text is the smaller part of the bill. **The container is mostly not text**: Kiwix's
-own Xapian index sits in namespace X as three blobs and is 8-48 % of the file (0.91 G, 4.13 G, 3.48 G,
-3.76 G), and in the maxi Wikipedias the images are another half - so estimating from the source file
-size is wrong twice over. **Expansion is a family constant, not a number**: compressed text clusters
-become 1.65x stored markup on both Wikipedias (1.653 and 1.636 - the two agree to 1 %) but 3.58x on
-the English and 6.39x on the Russian Wiktionary, so one coefficient cannot serve both families. The
-free classifier is compressed bytes per article: 480 B and 706 B for the wiktionaries, 4.2 KB and
-6.3 KB for the Wikipedias, which matches the observed split.
-
-## What each index costs on the non-ZIM library (three passes)
-
-38 dz/mdx dictionaries, measured with `text.db` size, `sum(length(entry.m))` and a full `dbstat`
-breakdown after each step; the entry count never moved, and `entry` was byte-identical before and
-after full text - the control that the bodies were not re-encoded.
-
-| step | text.db | delta | what it was |
-|---|---|---|---|
-| base (index only) | 2 988 MiB | - | 4 010 535 entries, bodies 2 126 MiB deflate (69 % of the db) |
-| + contains | 3 058 MiB | +2.3 MiB | `entry_fts` + `entry_trigram`: 88.6 MiB = 2.9 % = **23 bytes per entry** |
-| + full text | 4 565 MiB | +1 507 MiB | `article_fts`: 1 353 MiB, the rest free pages (VACUUM would return ~150 MiB) |
-
-So contains is priced per headword and full text per body byte: contains is flat at 19.8-42.4 B per
-entry (23.2 average) whatever the dictionary weighs, while full text added 16.5-117.6 % of the file
-before it (median 45 %), i.e. 0.49x the database that existed. The spread is deflate's: the index is
-built over `StripHTML` of the *uncompressed* body while the file holds it compressed, so a small
-dictionary whose markup compressed badly pays more for the index than the bodies take. ZIMs are not in
-this series - their full text is the read-through form above.
-
-## Size estimates: measured, predicted, not yet shown
-
-Stages 1-4 are in the tree. The ingest records `body_bytes`, `stored_body_bytes`, `headword_bytes`
-and `stats_version` in the meta of every dictionary; a ZIM reader adds what its directory held
-(`zim_articles`, `zim_redirects`, `zim_media`, `zim_other`, `zim_clusters`, `zim_text_bytes`,
-`zim_mixed_bytes`, `zim_other_bytes`, from `internal/format/zim/dmsh_stats.go`, also usable alone as
-`zim.MeasureDirectory`). Every one of those keys is in `volatileMeta`, so recording them moved no
-fingerprint and the golden tests still pass; `TestStatsMetaIsVolatile` keeps it that way.
-
-`internal/estimate` holds the coefficients (`Version = 1`) and predicts a band: contains 18-45 bytes
-per entry; full text a share of the current file for dz/mdx (0.16-1.18, median 0.45), a share of the
-stored bodies for a ZIM that has them (0.18-0.42), or a multiple of the archive's compressed article
-text for a read-through build (2.4-2.6 encyclopedia, 5.7-9.0 dictionary, split at 1500 compressed
-bytes per article). `estimate_test.go` carries the measured corpus as a table - 38 dz/mdx rows with
-their real growth, four ZIM rows with their real builds - and asserts the measurement falls inside the
-predicted band. It earned its keep on the first run: three constants were set from rounded numbers and
-were wrong (contains 20 against 19.8, full-text 0.17 against 16.5 %, wiktionary 5.8 against 5.79).
-
-`stats.cache` beside `text.db` (shape: `version`, `index_uuid`, source fingerprint, numbers) caches it.
-It is written in place rather than through a temporary - a cache whose reader validates its content
-needs no atomicity, and a stray temp file is something every listing of that folder would have to know
-about - and it is accepted only when `index_uuid` matches `dict_uuid`, the version is current and the
-source fingerprint still matches, while a source that is GONE is accepted (folders outlive sources).
-`Registry.warmStatsStart` fills it once per process from `Warm()`: two workers, one dictionary
-committed before the next, no prompt and no panel row, so a mid-flight close leaves the finished ones
-measured and the rest for the next start.
-
-The numbers now ride on each dictionary list row (`dictInfo.Estimate`, `internal/server/dmsh_estimate.go`),
-attached AFTER the row cache - the cache key knows nothing about the sidecar, and a cached row would
-otherwise keep saying "unknown" until something unrelated invalidated it. That means the page needs no
-new endpoint, no bridge method and no `openapi.yaml` entry: it reads what `/api/dicts` already sends.
-Two facts the first test run settled: a dz/mdx row gets its band from the file's own size and needs no
-measurement at all (`Basis: database`), so an old library is estimated out of the box; a ZIM row gets
-none until its directory has been measured (`Stats.ZIMForm`, which the sidecar now records beside the
-numbers), and that absence is exactly what the page shows as "Calculating".
-
-The window is in as `#fullTextPicker` (index.html), opened from a `full-text search` row in the
-Settings drawer - the owner's decision is that full text is its own door, not a chip beside three
-cheap ones. It lists every dictionary alphabetically with its band (or "already built", or
-"calculating" when nothing is measured yet), a checkbox only where there is something to build, a
-sticky summary with the selection's total and what the volume will have left, a warning when the high
-end does not fit, and the ZIM part of the total called out separately because that one is a rebuild
-that copies article texts. The build goes through the existing work API (`feature: "fts"`,
-`action: "create"`) so progress, Stop and the task panel are the ones already there. Free space rides
-on the list response's `end` message (`freeBytes`, `libraryVolume`, `fsx.FreeSpace` on the library
-volume) rather than on a route of its own.
-
-The build direction is gone from every other window: the dictionary chip keeps only "off" (removal is
-this dictionary's own state and cheap - the bodies are not decompressed again), and both the bulk
-button and the single "add full text" action open this window. CLI flags are untouched: a script is
-not a window. The ZIM skip and its `dictUI.bulkZimSkipped` string are now dead on that path.
-
-Not verified: the dialog has never been rendered - this machine has no browser automation (see the
-Playwright note above), so the JS is only checked by `tools/i18n-test.cjs` (syntax + keys) and the
-layout by eye in the source, and that the CSS block scoped inside the dialog is the right place for
-those rules rather than app.css.
-
-**What removing full text frees, measured without removing anything** (2026-11-01). SQLite's own page
-accounting (`dbstat`, read-only) gives the sizes inside the four prepared ZIM databases, and the article
-index is exactly the space a removal frees - `ClearSearchIndexesContext` drops `article_fts` and
-vacuums:
-
-| archive | text.db | our article_fts | headword fts | trigram | bodies (entry + its indexes) |
-| --- | --- | --- | --- | --- | --- |
-| wiktionary_ru 2026-09 | 9 645 MB | **1 291 MB** | 20 MB | 22 MB | 8 018 MB |
-| wikipedia_ru 2026-10 | 33 439 MB | **7 414 MB** | 33 MB | 61 MB | 24 830 MB |
-| wiktionary_en 2026-08 | 25 265 MB | **4 556 MB** | 101 MB | 128 MB | 19 946 MB |
-| wikipedia_de 2026-10 | 35 044 MB | **9 213 MB** | 44 MB | 82 MB | 25 059 MB |
-
-The first three match the figures the earlier measurement passes recorded (1.29, 7.41 and 9.21 - GB,
-not GiB as that note said), so the estimate the window shows for a ZIM is anchored to measurements that
-a second, independent method reproduces. Two things that paragraph above had wrong, both worth knowing
-before trusting the button: the **bodies are NOT freed** by removing full text - 8-25 GB of stored
-articles stay, and they go only when the request asks for a rebuild (`index: true`, which re-ingests the
-archive in its headwords-only form, `internal/server/clear_database.go` takes the `ClearSearchIndexes`
-branch for `fullText` alone and the `reconcile` branch only for `index`) - and the archive's own Kiwix
-index (0.52-3.18 GB, already inside the ZIM) is 2.5-2.9x smaller than the one we build, which is what
-makes it worth reading instead of building.
-
-## Reading Kiwix's own full-text index (spike findings)
-
-`X/fulltext/xapian` is stored **uncompressed**, one blob per cluster, starting with the Xapian magic
-`0f 0d "Xapian Glass"`, so it can be read in place from a mapped archive - no copying. Sizes 518 MB,
-2.52 GB, 3.18 GB for three of the four archives, against our own built article index of 1.29 GiB,
-7.41 GiB, 9.21 GiB (**2.4-2.9x larger**); `X/title/xapian` and the title listing are uncompressed too.
-libzim (cloned at `D:/Projects/Android/libzim`) documents the whole scheme: the query is unaccented
-first - via **ICU**, in libzim, not Xapian - then parsed with `OP_AND`, the stemmer and stopwords taken
-from the index metadata, `STEM_ALL`, `FLAG_CJK_NGRAM` (`src/search.cpp`); the index side wrote
-`index_text_without_positions` with `STOP_ALL`, so **no positions exist and only stemmed forms do**.
-libzim opens the index by seeking the archive and handing the fd to `Xapian::Database(fd)`.
-The pure-Go reader (gozim, MIT) parses that real version header correctly - `DocCount` = 1 528 188,
-exactly our entry count - but fails on every table access with `root block 571 not found`. Not the block
-size (both sides use 8192); the likely cause is the single-file layout, where all six tables are opened
-at `version_file.get_offset()` and block numbers are global to the area, while gozim assumes the
-multi-file shape. If we take this path the code belongs in our own package beside the container, reading
-a byte range rather than a `[]byte`, with Xapian built **locally as a test oracle** and never shipped,
-because a reader of our own makes compatibility our burden and its failures silent.
-
-## The glass format, as read off Xapian 1.4.32 (written down before the code)
-
-Everything below is from `D:/Projects/Android/xapian-core` and was checked byte by byte against the
-`fulltext/xapian` blob of the Russian Wiktionary, so a reader can be written from this section alone.
-
-**Integers.** `pack_uint` is LEB128 (7 bits per byte, high bit continues). `pack_string` is a packed
-length then the bytes. All values *inside blocks* are **big-endian** (`aligned_read4`, `unaligned_read2`).
-
-**Version file, at the start of the blob** (`glass_version.cc`): magic `0f 0d "Xapian Glass"` (14 bytes),
-then the format version (2 bytes, big-endian, `GLASS_FORMAT_VERSION`), then the database uuid (16 bytes),
-then `pack_uint(revision)`, then **six** `RootInfo` records in table order (postlist, docdata, termlist,
-position, spelling, synonym), then the statistics. A `RootInfo` is: `pack_uint(root)`, `pack_uint(level << 2
-| sequential << 1 | root_is_fake)`, `pack_uint(num_entries)`, `pack_uint(blocksize >> 11)`,
-`pack_uint(compress_min)`, `pack_string(free_list)`. The statistics are eight packed integers: doccount,
-last_docid - doccount, doclen_lbound, wdf_ubound, doclen_ubound - wdf_ubound, oldest_changeset,
-total_doclen, spelling_wordfreq_ubound. Each `RootInfo` carries the block size, so the version file needs
-no separate field.
-
-**Blocks** (`glass_table.cc`): `read_block(n)` reads at `offset + n * block_size`, where `offset` is the
-descriptor position when the database was opened - for libzim that is the blob's offset inside the ZIM
-(`src/tools.cpp:320` seeks and hands the fd to `Xapian::Database(fd)`), and for our own reader it is 0 at
-the blob's first byte. **Block numbers are global to the file** and shared by all six tables: that is the
-single-file layout, and it is exactly what a multi-file-shaped reader gets wrong (gozim's
-"root block 571 not found"). Block 0 is unused (`blockNone`), so block 1 starts at `block_size`.
-A block's header is 11 bytes: revision (4, BE), level (1 - 254 means freelist), MAX_FREE (2, BE),
-TOTAL_FREE (2, BE), DIR_END (2, BE). The directory follows the header: 2-byte big-endian item offsets at
-11, 13, 15, ... below `DIR_END`, ascending by key, each giving the item's offset in the block. Items are
-packed downward from the end of the block.
-
-**Items.** A *leaf* item (level 0) is `I2 K1 key [X2] tag`: `I2` is the item size in 2 bytes whose top
-three bits are flags (`0x80` tag is compressed, `0x40` last component, `0x20` first component); a
-component other than the first carries `X2`, its 2-byte counter. A *branch* item (level > 0) is
-`block(4, BE) K1 key X2` where the leading four bytes are the child's block number and `size() = key_len +
-1 + 2 + 4`. The compression flag means the tag is zlib-deflated above `compress_min`.
-
-**Checked on the real file**: block 571 of the postlist table (at 571 * 8192 bytes into the blob) has
-revision 1, level 2, directory from 11 to 323 (156 items) with item offsets 8185, 8172, 8159, ... spaced
-by 13 bytes, and block 1 has level 0 with eight 13-byte leaf items - all consistent with the layout above.
-So the addressing model is confirmed, not guessed.
-
-**The reader works end to end** (`internal/format/zim/glass`, pure Go, no cgo), against the Russian
-Wiktionary's 518 MB `X/fulltext/xapian` (format 1134, revision 1, block 8192, 1 528 188 documents,
-postlist root 571, docdata root 59 228 with one record per document, the termlist/position/spelling/
-synonym tables empty - libzim indexed without positions). What it reads: the version file, the
-single-file block space, the B-tree descent, item keys and tags, **chunked** posting lists, the docdata
-table and the query side (metadata, stopwords, stemming, AND). Nothing is copied: the tool extracts the
-blob once, and the package takes a `[]byte` (the byte-range API is still to do).
-
-`tools/xapian-glass-check <archive.zim> [query ...]` is the check: it prints the index's metadata, runs
-each query, and opens every article a query returns to verify that a word of that article stems to each
-term asked for - which is the index's own criterion, so index and reader agreeing is the whole result.
-Numbers from it, on the Russian Wiktionary: `"кларнетист"` 11 documents / 32 occurrences, `"джаз"` 162 /
-715, `"год"` 41 037 / 59 574, `"слов"` 1 449 345 / 5 081 953. The last two are the interesting ones:
-their lists are split across **42** and **1 448** table entries, and every entry is read, equal to the
-termfreq in the first chunk's header. Multi-word AND behaves: `"духовой инструмент"` gives бассетгорн,
-бомбарда, альт-саксофон; `"музыкальный инструмент"` gives фортепиано, укулеле, ионика.
-
-**It reads all four archives in place, in three languages** - `Dict.XapianIndex()` hands out a seekable
-window onto the archive file (`io.NewSectionReader` over the container's own handle), and
-`glass.OpenSource` reads blocks through it, so nothing is copied and the tool runs in well under a
-second instead of copying 518 MB - 3.18 GB first:
-
-| archive | index | documents | language | example |
-| --- | --- | --- | --- | --- |
-| wiktionary_ru 2026-09 | 518 MB | 1 528 188 | `rus` | `"духовой инструмент"` → 169 |
-| wikipedia_ru 2026-10 | 2.52 GB | 2 199 375 | `rus` | `"духовой инструмент"` → 774 |
-| wiktionary_en 2026-08 | 3.11 GB | 9 087 944 | `eng` | `"musical instrument"` → 7 197 (Porter2: *musical* → *music*) |
-| wikipedia_de 2026-10 | 3.18 GB | 3 275 258 | `deu` | `"Jazzmusiker"` → 18 973 (*-iker* off, so the stem is `jazzmus`) |
-
-Each row's query was checked the same way - every returned article opened and every term found in it.
-The English row is the clearest sighting of the stemmer being the archive's own: no English index holds
-"musical" as a term, and the query works anyway because both sides reduce it to "music".
-
-**Terms are stemmed, and the query has to stem too** - an earlier note here said the opposite
-("a query needs unaccenting and case folding but no snowball stemmer") and it was wrong, on evidence
-that looked convincing and was a coincidence: the first term checked, `"кларнетист"`, stems to itself.
-The index is built with Xapian's `STEM_ALL` and `STOP_ALL` (`src/writer/xapianWorker.cpp:49-58`), so it
-holds stems and only stems: in this archive `"джазовый"` is **0** documents while `"джазов"`, what the
-Russian stemmer makes of it, has 29, and `"джазов"` itself stems on to `"джаз"` with 162. The stemmer is
-whichever the index's `language` metadata resolves to - libzim runs it through ICU to a two-letter code
-and hands it to `Xapian::Stem` (`src/writer/xapianIndexer.cpp:44`, `src/tools.cpp`), which here is `rus`
--> `ru` -> Snowball Russian. `internal/format/zim/glass/stem.go` carries Snowball's own algorithms
-compiled to Go (`github.com/blevesearch/snowballstem`, BSD-3-Clause, notices regenerated), keyed by the
-codes and names Xapian accepts; a language Xapian stems but we do not (Armenian, Basque, Catalan,
-Indonesian, Lithuanian, Nepali, and the legacy earlyenglish/german2/kraaij_pohlmann/lovins variants) is
-reported as unstemmable - `ErrNoStemmer` - rather than searched with the wrong one, while a language
-Xapian has no stemmer for (Japanese, Thai) was never stemmed and is searched plain.
-
-Three more things only the bytes settled, each of which the code got wrong first:
-
-- **A common term's list is several table entries, not more bytes under one key.** Xapian breaks it into
-  ~2 KB chunks: the first under the term itself, each later one under the term, a zero byte and the
-  chunk's first document id in the key's own encoding (`glass_postlist.h`, `make_key`). Reaching them
-  needs a table cursor, not a lookup - `nextKey` keeps its descent path so it can climb out of a leaf -
-  and the next chunk does **not** start at the previous chunk's last document plus one, because a term
-  is not in every document: that gap is why a computed key finds nothing.
-- **The document-id key encoding is glass's, not chert's.** Both are in `common/pack.h`; glass's is a
-  unary length marker (leading set bits) and, below `0x8000`, **two plain big-endian bytes with no
-  marker at all**. Ours was the chert reading, which agrees with glass above `0x8000` and differs below
-  it - so every id an early check happened to use was above it and looked right, while ids below it
-  resolved to a *different* document (`49 a8` is 18 856, not 2472) or to none. The symptom was a search
-  whose hit count was short of the term's own list: 1 433 839 against 1 449 345, the difference being 16
-  chunks re-read because the walk's document ids were decoded from the wrong form. Pinned against the
-  archive's real bytes in `item_test.go` (`04 24` for 1060, `80 85 91` for 34 193).
-- **An item's size field covers the key AND the tag** (Xapian's `I K key X tag` with I the length of the
-  key-tag pair), so the tag ends three bytes past the size. Reading the size as the whole item cut every
-  tag three bytes short, which showed up as paths truncated inside a character.
-
-## Two more from the user's screenshots, to implement (2026-11-02)
+### Two more from the user's screenshots, to implement (2026-11-02)
 
 1. **The article find dialog needs the other two readings.** For the `[A … B]` (words) mode it already
    works end to end: the dialog's dropdown carries that reading (`articleFindMode`, index.html:964, with the
@@ -784,9 +536,7 @@ Three more things only the bytes settled, each of which the code got wrong first
    grows and when it closes, or recompute when the cache is done (`cached.done`, the same flag that makes
    `paging.exact` true). Found by the user's eye, not by a test: nothing in this area is covered by one.
 
-
-
-## Two chips, and who answers which reading (2026-11-02)
+### The three readings and their chips (2026-11-02 - done; kept because the two items above touch the same code)
 
 Done, and verified on the live library (44 dictionaries, 6 ZIM archives, one of them the converted
 Russian Wiktionary with an index of ours). The row carries two separate facts instead of one overloaded
@@ -848,8 +598,9 @@ dropped the reader back to the first option in silence, while the menu kept offe
 is now derived from the select's own options (`searchModeExists`), which cannot drift from the control it
 describes. Verified by driving the page: all three readings survive a reload, each wearing its own mark.
 
-## Server-removal estimate The workspace-dialog refactor in [`docs/DIALOG-REFACTOR.md`](docs/DIALOG-REFACTOR.md) is confirmed on Windows; Android/browser checks and unused iframe-route removal remain. The earlier estimate was 89–91% complete, with regression checks the largest remaining stage. Windows startup without a listener, direct page navigation and `/res/` media delivery are confirmed; remaining Windows screens, assets/styles, browser and Android HTTP paths still need verification.
+### The workspace-dialog refactor
 
+The workspace-dialog refactor in [`docs/DIALOG-REFACTOR.md`](docs/DIALOG-REFACTOR.md) in [`docs/DIALOG-REFACTOR.md`](docs/DIALOG-REFACTOR.md) is confirmed on Windows; Android/browser checks and unused iframe-route removal remain. The earlier estimate was 89–91% complete, with regression checks the largest remaining stage. Windows startup without a listener, direct page navigation and `/res/` media delivery are confirmed; remaining Windows screens, assets/styles, browser and Android HTTP paths still need verification.
 
 Update checks: System Settings now has Release, Pre-release, and Beta channels. Beta means the word beta anywhere in the version string, case-insensitive. The new-profile default is Beta on Windows and Android; saved selections still take precedence. The selected channel is saved with UI preferences; the app checks GitHub Releases at startup at most once per day and has a manual check. Windows Go server build and Android debug APK build passed; APK was not installed. Runtime UI behavior is pending. Build scripts accept --channel release, pre-release or beta; beta adds a -beta.1 suffix and pre-release adds -pre. GitHub publication metadata remains a separate step.
 
@@ -865,3 +616,31 @@ built-in without writing a selection to disk. All focused look tests pass.
 Android System Settings hides the Advanced section and its Reset default
 button. Windows uses a separate System Settings dialog and does not show this
 section or button. Runtime Android UI verification is pending.
+
+## What left this file on 2026-11-03
+
+Four kinds of thing did not belong in the state of the fork, and each now has one
+home. Nothing was lost; the commit message carries the narrative of the move.
+
+- **Numbers** - what a read-through ZIM costs, what each index costs, what removing
+  full text frees, the size-estimate bands, the Wildcards cache benchmark and the
+  ingest write-path measurement - are in `docs/MEASUREMENTS.md`.
+- **Xapian's own full-text index in a ZIM** ("glass": the spike, the format read off
+  Xapian 1.4.32, the reader and its three byte-level corrections) is in
+  `docs/GLASS.md`.
+- **This machine's state** - the Russian lemma pack, what it costs and what is odd
+  about its data - and the browser-automation recipe are in `docs/WINDOWS-VERIFY.md`.
+- **Session narrative** - every "Historical snapshot" paragraph, and the dated
+  sections listed below - is in `docs/handoff-archive.md`, which indexes them by
+  date. Read them by grep, or read the commit messages.
+
+The dated sections that had already moved there on 2026-11-03: progressive results
+and the user's three decisions (2026-11-02); a ZIM with its own index answering full
+text itself (2026-11-01); our index on request for an archive that has one
+(2026-11-02); strict readings declined rather than scanned, and the caps that went
+with them (2026-11-02); the strict readings being mostly blind, one of them lying
+(2026-11-02); the attached article temp and the build's cache (2026-11-03); an index
+that cannot be deleted, and every dictionary having one (2026-11-03); the index chip
+as a measurement (2026-11-03); the article index as a file of its own (2026-11-03);
+a ZIM without its own index getting ours, without the bodies (2026-11-02); and the
+three readings chosen by the reader (2026-11-02).

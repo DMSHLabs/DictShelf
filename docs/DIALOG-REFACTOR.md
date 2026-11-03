@@ -12,7 +12,7 @@ Keep each editor maintainable in separate source files for its markup, styles an
 
 ## Order of work
 
-1. The Windows server-removal implementation is complete; runtime verification of a few remaining branches is tracked in `HANDOFF.md`.
+1. The Windows server-removal implementation is complete; runtime verification of a few remaining branches is tracked in `HANDOFF.md` under "What remains" → "The workspace-dialog refactor".
 2. **Edit Filters pilot implemented and confirmed by the user.** Its markup, styles and JavaScript are separate embedded assets; the dialog lives in the main document and opens without iframe navigation. The Windows native bridge is used when present; browser and Android retain the HTTP adapter.
 3. Verify its loading, reading and saving of `groups.ini`, translations, appearance presets, close behavior and browser fallback. Check Windows and Android first; check Linux and macOS on their supported builds.
 4. **Edit Folders moved into the main document.** Its markup and styles are separate assets; its behavior is now a shared external `setup.js` used by both the standalone setup page and the embedded dialog, with scoped DOM lookups and deferred initialization. Folder/archive picker bindings, intake, folder validation, index defaults, saving and list refresh are wired. `node --check internal/server/web/setup.js`, `go build ./...` and `git diff --check` pass. The user confirmed the dialog works on Windows; Android runtime check remains.

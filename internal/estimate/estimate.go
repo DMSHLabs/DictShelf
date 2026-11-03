@@ -5,7 +5,7 @@
 // Package estimate predicts what an index will cost before it is built.
 //
 // Every coefficient here was measured on prepared dictionaries rather than
-// chosen: the series and the per-dictionary tables are in HANDOFF.md ("What
+// chosen: the series and the per-dictionary tables are in docs/MEASUREMENTS.md ("What
 // each index costs on the non-ZIM library" and "What a read-through ZIM
 // costs"). The inputs are the measurements a prepared database already
 // carries - the ingest records body_bytes, stored_body_bytes and

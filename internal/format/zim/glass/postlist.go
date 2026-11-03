@@ -49,7 +49,7 @@ func chunkTermKey(term string) []byte {
 
 // Lookup reads a term's posting list. The term must be exactly what the index
 // stores: lowercase, unaccented and stemmed with the archive's own stemmer
-// (stem.go; HANDOFF.md, "The glass format").
+// (stem.go; docs/GLASS.md, "The glass format").
 func (db *DB) Lookup(term string) (Term, error) {
 	var out Term
 	docFreq, collFreq, complete, err := db.walkPostings(term, chunkTermKey(term), func(docid, wdf uint32) bool {

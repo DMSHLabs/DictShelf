@@ -13,7 +13,7 @@ import (
 // A tag that does not fit in one item is split into components: items with the
 // same key, counter 1, 2, 3 ... in that order, the last one flagged. A posting
 // list of a common word is one of these, so reading only the first component
-// returns a list that ends in the middle of a document - see HANDOFF.md, "The
+// returns a list that ends in the middle of a document - see docs/GLASS.md, "The
 // glass format", and Xapian's make_start_of_chunk / component_of.
 func (db *DB) keyTag(table int, key []byte) ([]byte, bool, error) {
 	var out []byte

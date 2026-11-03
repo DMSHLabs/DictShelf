@@ -8,7 +8,7 @@
 //
 // It is written from the format, not ported from a reader: the layout was read
 // off Xapian 1.4.32 (backends/glass: glass_version.cc, glass_table.cc,
-// glass_cursor.cc, glass_defs.h) and is written down in HANDOFF.md under "The
+// glass_cursor.cc, glass_defs.h) and is written down in docs/GLASS.md under "The
 // glass format", together with the byte-level check that confirmed it against a
 // real archive. The one thing a reader written for the multi-file layout gets
 // wrong, and this one gets right: a single-file database keeps its six tables in

@@ -389,6 +389,9 @@ make help           # every available target
 
 `make` is preinstalled on macOS/linux, for windows get the `make-X.Y.Z-without-guile-w32-bin.zip` e.g. from 
 [sourceforge.net](https://sourceforge.net/projects/ezwinports/files/) and extract `make.exe` to a folder in `%PATH%`.
+On a machine that already has a mingw-w64 toolchain (Qt's, for instance) it is there as `mingw32-make.exe` instead, and
+then no download is needed — see `thirdpartytools.md`. The Windows builds also work without Make:
+`build-windows.cmd` / `build-android.cmd` are the scripts an end-to-end build uses.
 
 Or with the Go toolchain alone:
 
