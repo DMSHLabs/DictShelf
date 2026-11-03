@@ -50,7 +50,7 @@ For problems, see [Troubleshooting](troubleshooting.md).
     -   [Kiwix](https://library.kiwix.org): Wikipedia, Wiktionary and other
         reference works as `.zim` files.
     -   Any link to a dictionary, wrapped as a
-        [share link](../dictionaries/add.md#share-links) - a link in a chat or a
+        [share link](../share.md) - a link in a chat or a
         forum post works as it is, without a page of our own behind it.
     -   [Kiwix](https://library.kiwix.org): Wikipedia, Wiktionary and other
         reference works as `.zim` files.
