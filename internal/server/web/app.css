@@ -1485,18 +1485,19 @@ html[data-dict-icons-off] .dict-icon{display:none}
    chips that carry data-feat — means the source file is gone, so the switch
    cannot be moved: disabled, and dimmed. `.locked` on an INDEX chip means
    nothing of the sort: it is the measurement of a file on disk.
-   2026-11-03, the owner's decision: measurements read QUIET, and lose the fill
-   outright. A chip wearing the accent pill of a live switch promises a press,
-   and there is none to give: not on the index chip (whose press used to delete
-   the index), not on the archive's built-in index. So the accent fill stays
-   what this file has always said it is — "press to spend disk on an index" —
-   and a measurement is an outlined, quieter plate instead: dimmed, quiet ink,
-   and a hover that changes nothing. data-feat is the marker: every capability
-   chip has one, a measurement has none. */
+   2026-11-03, the owner's decision: a measurement WEARS THE SAME PILL as a live
+   switch, only pale. It is not a different shape or an outline — a built index
+   still reads as "on" at a glance, and the paleness is what says there is
+   nothing to press (the index chip's press used to delete the index; the
+   archive's built-in index was never pressable at all). So the fill, the border
+   and the white ink are the ones .feat.on gives, at reduced opacity, and the
+   hover keeps its own colours: a pill that reacted under the pointer would
+   promise the click it does not have. data-feat is the marker — every
+   capability chip has one, a measurement has none. */
 .pd .feat.locked{cursor:default;opacity:.5}
 .pd .feat.locked:hover{border-color:var(--line);color:var(--label-quiet)}
-.pd .feat.locked:not([data-feat]),.pd .feat.locked.on:not([data-feat]){
-  opacity:.75;background:transparent;border-color:var(--line);color:var(--label-quiet)}
+.pd .feat.locked.on:hover{border-color:var(--accent);color:#fff}
+.pd .feat.locked:not([data-feat]){opacity:.55}
 .pd .feat.busy{border-style:dashed;cursor:default}
 /* stale: still on, still working, but rebuildable — a dotted edge reads as
    "provisional" without the alarm of an error colour */

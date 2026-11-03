@@ -1063,7 +1063,8 @@ size, tooltip "Indexed: {size} on disk") and carries `data-index-size`, not `dat
 `askDSLIndexRemoval` and the whole `[data-delete-index]` click path are gone.
 
 The locked measurement chips - the index size, the native-index chip, and a ZIM's "built-in: words
-only" - also lost the accent fill and read at 75% opacity. The fill is what this stylesheet says a
+only" - wear the same accent pill as a live switch and read at 55% opacity (same fill, same white
+ink, paler; the hover keeps its own colours, so nothing reacts under the pointer). The fill is what this stylesheet says a
 live switch wears ("press to spend disk on an index"), so a chip that cannot be pressed no longer
 wears it; the appearance contract's white-on-fill exception list is now empty for the same reason.
 The LIVE switches (`contains`, `full-text`) are untouched: still filled, still pressable.

@@ -31,7 +31,9 @@ Work directly in `D:\Projects\Android\wudict`, as the user requested. Recheck br
 The chip that shows a prepared DSL's index size used to be a button titled "delete index": pressing
 it removed the prepared database. It is now a measurement - a `span.feat.on.locked` carrying
 `data-index-size` and the tooltip "Indexed: {size} on disk", with no click. The locked measurement
-chips (index size, native index, a ZIM's built-in index) are also dimmed and unfilled now; a filled
+chips (index size, native index, a ZIM's built-in index) wear the same accent pill as a live switch
+at 55% opacity - paler, not a different shape - so a built index still reads as "on" and the paleness
+is what says there is nothing to press; a filled
 accent chip on this card means a live switch, and those still are. The `[data-delete-index]` handler
 and `askDSLIndexRemoval` are removed; the bulk progress label looks for `data-index-size`.
 "Index only" in the card's Remove flow and the bulk panel's base delete are unchanged by decision.
