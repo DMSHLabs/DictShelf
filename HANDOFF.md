@@ -29,9 +29,11 @@ Windows, the NDK on Android, a native runner per platform in CI). The pure-Go SQ
 (`modernc.org/sqlite`, `-tags purego`) was removed with its dependency, its notices and its
 build-tag prose; a build that selects no driver fails by name (`internal/store/driver_missing.go`).
 `internal/speex/backend_nocgo.go` stays: it is the `!cgo` stub of the speex package, not a SQLite
-flavour. `pages/docs` (the published site) still offers the upstream `-purego` downloads and the
-`make cross` / `make build-purego` / `make android-go-purego` targets this fork has never had -
-cleaning that page set is open.
+flavour. The published site carries no `-purego` and no `make cross` / `make build-purego` /
+`make android-go-purego` (targets this fork has never had): rechecked 2026-11-03 with a grep over
+`pages/`, whose only remaining mention is the FAQ line saying the `-purego` artifacts are gone. One
+consequence is open: the manual's own pages are deployed but not in the site's navigation, which is
+Home plus the share page (an earlier decision - the menu was cut to those two entries).
 
 ## Domain, site and App Links
 

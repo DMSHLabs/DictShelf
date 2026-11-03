@@ -73,8 +73,10 @@ Wiktionary's 518 MB `X/fulltext/xapian` (format 1134, revision 1, block 8192, 1 
 postlist root 571, docdata root 59 228 with one record per document, the termlist/position/spelling/
 synonym tables empty - libzim indexed without positions). What it reads: the version file, the
 single-file block space, the B-tree descent, item keys and tags, **chunked** posting lists, the docdata
-table and the query side (metadata, stopwords, stemming, AND). Nothing is copied: the tool extracts the
-blob once, and the package takes a `[]byte` (the byte-range API is still to do).
+table and the query side (metadata, stopwords, stemming, AND). Nothing is copied: the spike
+extracted the blob once, and the reader now takes either a `[]byte` (`glass.Open`) or, since the
+byte-range API landed, the archive's own handle (`glass.OpenSource(io.ReaderAt, size)` -
+`Dict.XapianIndex()` hands it a seekable window, so no blob is ever materialised).
 
 `tools/xapian-glass-check <archive.zim> [query ...]` is the check: it prints the index's metadata, runs
 each query, and opens every article a query returns to verify that a word of that article stems to each
