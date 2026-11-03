@@ -1,6 +1,6 @@
 ---
 title: FAQ
-description: Privacy, working offline, licence, getting dictionaries, files on disk, moving the library, updating, disk space, the terminal, Android builds and requirements, export, Termux, searching several dictionaries, custom styles, network access, lemmatization.
+description: Privacy, working offline, licence, getting dictionaries, http:// links, files on disk, moving the library, updating, disk space, the terminal, Android builds and requirements, export, Termux, searching several dictionaries, custom styles, network access, lemmatization.
 ---
 
 # FAQ
@@ -61,6 +61,33 @@ For problems, see [Troubleshooting](troubleshooting.md).
     DictShelf reads MDict, StarDict, Aard 2, Lingvo DSL, Babylon, ZIM and DictShelf
     markdown: see [Formats](../dictionaries/formats.md). To install the files:
     [Add dictionaries](../dictionaries/add.md).
+
+??? question "Why does an import from a link fail with `only https downloads are allowed`?"
+
+    The full message is:
+
+    ```
+    only https downloads are allowed: set IMPORT_INSECURE=1 to allow http:// links
+    ```
+
+    DictShelf downloads only from `https://` links to public hosts. To allow an
+    `http://` link, set
+    [`IMPORT_INSECURE`](../reference/configuration.md#import_insecure) to `1` in
+    `dictshelf.toml` or in the environment, then restart DictShelf:
+
+    ``` toml
+    IMPORT_INSECURE = 1
+    ```
+
+    The same setting allows hosts on the local network, which are otherwise
+    refused with `that address is on the local network`. When
+    [`SERVER_IP`](../reference/configuration.md#server_ip-and-server_port) is not
+    `127.0.0.1`, a client on the network can then make this machine download from
+    any address it can reach: restrict the hosts with
+    [`IMPORT_URL_HOSTS`](../reference/configuration.md#import_url_hosts).
+
+    Without the hint, the message means the link is not `http://` or `https://`
+    at all; no setting allows those.
 
 ??? question "Where are DictShelf's files?"
 
