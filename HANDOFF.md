@@ -1014,6 +1014,46 @@ dropped the reader back to the first option in silence, while the menu kept offe
 is now derived from the select's own options (`searchModeExists`), which cannot drift from the control it
 describes. Verified by driving the page: all three readings survive a reload, each wearing its own mark.
 
+## An index cannot be deleted, and every dictionary has one (2026-11-03)
+
+The headword index is mandatory, so nothing removes it any more. Every door went: the card's "index
+only" button, the bulk panel's `base: delete`, `wudict rm -keep-source`, and the transport under them
+(`DELETE /api/library?prepared=1&source=0`) - `Registry.Remove` now refuses that combination when the
+dictionary has a source, naming the two things that CAN go: the whole dictionary, or its files only
+(which is the decision to keep the prepared copy standing alone). The bulk router answers the old
+operation with a 400 instead of routing it. `canDelete`/`allowBaseDelete` and the per-feature gate
+went with it.
+
+The "this dictionary does not want an index" policy went too: `indexOptions.Index` (and the three
+places that forced it true) is gone, `baseIndexRequired` no longer has the term, the dead branch that
+answered it by deleting the prepared folder is gone, and the setup page no longer draws a
+checked-and-disabled "index" checkbox. No prefs migration was needed: an old `"index": false` is an
+unknown key once the field is gone, and nothing read a false value.
+
+What remains of the old state is "no index right now". `dslRemoved` keeps its name and JSON key (the
+comments say what it means now) and is set only while a dictionary is queued for preparation; the two
+places that treated it as a veto - `queueNewDictionaries` skipping such a dictionary and `rescan`'s
+`fresh` - no longer do, so a library whose index was removed under the old rules gets one built again
+on the next start (`TestAMissingOrRememberedIndexIsPrepared`), and a stale marker beside a complete
+index is cleared where the queue sees it. The user-facing string changed with the meaning:
+"the dictionary index is not ready yet; it is being prepared" (`errors.indexRemoved` →
+`errors.indexNotReady`, both catalogs) - the old wording told the reader to create an index in a
+settings page that no longer offers to.
+
+**What is lost, and it is a real loss:** "index only" existed to reclaim the space of a big index while
+keeping the dictionary. Now the only way to get that space back is to delete the dictionary, or to
+drop its optional indexes (contains/full text - the full-text side of that is cheap, since the split
+made it one file). Accepted by the owner.
+
+Tests: the five whose subject was the removed feature are gone (`TestSingleDSLIndexRemoval`,
+`TestRemovedNonDSLIndexRequiresExplicitIngest`, `TestRescanKeepDoesNotRestoreRemovedBase`,
+`TestRescanDeletesRemovedPreparedIndex`, the two DSL-migration removal tests, and the file
+`dsl_modes_test.go` with them), the fixtures that suppressed the auto-queue with the marker were
+rebuilt (`unpreparedRegistry` now prepares normally and then removes the folder out of band), the
+migration drops the legacy gd key instead of interpreting a removal decision, and four dead
+translation keys were deleted (`dictUI.indexOnly`, `dictUI.bulkDeleteHint`, `dictUI.deleteIndex`,
+`dictUI.deleteIndexConfirm`).
+
 ## The index chip is a measurement, not a door (2026-11-03)
 
 On the dictionary card of a prepared DSL the index chip showed the size of the index and its
