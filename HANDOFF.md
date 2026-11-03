@@ -539,8 +539,24 @@ one commit each, all dated 2026-11-04: the CI runners and the release NDK, the
 layout spaces at a line's ends in the wmd writer, read-aloud language and the
 Other-languages menu, the headword's speaker button, the hidden bar coming back
 on focus, and the browser address with the escaped key. The MDict port
-(`65325a4d`) followed the same day and is DONE — see the first bullet. What was
+(`65325a4d`) followed the same day and is DONE — see below. What was
 left, and why:
+
+- **ZIM — four pieces taken on 2026-11-04.** The bound on a redirect chain (8 →
+  50, the writer's own watchdog from `libzim/src/entry.cpp`); `isArticle` now
+  requires a redirect's target to be an HTML article and `Resource` requires
+  stored content (`dirent.isContent()`, upstream's name); About gained the
+  archive's own article count so a ZIM's alias-inclusive entry count is printed
+  as names BESIDE articles (`1 528 188 / 2 527 809` for the Russian Wiktionary);
+  and `Exact` retries a missed path without a leading "X/" segment, as
+  `Archive::getEntryByPath` does. Each was gated on the ZIM suite, `TestRealFile`,
+  `TestRealFileRedirects` and `tools/xapian-glass-check` against a real archive
+  (the fixture and its command are in `docs/WINDOWS-VERIFY.md`), and every claim
+  above is a number from that archive rather than a reading of upstream's diff.
+  **NOT taken: upstream's browse-side de-duplication by target** — measured, the
+  Wiktionary's 999 440 redirects resolve to 153 594 articles and 124 221 of those
+  are named by more than one path (worst 23), so collapsing the row lists would
+  fight the two counts this fork prints on purpose.
 
 - **`65325a4d`, MDict parser correctness and speed — TAKEN 2026-11-04.** It is
   the one item a wholesale take-over worked for, and the reason is worth keeping:
@@ -569,14 +585,21 @@ left, and why:
   (`docs/WINDOWS-VERIFY.md` → "ZIM archives on this machine"), and bump
   `internal/format/zim`'s `ReaderVersion` (4 today) whenever what an ingest
   writes changes.
-- **`96e9a334` is two commits in one.** The wmd half (`internal/format/wmd`:
-  `index.go` +626, `units.go`, `labels.go`, `source.go`, `read.go`) is a format
-  package that reads no `config` at all, so it can be taken on its own. The other
-  half refactors `internal/store/pipeline.go`, `ingest.go` and `compress.go` —
-  the package this fork's own `ingest_pipeline.go` lives in, and where the
-  trigram/contains work of 2026-11-04 is happening. Leave the store half to that
-  work; the two halves are separable because the format half imports `store`, not
-  `config`.
+- **`96e9a334` (wmd) is NOT a copy job either, and the reason is a fork
+  decision.** Upstream's `internal/format/wmd` `Dict` is a wrapper over
+  `store.OpenSelfPrepared` - the format prepares a library index of its own.
+  This fork's is a DIRECT backend by design (`wmd.go`: `Dict{reader *Reader}`,
+  `Caps()` empty, `Exact`/`Prefix` = `dict.ErrUnsupported`, and the comment
+  "Opening it does not create a prepared index; library indexes are built by the
+  add queue or explicit indexing actions"). So the upstream half is taken as
+  INTERNALS - `index.go` (+626), `units.go`, `labels.go` and the rewritten
+  `read.go`/`source.go`, which is the two-parses-instead-of-three and the end of
+  the quadratic link-definition case - while `wmd.go`'s fork shape stays and no
+  `store.OpenSelfPrepared` call comes back. Extracting upstream's directory over
+  ours was tried on 2026-11-04 and reverted: it silently resurrects the
+  store-prepared Dict. The other half of that commit (the `internal/store`
+  `pipeline.go`/`ingest.go`/`compress.go` refactor) is this fork's own ground and
+  is being worked on separately.
 - **P6 of the transfer plan** (`c8b92dda`, `f1c5fb27`) — `internal/limits` itself
   now exists (it came in with the MDict port), so what remains is WIRING it: the
   `MAX_*` config keys, and the bounds at ZIM cluster decompression, slob bins,
