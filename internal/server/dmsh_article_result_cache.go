@@ -17,6 +17,7 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/ftsq"
 	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 	"github.com/DMSHLabs/DictShelf/internal/indexconst"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 	"github.com/DMSHLabs/DictShelf/internal/search"
 	"github.com/DMSHLabs/DictShelf/internal/store"
 )
@@ -146,33 +147,56 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 	}
 	switch request.CacheAction {
 	case "build":
-		match := ""
-		if fullTextReadingMode(request.Mode) {
-			match, err = articleFullTextMatch(query, request.Rung)
+		// The complete list is the one thing the plate can end up admitting it
+		// cannot produce ("Complete list unavailable"), and until 2026-11-03 that
+		// admission left no trace anywhere: the client shows a fixed line and does
+		// not log, so the cause existed only inside the failed request. Two lines
+		// close that. The DECLINED one fires when this pass is about to answer a
+		// strict reading with the words reading because the source has no
+		// positions and no article index of ours - the common, explainable case,
+		// gated on the caller asking for diagnostics like every other line in this
+		// area. The FAILED one is unconditional: an error nobody can reproduce is
+		// worth a line in any log, and it is rare.
+		if needsIndex {
+			logx.SystemDiagnosticIf(request.SearchDiagnostics,
+				"search_complete_list stage=declined dict=%q name=%q mode=%q rung=%q query=%q reason=%q",
+				e.ID, e.probeName(), request.Mode, request.Rung, query,
+				"the source answers full text itself and this dictionary has no article index of ours")
+		}
+		if err := func() error {
+			match := ""
+			if fullTextReadingMode(request.Mode) {
+				match, err = articleFullTextMatch(query, request.Rung)
+				if err != nil {
+					return err
+				}
+			}
+			entry, token, err := s.wildcardPages.begin(request.CacheID, signature, indexconst.BrowsePageSize,
+				max(1, request.CacheCount), e.ID, e.probeName(), request.CacheOrder, "", false, s.wildcardCacheDir(), request.SearchDiagnostics)
 			if err != nil {
 				return err
 			}
-		}
-		entry, token, err := s.wildcardPages.begin(request.CacheID, signature, indexconst.BrowsePageSize,
-			max(1, request.CacheCount), e.ID, e.probeName(), request.CacheOrder, "", false, s.wildcardCacheDir(), request.SearchDiagnostics)
-		if err != nil {
+			key := wildcardStreamKey{dictID: e.ID}
+			defer s.wildcardPages.finish(entry, &key, token)
+			if request.IgnoreDiacritics {
+				ctx = store.WithIgnoreDiacritics(ctx)
+			}
+			return source.StreamArticleIDs(ctx, query, request.Mode, match, func(ids []int64, total int, done bool) error {
+				words := make([]string, len(ids))
+				for i, id := range ids {
+					words[i] = strconv.FormatInt(id, 10)
+				}
+				if err := entry.append(e.ID, "", false, token, browseFindStreamEvent{Words: words, Total: total, Done: done}); err != nil {
+					return err
+				}
+				return emit(SearchEvent{T: "cache", Dict: e.ID, CacheID: request.CacheID, Total: total, Complete: done})
+			})
+		}(); err != nil {
+			logx.SystemDiagnostic("search_complete_list stage=failed dict=%q name=%q mode=%q rung=%q query=%q cache_id=%q error=%q",
+				e.ID, e.probeName(), request.Mode, request.Rung, query, request.CacheID, err)
 			return err
 		}
-		key := wildcardStreamKey{dictID: e.ID}
-		defer s.wildcardPages.finish(entry, &key, token)
-		if request.IgnoreDiacritics {
-			ctx = store.WithIgnoreDiacritics(ctx)
-		}
-		return source.StreamArticleIDs(ctx, query, request.Mode, match, func(ids []int64, total int, done bool) error {
-			words := make([]string, len(ids))
-			for i, id := range ids {
-				words[i] = strconv.FormatInt(id, 10)
-			}
-			if err := entry.append(e.ID, "", false, token, browseFindStreamEvent{Words: words, Total: total, Done: done}); err != nil {
-				return err
-			}
-			return emit(SearchEvent{T: "cache", Dict: e.ID, CacheID: request.CacheID, Total: total, Complete: done})
-		})
+		return nil
 	case "page":
 		if request.Start < 0 || request.Size < 1 || request.Size > 500 {
 			return errors.New("invalid article result portion")

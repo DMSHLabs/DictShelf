@@ -1473,7 +1473,16 @@ function pumpArticleResultCaches(){
       const now=performance.now();
       if(state.done||now-state.lastPaint>250){state.lastPaint=now;updateArticleCacheCard(state)}
     },articleCacheAbort.signal).catch(error=>{
-      if(generation===articleCacheSeq&&error.name!=="AbortError")state.error=error.message;
+      if(generation!==articleCacheSeq||error.name==="AbortError")return;
+      state.error=error.message;
+      /* The card says "Complete list unavailable" and nothing else, so the reason
+         has to leave the browser: the same search_article diagnostic the search
+         itself reports through, with the message the plate hides. Without this the
+         cause existed only inside this failed request (found 2026-11-03). */
+      if(searchArticleDiagnosticsEnabled())sendBrowseDiagnostic({event:"search_article",stage:"search_error",
+        runId:searchSeq,query:String(state.query||"").replace(/[\r\n]/g," ").slice(0,1000),mode:state.mode,
+        dict:state.dict,name:String(state.name||"").slice(0,256),total:state.total,
+        detail:String(error.message||error).replace(/[\r\n]/g," ").slice(0,1000)});
     }).finally(()=>{
       if(generation!==articleCacheSeq)return;
       articleCacheActive--;articleCacheFinished++;

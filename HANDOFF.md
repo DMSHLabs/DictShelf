@@ -658,6 +658,26 @@ Two things the live run taught, both now recorded in the code:
   no banner at all and is killed at 40 s). The offer therefore quotes the folder size, and the index
   figure appears only where a build can measure it (the pure-Go modernc build can; this one cannot).
 
+### Why the card says "Complete list unavailable" (2026-11-03)
+
+Seen on the user's two Wikipedias: the results card read "5+ результатов · Полный список недоступен"
+(`search.fullListUnavailable`). The cause is the one above: their full text is answered by the ARCHIVE's
+own index, and at that moment no index of ours existed beside it (the log 50 s later shows the three
+such archives being given one, `feature="fts" action="create"`). The archive's index has no positions, so
+a phrase is answered with the words reading - the plate's rung, and the main plate carries the "needs our
+index / Build" line for it - and a COMPLETE list cannot be paged from anywhere: our list is paged out of
+`articles.db`, and the only other route is decompressing candidates out of a 48 GB container, which is
+what "strict readings are declined, not scanned" refuses. The remedy is our own index; until it exists the
+card says honestly that the count is a head of the answer, and the count keeps its "+".
+
+That admission used to leave no trace at all: the client shows a fixed line and does not log, so a
+failure was reproducible only by guessing. Two traces now exist, in `dmsh_article_result_cache.go`'s
+`build` case - `search_complete_list stage=declined` (gated on the caller's diagnostics flag, like every
+other line in that area) and `stage=failed` with the dictionary, mode, rung, query, cache id and the
+error (unconditional: it is rare and it explains a user-visible message) - and the client now sends the
+message the plate hides through the `search_article`/`search_error` diagnostic it already had. Pinned by
+`TestAFailedCompleteListBuildIsLogged`, which fails when the line is taken away.
+
 ## Our index on request, for an archive that has its own (2026-11-02)
 
 The rule "an archive with its own index never gets one of ours" is now "not by DEFAULT": a caller that
