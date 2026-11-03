@@ -206,3 +206,29 @@ table above) falls with it: on wiktionary en `station` 241 → 15 ms, `nation` 1
 25 → 7 ms. The worst case is a term whose windows are all common: `tion` keeps 91 % of its candidates and
 `ость` 46 %, and both are still faster than before. Three windows are therefore the choice; a term of
 three runes has exactly one and is unchanged.
+
+## What the wmd reader's two-parse rewrite is worth (2026-11-04)
+
+Measured 2026-11-04 on the 12th Gen i7-12800HX with `go test -bench BenchmarkRead
+-benchtime 3x`, the benchmark being `internal/format/wmd/read_bench_test.go` - where
+these numbers can be reproduced. The dictionaries are synthetic: 20,000 entries and
+20,000 link reference definitions after them, each definition its own paragraph,
+read in 64 KiB chunks (the default 1 MiB scaled down) with every entry rendered.
+Synthetic because this machine has no real `.wmd` dictionary - the ZIM archives in
+`docs/WINDOWS-VERIFY.md` are its only real fixtures - so upstream's own before/after
+(the 17 GB OED, 4:44 to 35 s) is not reproduced here. Before is `61143203`, after is
+the two-parse reader of `96e9a334` (commits `a1201ed2`/`1175851e`).
+
+| shape | before | after | |
+|---|---|---|---|
+| no definitions | 51 ms | 22 ms | 2.3x |
+| 20,000 definitions, unreferenced | 207 ms | 56 ms | 3.7x |
+| 20,000 definitions, referenced | 319 ms | 73 ms | 4.4x |
+
+The old cost grows with definitions x parses, because every parse of every chunk was
+handed every definition; the new one barely moves with the definition count, which is
+what `refLabels` buys. The blank line between the definitions is not cosmetic: put
+them in one paragraph instead and goldmark v2.1.5's own
+`linkReferenceParagraphTransformer` is quadratic in them - 70 % of the CPU profile at
+this size, in the old reader and the new one alike. `docs/WUDICT-MARKDOWN.md` R9.3
+already records that as a stock-parser limit this reader does not guard against.

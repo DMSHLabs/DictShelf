@@ -539,7 +539,8 @@ one commit each, all dated 2026-11-04: the CI runners and the release NDK, the
 layout spaces at a line's ends in the wmd writer, read-aloud language and the
 Other-languages menu, the headword's speaker button, the hidden bar coming back
 on focus, and the browser address with the escaped key. The MDict port
-(`65325a4d`) followed the same day and is DONE — see below. What was
+(`65325a4d`) followed the same day and is DONE — see below — and so is the wmd
+half of `96e9a334`, ported as internals on 2026-11-04. What was
 left, and why:
 
 - **ZIM — four pieces taken on 2026-11-04.** The bound on a redirect chain (8 →
@@ -585,21 +586,31 @@ left, and why:
   (`docs/WINDOWS-VERIFY.md` → "ZIM archives on this machine"), and bump
   `internal/format/zim`'s `ReaderVersion` (4 today) whenever what an ingest
   writes changes.
-- **`96e9a334` (wmd) is NOT a copy job either, and the reason is a fork
-  decision.** Upstream's `internal/format/wmd` `Dict` is a wrapper over
-  `store.OpenSelfPrepared` - the format prepares a library index of its own.
-  This fork's is a DIRECT backend by design (`wmd.go`: `Dict{reader *Reader}`,
-  `Caps()` empty, `Exact`/`Prefix` = `dict.ErrUnsupported`, and the comment
-  "Opening it does not create a prepared index; library indexes are built by the
-  add queue or explicit indexing actions"). So the upstream half is taken as
-  INTERNALS - `index.go` (+626), `units.go`, `labels.go` and the rewritten
-  `read.go`/`source.go`, which is the two-parses-instead-of-three and the end of
-  the quadratic link-definition case - while `wmd.go`'s fork shape stays and no
-  `store.OpenSelfPrepared` call comes back. Extracting upstream's directory over
-  ours was tried on 2026-11-04 and reverted: it silently resurrects the
-  store-prepared Dict. The other half of that commit (the `internal/store`
-  `pipeline.go`/`ingest.go`/`compress.go` refactor) is this fork's own ground and
-  is being worked on separately.
+- **`96e9a334` (wmd) — TAKEN 2026-11-04, as internals.** The reader is upstream's
+  two-parse one now (phase 1 `index.go`, phase 2 `units.go`, `labels.go`'s
+  `refLabels`), while this fork's DIRECT backend stays exactly as it was:
+  `wmd.go` still holds `Dict{reader *Reader}`, empty `Caps()`, `Exact`/`Prefix` =
+  `dict.ErrUnsupported`, and no `store.OpenSelfPrepared` call came back.
+  Extracting upstream's directory over ours was tried earlier the same day and
+  reverted: it silently resurrects the store-prepared Dict. Two spots had to
+  differ, each decided on purpose and written into its commit: `index.go`'s
+  `urgentNow` reads `runtime.GOMAXPROCS(0) > 1` instead of upstream's
+  `dict.Urgent` (this fork has no `internal/dict/urgent.go`; its lane is
+  `server/power.go`'s GOMAXPROCS), and this fork's own
+  `defer dict.ClearActivity(path)` in `openSource` was DROPPED — it contradicted
+  `bound_test.go`'s contract that the CONSUMER of the text clears the mark, which
+  this fork's own `internal/dict/activity.go` states in words, and nothing in the
+  fork reads `dict.ActivityOf` at all. `bound_test.go` itself came back here: it
+  had been lost in the 2026-10-11 merge `88a9ffeb`, not dropped on purpose.
+  **`ReaderVersion` stays 1** — `TestReaderGolden` did not move, so the rewrite
+  changes how the text is read and not what it yields, and no library rebuilds.
+  Measured in `internal/format/wmd/read_bench_test.go` on synthetic 20,000-entry
+  dictionaries (no real `.wmd` exists on this machine): 51→22 ms plain, 207→56 ms
+  with 20,000 unreferenced definitions, 319→73 ms with them referenced. NOT
+  fixed, and the spec already documents it as a stock-parser limit (R9.3):
+  goldmark v2.1.5's own quadratic in the definitions of ONE paragraph. The store
+  half of that commit (`pipeline.go`/`ingest.go`/`compress.go`) stays this fork's
+  own ground.
 - **P6 of the transfer plan** (`c8b92dda`, `f1c5fb27`) — `internal/limits` itself
   now exists (it came in with the MDict port), so what remains is WIRING it: the
   `MAX_*` config keys, and the bounds at ZIM cluster decompression, slob bins,
