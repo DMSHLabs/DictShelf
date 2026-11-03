@@ -16,6 +16,12 @@ body:has(.share-page) .md-sidebar--secondary,
 body:has(.share-page) .md-nav--primary .md-nav--secondary,
 body:has(.share-page) .md-path,
 body:has(.share-page) .md-footer__inner{display:none}
+/* The one control this page has: the way into the app when the browser got the
+   link instead (see the script below). Hidden until that script shows it. */
+.md-typeset .open-in-app{text-align:center;margin:0 0 1.6rem}
+/* the attribute hides it; this makes it survive a theme rule that sets
+   a display of its own on paragraphs */
+.md-typeset .open-in-app[hidden]{display:none}
 </style>
 
 <div class="share-page" markdown>
@@ -38,6 +44,34 @@ separated by a comma, a semicolon, a bar or a space.
 
 On Android with DictShelf installed, opening such a link starts the import in the
 app; elsewhere, paste it on the setup page.
+
+<p class="open-in-app" id="open-in-app-wrap" hidden>
+  <a id="open-in-app" class="md-button md-button--primary">Open in DictShelf</a>
+</p>
+
+<script>
+/* A browser tab is where a share link lands when Android did not hand it to the
+   app: Android 11 and below have no App Links at all, Android 12+ may not have
+   verified this domain on this device yet, and a messenger's own browser or
+   Custom Tab never hands an App Link over. The extra below is what the app
+   reads (Intake.java, EXTRA_URL): an intent: URL cannot carry the payload as
+   data, because a share link's payload IS its fragment - the very part intent:
+   syntax consumes.
+   Shown on Android only, and only when there is something after "#": a bare
+   /share/ has nothing to import, and the app would answer that it is a page of
+   dictionary links. */
+(function () {
+  var wrap = document.getElementById('open-in-app-wrap');
+  var link = document.getElementById('open-in-app');
+  if (!wrap || !link) return;
+  if (!/Android/i.test(navigator.userAgent)) return;
+  if (location.hash.length < 2) return;
+  var pkg = 'com.dmshlabs.dictshelf';
+  link.href = 'intent://dictshelf.com/share/#Intent;scheme=https;package=' + pkg +
+    ';S.' + pkg + '.extra.INTAKE_URL=' + encodeURIComponent(location.href) + ';end';
+  wrap.hidden = false;
+})();
+</script>
 
 ## What happens when it is opened
 
