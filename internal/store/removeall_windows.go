@@ -31,18 +31,40 @@ import (
 const (
 	errSharingViolation = syscall.Errno(32) // ERROR_SHARING_VIOLATION
 	errLockViolation    = syscall.Errno(33) // ERROR_LOCK_VIOLATION
+	// 5 is ERROR_ACCESS_DENIED, and Windows uses it for "in use" as well: an
+	// unlink of a held file reports SHARING_VIOLATION, while moving a folder that
+	// has a held file INSIDE it reports this one (measured, 2026-11-03). A real
+	// permission problem pays the same second of retries and then reports
+	// unchanged.
+	errAccessDenied = syscall.Errno(5)
 )
 
 func removeFolder(path string) error {
+	return retryWhileHeld(path, func() error { return os.RemoveAll(path) }, "remove")
+}
+
+// moveFolder renames a directory. Windows refuses to move a folder that has an
+// open file inside it exactly as it refuses to unlink one, so the removal's
+// rename needs the same bounded retry the delete gets: without it a scanner
+// holding one file of the folder for a moment would fail a removal that used to
+// succeed.
+func moveFolder(from, to string) error {
+	return retryWhileHeld(from, func() error { return os.Rename(from, to) }, "move")
+}
+
+// retryWhileHeld runs op, and while Windows says the path is held it waits and
+// tries again - briefly, because a holder still there after about a second is a
+// real one and its error is the one to report.
+func retryWhileHeld(path string, op func() error, what string) error {
 	var err error
 	for attempt, wait := 0, 10*time.Millisecond; ; attempt, wait = attempt+1, wait+wait {
-		if err = os.RemoveAll(path); err == nil {
+		if err = op(); err == nil {
 			return nil
 		}
-		if attempt >= 7 || !errors.Is(err, errSharingViolation) && !errors.Is(err, errLockViolation) {
+		if attempt >= 7 || !errors.Is(err, errSharingViolation) && !errors.Is(err, errLockViolation) && !errors.Is(err, errAccessDenied) {
 			return err
 		}
-		logx.V("remove: %s is in use, retrying in %v (%v)", path, wait, err)
+		logx.V("%s: %s is in use, retrying in %v (%v)", what, path, wait, err)
 		time.Sleep(wait)
 	}
 }

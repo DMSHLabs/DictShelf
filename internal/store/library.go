@@ -566,7 +566,10 @@ func Folders() ([]Folder, error) {
 	}
 	var out []Folder
 	for _, de := range des { // ReadDir sorts by name
-		if !de.IsDir() {
+		if !de.IsDir() || isRemovalDebris(de.Name()) {
+			// Debris of a removal that died between its rename and its delete:
+			// a whole dictionary under a name nobody asked for, which the
+			// startup sweep removes and `clean` reports. Never a dictionary.
 			continue
 		}
 		dir := filepath.Join(root, de.Name())

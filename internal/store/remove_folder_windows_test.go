@@ -46,3 +46,49 @@ func TestRemovingAFolderWaitsForATransientHolder(t *testing.T) {
 		t.Errorf("the folder is still there: %v", err)
 	}
 }
+
+// A holder that outlives the retry must not leave HALF a dictionary in place of
+// one. The removal moves the folder out of the way before deleting anything, and
+// on Windows a held file blocks a rename exactly as it blocks an unlink - so a
+// removal that cannot even move the folder leaves the folder whole and says so,
+// where deleting file by file would have taken text.db away and left the caches.
+func TestARemovalThatCannotMoveTheFolderLeavesItWhole(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("WUDICT_DB_DIR", root)
+	dir := filepath.Join(root, "dict")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := []string{TextDBName, ArticlesDBName, "icon.cache", "stats.cache"}
+	for _, name := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("published"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	held, err := os.Open(TextDBPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Close()
+
+	if _, err := RemovePrepared(dir); err == nil {
+		t.Fatal("a holder that outlives the retry must fail the removal")
+	}
+	for _, name := range files {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Errorf("the failed removal took %s away: %v", name, err)
+		}
+	}
+	if debris, _ := filepath.Glob(filepath.Join(root, "*"+removalInfix+"*")); len(debris) != 0 {
+		t.Errorf("a removal that could not move the folder left debris anyway: %v", debris)
+	}
+
+	// With the holder gone the same call does its whole job.
+	held.Close()
+	if _, err := RemovePrepared(dir); err != nil {
+		t.Fatalf("the removal did not succeed once the holder let go: %v", err)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("the folder is still there: %v", err)
+	}
+}

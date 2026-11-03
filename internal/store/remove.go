@@ -68,10 +68,27 @@ func RemovePrepared(dir string) (int64, error) {
 	}
 
 	n := TreeSize(abs)
+	// Moved out of the way first, then deleted (removalInfix, dmsh_ingest_sweep.go).
+	// Deleting a folder file by file can fail in the middle, which leaves a
+	// dictionary with its text.db gone and its caches not - a dictionary that can
+	// neither be used nor removed cleanly. A MOVE either happens or does not, so:
+	//
+	//   - a folder that cannot be moved (something inside it is held, which on
+	//     Windows blocks a rename exactly as it blocks an unlink) is left exactly
+	//     as it was, and the error says which folder it is;
+	//   - a folder that was moved but not deleted leaves its contents under a
+	//     debris name, which nothing lists, `clean` reports and the startup sweep
+	//     removes.
+	//
+	// Either way the slot the library knows is never half-deleted.
+	debris, err := renameOutOfTheWay(abs)
+	if err != nil {
+		return 0, fmt.Errorf("removing %s: %w", abs, err)
+	}
 	// removeFolder, not os.RemoveAll: Windows refuses to delete a file anything
 	// holds open, and holds are transient there far more often than they mean
 	// anything (removeall_windows.go).
-	if err := removeFolder(abs); err != nil {
+	if err := removeFolder(debris); err != nil {
 		return 0, fmt.Errorf("removing %s: %w", abs, err)
 	}
 	return n, nil
@@ -99,4 +116,15 @@ func TreeSize(path string) int64 {
 		return nil
 	})
 	return n
+}
+
+// renameOutOfTheWay moves a prepared folder to its debris name beside itself and
+// returns the new path, or the folder it could not move. The rename is the half
+// of a removal that cannot be interrupted half way (removalInfix).
+func renameOutOfTheWay(abs string) (string, error) {
+	to := removalDebrisName(abs)
+	if err := moveFolder(abs, to); err != nil {
+		return "", err
+	}
+	return to, nil
 }

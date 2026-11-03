@@ -1091,6 +1091,13 @@ func (r *Registry) startTempSweep() {
 	go func() {
 		defer r.jobs.wg.Done()
 		removed, freed := 0, int64(0)
+		// The library root as well as every prepared folder: an ingest's working
+		// files live inside the folder it is building, but the debris of a removal
+		// that died between its rename and its delete lives beside them, and that
+		// is a whole dictionary nothing would otherwise reclaim (store.removalInfix).
+		n, size := store.SweepIngestTemps(store.DefaultDBDir())
+		removed += n
+		freed += size
 		for _, e := range entries {
 			dir, ok := store.LookupDir(e.Path)
 			if !ok {

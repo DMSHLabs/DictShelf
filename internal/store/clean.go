@@ -101,6 +101,14 @@ func FindLeftovers() ([]Leftover, error) {
 // alone, because a folder is the user's unit to copy and move (D20) and
 // whatever else they put in it is theirs.
 func judgeFolder(dir string) []Leftover {
+	// A folder a removal renamed out of the way: whole (nothing was deleted, or
+	// the rename would not be here) and nobody's - the removal's own delete is
+	// what failed, and the startup sweep would have taken it had the process not
+	// been killed first. Reported whatever it holds, including a readable
+	// text.db, because its NAME is the one thing that says it is debris.
+	if isRemovalDebris(filepath.Base(dir)) {
+		return []Leftover{{Path: dir, Size: dirSize(dir), Reason: "interrupted removal", IsDir: true}}
+	}
 	textDB := TextDBPath(dir)
 	fi, err := os.Stat(textDB)
 	if err != nil || fi.IsDir() {

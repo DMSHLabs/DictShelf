@@ -183,6 +183,21 @@ Summarised here because the narrative of how each arrived is now in
   sets those per database at connection open - before the attached file existed (`ingestCacheKiB`, 64 MiB,
   one value for every platform).
 
+## Removal, as rules (2026-11-03)
+
+- **A removal moves the folder out of the way before deleting anything** (`store.removalInfix`,
+  `.removing.<hex>` beside the folder). Windows blocks that move when a file inside is held, exactly as
+  it blocks an unlink - so a removal that cannot move the folder fails and leaves it WHOLE, where
+  deleting file by file would have taken `text.db` away and left the caches. A removal that moved the
+  folder but could not delete it leaves the contents under the debris name: nothing lists it
+  (`store.Folders` skips it), `clean` reports it as an interrupted removal, and the startup sweep
+  removes it - the sweep now covers the library root as well as each prepared folder, because that is
+  where prepared folders and their debris live.
+- **Both retries are bounded and share one rule** (`retryWhileHeld`): a sharing violation, a lock
+  violation or ACCESS_DENIED - Windows reports 5 as well as 32 for "in use", and a held file inside a
+  folder being MOVED reports 5 - are retried for about a second, then the real error is reported
+  unchanged. `TestARemovalThatCannotMoveTheFolderLeavesItWhole` and the sweep test pin it.
+
 ## Session narratives moved to the archive (2026-11-03)
 
 The dated sections below were session narratives of finished work; they now live in

@@ -1515,6 +1515,9 @@ func TestSplitBuildRecordsTheArticleIndexSize(t *testing.T) {
 // published file beside them must not be touched.
 func TestSweepIngestTempsClearsOnlyWorkingFiles(t *testing.T) {
 	dir := t.TempDir()
+	// The folder IS the library for this test: clean and the listing are asked
+	// below, and both answer about DefaultDBDir.
+	t.Setenv("WUDICT_DB_DIR", dir)
 	planted := map[string]int{
 		"text.db.ingest.ab12":           10,
 		"text.db.ingest.ab12-articles":  20,
@@ -1539,6 +1542,53 @@ func TestSweepIngestTempsClearsOnlyWorkingFiles(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
 			t.Errorf("%s was not cleared", name)
 		}
+	}
+	// A removal's debris is a DIRECTORY and goes too (removalInfix); a folder
+	// that is not debris is the user's and stays, whatever it holds.
+	debrisDir := filepath.Join(dir, "dict"+removalInfix+"ab12")
+	userDir := filepath.Join(dir, "notes")
+	for _, d := range []string{debrisDir, userDir} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(d, TextDBName), []byte("published"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// clean reports the debris too, whatever it holds - its NAME is what says it
+	// is debris - and the listing never shows it as a dictionary.
+	left, err := FindLeftovers()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, item := range left {
+		if item.Path == debrisDir {
+			found = item.IsDir && item.Reason == "interrupted removal"
+		}
+	}
+	if !found {
+		t.Errorf("clean does not report the debris: %+v", left)
+	}
+	folders, err := Folders()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range folders {
+		if f.Dir == debrisDir {
+			t.Errorf("the listing shows the debris as a dictionary: %+v", f)
+		}
+	}
+
+	moreRemoved, moreFreed := SweepIngestTemps(dir)
+	if moreRemoved != 1 || moreFreed <= 0 {
+		t.Errorf("the sweep took %d folder(s), %d bytes; want the debris only", moreRemoved, moreFreed)
+	}
+	if _, err := os.Stat(debrisDir); !os.IsNotExist(err) {
+		t.Errorf("the removal debris survived the sweep: %v", err)
+	}
+	if _, err := os.Stat(userDir); err != nil {
+		t.Errorf("a folder that is not debris was swept: %v", err)
 	}
 	for _, keep := range []string{TextDBName, ArticlesDBName, "icon.cache", "stats.cache"} {
 		if _, err := os.Stat(filepath.Join(dir, keep)); err != nil {

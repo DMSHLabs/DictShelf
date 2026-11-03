@@ -9,5 +9,8 @@ package store
 import "os"
 
 // removeFolder deletes a prepared folder. Off Windows an open file can be
-// unlinked, so a holder is never in the way and there is nothing to retry.
+// unlinked (and moved), so a holder is never in the way and nothing is retried:
+// the two names exist so the removal reads the same on every platform.
 func removeFolder(path string) error { return os.RemoveAll(path) }
+
+func moveFolder(from, to string) error { return os.Rename(from, to) }
