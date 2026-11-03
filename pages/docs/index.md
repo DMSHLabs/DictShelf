@@ -8,6 +8,10 @@ description: DictShelf - one executable that searches every dictionary you own, 
 .md-typeset .hero img{width:min(200px,42vw);height:auto;margin:0 auto;display:block}
 .md-typeset .hero h1{margin:.8rem 0 .6rem;font-size:2.1rem;font-weight:700;letter-spacing:-.01em}
 .md-typeset .hero p{max-width:46rem;margin:0 auto 1.6rem;font-size:1.05rem;line-height:1.65}
+/* The theme floats copy/edit actions in the top-right of the content, which on
+   this page means on top of the mark. They belong to an article, not a landing
+   page; the manual's own pages keep them. */
+body:has(.hero) .md-content__button{display:none}
 </style>
 
 <div class="hero" markdown>
