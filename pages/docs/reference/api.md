@@ -1,6 +1,6 @@
 ---
 title: HTTP API
-description: The wudict HTTP API - who may call it, streaming search results, the dictionary list, resources, errors, and the OpenAPI document.
+description: The DictShelf HTTP API - who may call it, streaming search results, the dictionary list, resources, errors, and the OpenAPI document.
 ---
 
 # HTTP API
@@ -15,7 +15,7 @@ your own programs. The server answers on `http://127.0.0.1:6888` by default.
 | Client | Can call |
 | --- | --- |
 | a program on the same machine (curl, Python, Node, an application) | every endpoint |
-| the wudict page | every endpoint |
+| the DictShelf page | every endpoint |
 | a browser extension | `/api/dicts`, `/api/search`, `/res/`; [`BROWSER_EXTENSIONS`](configuration.md#browser_extensions) can restrict which extensions |
 | a web page | the same three endpoints, if [`WEB_ORIGINS`](configuration.md#web_origins) lists its origin |
 | a client on another host | every endpoint with the access key; the three endpoints without it |
@@ -23,7 +23,7 @@ your own programs. The server answers on `http://127.0.0.1:6888` by default.
 When the server listens on the network, every endpoint except the three needs
 the access key ([`AUTH`](configuration.md#auth)): a program sends
 `Authorization: Bearer <key>`; a browser receives it as a cookie from the link
-`wudict token` prints. Deleting dictionaries from another host also needs
+`dictshelf token` prints. Deleting dictionaries from another host also needs
 [`ALLOW_REMOTE_DELETE`](configuration.md#allow_remote_delete).
 
 CORS (`WEB_ORIGINS`, `BROWSER_EXTENSIONS`) applies only to pages and
@@ -32,7 +32,7 @@ affected by it.
 
 ## Calling the API from a web page
 
-List the page's origin and restart wudict:
+List the page's origin and restart DictShelf:
 
 ``` toml title="~/.dmshlabs/dictshelf/dictshelf.toml"
 WEB_ORIGINS = ["http://localhost:3000"]
@@ -45,7 +45,7 @@ WEB_ORIGINS = ["http://localhost:3000"]
 -   A `file://` page sends `Origin: null`, which is never allowed. Serve the
     page over `http://`, also during development.
 -   Chrome preflights requests from a non-local page to `127.0.0.1` (local
-    network access). wudict answers the preflight for listed origins; a Chrome
+    network access). DictShelf answers the preflight for listed origins; a Chrome
     policy or another extension can still block the request.
 
 A refused request appears in the browser console as a CORS error, not as an
@@ -63,7 +63,7 @@ document. A test checks it against the server's routes in both directions.
 | [API reference](../api/index.html) | rendered, with a `curl` example per endpoint |
 | `make api-ui` | rendered to `dist/api-explorer.html`, for offline use |
 
-Endpoints tagged `internal` serve the wudict page and the Android app and may
+Endpoints tagged `internal` serve the DictShelf page and the Android app and may
 change between releases.
 
 ## Streaming

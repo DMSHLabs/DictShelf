@@ -1,7 +1,7 @@
-# Writing for wudict
+# Writing for DictShelf
 
-These rules apply to the manual (`pages/docs`), `README.md`, the web UI, `wudict --help`
-and the wudict howto. The app is intended for general public as well as lexicographers,
+These rules apply to the manual (`pages/docs`), `README.md`, the web UI, `dictshelf --help`
+and the built-in howto. The app is intended for general public as well as lexicographers,
 translators, linguists, developers. They want the exact term, the exact condition and
 the exact default, and nothing that stands between them and the fact.
 
@@ -30,12 +30,12 @@ it is a different thing.
 
 | Use | Meaning | Do not use |
 |---|---|---|
-| **wudict** | the program, in prose (D27) | wuDict (except the Android app and the browser extension), WuWeiDict (except where the official name is required: title, licence, About) |
-| **dictionary** | one dictionary, as wudict lists it | entry (for a dictionary), book |
+| **DictShelf** | the program, in prose and in the UI (naming decision amended 2026-11-03) | wudict, wuDict, WuWeiDict — except in exactly three places: the **wudict markdown** format (its name, its `wudict:` front-matter gate, its `.wudict.md` / `.wudict.files` naming), a legacy path or setting (the config file `wudict.toml`, `~/.wudict`, `~/.wuDict2`, `WUDICT_HOME`, the WebView bridge names and localStorage keys), and one sentence saying DictShelf is a fork of wudict |
+| **dictionary** | one dictionary, as DictShelf lists it | entry (for a dictionary), book |
 | **dictionary files** | the files a dictionary consists of on disk: `.mdx` + `.mdd`, `.ifo` + `.idx` + `.dict.dz`, … | original(s), source, source files |
 | **index** (verb), **indexed**, **indexing** | building the dictionary's copy in the library | prepare, ingest (except the `ingest` command), cache, import, build |
 | **not indexed** | searched through the dictionary's own format | preview, cached, raw |
-| **library** | the folder of all indexed dictionaries (`DB_DIR`, `~/.wudict/db`) | DB folder, DB dir, database, cache folder, internal databases |
+| **library** | the folder of all indexed dictionaries (`DB_DIR`, `~/.dmshlabs/dictshelf/db`) | DB folder, DB dir, database, cache folder, internal databases |
 | **library folder** | one dictionary's folder in the library (`text.db`, `media.db`, `info.txt`, optional `icon.cache`, `res/`) | index folder, prepared folder, cache folder |
 | **headword index** | the index every indexed dictionary has: exact and prefix search | regular index, base index |
 | **contains index** | the index behind contains search (FTS5 trigram) | substring index, trigram index, Contain |
@@ -43,13 +43,13 @@ it is a different thing.
 | **media pack** | `media.db`: the dictionary's images and audio, copied into the library | packed media, media index |
 | **exact**, **prefix**, **contains**, **full-text** | the four search modes, as the API, the URL and the CLI spell them | starts with, substring search, FTS mode, fuzzy |
 | **phrase**, **proximity**, **anywhere** | the three stages of an unquoted full-text query | ladder, rung, widening, step |
-| **headword** | the word an entry is filed under | keyword, key (except `wudict keys`), lemma (for a headword) |
+| **headword** | the word an entry is filed under | keyword, key (except `dictshelf keys`), lemma (for a headword) |
 | **article** | the text of one entry, as the dictionary formats it | definition (for the whole article), body, card |
 | **lemmatization** | finding the lemma of an inflected form and searching for the lemma | morphology, stemming, word forms |
 | **lemma**, **inflected form** | *know*, *knew* | dictionary form, base form, word form |
 | **lemma data** | the per-language files lemmatization reads | lemma packs, word-form data, lemmatizers, morphology data |
 | **resource** | a file a dictionary ships: stylesheet, script, image, audio, font | asset, media file (for all of them) |
-| **resource override** | a file in a library folder's `res/` that wudict serves instead of the dictionary's own | patch, repair, fix, replacement |
+| **resource override** | a file in a library folder's `res/` that DictShelf serves instead of the dictionary's own | patch, repair, fix, replacement |
 | **dictionary panel** | the panel the <kbd>☰</kbd> button opens | ☰ panel, settings, the panel (on first mention) |
 | **folder summary** | the row at the top of the dictionary panel (<kbd>⚙ 2 folders · 105 dictionaries</kbd>) and the actions it expands to | ⚙ box, cog menu, settings |
 | **setup page** | `/setup` | settings page, configuration page |
@@ -58,9 +58,9 @@ it is a different thing.
 | **enabled** | included in *All dictionaries* searches | active, on, selected |
 | **pinned** | placed at the top of the dictionary list, in the user's order; the others are listed A–Z | favourite, starred, my order |
 | **import** | installing dictionary files from a file or a link | download (for the whole act), add |
-| **outdated** | indexed by an older version of wudict, or from dictionary files that have changed since | stale, old |
+| **outdated** | indexed by an older version of DictShelf, or from dictionary files that have changed since | stale, old |
 | **reindex** | rebuild an outdated index | refresh, rebuild (as the name of the act) |
-| **access key** | the token a request from the network must carry | password, token (except `wudict token`), secret |
+| **access key** | the token a request from the network must carry | password, token (except `dictshelf token`), secret |
 | **orphan** | a library folder whose dictionary files are gone | leftover, deleted externally |
 
 ## Register

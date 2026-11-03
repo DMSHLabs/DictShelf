@@ -10,7 +10,7 @@ DictShelf is based on WuWeiDict and is maintained in the
 application ID, `com.dmshlabs.dictshelf`.
 
 DictShelf searches `.mdx`, `.ifo`, `.slob`, `.dsl`, `.bgl`, `.zim` and `.wudict.md`
-dictionaries on the phone. The app runs the wudict server on the phone's
+dictionaries on the phone. The app runs the DictShelf server on the phone's
 loopback address and shows its pages; network use is listed in the
 [Privacy Policy](../privacy_policy.md#network-requests).
 
@@ -117,7 +117,7 @@ replace. Create `koreader/dictionaries.lua` in internal storage:
 
 ``` lua title="koreader/dictionaries.lua"
 return {
-    { "wudict", "DictShelf", false, "com.dmshlabs.dictshelf", "search" },
+    { "dictshelf", "DictShelf", false, "com.dmshlabs.dictshelf", "search" },
 }
 ```
 
@@ -174,10 +174,10 @@ See [Remove a dictionary](../dictionaries/library.md#remove-a-dictionary).
 | | Desktop | Android |
 | --- | --- | --- |
 | Dictionary folders | any, set on the setup page | FOSS: *Internal storage → Dictionaries*; Play: imported |
-| Speex `.spx` audio | `-cgo` builds; `-purego` with `speexdec` | built in |
+| Speex `.spx` audio | built in (`SPEEX_BACKEND=external` uses `speexdec`) | built in |
 | Browser extension | yes | no; the text selection menu replaces it |
 | Command line | yes | no |
-| Lemma data | Lemmatization page or `wudict lemmas` | Lemmatization page |
+| Lemma data | Lemmatization page or `dictshelf lemmas` | Lemmatization page |
 
 ## Next
 

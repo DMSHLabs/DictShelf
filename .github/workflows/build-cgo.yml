@@ -86,7 +86,7 @@ jobs:
           CGO_ENABLED: "1"
           CC: ${{ matrix.cc }} # empty ⇒ Go's default compiler for the host
         run: |
-          BINARY="wudict-${{ matrix.goos }}-${{ matrix.goarch }}-cgo${{ matrix.ext }}"
+          BINARY="dictshelf-${{ matrix.goos }}-${{ matrix.goarch }}-cgo${{ matrix.ext }}"
           VERSION="${{ inputs.tag }}"
           if [ -z "$VERSION" ]; then
             # Blank field: the rule the release job below applies (D168) -
@@ -116,12 +116,12 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v7
         with:
-          name: wudict-${{ matrix.goos }}-${{ matrix.goarch }}-cgo
-          path: wudict-${{ matrix.goos }}-${{ matrix.goarch }}-cgo${{ matrix.ext }}
+          name: dictshelf-${{ matrix.goos }}-${{ matrix.goarch }}-cgo
+          path: dictshelf-${{ matrix.goos }}-${{ matrix.goarch }}-cgo${{ matrix.ext }}
 
   # The double-clickable macOS app (D75). One UNIVERSAL bundle rather than one
   # per chip: the point of an .app is that nobody has to know what a chip is.
-  # Version and name come from the binary itself (`wudict --version`), so this
+  # Version and name come from the binary itself (`dictshelf --version`), so this
   # job stamps nothing and cannot drift from the build job above.
   macos-app:
     name: macOS .app (universal)
@@ -137,39 +137,39 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: artifacts
-          pattern: wudict-darwin-*-cgo
+          pattern: dictshelf-darwin-*-cgo
           merge-multiple: true
 
       - name: Fuse the slices and build the bundle
         shell: bash
         run: |
           set -eu
-          slices=$(ls artifacts/wudict-darwin-*-cgo 2>/dev/null || true)
+          slices=$(ls artifacts/dictshelf-darwin-*-cgo 2>/dev/null || true)
           if [ -z "$slices" ]; then
             echo "::warning title=No .app::no darwin binaries were produced - skipping the bundle"
             exit 0
           fi
           # lipo -create accepts a single input, so a half-failed matrix still
           # yields a usable (thin) app instead of no app at all.
-          lipo -create -output wudict $slices
-          chmod +x wudict
-          lipo -info wudict
-          APP_BIN="$PWD/wudict" BUILD_DIR="$PWD/dist" sh tools/make-app.sh
+          lipo -create -output dictshelf $slices
+          chmod +x dictshelf
+          lipo -info dictshelf
+          APP_BIN="$PWD/dictshelf" BUILD_DIR="$PWD/dist" sh tools/make-app.sh
           # ditto, not zip: it is the only archiver Apple guarantees keeps the
           # bundle's symlinks, xattrs and code signature intact.
           # Versioned like every other asset (dictshelf-windows-x64-setup-3.7.5.exe),
           # from the binary's own --version via the same helper make-app.sh
           # used, so the zip and the bundle inside it cannot disagree. Same
           # file-name rules as the APK: leading "v" dropped, "/" -> "_".
-          eval "$(sh tools/version.sh ./wudict)"
+          eval "$(sh tools/version.sh ./dictshelf)"
           ZIPVER=$(printf '%s' "${WUDICT_VERSION#v}" | tr '/' '_')
-          ditto -c -k --keepParent "$(cat dist/.app-path)" "wudict-macos-universal-app-${ZIPVER}.zip"
+          ditto -c -k --keepParent "$(cat dist/.app-path)" "dictshelf-macos-universal-app-${ZIPVER}.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: wudict-macos-app
-          path: wudict-macos-universal-app-*.zip
+          name: dictshelf-macos-app
+          path: dictshelf-macos-universal-app-*.zip
           if-no-files-found: warn
 
   # Windows desktop and console CLI binaries are built separately.
@@ -260,7 +260,7 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
-          name: wudict2-windows-installer
+          name: dictshelf-windows-installer
           path: dist/dictshelf-windows-x64-setup*.exe
           if-no-files-found: error
 

@@ -6,7 +6,7 @@ description: Serve your own copy of a dictionary's stylesheet, script, image or 
 # Resource overrides
 
 A **resource override** is a file in a library folder's `res/` subfolder.
-wudict serves it in place of the dictionary's own resource at the same path, or
+DictShelf serves it in place of the dictionary's own resource at the same path, or
 in addition, if the dictionary lacks it. Use it to replace a broken stylesheet
 or script, or to supply a missing image.
 
@@ -37,7 +37,7 @@ In the browser's network panel, a resource request reads
 `/res/<dictionary id>/<path>`. `<path>` is the path to use under `res/`; a `404`
 marks a missing resource.
 
-wudict logs a warning when it serves a `.js`, `.css`, `.html`, `.json`, `.xml`,
+DictShelf logs a warning when it serves a `.js`, `.css`, `.html`, `.json`, `.xml`,
 `.svg` or `.txt` resource that contains NUL bytes, which these formats cannot
 contain, and names the `res/` path that would override it.
 
@@ -52,7 +52,7 @@ play Speex: use `.mp3` or `.wav`.
 ## Dictionary scripts
 
 An article that contains scripts is rendered in a sandboxed frame with its own
-document, styles and scripts. Its scripts cannot reach wudict's page; `parent`
+document, styles and scripts. Its scripts cannot reach DictShelf's page; `parent`
 exposes only a small fixed interface.
 
 Scripts that test for a host application, as many MDict dictionaries do, find

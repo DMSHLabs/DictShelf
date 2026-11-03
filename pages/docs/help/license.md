@@ -1,11 +1,11 @@
 ---
 title: Licence
-description: WuWeiDict is free software under the GNU GPL, version 3 or later; the third-party code it includes.
+description: DictShelf is free software under the GNU GPL, version 3 or later; the third-party code it includes.
 ---
 
 # Licence
 
-**WuWeiDict** is free software. You may redistribute it and change it under the
+**DictShelf** is free software. You may redistribute it and change it under the
 terms of the **GNU General Public License**, as published by the Free Software
 Foundation, either version 3 of the license or, at your option, any later
 version.
@@ -16,7 +16,7 @@ for a particular purpose.
 
 The full text is in the repository at `LICENSE`, and at the
 [Free Software Foundation](https://www.gnu.org/licenses/gpl-3.0.html).
-`wudict licenses` prints it with the notices for all third-party code.
+`dictshelf licenses` prints it with the notices for all third-party code.
 
 ## Third-party code
 

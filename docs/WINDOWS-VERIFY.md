@@ -85,7 +85,7 @@ them are in `docs/handoff-archive.md`.
   DLL has to sit beside it.
 - `DictShelf.exe` now hosts its WebView2 window on a locked Windows UI
   thread when launched from Explorer or Start; terminal launches retain the
-  browser. It keeps a separate profile under `%LOCALAPPDATA%\wuDict\WebView2`
+  browser. It keeps a separate profile under `%LOCALAPPDATA%\dictshelf\WebView2`
   and falls back to the browser when the Runtime is missing. Closing the
   window leaves the tray server running; Settings → Exit and tray Quit stop it.
   Recheck a rebuilt release installer on a desktop before claiming visual
@@ -108,7 +108,7 @@ them are in `docs/handoff-archive.md`.
   `D:\ProgSoft\InnoSetup7\ISCC.exe`. Verified 2026-09-28: `build-windows.cmd
   installer` packages the cgo `DictShelf.exe` and builds the setup program,
   `dist\dictshelf-windows-x64-setup-0.0.0.exe` (7.3 MB, ProductName DictShelf,
-  FileDescription "wuDict Setup"); Inno Setup 7 still accepts the legacy
+  FileDescription "DictShelf Setup"); Inno Setup 7 still accepts the legacy
   `/D<name>=<value>` defines `make-installer.ps1` passes it. The **5** that is
   also on this machine (`D:\ProgSoft\InnoSetup5\`) cannot read the script at all
   — no `x64compatible`, no `PrivilegesRequiredOverridesAllowed` — and fails
@@ -320,7 +320,7 @@ different revision, run the same command in a `git worktree` of that revision
 For the real thing - one archive, alone, no other builds running - the CLI is
 the driver and its own line is the number:
 
-    wudict ingest -fulltext -contains -o <dir>/text.db <archive.zim>
+    DictShelf ingest -fulltext -contains -o <dir>/text.db <archive.zim>
 
 Measured 2026-11-03 on the NVMe machine, `wiktionary_ru_all_nopic_2026-09.zim`
 (2.15 GB, 1.53 M entries), four runs of the same command back to back:

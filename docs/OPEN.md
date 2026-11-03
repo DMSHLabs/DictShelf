@@ -330,7 +330,7 @@ Diagnosis, from reading the file — **not fixed, and deliberately not fixed**:
 The general lesson, which is the actual reason for this item: a dictionary's
 bespoke cloud-TTS integration built on a private protocol **will** rot — this one
 already has, and its pinned `Sec-MS-GEC-Version=1-130.0.2849.68` is years stale.
-A wudict-level fallback that owns nothing dictionary-specific is the durable
+A DictShelf-level fallback that owns nothing dictionary-specific is the durable
 answer. Per-dictionary `res/` patching was considered and **rejected by the user
 as unsustainable**.
 
@@ -720,7 +720,7 @@ document — server-side authentication — since every larger version of this d
 
 ---
 
-## O11 — wudict markdown bundle (`.wudict.zip`) — **DEFERRED (D154, 2026-09-27)**
+## O11 — wudict markdown bundle (`.dictshelf.zip`) — **DEFERRED (D154, 2026-09-27)**
 
 One zip holding `<s>.wudict.md` and `<s>.wudict.files/`: a single file to hand over. It was prototyped on the
 archived `wumark-poc` branch and deferred for its own safety surface: bomb bounds, entry-name validation, symlinks,
@@ -820,7 +820,7 @@ while that dictionary IS the scope, so it can never be selected, and no resolver
 The removal question ("when do we take it out") is answered the same way: nothing removes it,
 because it is recomputed from the scope on every open — it is gone the moment the scope is
 anything else, which is exactly when the reader picks another entry in the dropdown
-(`wudictPickerGroupChanged` resets the scope to all, the pre-existing behaviour).
+(`dictshelfPickerGroupChanged` resets the scope to all, the pre-existing behaviour).
 
 The general shape, kept for reference if a *stored* or *selectable* one-dictionary scope is ever
 wanted: a `d:<id>` spelling beside `g:<facet>:<value>`, resolved by the same `dictSel` branch to

@@ -29,7 +29,7 @@ import (
 )
 
 // `wudict dump` writes one dictionary out, as pyglossary's CSV (the default)
-// or as WuWeiDict markdown (-format md, dump_md.go).
+// or as wudict markdown (-format md, dump_md.go).
 //
 // The CSV is a two-column
 // file whose leading rows are "#key","value" metadata and whose remaining rows
@@ -52,7 +52,7 @@ func cmdDump(args []string) error {
 	var out, format, modeFlag, compress, resFlag string
 	fs.StringVar(&out, "o", "", "output folder for the dump and its resources (created if missing)")
 	fs.StringVar(&out, "output", "", "long form of -o")
-	fs.StringVar(&format, "format", "csv", "csv, or md (WuWeiDict markdown)")
+	fs.StringVar(&format, "format", "csv", "csv, or md (wudict markdown)")
 	fs.StringVar(&modeFlag, "mode", "html", "md only: html (each article's HTML kept) or clean (markdown only, lossy)")
 	fs.StringVar(&compress, "compress", "", "md only: gz")
 	fs.StringVar(&resFlag, "resources", "all", "all, text (only .css, .js and other text files), or none")

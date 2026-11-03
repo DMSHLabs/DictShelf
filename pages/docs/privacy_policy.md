@@ -8,7 +8,7 @@ description: DictShelf collects no data about you and has no account. It connect
 **Effective 3 October 2026.**
 
 This policy covers the **DictShelf** Android app (`com.dmshlabs.dictshelf`) and
-the `wudict` program it is built from, on every platform.
+the `dictshelf` program it is built from, on every platform.
 
 ## Summary
 
@@ -89,7 +89,7 @@ DictShelf makes a network request only in these cases:
 A tapped external link opens in your browser; DictShelf does not follow it.
 
 The server at the other end of each request sees your IP address, as with any
-web request. DictShelf's own requests identify themselves as `wudict` and carry
+web request. DictShelf's own requests identify themselves as `dictshelf` and carry
 nothing else about you or your device.
 
 With the network turned off, everything except these downloads works.

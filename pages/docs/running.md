@@ -1,6 +1,6 @@
 ---
 title: Run at startup
-description: Start wudict at login - a macOS LaunchAgent, a Linux systemd user unit, or the Windows Startup folder.
+description: Start DictShelf at login - a macOS LaunchAgent, a Linux systemd user unit, or the Windows Startup folder.
 ---
 
 # Run at startup
@@ -14,7 +14,7 @@ The macOS and Linux setups use `make` targets in a clone of the
 
     | Command | Action |
     | --- | --- |
-    | `make mac-agent-install` | build `wudict`, generate the LaunchAgent plist, and register it; runs `wudict serve --no-browser` (`AGENT_BIN=<path>` for another binary) |
+    | `make mac-agent-install` | build `dictshelf`, generate the LaunchAgent plist, and register it; runs `dictshelf serve --no-browser` (`AGENT_BIN=<path>` for another binary) |
     | `make mac-agent-start` | load and start the agent |
     | `make mac-agent-stop` | stop and unload the agent |
     | `make mac-agent-restart` | rebuild, then restart the agent |
@@ -43,17 +43,17 @@ The macOS and Linux setups use `make` targets in a clone of the
     | `make linux-service-status` | show the unit's state |
     | `make linux-service-uninstall` | disable and remove the unit; the binary stays |
 
-    The unit runs `/usr/local/bin/wudict`. `make linux-install` installs only
-    the binary; `PREFIX=/opt/wudict` changes the location.
+    The unit runs `/usr/local/bin/dictshelf`. `make linux-install` installs only
+    the binary; `PREFIX=/opt/dictshelf` changes the location.
 
     A user unit is managed with `systemctl --user`, e.g.
-    `systemctl --user status wudict`. To keep it running after logout:
+    `systemctl --user status dictshelf`. To keep it running after logout:
 
     ``` sh
     sudo loginctl enable-linger "$(id -un)"
     ```
 
-    Logs: `journalctl --user -u wudict -f`.
+    Logs: `journalctl --user -u dictshelf -f`.
 
 === "Windows"
 
@@ -65,7 +65,7 @@ The macOS and Linux setups use `make` targets in a clone of the
 
     ## By hand
 
-    1. Put `DictShelf.exe` in a folder, e.g. `C:\tools\wudict\`.
+    1. Put `DictShelf.exe` in a folder, e.g. `C:\tools\dictshelf\`.
     2. <kbd>Win</kbd>+<kbd>R</kbd>, enter `shell:startup`.
     3. Create a shortcut to `DictShelf.exe` in that folder, and add
        `--no-browser` to its target.

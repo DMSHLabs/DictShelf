@@ -7,12 +7,12 @@
 # packager can be derived from the binary instead of carrying a second copy of
 # the name and version that can drift from cli.ProductName / cli.Version:
 #
-#   eval "$(sh tools/version.sh ./wudict)"
+#   eval "$(sh tools/version.sh ./dictshelf)"
 #   WUDICT_NAME='DictShelf'       # CFBundleName
 #   WUDICT_VERSION='v0.9-4-gabc' # what a human is shown
 #   WUDICT_NUM='0.9.0'           # what Info.plist and VERSIONINFO demand: x.y.z
 #
-# `wudict --version` prints "<ProductName> <Version>" on its first line. If the
+# `dictshelf --version` prints "<ProductName> <Version>" on its first line. If the
 # binary cannot run (cross-built for another architecture) the fallbacks below
 # keep the packager working rather than failing on a cosmetic string.
 #

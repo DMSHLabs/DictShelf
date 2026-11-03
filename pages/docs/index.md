@@ -1,11 +1,11 @@
 ---
 title: Home
-description: wudict searches MDict, StarDict, Aard 2, Lingvo DSL, Babylon, ZIM and wudict markdown dictionaries in the browser, on macOS, Linux, Windows and Android.
+description: DictShelf searches MDict, StarDict, Aard 2, Lingvo DSL, Babylon, ZIM and wudict markdown dictionaries in the browser, on macOS, Linux, Windows and Android.
 ---
 
 # All your dictionaries, in your browser
 
-**WuWeiDict** (`wudict`) searches all your local dictionaries at once and shows
+**DictShelf** (`dictshelf`) searches all your local dictionaries at once and shows
 the results in the browser, at [localhost:6888](http://localhost:6888). It is a
 single executable with no dependencies.
 
@@ -63,11 +63,11 @@ single executable with no dependencies.
     `.wudict.md`. A dictionary as one CommonMark file, readable and editable
     in any text editor.
 
--   :fontawesome-solid-box-archive:{ .lg .middle } **wudict library**
+-   :fontawesome-solid-box-archive:{ .lg .middle } **DictShelf library**
 
     ---
 
-    `text.db`. wudict's SQLite format: one folder per dictionary, with an optional `media.db`; portable between machines.
+    `text.db`. DictShelf's SQLite format: one folder per dictionary, with an optional `media.db`; portable between machines.
 
 </div>
 
@@ -112,6 +112,6 @@ languages are installed from <kbd>☰</kbd> → folder summary →
 
 ## Privacy
 
-No account, no telemetry, no analytics, no crash reporting. wudict connects to
+No account, no telemetry, no analytics, no crash reporting. DictShelf connects to
 the internet only to download what you ask for. See the
 [Privacy Policy](privacy_policy.md).

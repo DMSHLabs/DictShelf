@@ -9,12 +9,12 @@ For problems, see [Troubleshooting](troubleshooting.md).
 
 ??? question "Is any of my data sent anywhere?"
 
-    No. wudict listens on the loopback address `127.0.0.1` and has no account,
+    No. DictShelf listens on the loopback address `127.0.0.1` and has no account,
     no telemetry, no analytics or crash reporting. It connects to the internet only to
     download what you ask for: lemma data, or a dictionary from a link you
     provide. See the [Privacy Policy](../privacy_policy.md).
 
-??? question "Does wudict work offline?"
+??? question "Does DictShelf work offline?"
 
     Yes. Search, lookup and indexing need no network. This is also true for
     the Android app. Only these need the network:
@@ -26,27 +26,30 @@ For problems, see [Troubleshooting](troubleshooting.md).
     -   <kbd>Read aloud</kbd> with a voice that the browser gets from the
         network. The voices of the operating system need no network.
 
-??? question "Why two names, WuWeiDict and wudict?"
+??? question "Why the name DictShelf, and what is wudict?"
 
-    *Wú wéi* (無為) is the classical Chinese term for effortless action, or
-    non-action. `wudict` is the short form, used for the program.
+    DictShelf is a shelf of dictionaries: one program that searches every
+    dictionary you own. It is a fork of **wudict** (*WuWeiDict*, from *wú wéi*
+    無為, the classical Chinese term for effortless action) and keeps that
+    program's dictionary formats — including *wudict markdown*, which is where
+    the old name still appears — its library layout and its HTTP API.
 
-??? question "Is wudict free?"
+??? question "Is DictShelf free?"
 
-    Yes. wudict is free software under the GNU General Public License,
+    Yes. DictShelf is free software under the GNU General Public License,
     version 3 or later. You can use, change and redistribute it under that
     licence. The source code is on
     [GitHub](https://github.com/DMSHLabs/DictShelf). See [Licence](license.md).
 
-    The licence applies to wudict only. Each dictionary has its own licence.
+    The licence applies to DictShelf only. Each dictionary has its own licence.
 
 ??? question "Where can I get dictionaries?"
 
     Use your own dictionary files, or get free dictionaries:
 
-    -   [legbehindneck.com/wudict](https://legbehindneck.com/wudict/): free
+    -   [legbehindneck.com/DictShelf](https://legbehindneck.com/DictShelf/): free
         dictionaries as [share links](../dictionaries/add.md#share-links). On
-        Android, a share link starts the import in wuDict. On a desktop, paste
+        Android, a share link starts the import in DictShelf. On a desktop, paste
         the link on the setup page.
     -   [Kiwix](https://library.kiwix.org): Wikipedia, Wiktionary and other
         reference works as `.zim` files.
@@ -54,11 +57,11 @@ For problems, see [Troubleshooting](troubleshooting.md).
         [wudict markdown](../dictionaries/formats.md#wudict-markdown) file in
         a text editor.
 
-    wudict reads MDict, StarDict, Aard 2, Lingvo DSL, Babylon, ZIM and wudict
+    DictShelf reads MDict, StarDict, Aard 2, Lingvo DSL, Babylon, ZIM and DictShelf
     markdown: see [Formats](../dictionaries/formats.md). To install the files:
     [Add dictionaries](../dictionaries/add.md).
 
-??? question "Where are wudict's files?"
+??? question "Where are DictShelf's files?"
 
     ``` text title="macOS and Linux"
     ~/.dmshlabs/dictshelf/
@@ -73,13 +76,13 @@ For problems, see [Troubleshooting](troubleshooting.md).
 
     Windows and Android: [Configuration → Files](../reference/configuration.md#files).
 
-??? question "How do I update wudict?"
+??? question "How do I update DictShelf?"
 
     Replace the executable, or run the new installer, `DictShelf.app` or APK over
     the old one. Settings and the library are kept. Indexes built by an older
     version are reported as [outdated](../dictionaries/library.md#outdated-indexes)
-    and rebuilt with <kbd>Rebuild</kbd> or `wudict reindex`. 
-    Use [Obtainium](https://obtainium.imranr.dev/) to automatically update the Android FOSS version of wudict. 
+    and rebuilt with <kbd>Rebuild</kbd> or `dictshelf reindex`.
+    Use [Obtainium](https://obtainium.imranr.dev/) to automatically update the Android FOSS version of DictShelf.
 
 ??? question "How do I free the disk space an index uses?"
 
@@ -89,18 +92,18 @@ For problems, see [Troubleshooting](troubleshooting.md).
     it. <kbd>Rescan folders</kbd> lists [orphans](../dictionaries/library.md#orphans)
     and deletes the ones you tick.
 
-??? question "Can I use wudict without a browser?"
+??? question "Can I use DictShelf without a browser?"
 
-    Yes, you can use wudict in the terminal:
+    Yes, you can use DictShelf in the terminal:
 
     ``` sh
-    wudict lookup -format text Oxford.mdx flight     # show definitions as plain text
-    wudict keys   ~/Dictionaries/Oxford.mdx          # list all headwords
-    wudict ingest                                    # index the dictionary folders
-    wudict clean                                     # list removable library folders
+    dictshelf lookup -format text Oxford.mdx flight     # show definitions as plain text
+    dictshelf keys   ~/Dictionaries/Oxford.mdx          # list all headwords
+    dictshelf ingest                                    # index the dictionary folders
+    dictshelf clean                                     # list removable library folders
     ```
 
-    See `wudict --help` in terminal.
+    See `dictshelf --help` in terminal.
 
     [Command line](../reference/cli.md)
 
@@ -133,8 +136,8 @@ For problems, see [Troubleshooting](troubleshooting.md).
     | Dictionary files | *Internal storage → Dictionaries*, a folder you manage | `Android/data/com.dmshlabs.dictshelf/files/Dictionaries`; you import the files |
     | Storage permission | *All files access* | none |
     | Updates | Obtainium, or a download from GitHub | Google Play |
-    | Signing certificate | the wudict developers | Google |
-    | Reachable from other devices (testing) | optional toggle in wudict settings, OFF by default | no |
+    | Signing certificate | the DictShelf developers | Google |
+    | Reachable from other devices (testing) | optional toggle in DictShelf settings, OFF by default | no |
     | Install and crash data to Google | no | yes |
 
     **Disk space.**
@@ -228,42 +231,42 @@ For problems, see [Troubleshooting](troubleshooting.md).
 
     Set [`SERVER_IP`](../reference/configuration.md#server_ip-and-server_port)
     to `0.0.0.0`. Requests from the network then need the access key
-    ([`AUTH`](../reference/configuration.md#auth)): `wudict token` prints a link
+    ([`AUTH`](../reference/configuration.md#auth)): `dictshelf token` prints a link
     that carries it; open it once in the browser on the other device. Deleting
     dictionaries from another device also needs
     [`ALLOW_REMOTE_DELETE`](../reference/configuration.md#allow_remote_delete).
 
-??? question "Does wudict change my dictionary files?"
+??? question "Does DictShelf change my dictionary files?"
 
     No. Indexes go into the library. A replacement for a broken resource goes
     into the dictionary's library folder as a
     [resource override](../dictionaries/override.md). Only
-    <kbd>🗑 Remove…</kbd> and `wudict rm` delete dictionary files.
+    <kbd>🗑 Remove…</kbd> and `dictshelf rm` delete dictionary files.
 
 ??? question "Can I convert or export a dictionary?"
 
-    Yes, from the command line. `wudict dump` can export a dictionary as CSV or as
+    Yes, from the command line. `dictshelf dump` can export a dictionary as CSV or as
     [wudict markdown](../dictionaries/formats.md#wudict-markdown):
 
     ``` sh
-    wudict dump -o ~/exports ~/Dictionaries/Oxford.mdx              # CSV
-    wudict dump -format md -o ~/exports ~/Dictionaries/Oxford.mdx   # wudict markdown
+    dictshelf dump -o ~/exports ~/Dictionaries/Oxford.mdx              # CSV
+    dictshelf dump -format md -o ~/exports ~/Dictionaries/Oxford.mdx   # wudict markdown
     ```
 
-    For more details see: `wudict dump --help`
+    For more details see: `dictshelf dump --help`
 
     The images, audio and other resources are exported to a folder next to the output.
     The CSV is compatible with [pyglossary](https://github.com/ilius/pyglossary),
     and thus can be converted to other formats, such as StarDict.
-    See [wudict dump](../reference/cli.md#dump).
+    See [DictShelf dump](../reference/cli.md#dump).
 
     The Android app has no command line, but it is possible to build and run 
-    the desktop version of wudict on Android in the Termux environment.
-    See *Can I use wudict in Termux?* below.
+    the desktop version of DictShelf on Android in the Termux environment.
+    See *Can I use DictShelf in Termux?* below.
 
-??? question "Can I use wudict in Termux?"
+??? question "Can I use DictShelf in Termux?"
 
-    Yes, you can build wudict from the source code in
+    Yes, you can build DictShelf from the source code in
     [Termux](https://termux.dev). The server and all commands work, as on a
     desktop.
 
@@ -278,19 +281,19 @@ For problems, see [Troubleshooting](troubleshooting.md).
 
         `go version` must show 1.26.5 or later.
 
-    3.  Get the source code and build wudict:
+    3.  Get the source code and build DictShelf:
 
         ``` sh
         git clone https://github.com/DMSHLabs/DictShelf
-        cd wudict
+        cd dictshelf
         make build                            # cgo: fast SQLite, built-in Speex decoder
-        install -m 755 wudict $PREFIX/bin/
+        install -m 755 dictshelf $PREFIX/bin/
         ```
 
         The first build compiles SQLite. This can take some minutes.
 
-        Without `clang`, use `make build-purego` in place of `make build`.
-        SQLite is then slower, and `.spx` audio needs the `speexdec` program.
+        Without `clang` there is no build at all: `make build` compiles SQLite
+        and needs a C compiler. Install `clang` (or `gcc`) in Termux first.
 
     4.  Give Termux access to the shared storage:
 
@@ -311,14 +314,14 @@ For problems, see [Troubleshooting](troubleshooting.md).
         EOF
         ```
 
-        `~/storage/shared/Dictionaries` is also the folder of the wuDict FOSS
+        `~/storage/shared/Dictionaries` is also the folder of the DictShelf FOSS
         build. The two use the same dictionary files. Each has its own library.
-        The wuDict app uses port 6888, so wudict in Termux uses 6889.
+        The DictShelf app uses port 6888, so DictShelf in Termux uses 6889.
 
     6.  Start the server:
 
         ``` sh
-        wudict
+        dictshelf
         ```
 
     7.  Open `http://127.0.0.1:6889` in a browser on the phone.
@@ -328,7 +331,7 @@ For problems, see [Troubleshooting](troubleshooting.md).
         termux-wake-lock
         ```
 
-    To update: in the `wudict` folder, run `git pull`, `make build` and the `install` command again.
+    To update: in the `dictshelf` folder, run `git pull`, `make build` and the `install` command again.
 
 ??? question "Can I search several dictionaries at once?"
 
@@ -346,14 +349,14 @@ For problems, see [Troubleshooting](troubleshooting.md).
     See [Picker groups](../dictionaries/groups.md) and
     [Dictionary panel](../start/search.md#dictionary-panel).
 
-??? question "Can I change the look of wudict and of the articles?"
+??? question "Can I change the look of DictShelf and of the articles?"
 
     Yes.
 
     -   Theme: <kbd>◐</kbd> chooses auto, light or dark.
     -   Text size: <kbd>☰</kbd> → <kbd>−</kbd> <kbd>15px</kbd> <kbd>+</kbd>.
     -   Your own CSS: <kbd>☰</kbd> → folder summary →
-        <kbd>Custom styles…</kbd>. **App** changes the wudict page. **Article**
+        <kbd>Custom styles…</kbd>. **App** changes the DictShelf page. **Article**
         changes every dictionary article. <kbd>Examples…</kbd> inserts ready
         styles, such as sepia, true black, a serif font, and a compact layout
         for phones. **Files** adds fonts and images.
@@ -364,27 +367,30 @@ For problems, see [Troubleshooting](troubleshooting.md).
 
 ??? question "Why does *estuviera* find nothing?"
 
-    Spanish lemma data is not installed, or wudict cannot tell that the
+    Spanish lemma data is not installed, or DictShelf cannot tell that the
     dictionary is Spanish.
 
     Install it: <kbd>☰</kbd> → folder summary → <kbd>Lemmatization…</kbd> →
     tick Spanish. It applies from the next search. In a terminal:
-    `wudict lemmas download es`.
+    `dictshelf lemmas download es`.
 
     Most `.mdx` and `.slob` dictionaries do not declare their language. Name the
     file with a language code first (`es-en-collins.mdx`), or put it in a folder
     named by the code (`es/`). English is assumed when nothing else is found.
     See [language detection](../reference/configuration.md#lemmatization).
 
-??? question "What's the difference between -cgo and -purego flavours and which should I choose?"
+??? question "Is there a pure-Go build I can use without a C compiler?"
 
-    Prefer `-cgo` for platform where it is available: you get a faster SQLite engine, and the built-in Speex decoder.
-    `-purego` is the fallback mode for environments where C-code cannot be compiled; A `-purego` build needs the external command line `speexdec` utility for Speex audio decoding.
-    See [-cgo or -purego](../start/install.md#-cgo-or-purego).
+    No. There used to be one — a second SQLite driver written in Go — and it
+    was removed in November 2026: it was a different binary with different
+    measured index sizes, and every build this project makes already used cgo.
+    A build without cgo now fails on purpose instead of quietly using another
+    driver, and the `-purego` artifacts and tags are gone.
+    See [One build](../start/install.md#one-build).
 
 ??? question "How do I stop the browser tab opening at startup?"
 
-    `wudict --no-browser`, or `NO_BROWSER = "1"` in `~/.dmshlabs/dictshelf/dictshelf.toml`.
+    `dictshelf --no-browser`, or `NO_BROWSER = "1"` in `~/.dmshlabs/dictshelf/dictshelf.toml`.
 
 ??? question "How do I build this documentation site?"
 

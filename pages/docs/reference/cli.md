@@ -1,15 +1,15 @@
 ---
 title: Command line
-description: Every wudict command, its flags and arguments.
+description: Every DictShelf command, its flags and arguments.
 ---
 
 # Command line
 
 ``` text
-wudict [command] [flags] [args]
+dictshelf [command] [flags] [args]
 ```
 
-`wudict --help` prints the full reference; `wudict --version` (`-v`) prints the
+`dictshelf --help` prints the full reference; `dictshelf --version` (`-v`) prints the
 version. `--verbose` applies to every command. Flags may be written with one
 or two dashes.
 
@@ -34,15 +34,15 @@ or two dashes.
 | [`licenses`](#licenses) | print the licence and third-party notices |
 
 A command that takes a dictionary path also accepts a library folder:
-`wudict info ~/.dmshlabs/dictshelf/db/Oxford` and `wudict info ~/.dmshlabs/dictshelf/db/Oxford/text.db`
+`dictshelf info ~/.dmshlabs/dictshelf/db/Oxford` and `dictshelf info ~/.dmshlabs/dictshelf/db/Oxford/text.db`
 are equivalent.
 
 ## serve
 
 ``` sh
-wudict
-wudict serve --port 9090 --no-browser
-wudict ~/Dictionaries/Oxford.mdx     # serve that file's folder and open it
+dictshelf
+dictshelf serve --port 9090 --no-browser
+dictshelf ~/Dictionaries/Oxford.mdx     # serve that file's folder and open it
 ```
 
 | Flag | Setting |
@@ -65,7 +65,7 @@ The other settings have no flag; they are set in the environment or in
 ## list
 
 ``` sh
-wudict list ~/Dictionaries /Volumes/Ext/Dicts
+dictshelf list ~/Dictionaries /Volumes/Ext/Dicts
 ```
 
 Prints one line per dictionary found in the folders, subfolders included.
@@ -73,7 +73,7 @@ Prints one line per dictionary found in the folders, subfolders included.
 ## info
 
 ``` sh
-wudict info ~/Dictionaries/Oxford.mdx
+dictshelf info ~/Dictionaries/Oxford.mdx
 ```
 
 Prints the name, format, number of entries, search modes, language and its
@@ -91,10 +91,10 @@ files:
 ## lookup, prefix, contains, fts
 
 ``` sh
-wudict lookup   [-n max] <dictfile> <word>    # exact; accent-folded if nothing matches
-wudict prefix   [-n max] <dictfile> <word>    # exact, then prefix; accents ignored
-wudict contains [-n max] <dictfile> <word>    # headwords containing <word>
-wudict fts      [-n max] <dictfile> <query>   # full-text query, as in the app
+dictshelf lookup   [-n max] <dictfile> <word>    # exact; accent-folded if nothing matches
+dictshelf prefix   [-n max] <dictfile> <word>    # exact, then prefix; accents ignored
+dictshelf contains [-n max] <dictfile> <word>    # headwords containing <word>
+dictshelf fts      [-n max] <dictfile> <query>   # full-text query, as in the app
 ```
 
 | Flag | Effect |
@@ -109,13 +109,13 @@ wudict fts      [-n max] <dictfile> <query>   # full-text query, as in the app
 matches.
 
 ``` sh title="an article as an HTML file whose images load from the server"
-wudict lookup -format clean -base http://127.0.0.1:6888 ~/Dictionaries/Oxford.mdx flight > flight.html
+dictshelf lookup -format clean -base http://127.0.0.1:6888 ~/Dictionaries/Oxford.mdx flight > flight.html
 ```
 
 ## searchall
 
 ``` sh
-wudict searchall [-mode m] [-n perDict] [-format f] [-dict-dir <dir>] [<dir>] <term>
+dictshelf searchall [-mode m] [-n perDict] [-format f] [-dict-dir <dir>] [<dir>] <term>
 ```
 
 Searches every dictionary in the folders and prints each dictionary's results
@@ -139,7 +139,7 @@ folders. The exit status is `1` when no dictionary matches.
 ## keys
 
 ``` sh
-wudict keys [-offset N] [-n count] <dictfile>
+dictshelf keys [-offset N] [-n count] <dictfile>
 ```
 
 Lists the headwords, all by default. For an `.mdd` file, lists the files it
@@ -148,8 +148,8 @@ contains.
 ## res
 
 ``` sh
-wudict res [-o out] [-f] <dictfile> <name>
-wudict res ~/Dictionaries/Oxford.mdd audio/word.mp3
+dictshelf res [-o out] [-f] <dictfile> <name>
+dictshelf res ~/Dictionaries/Oxford.mdd audio/word.mp3
 ```
 
 Extracts one resource. `<name>` is a name `keys` prints; an `.mdd` can be given
@@ -164,13 +164,13 @@ directly.
 ## dump
 
 ``` sh
-wudict dump [-format csv|md] [-mode html|clean] [-compress gz] [-resources all|text|none] -o <outdir> <dictfile>
+dictshelf dump [-format csv|md] [-mode html|clean] [-compress gz] [-resources all|text|none] -o <outdir> <dictfile>
 ```
 
 ### CSV
 
 ``` sh
-wudict dump -o ~/exports ~/Dictionaries/Oxford.mdx
+dictshelf dump -o ~/exports ~/Dictionaries/Oxford.mdx
 ```
 
 Writes `<outdir>/<name>.csv` in the layout [pyglossary](https://github.com/ilius/pyglossary)
@@ -197,8 +197,8 @@ both.
 ### wudict markdown
 
 ``` sh
-wudict dump -format md -o ~/exports ~/Dictionaries/Oxford.mdx
-wudict dump -format md -mode clean -compress gz -o ~/exports ~/Dictionaries/Oxford.mdx
+dictshelf dump -format md -o ~/exports ~/Dictionaries/Oxford.mdx
+dictshelf dump -format md -mode clean -compress gz -o ~/exports ~/Dictionaries/Oxford.mdx
 ```
 
 Writes `<outdir>/<name>.wudict.md` ([wudict markdown](../dictionaries/formats.md#wudict-markdown)),
@@ -226,7 +226,7 @@ is documented in [The text.db format](text-db.md).
 ## ingest
 
 ``` sh
-wudict ingest [-full] [-fulltext] [-contains] [<dictfile|folder> …]
+dictshelf ingest [-full] [-fulltext] [-contains] [<dictfile|folder> …]
 ```
 
 Indexes dictionaries into `<DB_DIR>/<name>/` (`text.db`, `info.txt`). Without a
@@ -249,10 +249,10 @@ A flag left out keeps what each dictionary has.
 ## reindex
 
 ``` sh
-wudict reindex [-all] [<name|path> …]
+dictshelf reindex [-all] [<name|path> …]
 ```
 
-Rebuilds outdated indexes: built by an older version of wudict, from dictionary
+Rebuilds outdated indexes: built by an older version of DictShelf, from dictionary
 files that changed since, or unreadable. Each dictionary keeps its indexes and
 media pack. Names limit the rebuild to those dictionaries; `-all` rebuilds
 current ones too. A dictionary whose files are gone is reported and kept. While
@@ -262,9 +262,9 @@ its progress.
 ## lemmas
 
 ``` sh
-wudict lemmas list                  # installed and available languages
-wudict lemmas download hu fr pt ru  # install, by code or English name
-wudict lemmas remove ru             # delete
+dictshelf lemmas list                  # installed and available languages
+dictshelf lemmas download hu fr pt ru  # install, by code or English name
+dictshelf lemmas remove ru             # delete
 ```
 
 ```
@@ -277,8 +277,8 @@ Lemma files in ~/.dmshlabs/dictshelf/lemmas
   [ ]  ru   Russian          1.9 MB  ~63 MB RAM
   ...
 
-  wudict lemmas download ru sk    install       [x] ready   [ ] not installed
-  wudict lemmas remove sk         delete        [!] installed, differs from the catalogue
+  dictshelf lemmas download ru sk    install       [x] ready   [ ] not installed
+  dictshelf lemmas remove sk         delete        [!] installed, differs from the catalogue
 ```
 
 The RAM column is the memory a language uses while loaded; at most
@@ -302,9 +302,9 @@ Android.
 ## clean
 
 ``` sh
-wudict clean                # list
-wudict clean -f             # delete broken library folders
-wudict clean -f -orphans    # and orphans
+dictshelf clean                # list
+dictshelf clean -f             # delete broken library folders
+dictshelf clean -f -orphans    # and orphans
 ```
 
 Lists incomplete or unreadable library folders, interrupted indexing, and
@@ -318,7 +318,7 @@ location. A library folder kept with *dictionary files only* or
 ## rm
 
 ``` sh
-wudict rm [-f] [-keep-source | -keep-index] <name|path>
+dictshelf rm [-f] [-keep-source | -keep-index] <name|path>
 ```
 
 Removes one dictionary: its library folder and its dictionary files. The
@@ -337,8 +337,8 @@ again on its next search.
 ## token
 
 ``` sh
-wudict token           # print the link that carries the access key
-wudict token -rotate   # replace the key
+dictshelf token           # print the link that carries the access key
+dictshelf token -rotate   # replace the key
 ```
 
 A browser on another device opens the link once when the server listens on the
@@ -353,8 +353,8 @@ into it.
 ## Examples
 
 ``` sh
-wudict --dict-dir ~/Books/Dicts --port 9090 --no-browser
-wudict lookup ~/Dictionaries/Oxford.mdx serendipity
-wudict ingest -full ~/Dictionaries/Oxford.mdx
-SERVER_PORT=9000 wudict
+dictshelf --dict-dir ~/Books/Dicts --port 9090 --no-browser
+dictshelf lookup ~/Dictionaries/Oxford.mdx serendipity
+dictshelf ingest -full ~/Dictionaries/Oxford.mdx
+SERVER_PORT=9000 dictshelf
 ```

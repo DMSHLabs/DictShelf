@@ -8,8 +8,8 @@ description: The DictShelf installer for Windows - install modes, optional tasks
 The installer is optional. It installs `DictShelf.exe` for the desktop and
 terminal commands, alongside a Start menu entry, an uninstaller and four
 optional actions.
-It runs on 64-bit Windows on x64, and on Arm64 Windows 11 (x64 emulation). On
-other Arm64 systems use `wudict-windows-arm64-purego.exe`.
+It runs on 64-bit Windows on x64, and on Arm64 Windows 11 through x64
+emulation. There is no native Arm64 build.
 
 ## Install
 
@@ -53,11 +53,11 @@ PowerShell or `cmd`. The log is written to
 If the app is already active, a second operational launch displays a warning and exits.
 
 DictShelf keeps its files in `%USERPROFILE%\.dmshlabs\dictshelf`. On first launch, if
-`%USERPROFILE%\.wudict` exists, DictShelf checks its `state.json` for DictShelf-only
+`%USERPROFILE%\.dictshelf` exists, DictShelf checks its `state.json` for DictShelf-only
 settings. If it finds them, it asks whether to copy or move DictShelf settings,
 styles and lemma files into the new folder. Otherwise, it offers to import only
 the dictionary folders and lemmas, or start with **Edit Folders**. Dictionary
-indexes are not copied; DictShelf rebuilds them in its own format. The old wuDict
+indexes are not copied; DictShelf rebuilds them in its own format. The old DictShelf
 server is stopped before files are copied when its settings identify a running
 instance.
 

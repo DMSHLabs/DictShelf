@@ -9,7 +9,7 @@ in your browser at [http://localhost:6888](http://localhost:6888).
 DictShelf keeps the original format support and adds its own product identity and platform work:
 
 - Its own Android identity — launcher name **DictShelf** — so it installs and
-  runs **beside** the upstream wuDict app.
+  runs **beside** the upstream DictShelf app.
 - A different default server port, **6889** (upstream uses 6888), so both apps
   can run at the same time on one device.
 - Android-focused UI work: an extended Appearance sheet (window background
@@ -40,16 +40,16 @@ Runs natively on [android](https://dmshlabs.github.io/DictShelf/apps/android/), 
 | Lingvo DSL      | `.dsl`, `.dsl.dz`                   | UTF-8/16/32 auto-detected; `*.dsl.files.zip` resources |
 | Babylon         | `.bgl`                              | gzip block stream; source/target charset auto-detected (Latin / Cyrillic / CJK code pages); embedded images |
 | ZIM             | `.zim`                              | Kiwix/Wikimedia offline archives; see https://library.kiwix.org
-| wudict markdown | `.wudict.md` or `.md`, `.wudict.md.gz` | plain CommonMark, readable and editable in any editor; a dictionary only when its first two lines are `# Title` and `wudict: 1`, whatever the name; `<name>.wudict.files/` resources; written by `wudict dump -format md` |
-| wudict          | cache folder (`text.db`)            | wuDict's own SQLite-based format (see *Sharing*, below) |
+| wudict markdown | `.wudict.md` or `.md`, `.wudict.md.gz` | plain CommonMark, readable and editable in any editor; a dictionary only when its first two lines are `# Title` and `wudict: 1`, whatever the name; `<name>.wudict.files/` resources; written by `dictshelf dump -format md` |
+| DictShelf          | cache folder (`text.db`)            | DictShelf's own SQLite-based format (see *Sharing*, below) |
 
-## wuDict for Desktop
+## DictShelf for Desktop
 
 1. Download the standalone binary for your OS from
-   [releases](https://github.com/DMSHLabs/DictShelf/releases), rename to `wudict`,
-   `chmod +x wudict` (macOS/Linux) and move to a folder in `$PATH`, e.g. `/usr/local/bin`.
-2. Run `wudict` or `./wudict` if the file is in the current folder. For Windows, use the `dictshelf-windows-x64-setup-<version>.exe` installer or the `DictShelf.exe` desktop build. For macOS an app bundle is provided (it is not signed with a commercial Apple Developer Certificate, macOS flags it as unverified, and extra steps are needed to de-quarantine the app as described in the [manual](https://dmshlabs.github.io/DictShelf/apps/macos/)).
-3. By default `wudict` searches for dictionaries under `~/Dictionaries` (including subfolders); 
+   [releases](https://github.com/DMSHLabs/DictShelf/releases), rename to `dictshelf`,
+   `chmod +x dictshelf` (macOS/Linux) and move to a folder in `$PATH`, e.g. `/usr/local/bin`.
+2. Run `dictshelf` or `./dictshelf` if the file is in the current folder. For Windows, use the `dictshelf-windows-x64-setup-<version>.exe` installer or the `DictShelf.exe` desktop build. For macOS an app bundle is provided (it is not signed with a commercial Apple Developer Certificate, macOS flags it as unverified, and extra steps are needed to de-quarantine the app as described in the [manual](https://dmshlabs.github.io/DictShelf/apps/macos/)).
+3. By default `dictshelf` searches for dictionaries under `~/Dictionaries` (including subfolders);
    if the dictionary folder is missing or empty, a setup page opens where you can configure your dictionary folders.
 
 ## Adding dictionaries 
@@ -62,10 +62,10 @@ You can configure the dictionary folders from
 the console via cli args, env vars or by directly editing the config file at `~/.dmshlabs/dictshelf/dictshelf.toml` (recommended):
 ```sh
 # as one or more CLI args (for example, as a temporary override of the current `dictshelf.toml`):
-wudict --dict-dir ~/Dictionaries --dict-dir /Volumes/Data/Dicts   # repeat the flag
+dictshelf --dict-dir ~/Dictionaries --dict-dir /Volumes/Data/Dicts   # repeat the flag
 
 # or via an env var:
-DICT_DIR="~/Dictionaries:/Volumes/Data/Dicts" wudict              # separate multiple folders with ":" on linux/mac and ";" on Windows
+DICT_DIR="~/Dictionaries:/Volumes/Data/Dicts" dictshelf              # separate multiple folders with ":" on linux/mac and ";" on Windows
 ```
 
 in `dictshelf.toml` (the recommended way):
@@ -82,7 +82,7 @@ DICT_DIR = ["~/Dictionaries", "/Volumes/Data/Dicts"]
 | **contains** | substring / typo-tolerant headword match, anywhere in the word (FTS5 trigram) | ad-hoc |
 | **full-text** | search inside article text, ranked by relevance | yes |
 
-When you add a dictionary, wudict queues its headword index in the background.
+When you add a dictionary, DictShelf queues its headword index in the background.
 Until the index is ready, exact and prefix searches use the dictionary's own
 format. The library index makes lookups faster and supports accent-insensitive
 search (*corazon* → *corazón*). Search does not start an index job.
@@ -91,7 +91,7 @@ search (*corazon* → *corazón*). Search does not start an index job.
  (substring search) are not enabled by default as they consume more disk space. 
 Click the <kbd>☰</kbd> button and enable them as needed.
 For each dictionary the index size is displayed; *⚡ index all* adds full-text for all dictionaries
-at once, and `wudict ingest [-fulltext] [-contains] [<file-or-folder>]` does the
+at once, and `dictshelf ingest [-fulltext] [-contains] [<file-or-folder>]` does the
 same from the command line.
 
 Results stream live as each dictionary responds — the top one opens
@@ -113,14 +113,14 @@ be searched by selecting it in the dictionary dropdown.
 
 ## Run as an app (macOS)
 
-For macOS you can either run the `wudict` binary from a terminal, or use the **`wudict-macos-universal-app-<version>.zip`** from [releases](https://github.com/DMSHLabs/DictShelf/releases) which wraps `wudict` into a macOS app bundle.
+For macOS you can either run the `dictshelf` binary from a terminal, or use the **`dictshelf-macos-universal-app-<version>.zip`** from [releases](https://github.com/DMSHLabs/DictShelf/releases) which wraps `dictshelf` into a macOS app bundle.
 
 > [!WARNING]
 > The macOS bundle is signed with an ad-hoc certificate therefore on first run the bundle has be de-quarantined with `/usr/bin/xattr -cr /Applications/DictShelf.app` and then launched via righ-click → <kbd>**Open**</kbd>.
 
-## Run wudict as a service (macOS)
+## Run DictShelf as a service (macOS)
 
-`wudict` can be installed as a `launchctl` LaunchAgent using Makefile targets:
+`dictshelf` can be installed as a `launchctl` LaunchAgent using Makefile targets:
 
 ```sh
 # run from project root
@@ -145,15 +145,15 @@ the WebView2 Runtime is absent, it opens the default browser instead. Logs go to
 
 ## Run as a service (Linux)
 
-On linux `wudict` can be installed as a **systemd user unit** — only copying the binary into
+On linux `dictshelf` can be installed as a **systemd user unit** — only copying the binary into
 `/usr/local/bin` needs sudo, the service itself runs with user permissions and start/stop does not require sudo.
 Unlike system services which are managed via `systemd start|stop|status <service-name>`, a user systemd service 
-additionally requires the `--user` key, e.g. `systemd --user start|stop|status wudict`.
+additionally requires the `--user` key, e.g. `systemd --user start|stop|status dictshelf`.
 
 ```sh
 # from project root
-make linux-service-install   # sudo-installs /usr/local/bin/wudict, then writes the user unit
-make linux-service-start     # systemctl --user enable --now wudict.service
+make linux-service-install   # sudo-installs /usr/local/bin/dictshelf, then writes the user unit
+make linux-service-start     # systemctl --user enable --now dictshelf.service
 make linux-service-stop
 make linux-service-restart   # rebuild, reinstall the binary, restart
 make linux-service-status
@@ -163,7 +163,7 @@ make linux-install     # just the binary  (PREFIX=/opt/foo to relocate)
 make linux-uninstall
 ```
 
-The systemd unit assumes the executable is at `/usr/local/bin/wudict`.
+The systemd unit assumes the executable is at `/usr/local/bin/dictshelf`.
 
 To keep the service running when you are not logged in:
 
@@ -190,7 +190,7 @@ config file path is printed on startup.
 | `--use-cached` | `USE_CACHED` | off                           |
 | — | `BROWSER_EXTENSIONS` | any extension may look words up |
 
-**`BROWSER_EXTENSIONS`** sets which browser extensions may use the `wudict` server. 
+**`BROWSER_EXTENSIONS`** sets which browser extensions may use the `dictshelf` server.
 Blank (the default) lets any installed extension reach the read-only dictionary API — `/api/dicts`, `/api/search`,
 `/res/`.
 
@@ -209,54 +209,54 @@ Config file search order: `--config` / `CONFIG_PATH`, then
 `<exe-dir>/dictshelf.toml`, `~/.dmshlabs/dictshelf/dictshelf.toml`,
 `/etc/dictshelf/dictshelf.toml`.
 
-**Portable mode.** A `dictshelf.toml` can also be placed in the same folder as the `wudict` (or `DictShelf.exe`) executable.
+**Portable mode.** A `dictshelf.toml` can also be placed in the same folder as the `dictshelf` (or `DictShelf.exe`) executable.
 
 **`~/.dmshlabs/dictshelf/state.json`** stores dictionary search order and enabled/disable state.
 
 ## Command line
 
-Run `wudict --help` for the full reference. 
+Run `dictshelf --help` for the full reference.
 
 > Examples:
 
 ```sh
-wudict                                   # start the server (default command)
+dictshelf                                   # start the server (default command)
 
 # start server with custom options
-wudict --dict-dir ~/Dicts --port 9090    
-wudict --dict-dir ~/Dicts --dict-dir /Volumes/Ext/Dicts   # several folders
+dictshelf --dict-dir ~/Dicts --port 9090
+dictshelf --dict-dir ~/Dicts --dict-dir /Volumes/Ext/Dicts   # several folders
 
 # search for a word in a specific dictionary; plain text to stdout 
 # optional, request specific format with: "-format=raw|clean|text"
-wudict lookup ~/Dicts/Oxford.mdx water
+dictshelf lookup ~/Dicts/Oxford.mdx water
 
 # search ALL dictionaries in folder; plain text to stdout
-wudict searchall -dict-dir /path/to/dicts flight
+dictshelf searchall -dict-dir /path/to/dicts flight
 
 # index every dictionary in your configured folders (DICT_DIR), as the app does
-wudict ingest
+dictshelf ingest
 
 # index every dictionary in a given folder
-wudict ingest ~/Dicts                    
+dictshelf ingest ~/Dicts
 
 # index + pack media
-wudict ingest -full ~/Dicts/Oxford.mdx   
+dictshelf ingest -full ~/Dicts/Oxford.mdx
 
 # clean leftover files
-wudict clean
+dictshelf clean
 
 # list removable library items (-f deletes)
 
 # list headwords (or keys) in a specific dictionary
-wudict keys ~/Dicts/Oxford.mdx
-wudict keys ~/Dicts/Oxford.mdd
+dictshelf keys ~/Dicts/Oxford.mdx
+dictshelf keys ~/Dicts/Oxford.mdd
 
-# extract a resource (pass the key shown by `wudict keys ...`)
-wudict res ~/Dicts/Oxford.mdd audio/a.mp3
+# extract a resource (pass the key shown by `dictshelf keys ...`)
+dictshelf res ~/Dicts/Oxford.mdd audio/a.mp3
 ```
 
 For more on command line usage see the manual:
-- [wuDict Command Line](https://dmshlabs.github.io/DictShelf/reference/cli/)
+- [DictShelf Command Line](https://dmshlabs.github.io/DictShelf/reference/cli/)
 
 ## Sharing dictionaries (one folder each)
 
@@ -294,7 +294,7 @@ system. <kbd>**Edit folders…**</kbd> opens the dictionary folders editor.
 Dictionaries can include their own stylesheets, scripts, images and audio. 
 You can provide your own 'patched' versions 
 by placing files in the `res/` subfolder in 
-wudict's DB folder at `~/.dmshlabs/dictshelf/db/<some-dict-name/res`. Files from `./res`
+DictShelf's DB folder at `~/.dmshlabs/dictshelf/db/<some-dict-name/res`. Files from `./res`
 take precedence over the original files from `.mdd`, `.slob`, `.dsl.files.zip` etc.
 
 ```
@@ -314,13 +314,13 @@ One exception: a `.spx` audio file placed in `res/` is served as-is,
 
 ## Custom styles
 
-`res/` patches one file of one dictionary. To restyle **everything** — wudict
+`res/` patches one file of one dictionary. To restyle **everything** — DictShelf
 itself and every article — put your own CSS in two optional files beside the
 `dictshelf.toml` in effect, usually `~/.dmshlabs/dictshelf/style/`:
 
 ```
 ~/.dmshlabs/dictshelf/style/
-  app.css       wudict itself — its colours, its own layout
+  app.css       dictshelf itself — its colours, its own layout
   article.css   what dictionaries render, in every article
 ```
 
@@ -370,7 +370,7 @@ Article text in prepared dictionaries is compressed when that reduces its size.
 
 ## Speex audio (.spx)
 
-Browsers cannot play Speex. wuDict internally transcodes
+Browsers cannot play Speex. DictShelf internally transcodes
 `.spx` audio to WAV and caches the result, with the decoder built in.
 With `SPEEX_BACKEND=external` the external `speexdec` utility is used instead
 (for mac: `brew install speex`, linux: `apt install speex`, etc).
@@ -381,7 +381,7 @@ Requires [Go](https://go.dev/doc/install) (and a C compiler for the
 default cgo build):
 
 ```sh
-make build          # native build (cgo sqlite, fastest) → ./wudict
+make build          # native build (cgo sqlite, fastest) → ./dictshelf
 make install        # install the binary into GOBIN
 make check          # tidy + vet + tests
 make help           # every available target
@@ -424,13 +424,13 @@ make mac-app            # dist/DictShelf.app — universal-ready, ad-hoc signed
 make mac-app-install    # copy it to ~/Applications (APP_DEST= to relocate)
 ```
 
-The bundle is the same binary as console `wudict` which spawns no terminal window, and 
+The bundle is the same binary as console `dictshelf` which spawns no terminal window, and
 additionally adds a **menu-bar icon** with common actions. See more about [running on macOS](https://dmshlabs.github.io/DictShelf/apps/macos/).
 
 
 ## Acknowledgements
 
-Almost nothing here was invented by this project. Some of the formats `wudict` reads are open-source, others are
+Almost nothing here was invented by this project. Some of the formats `dictshelf` reads are open-source, others are
 closed source, and they are available because other people spent years working
 on dictionaries and tools to read, write and convert data in these formats.
 
@@ -438,7 +438,7 @@ on dictionaries and tools to read, write and convert data in these formats.
 
 - **[pyglossary](https://github.com/ilius/pyglossary)** — its plugins are the clearest working description of
   MDX/MDD, StarDict, Slob, DSL and BGL that exists anywhere, and the BGL parser
-  in `wudict` is ported from `pyglossary`'s `babylon_bgl` plugin. Thanks to
+  in `dictshelf` is ported from `pyglossary`'s `babylon_bgl` plugin. Thanks to
   **[@ilius](https://github.com/ilius)** and pyglossary's contributors for
   sustained, meticulous work on formats nobody else kept maintaining.
 - **[GoldenDict](http://goldendict.org/)** and the actively developed fork
@@ -501,7 +501,7 @@ The files this fork authored, and its changes to the ones it inherited, are
 © 2026 DmShAl (Shepeta Dmitry), under the same license; upstream's copyright
 notices remain in place where upstream wrote the file.
 
-`wudict licenses` prints the full third-party notices from inside the binary;
+`dictshelf licenses` prints the full third-party notices from inside the binary;
 the same text is in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 Third-party code included in this repository:

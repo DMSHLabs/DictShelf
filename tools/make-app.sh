@@ -12,14 +12,14 @@
 # symlink (EvalSymlinks would resolve it back out of the bundle and the tray
 # would silently refuse to start).
 #
-# Everything else is already wired: a bare `wudict` with no arguments serves,
+# Everything else is already wired: a bare `dictshelf` with no arguments serves,
 # a second launch finds the port taken, opens the browser and exits, and a GUI
 # launch redirects logx to ~/Library/Logs/DMSH Labs/DictShelf/dictshelf.log. This script adds no
 # behaviour to the product; it only produces the directory layout and the
 # Info.plist that make macOS treat the binary as an app.
 #
 # Env (all optional, set by the Makefile):
-#   APP_BIN    binary to embed        default ./wudict
+#   APP_BIN    binary to embed        default ./dictshelf
 #   APP_ID     CFBundleIdentifier     default com.dmshlabs.dictshelf
 #   MACOS_MIN  LSMinimumSystemVersion default 12.0
 #   BUILD_DIR  output directory       default dist
@@ -27,7 +27,7 @@
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-bin=${APP_BIN:-$root/wudict}
+bin=${APP_BIN:-$root/dictshelf}
 id=${APP_ID:-com.dmshlabs.dictshelf}
 minos=${MACOS_MIN:-12.0}
 out=${BUILD_DIR:-dist}
@@ -54,7 +54,7 @@ if [ -n "$over" ]; then
 fi
 
 # Identity comes from the binary itself rather than from a Makefile variable
-# (tools/version.sh): `wudict --version` prints "<ProductName> <Version>", so
+# (tools/version.sh): `dictshelf --version` prints "<ProductName> <Version>", so
 # the bundle cannot drift from cli.ProductName / cli.Version the way a second
 # copy of the name would. The Windows installer reads the same helper.
 eval "$(sh "$root/tools/version.sh" "$bin")"
@@ -69,14 +69,14 @@ mkdir -p "$contents/MacOS" "$contents/Resources"
 
 # cp, never ln: see the EvalSymlinks note above. -p keeps the mode and the
 # ad-hoc signature the Go linker already put on the arm64 binary.
-cp -p "$bin" "$contents/MacOS/wudict"
-chmod 755 "$contents/MacOS/wudict"
+cp -p "$bin" "$contents/MacOS/dictshelf"
+chmod 755 "$contents/MacOS/dictshelf"
 cp "$icns" "$contents/Resources/dictshelf.icns"
 printf 'APPL????' > "$contents/PkgInfo"
 
 sed -e '/<!-- TEMPLATE/,/^-->$/d' \
     -e "s|@NAME@|$name|g" \
-    -e "s|@EXEC@|wudict|g" \
+    -e "s|@EXEC@|dictshelf|g" \
     -e "s|@ID@|$id|g" \
     -e "s|@SHORT@|$short|g" \
     -e "s|@BUILD@|$short|g" \

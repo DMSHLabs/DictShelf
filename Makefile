@@ -1,11 +1,12 @@
-# wudict - developer UI & manifest (Decision D10)
+# DictShelf - developer UI & manifest (Decision D10)
 # Every meaningful action lives here; `make` alone shows this menu.
 # New capabilities MUST land with a target.
 
 # One binary, one entry point (D28). Go names an installed binary after the
-# last element of its package path, and the module is .../wudict, so the
-# module-root main package is all that's needed to get "wudict".
-BINARY     := wudict
+# last element of its package path, and the module is .../DictShelf, so the
+# module-root main package would be "DictShelf"; the name below is what the
+# binary, the macOS bundle and the release artifacts are called instead.
+BINARY     := dictshelf
 CMD        := .
 BUILD_DIR  := dist
 
@@ -59,7 +60,7 @@ i18n-check-js: ## Check JS plural rules and fallback (optional; requires Node, n
 
 .PHONY: help
 help: ## Show this help
-	@echo "wudict make targets:"; echo
+	@echo "dictshelf make targets:"; echo
 	@awk 'BEGIN{FS=":.*##"} /^[a-zA-Z0-9_.-]+:.*##/{printf "  \033[36m%-24s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo
 	@echo "Vars: ARGS=<cli args>  WUDICT_TEST_MDX|_STARDICT|_SLOB|_DSL|_ZIM=<integration fixtures>"
@@ -71,7 +72,7 @@ build: ## Build the host binary - cgo flavour (built-in sqlite FTS5 + built-in s
 	CGO_ENABLED=1 go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BINARY) $(CMD)
 
 .PHONY: install
-install: ## go install the wudict binary into GOBIN
+install: ## go install the dictshelf binary into GOBIN
 	CGO_ENABLED=1 go install $(GOFLAGS) -ldflags "$(LDFLAGS)" $(CMD)
 
 .PHONY: run
@@ -99,11 +100,11 @@ icons: ## Regenerate six platform icon variants and previews from SVGs using Ink
 # ---- macOS .app bundle (D75) --------------------------------------------
 # The bundle is the only macOS launch path that tells the binary a person
 # started it: internal/tray looks for ".app/Contents/MacOS/" in its own
-# os.Executable(). Nothing else about the product changes - a bare `wudict`
+# os.Executable(). Nothing else about the product changes - a bare `dictshelf`
 # already serves, and a second launch already finds the port taken, opens the
 # browser and exits.
 #
-# The bundle NAME is derived by tools/make-app.sh from `wudict --version`, so
+# The bundle NAME is derived by tools/make-app.sh from `dictshelf --version`, so
 # it cannot drift from cli.ProductName the way a copy of the name here would.
 # The script reports the path it built in $(BUILD_DIR)/.app-path, which is how
 # the install target addresses a name Make does not know.
@@ -437,7 +438,7 @@ check: tidy vet test ## Pre-commit gate: tidy + vet + test
 
 # ---- lemma data ---------------------------------------------------------
 # Only English is built into the binary (D87); every other language is a file
-# a user installs with `wudict lemmas download` (D88). This builds what that
+# a user installs with `dictshelf lemmas download` (D88). This builds what that
 # command downloads: <code>.tsv.gz per language, plus the manifest.json that
 # LEMMA_URL points at and the ODbL ATTRIBUTION.txt redistribution requires.
 #
@@ -555,7 +556,7 @@ LOGDIR   := $(HOME)/Library/Logs/DMSH Labs/DictShelf
 # Which binary the agent runs. Defaults to THIS checkout's build, so that
 # `make mac-agent-restart` (rebuild + kickstart) is coherent. Point it at the
 # installed copy to survive moving/renaming the checkout:
-#   make mac-agent-install AGENT_BIN="$$(go env GOPATH)/bin/wudict"
+#   make mac-agent-install AGENT_BIN="$$(go env GOPATH)/bin/dictshelf"
 AGENT_BIN ?= $(abspath $(BINARY))
 
 .PHONY: mac-agent-install

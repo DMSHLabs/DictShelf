@@ -1,5 +1,5 @@
 # ============================================================================
-# WuWeiDict - documentation site configuration (Zensical, TOML)
+# DictShelf - documentation site configuration (Zensical, TOML)
 #
 # Build:   zensical build        (from this directory)
 # Preview: zensical serve        (http://localhost:8000)

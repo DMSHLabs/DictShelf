@@ -1,6 +1,6 @@
 ---
 title: Build from source
-description: Build wudict yourself with Go, with or without a C compiler, including cross-compiled releases and the Android app.
+description: Build DictShelf yourself with Go, with or without a C compiler, including cross-compiled releases and the Android app.
 ---
 
 # Build from source
@@ -12,27 +12,22 @@ Windows.
 
 ## go install
 
-=== "With a C compiler"
+``` sh title="cgo SQLite plus the built-in Speex decoder"
+go install -tags sqlite_fts5,sqlite_dbstat github.com/DMSHLabs/DictShelf@latest
+```
 
-    ``` sh title="cgo SQLite plus the built-in Speex decoder"
-    go install -tags sqlite_fts5 github.com/DMSHLabs/DictShelf@latest
-    ```
-
-=== "Without a C compiler"
-
-    ``` sh title="pure-Go SQLite"
-    go install github.com/DMSHLabs/DictShelf@latest
-    ```
-
-The tag selects the SQLite driver and the Speex decoder. Without a C compiler,
-`-tags sqlite_fts5` builds the pure-Go variant instead of failing.
+The tags select the SQLite driver and the page-accounting table the recorded
+index sizes are measured with, and the Speex decoder is compiled in beside
+them. A C compiler is required: without one, or without the tags, the build
+fails on purpose, by name (`internal/store/driver_missing.go`), rather than
+linking a different driver.
 
 ## From a clone
 
 Every action has a `make` target.
 
 ``` sh
-make build     # native build, cgo flavour, into ./wudict
+make build     # native build, cgo flavour, into ./dictshelf
 make install   # into GOBIN
 make check     # tidy, vet and all tests
 make help      # every target, with a description
@@ -76,11 +71,13 @@ fails it.
 
 ## Release builds
 
-``` sh
-make cross
-```
-
-Builds the `-purego` binaries for macOS, Linux and Windows into `dist/`.
+The release binaries are built by
+[`build-cgo.yml`](https://github.com/DMSHLabs/DictShelf/blob/dev/.github/workflows/build-cgo.yml),
+one native runner per platform, because cgo cannot cross the host arch/OS:
+`dictshelf-darwin-arm64-cgo`, `dictshelf-darwin-amd64-cgo`,
+`dictshelf-linux-amd64-cgo`, `dictshelf-linux-arm64-cgo` and the universal
+`dictshelf-macos-universal-app-<version>.zip`; the Windows side comes from
+`build-windows.cmd` as `DictShelf.exe` plus the installer below.
 
 ``` sh
 make mac-app          # DictShelf.app into dist/
@@ -95,8 +92,9 @@ make android-go     # build the server for the app (needs the Android NDK)
 make apk-foss-debug # build the FOSS debug APK (needs the Android SDK)
 ```
 
-Without the NDK, `make android-go-purego` builds the pure-Go variant, which
-has no Speex audio. The app is a WebView shell around the same server binary.
+The Go side is cgo, cross-compiled with the NDK's `clang`: without the NDK
+there is no Android build. The app is a WebView shell around the same server
+binary.
 
 ### Builds
 
@@ -114,5 +112,5 @@ permission. See [Android app](../apps/android.md).
 ## Check
 
 ``` sh
-./wudict --version
+./dictshelf --version
 ```

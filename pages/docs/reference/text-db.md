@@ -1,6 +1,6 @@
 ---
 title: The text.db format
-description: The SQLite format of an indexed wudict dictionary - tables, meta keys, article storage, and reading or writing it from another program.
+description: The SQLite format of an indexed DictShelf dictionary - tables, meta keys, article storage, and reading or writing it from another program.
 ---
 
 # The `text.db` format
@@ -21,7 +21,7 @@ programs that read or write them.
 `text.db` alone is a complete dictionary; the other files are optional or
 derived.
 
-`PRAGMA user_version` is **1**; wudict does not open a database with another
+`PRAGMA user_version` is **1**; DictShelf does not open a database with another
 value. Tables have been added without changing it (see
 [Compatibility](#compatibility)), so a reader must check that a table exists
 before using it.
@@ -151,7 +151,7 @@ their original spelling:
 <a href="sound://lion.mp3">🔊</a>
 ```
 
-wudict rewrites them to `/res/<dictionary id>/…` when it serves an article, not
+DictShelf rewrites them to `/res/<dictionary id>/…` when it serves an article, not
 in the database. An exporter gets the original names and looks each one up in
 `media.db` (below) or beside the dictionary file.
 
@@ -170,7 +170,7 @@ CREATE TABLE resource(name TEXT PRIMARY KEY, mime TEXT, data BLOB);
   exactly, then case-insensitively, then in both Unicode normalization forms:
   MDX stores resource names in lower case, loose files keep their spelling, and
   an article may use either.
-- `resource.data` is the file's bytes, not compressed by wudict.
+- `resource.data` is the file's bytes, not compressed by DictShelf.
 - `meta.dict_uuid` **must** equal the `dict_uuid` in the `text.db` beside it.
   A mismatched pair is refused.
 
@@ -182,7 +182,7 @@ is derived, need not be copied, and can be deleted.
 Without SQL:
 
 ``` sh title="whole dictionary as CSV, pyglossary layout"
-wudict dump -o out ~/.dmshlabs/dictshelf/db/Webster
+dictshelf dump -o out ~/.dmshlabs/dictshelf/db/Webster
 ```
 
 This writes `out/Webster.csv`: `"#key","value"` metadata rows, then one row
@@ -201,11 +201,11 @@ ORDER BY e.id;
 ```
 
 Decode `m` as shown [above](#reading-articles). Open the file read-only
-(`file:…?mode=ro`) while wudict may be running.
+(`file:…?mode=ro`) while DictShelf may be running.
 
 ## Authoring a dictionary directly
 
-A `text.db` written by another program is a wudict dictionary. Put its folder
+A `text.db` written by another program is a DictShelf dictionary. Put its folder
 in the library or in a dictionary folder.
 
 Requirements:
@@ -221,13 +221,13 @@ Requirements:
       *About this dictionary* text.
 - [x] Set `meta.dict_uuid` (16 random bytes, hex) if you also write a
       `media.db`, and put the same value in both.
-- [x] Leave out `meta.source_path`. If it names an existing file, wudict takes
+- [x] Leave out `meta.source_path`. If it names an existing file, DictShelf takes
       the About text from that file and ignores `description`.
 - [x] Write to a temporary file and rename it into place, so an incomplete
       database is never found.
 
 `meta.format` is a free label. Use your own (`native`), not `dsl` or
-`stardict`: wudict treats those as built by itself and may offer to rebuild
+`stardict`: DictShelf treats those as built by itself and may offer to rebuild
 them.
 
 ## Compatibility

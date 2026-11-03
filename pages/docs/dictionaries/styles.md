@@ -1,6 +1,6 @@
 ---
 title: Custom styles
-description: Your own CSS for wudict and for dictionary articles - the editor, the examples, dark mode and a compact phone layout.
+description: Your own CSS for DictShelf and for dictionary articles - the editor, the examples, dark mode and a compact phone layout.
 ---
 
 # Custom styles
@@ -9,7 +9,7 @@ Two optional CSS files:
 
 | File | Applies to |
 | --- | --- |
-| `app.css` | wudict's own page: colours, layout |
+| `app.css` | DictShelf's own page: colours, layout |
 | `article.css` | every dictionary article |
 
 They are in the `style/` folder beside the `dictshelf.toml` in effect, usually
@@ -47,12 +47,12 @@ so a reload applies the change.
 
 ## App or Article
 
-`article.css` styles dictionary markup and cannot reach wudict's page.
+`article.css` styles dictionary markup and cannot reach DictShelf's page.
 
 | Rule | File |
 | --- | --- |
 | a custom property (`--token`) | `app.css`: properties set on `:root` are inherited by articles |
-| a selector for wudict's elements (`.col`, `details.dict`) | `app.css` |
+| a selector for DictShelf's elements (`.col`, `details.dict`) | `app.css` |
 | a selector for dictionary markup (`body`, `p`, `table`) | `article.css` |
 
 ``` css title="app.css — sepia"
@@ -64,7 +64,7 @@ html:not([data-dark]){
 ```
 
 `--wd-article-bg` and `--wd-article-fg` are the article surface; the others are
-wudict's own tokens.
+DictShelf's own tokens.
 
 A dictionary that sets its own background on its markup is not reached by the
 tokens. The colour examples therefore also insert into `article.css`:
@@ -108,7 +108,7 @@ html:not([data-dark]){ /* light */ }
 
 In `article.css`: `:host([data-dark]), html[data-dark] { … }`.
 
-In dark mode wudict inverts each article's colours: dictionary stylesheets have
+In dark mode DictShelf inverts each article's colours: dictionary stylesheets have
 no dark variant. Write article colours for light mode, and use `[data-dark]` in
 `article.css` only to exempt an element from the inversion. The article tokens
 under `html[data-dark]` in `app.css` are also values before inversion:
@@ -149,7 +149,7 @@ widths. The *Compact* example removes both below a width of 700px:
 `:host` is the root of an article without scripts; `:root > body` the root of
 one rendered in a frame. Only the root needs these prefixes; other selectors in
 `article.css` reach only article markup. The `app.css` part of *Compact*
-removes wudict's own padding around the article.
+removes DictShelf's own padding around the article.
 
 ??? info "What each part does"
 

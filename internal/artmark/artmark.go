@@ -2,11 +2,11 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Package artmark is the markup contract for articles wudict writes itself.
+// Package artmark is the markup contract for articles DictShelf writes itself.
 //
 // Two kinds of article HTML reach a reader. NATIVE markup (mdx, slob, zim,
 // most stardict) comes out of the dictionary with a stylesheet of its own,
-// and wudict only sanitises and re-points it. SYNTHESIZED markup is authored
+// and DictShelf only sanitises and re-points it. SYNTHESIZED markup is authored
 // here - Lingvo DSL is a tag stream with no HTML at all (internal/format/dsl),
 // XDXF is an XML vocabulary that must be mapped onto elements
 // (internal/format/stardict) - and there is no stylesheet anywhere, because
@@ -73,7 +73,7 @@ package artmark
 
 // Prefix namespaces every class in the vocabulary. It is also the filter the
 // `clean` article format applies: a wu- class survives sanitisation because it
-// is wudict's own, anything else is dropped with the rest of the presentation.
+// is DictShelf's own, anything else is dropped with the rest of the presentation.
 const Prefix = "wu-"
 
 // Version is bumped when the emitted markup changes in a way that makes

@@ -19,7 +19,7 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
-// `wudict dump -format md` writes the dictionary as WuWeiDict markdown
+// `dictshelf dump -format md` writes the dictionary as wudict markdown
 // (docs/WUDICT-MARKDOWN.md §6): "<name>.wudict.md", or ".wudict.md.gz" with
 // -compress gz, and its resources in "<name>.wudict.files/". -mode html (the
 // default) keeps every article's HTML as it is, losing nothing; -mode clean

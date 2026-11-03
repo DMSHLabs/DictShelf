@@ -6,7 +6,7 @@ description: Indexing, library folders, moving a dictionary, outdated indexes, a
 # The library
 
 The **library** (`~/.dmshlabs/dictshelf/db`, [`DB_DIR`](../reference/configuration.md#db_dir))
-holds wudict's indexed copy of each dictionary: one library folder per
+holds DictShelf's indexed copy of each dictionary: one library folder per
 dictionary.
 
 ## Indexing
@@ -18,7 +18,7 @@ dictionary.
 | + contains index | the same `text.db`         | + contains |
 | + full-text index | the same `text.db`         | + full-text |
 
-A dictionary is searchable as soon as wudict finds it. wudict queues its
+A dictionary is searchable as soon as DictShelf finds it. DictShelf queues its
 headword index when the dictionary is added or found by Rescan. The queue's
 concurrency is calculated from the machine's logical processors. Until the index
 is ready, exact and prefix searches use the dictionary's own format. Search
@@ -30,7 +30,7 @@ file. The ZIM index cannot be changed in Dictionary Settings.
 
 The contains index, the full-text index and the media pack are added per
 dictionary with its switches in the dictionary panel, or with
-[`wudict ingest`](#index-from-the-terminal).
+[`dictshelf ingest`](#index-from-the-terminal).
 
 ## Library folder
 
@@ -58,8 +58,8 @@ dictionary is usually smaller than its dictionary files.
 ## Index from the terminal
 
 ``` sh
-wudict ingest                    # the dictionary folders (DICT_DIR)
-wudict ingest ~/Dictionaries/es  # one folder
+dictshelf ingest                    # the dictionary folders (DICT_DIR)
+dictshelf ingest ~/Dictionaries/es  # one folder
 ```
 
 `ingest` skips dictionaries already indexed and gives a new dictionary the
@@ -70,9 +70,9 @@ See [`ingest`](../reference/cli.md#ingest).
 
 ## Outdated indexes
 
-An index is outdated when an older version of wudict built it, or when the
+An index is outdated when an older version of DictShelf built it, or when the
 dictionary files changed since. The dictionary panel then shows *N dictionaries have outdated indexes* and <kbd>Rebuild</kbd>;
-[`wudict reindex`](../reference/cli.md#reindex) does the same from a terminal.
+[`dictshelf reindex`](../reference/cli.md#reindex) does the same from a terminal.
 A rebuild keeps each dictionary's indexes and media pack. <kbd>Stop</kbd> ends
 it after the current dictionary.
 
@@ -94,7 +94,7 @@ to create the index again before you need the library copy.
 
     Files are unlinked, not moved to the Trash or the Recycle Bin.
 
-When running wudict on a LAN, from another host, removal needs
+When running DictShelf on a LAN, from another host, removal needs
 [`ALLOW_REMOTE_DELETE`](../reference/configuration.md#allow_remote_delete).
 
 ## Remove an index
@@ -115,11 +115,11 @@ ordinary dictionaries.
 ## From the terminal
 
 ``` sh
-wudict clean               # list broken or incomplete library folders, and orphans
-wudict clean -f            # delete the broken ones
-wudict clean -f -orphans   # and the orphans
-wudict rm Oxford           # list what removing Oxford would delete
-wudict rm -f Oxford        # delete the library folder and the dictionary files
+dictshelf clean               # list broken or incomplete library folders, and orphans
+dictshelf clean -f            # delete the broken ones
+dictshelf clean -f -orphans   # and the orphans
+dictshelf rm Oxford           # list what removing Oxford would delete
+dictshelf rm -f Oxford        # delete the library folder and the dictionary files
 ```
 
 `rm -keep-source` deletes only the library folder, `rm -keep-index` only the

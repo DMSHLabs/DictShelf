@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: Every wudict setting - flag, environment variable, dictshelf.toml key, values and default.
+description: Every DictShelf setting - flag, environment variable, dictshelf.toml key, values and default.
 ---
 
 # Configuration
@@ -15,14 +15,14 @@ default. The setup page shows which values a flag or variable overrides.
 
 ## Config file
 
-wudict reads the first of:
+DictShelf reads the first of:
 
 1. `--config` or `CONFIG_PATH`
 2. `dictshelf.toml` next to the executable ([portable mode](#portable-mode))
 3. `~/.dmshlabs/dictshelf/dictshelf.toml` on macOS and Linux; `~/.dmshlabs/dictshelf/dictshelf.toml` on Windows
 4. `/etc/dictshelf/dictshelf.toml`
 
-The first `wudict serve` creates the platform config file with every setting
+The first `dictshelf serve` creates the platform config file with every setting
 commented out. Each start prints the file in effect. An unknown key is reported
 at startup and on the setup page.
 
@@ -30,7 +30,7 @@ at startup and on the setup page.
 
 A `dictshelf.toml` next to the executable takes precedence over
 `~/.dmshlabs/dictshelf/dictshelf.toml` and receives the settings saved from the setup page.
-wudict never creates it.
+DictShelf never creates it.
 
 ## Files
 
@@ -43,7 +43,7 @@ wudict never creates it.
 | In the config folder | Contents |
 | --- | --- |
 | `dictshelf.toml` | settings |
-| `state.json` | dictionary order, enabled dictionaries, display preferences; written by wudict |
+| `state.json` | dictionary order, enabled dictionaries, display preferences; written by DictShelf |
 | `groups.ini` | picker groups, once edited |
 | `style/` | custom styles |
 | `token` | the access key |
@@ -54,8 +54,8 @@ Log when there is no console: macOS `~/Library/Logs/DMSH Labs/DictShelf/dictshel
 `~/.dmshlabs/dictshelf/dictshelf.log`, Windows `%USERPROFILE%\.dmshlabs\dictshelf\db.logs\dictshelf.log`, Android
 logcat.
 
-wudict does not modify dictionary files. Only <kbd>🗑 Remove…</kbd> and
-`wudict rm` delete them.
+DictShelf does not modify dictionary files. Only <kbd>🗑 Remove…</kbd> and
+`dictshelf rm` delete them.
 
 ## Everyday settings
 
@@ -69,8 +69,8 @@ Folders with dictionary files, subfolders included.
 | Default | `~/Dictionaries` |
 
 ``` sh title="two folders, from the command line and the environment"
-wudict --dict-dir ~/Dictionaries --dict-dir /Volumes/Ext/Dicts
-DICT_DIR="~/Dictionaries:/Volumes/Ext/Dicts" wudict     # ";" on Windows
+dictshelf --dict-dir ~/Dictionaries --dict-dir /Volumes/Ext/Dicts
+DICT_DIR="~/Dictionaries:/Volumes/Ext/Dicts" dictshelf     # ";" on Windows
 ```
 
 ``` toml title="~/.dmshlabs/dictshelf/dictshelf.toml"
@@ -90,7 +90,7 @@ The library: one library folder per indexed dictionary.
 | Flag | `--db-dir <path>` |
 | Default | `~/.dmshlabs/dictshelf/db` |
 
-Must not be a `DICT_DIR` folder; wudict does not start if it is.
+Must not be a `DICT_DIR` folder; DictShelf does not start if it is.
 
 ### SERVER_IP and SERVER_PORT
 
@@ -139,7 +139,7 @@ Requests from the loopback address can always delete.
 !!! warning "Deletion is permanent"
 
     Deleted files are unlinked, not moved to the Trash or the Recycle Bin.
-    `wudict rm` without `-f` lists what it would delete.
+    `dictshelf rm` without `-f` lists what it would delete.
 
 ### VERBOSE
 
@@ -164,7 +164,7 @@ Which decoder converts `.spx` audio to WAV.
 | Values | `internal` (built-in libspeex), `external` (the `speexdec` program) |
 | Default | `internal` |
 
-`internal` needs a `-cgo` build; a `-purego` build always uses `external`.
+`internal` is the default and always available; `external` forces the `speexdec` program.
 
 ### SPEEXDEC
 
@@ -226,7 +226,7 @@ A soft memory limit for the whole process.
 | Values | a size such as `4GB`; `0`: none |
 | Default | none; Android: 1/16 of the device's RAM, between 192 MiB and 384 MiB |
 
-Near the limit, the Go runtime collects garbage more often and wudict drops its
+Near the limit, the Go runtime collects garbage more often and DictShelf drops its
 caches; the process can still exceed it.
 
 ## Lemmatization
@@ -235,7 +235,7 @@ With lemma data for a language, a search for an inflected form finds the lemma:
 `knew` → *know*, `fuiste` → *ser*, `идет` → *идти*. See
 [Search → Inflected words](../start/search.md#inflected-words).
 
-**Lemmatization needs the dictionary's language.** wudict takes the first it
+**Lemmatization needs the dictionary's language.** DictShelf takes the first it
 finds of:
 
 1. the language the dictionary declares: Lingvo DSL (`#INDEX_LANGUAGE`),
@@ -262,7 +262,7 @@ How many languages of lemma data stay in memory.
 
 A language is loaded on the first search that needs it; above the limit the
 least recently used is unloaded. A loaded language uses 1 MB (Persian) to 90 MB
-(Slovak); English 7 MB. `wudict lemmas list` shows each.
+(Slovak); English 7 MB. `dictshelf lemmas list` shows each.
 
 ### LEMMA_DIR
 
@@ -275,9 +275,9 @@ The folder of installed lemma data. English is built in.
 | Default | `~/.dmshlabs/dictshelf/lemmas` |
 
 Install languages with <kbd>Lemmatization…</kbd> (dictionary panel → folder
-summary) or [`wudict lemmas download`](cli.md#lemmas). The folder is read at
+summary) or [`dictshelf lemmas download`](cli.md#lemmas). The folder is read at
 startup and after each install or removal on the Lemmatization page; a file
-added by hand or with `wudict lemmas` is read after a restart.
+added by hand or with `dictshelf lemmas` is read after a restart.
 
 ??? info "Lemma data file format"
 
@@ -302,15 +302,15 @@ The catalogue lemma data is installed from.
 
 | | |
 | --- | --- |
-| Flag | `-url` on the `wudict lemmas` commands |
+| Flag | `-url` on the `dictshelf lemmas` commands |
 | Values | a URL, or the path of a `manifest.json` |
 | Default | `https://raw.githubusercontent.com/wuweidict/lemmas/main/manifest.json` |
 
-Used by `wudict lemmas` and the Lemmatization page. A local path installs
+Used by `dictshelf lemmas` and the Lemmatization page. A local path installs
 without a network, e.g. from a copy of the catalogue repository:
 
 ``` sh
-wudict lemmas download -url /media/usb/lemmas/manifest.json ru sk
+dictshelf lemmas download -url /media/usb/lemmas/manifest.json ru sk
 ```
 
 Each file is checked against the SHA-256 digest in the catalogue.
@@ -378,10 +378,10 @@ Whether a request must carry the access key.
 | Default | `auto`: required when [`SERVER_IP`](#server_ip-and-server_port) is not `127.0.0.1` |
 
 The key is a random string stored in `~/.dmshlabs/dictshelf/token`, readable only by your
-user. `wudict token` prints a link that carries it
+user. `dictshelf token` prints a link that carries it
 (`http://<address>:<port>/?k=<key>`); opening the link once stores the key in
 that browser as a cookie. Scripts send `Authorization: Bearer <key>`.
-`wudict token -rotate` replaces the key, and every browser and script holding
+`dictshelf token -rotate` replaces the key, and every browser and script holding
 the old one must be given the new link.
 
 The three endpoints open to browser extensions (`/api/dicts`, `/api/search`,
@@ -411,7 +411,7 @@ address are always accepted.
 | Default | blank: IP addresses and `localhost` only |
 
 ``` toml
-TRUSTED_HOSTS = ["wudict.lan"]
+TRUSTED_HOSTS = ["dictshelf.lan"]
 ```
 
 A request naming any other host is refused with `421 Misdirected Request`. This
@@ -486,6 +486,6 @@ DICT_DIR      = ["~/Dictionaries", "/data/dicts"]
 SERVER_IP     = "0.0.0.0"          # listen on the network: AUTH applies
 SERVER_PORT   = "9000"
 NO_BROWSER    = "1"
-TRUSTED_HOSTS = ["wudict.lan"]
+TRUSTED_HOSTS = ["dictshelf.lan"]
 WEB_ORIGINS   = ["http://localhost:3000"]
 ```

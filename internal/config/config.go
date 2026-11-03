@@ -536,7 +536,7 @@ const configTemplate = `# DictShelf configuration  (~/.dmshlabs/dictshelf/dictsh
 # AUTH        = "auto"                # must a request carry the access key?  "auto" = only when this
 #                                     # server listens on the network (SERVER_IP is not 127.0.0.1),
 #                                     # "on" = always, "off" = never. The key is a random string in
-#                                     # ~/.dmshlabs/dictshelf/token: "wudict token" prints the link that carries
+#                                     # ~/.dmshlabs/dictshelf/token: "dictshelf token" prints the link that carries
 #                                     # it, "wudict token --rotate" replaces it.
 `
 

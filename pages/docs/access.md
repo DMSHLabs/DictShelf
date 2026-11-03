@@ -1,11 +1,11 @@
 ---
 title: Access from other devices
-description: Use a wudict server from other devices on your network - listen address, access key, host names, deletion and import limits.
+description: Use a DictShelf server from other devices on your network - listen address, access key, host names, deletion and import limits.
 ---
 
 # Access from other devices
 
-By default wudict listens on `127.0.0.1` and only the machine it runs on can
+By default DictShelf listens on `127.0.0.1` and only the machine it runs on can
 reach it.
 
 ## Listen on the network
@@ -14,7 +14,7 @@ reach it.
 SERVER_IP = "0.0.0.0"
 ```
 
-or `wudict --ip 0.0.0.0`. Restart wudict.
+or `dictshelf --ip 0.0.0.0`. Restart DictShelf.
 
 ## Access key
 
@@ -23,12 +23,12 @@ On a network address, every request needs the access key
 read-only endpoints for browser extensions (`/api/dicts`, `/api/search`,
 `/res/`).
 
-1.  On the server machine, run `wudict token`. It prints a link such as
+1.  On the server machine, run `dictshelf token`. It prints a link such as
     `http://192.168.1.20:6888/?k=<key>`.
 2.  Open the link once in the browser on the other device. The browser keeps
     the key as a cookie.
 
-A program sends `Authorization: Bearer <key>`. `wudict token -rotate` replaces
+A program sends `Authorization: Bearer <key>`. `dictshelf token -rotate` replaces
 the key; every device then needs the new link. The key is stored in
 `~/.dmshlabs/dictshelf/token`; [`AUTH_TOKEN`](reference/configuration.md#auth_token)
 supplies it from elsewhere.
@@ -46,7 +46,7 @@ through a host name, e.g. behind a reverse proxy, list the name in
 [`TRUSTED_HOSTS`](reference/configuration.md#trusted_hosts):
 
 ``` toml
-TRUSTED_HOSTS = ["wudict.lan"]
+TRUSTED_HOSTS = ["dictshelf.lan"]
 ```
 
 ## Deleting and importing

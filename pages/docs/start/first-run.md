@@ -1,26 +1,26 @@
 ---
 title: First run
-description: Start wudict, set the dictionary folders, and check that the dictionaries are found.
+description: Start DictShelf, set the dictionary folders, and check that the dictionaries are found.
 ---
 
 # First run
 
-Requires `wudict` installed ([Install](install.md)) and a folder of
+Requires `dictshelf` installed ([Install](install.md)) and a folder of
 dictionary files.
 
 ## 1. Start the server
 
 ``` sh
-wudict
+dictshelf
 ```
 
-wudict prints the address it listens on, the dictionary folders it reads and
+DictShelf prints the address it listens on, the dictionary folders it reads and
 the config file in effect, then opens the browser at
 [localhost:6888](http://localhost:6888). A binary in the current folder is
-started with `./wudict`.
+started with `./dictshelf`.
 
-The **wudict howto**, a guide built in as a dictionary, is always available:
-search for `wudict` to list its topics.
+The **DictShelf howto**, a guide built in as a dictionary, is always available:
+search for `dictshelf` to list its topics.
 
 ## 2. Set the dictionary folders
 
@@ -47,13 +47,13 @@ The folders can also be set without the setup page:
 === "Command line"
 
     ``` sh title="repeat the flag for more folders"
-    wudict --dict-dir ~/Dictionaries --dict-dir /Volumes/Data/Dicts
+    dictshelf --dict-dir ~/Dictionaries --dict-dir /Volumes/Data/Dicts
     ```
 
 === "Environment variable"
 
     ``` sh title="separate folders with : (; on Windows)"
-    DICT_DIR="~/Dictionaries:/Volumes/Data/Dicts" wudict
+    DICT_DIR="~/Dictionaries:/Volumes/Data/Dicts" dictshelf
     ```
 
 A command-line flag overrides the environment variable, which overrides
@@ -68,15 +68,15 @@ word you know is in one of them.
 
 From a terminal:
 
-``` sh title="the dictionaries wudict finds in a folder"
-wudict list ~/Dictionaries
+``` sh title="the dictionaries dictshelf finds in a folder"
+dictshelf list ~/Dictionaries
 ```
 
-Each line is one dictionary wudict can read.
+Each line is one dictionary DictShelf can read.
 
 ## Indexing
 
-When wudict finds a dictionary, it queues its headword index in the background
+When DictShelf finds a dictionary, it queues its headword index in the background
 and saves it in the library (`~/.dmshlabs/dictshelf/db`). Until indexing finishes, exact
 and prefix searches use the dictionary's own format. The library index makes
 search faster and uses less memory.

@@ -1,11 +1,11 @@
 ---
 title: Install
-description: Download and run wudict on macOS, Linux, Windows or Android - one executable, no dependencies.
+description: Download and run DictShelf on macOS, Linux, Windows or Android - one executable, no dependencies.
 ---
 
 # Install
 
-`wudict` is one executable per platform, with no runtime or database server to
+`dictshelf` is one executable per platform, with no runtime or database server to
 install. macOS also has an app bundle, Windows an installer, Android an APK.
 
 [Releases](https://github.com/DMSHLabs/DictShelf/releases/latest){ .md-button .md-button--primary }
@@ -17,41 +17,42 @@ install. macOS also has an app bundle, Windows an installer, Android an APK.
     Apple silicon Macs (M-series) use `arm64`, Intel Macs `amd64`.
 
     ``` sh title="Apple silicon (arm64), downloaded to ~/Downloads"
-    chmod +x ~/Downloads/wudict-darwin-arm64-cgo
-    mv ~/Downloads/wudict-darwin-arm64-cgo /usr/local/bin/wudict
-    wudict
+    chmod +x ~/Downloads/dictshelf-darwin-arm64-cgo
+    mv ~/Downloads/dictshelf-darwin-arm64-cgo /usr/local/bin/dictshelf
+    dictshelf
     ```
 
     ``` sh title="Intel (amd64)"
-    chmod +x ~/Downloads/wudict-darwin-amd64-cgo
-    mv ~/Downloads/wudict-darwin-amd64-cgo /usr/local/bin/wudict
-    wudict
+    chmod +x ~/Downloads/dictshelf-darwin-amd64-cgo
+    mv ~/Downloads/dictshelf-darwin-amd64-cgo /usr/local/bin/dictshelf
+    dictshelf
     ```
 
     If macOS blocks the first run ("Apple could not verify…"), open *System
     Settings → Privacy & Security* and click **Open Anyway**, or remove the
-    quarantine attribute: `xattr -d com.apple.quarantine /usr/local/bin/wudict`.
+    quarantine attribute: `xattr -d com.apple.quarantine /usr/local/bin/dictshelf`.
 
-    The app bundle `wudict-macos-universal-app-<version>.zip` contains
+    The app bundle `dictshelf-macos-universal-app-<version>.zip` contains
     **DictShelf.app**: the same program, universal, with a menu-bar icon instead
     of a terminal. See [macOS app](../apps/macos.md).
 
 === "Linux"
 
     ``` sh title="amd64"
-    chmod +x wudict-linux-amd64-cgo
-    sudo mv wudict-linux-amd64-cgo /usr/local/bin/wudict
-    wudict
+    chmod +x dictshelf-linux-amd64-cgo
+    sudo mv dictshelf-linux-amd64-cgo /usr/local/bin/dictshelf
+    dictshelf
     ```
 
-    ``` sh title="Raspberry Pi"
-    # Pi 3, 4, 5, Zero 2 W, 64-bit OS  -> wudict-linux-arm64-cgo
-    # Pi 2; Pi 3, 4, 5 on a 32-bit OS   -> wudict-linux-arm-v7-purego
-    # Pi 1, Zero, Zero W                -> wudict-linux-arm-v6-purego
-    chmod +x wudict-linux-arm64-cgo
-    sudo mv wudict-linux-arm64-cgo /usr/local/bin/wudict
-    wudict
+    ``` sh title="Raspberry Pi (64-bit OS)"
+    # Pi 3, 4, 5, Zero 2 W -> dictshelf-linux-arm64-cgo
+    chmod +x dictshelf-linux-arm64-cgo
+    sudo mv dictshelf-linux-arm64-cgo /usr/local/bin/dictshelf
+    dictshelf
     ```
+
+    Releases are built for 64-bit Linux only: 32-bit Raspberry Pi OS is not
+    supported.
 
 === "Windows"
 
@@ -62,8 +63,6 @@ install. macOS also has an app bundle, Windows an installer, Android an APK.
     ``` pwsh title="PowerShell"
     .\DictShelf.exe
     ```
-
-    On Arm64 Windows use `wudict-windows-arm64-purego.exe` where available.
 
     The file is not code-signed, so Windows Defender SmartScreen stops its
     first run: choose **More info**, then **Run anyway**.
@@ -87,27 +86,25 @@ install. macOS also has an app bundle, Windows an installer, Android an APK.
 ## Check
 
 ``` sh
-wudict --version
-wudict
+dictshelf --version
+dictshelf
 ```
 
-`wudict` prints the address it listens on and opens the browser at
-[localhost:6888](http://localhost:6888). `wudict --help` lists every command
+`dictshelf` prints the address it listens on and opens the browser at
+[localhost:6888](http://localhost:6888). `dictshelf --help` lists every command
 and setting.
 
-## -cgo or -purego
+## One build { #one-build }
 
-Most platforms have a **`-cgo`** and a **`-purego`** build. They differ in two
-components:
+There is one kind of build, and nothing to choose between: SQLite through
+`mattn/go-sqlite3`, compiled with cgo, with the Speex decoder beside it. A
+build without a C compiler fails on purpose, by name
+(`internal/store/driver_missing.go`), instead of quietly linking a different
+driver with different index sizes. See [Building](../reference/building.md).
 
-| | `-cgo` | `-purego` |
-| --- | --- | --- |
-| SQLite driver | mattn/go-sqlite3 (C) | modernc.org/sqlite (Go); slightly slower |
-| Speex `.spx` audio | built-in decoder | needs `speexdec` (`brew install speex`, `apt install speex`) |
-
-Use `-cgo` where it exists: macOS, Linux on amd64 and arm64, Windows on x64.
-Use `-purego` for 32-bit Raspberry Pi and Arm64 Windows. Building `-cgo`
-yourself needs a C compiler; see [Building](../reference/building.md).
+Speex `.spx` audio plays through the decoder compiled into the binary.
+Setting `SPEEX_BACKEND = "external"` makes it use the `speexdec` program
+instead (`brew install speex`, `apt install speex`).
 
 ## Update
 

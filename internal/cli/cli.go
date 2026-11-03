@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// wudict CLI - Phase 1 surface: inspect and query dictionaries via
+// dictshelf CLI - Phase 1 surface: inspect and query dictionaries via
 // the direct backends. The HTTP server arrives in a later phase.
 package cli
 
@@ -66,12 +66,12 @@ var DefaultServe = "1"
 // Notices is THIRD-PARTY-NOTICES.md, handed over by the root package - the
 // only one that can embed a file at the module root. A release is a bare
 // executable with nothing beside it, and several of the licences in that file
-// require their text to travel with a BINARY, so `wudict licenses` carries it.
+// require their text to travel with a BINARY, so `dictshelf licenses` carries it.
 // Empty only in a build that skipped the shim (a test binary, say).
 var Notices string
 
-// Product identity, in one place. The binary is `wudict`; the name people
-// read is WuWeiDict. Anything user-facing - CLI banner, web UI
+// Product identity, in one place. The binary is `dictshelf`; the name people
+// read is DictShelf. Anything user-facing - CLI banner, web UI
 // About box, setup page - sources its wording from here or mirrors it.
 const (
 	ProductName = "DictShelf"
@@ -81,16 +81,16 @@ const (
 
 func usage() string {
 	help := fmt.Sprintf(`DictShelf %s - dictionary server for the browser
-MDict (.mdx/.mdd) · StarDict (.ifo) · Aard 2 (.slob) · Lingvo DSL (.dsl/.dsl.dz) · Babylon (.bgl) · ZIM (.zim) · wudict markdown (.wudict.md) · wudict library (text.db)
+MDict (.mdx/.mdd) · StarDict (.ifo) · Aard 2 (.slob) · Lingvo DSL (.dsl/.dsl.dz) · Babylon (.bgl) · ZIM (.zim) · wudict markdown (.wudict.md) · DictShelf library (text.db)
 
 USAGE
-  wudict [command] [flags] [args]
+  dictshelf [command] [flags] [args]
 
-  With no command, or with flags only, wudict starts the server ("serve").
+  With no command, or with flags only, dictshelf starts the server ("serve").
 
-  wudict <dictfile>                       Serve the folder of that file and open it
+  dictshelf <dictfile>                     Serve the folder of that file and open it
                                           in the browser; this is what opening a
-                                          dictionary file with wudict does.
+                                          dictionary file with dictshelf does.
 
 COMMANDS
   serve                                   Start the server (the default command)
@@ -177,7 +177,7 @@ COMMANDS
                                           dictionary, or its files only. Without
                                           -f, rm lists what it would delete.
   reindex [-all] [<name|path>…]           Rebuild outdated indexes: built by an older
-                                          version of wudict, from dictionary files
+                                          version of DictShelf, from dictionary files
                                           changed since, or unreadable. Indexes and
                                           media pack are kept. Names limit it to those
                                           dictionaries; -all rebuilds current ones
@@ -264,7 +264,7 @@ SETTINGS
                           default: the published catalogue
 
   MEMORY_LIMIT = "4GB"    Soft memory limit: near it, Go collects garbage more
-                          often and wudict drops its caches. "0": none.
+                          often and DictShelf drops its caches. "0": none.
                           env: MEMORY_LIMIT   toml: MEMORY_LIMIT
                           default: none (Android: 1/16 of RAM, 192-384 MiB)
 
@@ -297,7 +297,7 @@ SETTINGS
   TRUSTED_HOSTS           Host names the server answers to besides "localhost";
                           IP addresses are always accepted. Needed behind a
                           reverse proxy or for a host name you gave the machine:
-                            TRUSTED_HOSTS = ["wudict.lan"]
+                            TRUSTED_HOSTS = ["dictshelf.lan"]
                           Other names are refused, which blocks DNS rebinding.
                           "*" turns the check off.
                           env: TRUSTED_HOSTS  toml: TRUSTED_HOSTS
@@ -309,7 +309,7 @@ SETTINGS
                           network address gives anyone who can reach the port
                           your library, settings and folder names.
                           The key is in ~/.wudict/token, readable only by you;
-                          "wudict token" prints the link that carries it.
+                          "dictshelf token" prints the link that carries it.
                           env: AUTH           toml: AUTH
                           default: auto
 
@@ -366,7 +366,7 @@ CONFIG FILE
   1. --config / CONFIG_PATH
   2. wudict.toml next to the executable (portable mode: takes precedence
      and receives the settings saved from the setup page; never created by
-     wudict)
+     dictshelf)
   3. ~/.wudict/wudict.toml (created, commented out, by the first "serve")
   4. /etc/dictshelf/dictshelf.toml
   Each start prints the file in effect.
@@ -391,12 +391,12 @@ LIBRARY
 
   The path is the one in the /res/<id>/<path> request in the browser's
   network panel. Overrides are served with no-cache. A .spx override is
-  not converted to WAV. wudict logs a warning, with the res/ path, when
+  not converted to WAV. DictShelf logs a warning, with the res/ path, when
   it serves a .js/.css/.html/.json/.xml/.svg/.txt resource containing
   NUL bytes.
 
 CUSTOM STYLES
-  <config folder>/style/app.css      wudict's page
+  <config folder>/style/app.css      DictShelf's page
   <config folder>/style/article.css  every dictionary article
 
   Custom properties set on :root in app.css also apply to articles:
@@ -416,11 +416,11 @@ EXAMPLE wudict.toml
   NO_BROWSER  = "1"
 
 EXAMPLES
-  wudict
-  wudict --dict-dir ~/Books/Dicts --port 9090 --no-browser
-  wudict lookup ~/Dictionaries/Oxford.mdx serendipity
-  wudict ingest -full ~/Dictionaries/Oxford.mdx
-  SERVER_PORT=9000 wudict
+  dictshelf
+  dictshelf --dict-dir ~/Books/Dicts --port 9090 --no-browser
+  dictshelf lookup ~/Dictionaries/Oxford.mdx serendipity
+  dictshelf ingest -full ~/Dictionaries/Oxford.mdx
+  SERVER_PORT=9000 dictshelf
 
 MANUAL
   https://dmshlabs.github.io/DictShelf/
@@ -547,7 +547,7 @@ func Main() {
 			break
 		}
 		if args := openFileArgs(cmd); args != nil {
-			// `wudict <dictfile>` - the entry point desktop file associations
+			// `dictshelf <dictfile>` - the entry point desktop file associations
 			// point at (D76). Tested last, so a typo is still an unknown
 			// command rather than a silently misread path.
 			err = cmdServe(args)
@@ -613,7 +613,7 @@ func openFileArgs(arg string) []string {
 func cmdList(args []string) error {
 	dirs := folderArgs(args)
 	if len(dirs) == 0 {
-		return fmt.Errorf("usage: wudict list <dir> [dir…]")
+		return fmt.Errorf("usage: dictshelf list <dir> [dir…]")
 	}
 	paths, _, err := dict.DiscoverAll(dirs)
 	if err != nil {
@@ -641,7 +641,7 @@ func folderArgs(args []string) []string {
 
 func cmdInfo(args []string) error {
 	if len(args) != 1 {
-		return fmt.Errorf("usage: wudict info <dictfile>")
+		return fmt.Errorf("usage: dictshelf info <dictfile>")
 	}
 	// Before the open, so the file list is printed even for a dictionary whose
 	// header will not parse - which is exactly when knowing what is on disk
@@ -743,12 +743,12 @@ func aboutLines(format, srcPath, desc string) []string {
 // itself, the .mdd/.files.zip/.idx companions it cannot be read without, and
 // the prepared folder if it has one.
 type dictFile struct {
-	kind string // "original" or "prepared", the words `wudict rm` uses
+	kind string // "original" or "prepared", the words `dictshelf rm` uses
 	path string
 	size int64
 }
 
-// dictFiles answers the question `wudict rm` answers as a side effect of its
+// dictFiles answers the question `dictshelf rm` answers as a side effect of its
 // dry run - what is on disk for this dictionary, and how big - without the
 // user having to type a delete command to find out (D63 makes rm dry by
 // default precisely so it can be used for looking; this is the looking).
@@ -793,7 +793,7 @@ func dictFiles(arg string) []dictFile {
 	return out
 }
 
-// printDictFiles prints the inventory in `wudict rm`'s vocabulary and order -
+// printDictFiles prints the inventory in `dictshelf rm`'s vocabulary and order -
 // originals first, prepared last, one line each, then the total - so the two
 // commands describe the same dictionary in the same words.
 func printDictFiles(files []dictFile) {
@@ -826,7 +826,7 @@ func cmdQuery(mode string, args []string) error {
 	base := fs.String("base", "", "prefix for /res/… references (e.g. http://127.0.0.1:6888)")
 	fs.Parse(args)
 	if fs.NArg() != 2 {
-		return fmt.Errorf("usage: wudict %s [-n max] [-format raw|clean|text] <dictfile> <word>", mode)
+		return fmt.Errorf("usage: dictshelf %s [-n max] [-format raw|clean|text] <dictfile> <word>", mode)
 	}
 	// Before the open, so a misspelled format costs nothing.
 	f, err := server.ParseArticleFormat(*format)
@@ -876,7 +876,7 @@ func cmdKeys(args []string) error {
 	n := fs.Int("n", 0, "how many headwords (0 = all)")
 	fs.Parse(args)
 	if fs.NArg() != 1 {
-		return fmt.Errorf("usage: wudict keys [-offset N] [-n count] <dictfile>")
+		return fmt.Errorf("usage: dictshelf keys [-offset N] [-n count] <dictfile>")
 	}
 	d, err := dict.Open(fs.Arg(0))
 	if err != nil {
@@ -953,7 +953,7 @@ func cmdIngest(args []string) error {
 	}
 	srcs = split
 	if len(srcs) == 0 {
-		return fmt.Errorf("no dictionary folder is configured (%s) - name one: wudict ingest <dictfile|folder…>", origin)
+		return fmt.Errorf("no dictionary folder is configured (%s) - name one: dictshelf ingest <dictfile|folder…>", origin)
 	}
 
 	if *out != "" {
@@ -1277,7 +1277,7 @@ func cmdServe(args []string) (err error) {
 	logx.V("config: source=%q dictDirs=%v dbDir=%q addr=%s speexdec=%s",
 		cfg.Source, cfg.DictDirs, cfg.DBDir, cfg.Addr(), cfg.Speexdec)
 
-	// The library (DB_DIR) is wudict's own working area, never a folder of
+	// The library (DB_DIR) is DictShelf's own working area, never a folder of
 	// user dictionaries. Using it as DICT_DIR is a
 	// hard error; and wherever it lives, discovery skips it - which also covers
 	// the subtler case of a DB_DIR nested inside the dictionary folder.
@@ -1332,9 +1332,9 @@ func cmdServe(args []string) (err error) {
 				return nil
 			}
 			return fmt.Errorf(`cannot listen on %s: %w
-Something else holds the port (it did not answer as a wudict).
-Hint: pick another port with --port, e.g.:  wudict --port %s
-      or find what holds it:                %s`,
+Something else holds the port (it did not answer as a DictShelf server).
+Hint: pick another port with --port, e.g.:  dictshelf --port %s
+      or find what holds it:              %s`,
 				cfg.Addr(), lerr, nextPort(cfg.Port), portHolderCmd(cfg.Port))
 		}
 		defer ln.Close()
@@ -1636,7 +1636,7 @@ func openHeadlessLog() (*os.File, error) {
 }
 
 // applyLibrarySettings gives the subcommands that touch the library the same
-// settings the server uses, so `wudict ingest` writes where the server looks:
+// settings the server uses, so `dictshelf ingest` writes where the server looks:
 // DB_DIR from the flag, the environment or wudict.toml alike.
 func applyLibrarySettings() {
 	cfg, err := config.Load("", nil)
@@ -1669,7 +1669,7 @@ func portHolderCmd(port string) string {
 
 // resolveSpeexdec locates the speexdec binary ONCE at startup (never at .spx
 // playback time). Precedence: an explicit SPEEXDEC override, then a binary
-// sitting next to the wudict executable, then $PATH. Returns the resolved
+// sitting next to the DictShelf executable, then $PATH. Returns the resolved
 // path ("" if none found) and a short human-readable source label.
 func resolveSpeexdec(override string) (path, source string) {
 	name := "speexdec"

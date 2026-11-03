@@ -893,7 +893,7 @@
   "pages.useDictionaries": "Использовать эти словари",
   "pages.restoreHowto": "Вернуть руководство wudict",
   "pages.restoreHint": "— встроенное руководство wudict.",
-  "pages.supported": "Поддерживаются: MDict (.mdx + .mdd) · StarDict (.ifo) · Aard2 (.slob) · Lingvo (.lsd, .dsl, .dsl.dz, .dsl.dz2) · Babylon (.bgl) · ZIM (.zim) · wuDict markdown (.wudict.md, .md)",
+  "pages.supported": "Поддерживаются: MDict (.mdx + .mdd) · StarDict (.ifo) · Aard2 (.slob) · Lingvo (.lsd, .dsl, .dsl.dz, .dsl.dz2) · Babylon (.bgl) · ZIM (.zim) · wudict markdown (.wudict.md, .md)",
   "pages.close": "Закрыть",
   "pages.unreachable": "✕ нет связи",
   "pages.noneFound": "✕ ничего не найдено",

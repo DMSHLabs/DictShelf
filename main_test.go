@@ -12,7 +12,7 @@ import (
 )
 
 // The notices are an obligation, not documentation: MIT, BSD and Apache all
-// require their text to accompany a BINARY distribution, and a wudict release
+// require their text to accompany a BINARY distribution, and a DictShelf release
 // is a bare executable. So the file must be embedded, and it must still name
 // every module we actually link - the failure mode being a dependency added
 // months after anyone last thought about licences.

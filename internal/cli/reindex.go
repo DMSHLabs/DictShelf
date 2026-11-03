@@ -24,7 +24,7 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
-// `wudict reindex` - bring prepared dictionaries current; the command-line
+// `dictshelf reindex` - bring prepared dictionaries current; the command-line
 // half of the panel's Rebuild (server/reindex.go).
 //
 // Outdated-only by default: a dictionary is rebuilt when store.Stale says its
@@ -34,7 +34,7 @@ import (
 // Each dictionary keeps its plan (store.KeptPlan), and one that had packed
 // media gets it repacked when the rebuild left it unpaired. A dictionary whose
 // source is gone cannot be rebuilt: it is named and left as it is. There is no
-// dry run - `wudict list` already says what is prepared, and a rebuild
+// dry run - `dictshelf list` already says what is prepared, and a rebuild
 // replaces each database atomically, so an interrupted run loses nothing.
 //
 // A running server on this library holds these databases open and serves
@@ -42,7 +42,7 @@ import (
 // the job to that server - the same job its panel starts - and follows the
 // progress; -all and named dictionaries, which that job does not offer, are
 // refused. Only the configured address is asked: a server started on another
-// port with other flags is not found (refuseUnderServer, which `wudict rm`,
+// port with other flags is not found (refuseUnderServer, which `dictshelf rm`,
 // `ingest` and `clean` use, asks the same address).
 
 func cmdReindex(args []string) error {
@@ -53,7 +53,7 @@ func cmdReindex(args []string) error {
 
 	if inst, addr, ok := libraryServer(); ok {
 		if *all || fs.NArg() > 0 {
-			return fmt.Errorf("a wudict server is using this library at http://%s/ - stop it first, "+
+			return fmt.Errorf("a DictShelf server is using this library at http://%s/ - stop it first, "+
 				"or use Rebuild in its dictionary panel (outdated dictionaries only)", addr)
 		}
 		return handOffReindex(inst, addr)
@@ -114,7 +114,7 @@ func folderNeedsReindex(f store.Folder) bool {
 	return len(store.Stale(store.TextDBPath(f.Dir), f.Source)) > 0
 }
 
-// folderLabel is the name a library folder is known by in `wudict list`.
+// folderLabel is the name a library folder is known by in `dictshelf list`.
 func folderLabel(f store.Folder) string { return filepath.Base(f.Dir) }
 
 // reindexTargets resolves the arguments to library folders: every folder
@@ -142,7 +142,7 @@ func reindexTargets(args []string) ([]store.Folder, error) {
 	return out, nil
 }
 
-// resolveFolder accepts every identifier `wudict rm` does (resolveRemoval).
+// resolveFolder accepts every identifier `dictshelf rm` does (resolveRemoval).
 // That one knows the library through what it can read; a folder whose
 // text.db this build cannot open - exactly the one most in need of a rebuild
 // - is still reachable by its folder name or path.
@@ -233,7 +233,7 @@ func entryProgress(done, total int) {
 	}
 }
 
-// libraryServer finds a wudict serving on the configured address and using
+// libraryServer finds a DictShelf server on the configured address and using
 // this library. A server on another library holds none of these files; one
 // that asks for an access key says nothing about its library, so it is
 // assumed to be using this one - the cautious reading.
@@ -255,12 +255,12 @@ func libraryServer() (*runningInstance, string, bool) {
 
 // refuseUnderServer stops a command that would replace or delete prepared
 // files while a server on this library has them open. On Windows the rename or
-// delete of an open file fails, so `wudict rm` would end half done and an
+// delete of an open file fails, so `dictshelf rm` would end half done and an
 // ingest would fail at its last step; elsewhere the server would go on serving
 // the replaced data. instead names what the user can do in the panel.
 func refuseUnderServer(instead string) error {
 	if _, addr, ok := libraryServer(); ok {
-		return fmt.Errorf("a wudict server is using this library at http://%s/ - stop it first, or %s", addr, instead)
+		return fmt.Errorf("a DictShelf server is using this library at http://%s/ - stop it first, or %s", addr, instead)
 	}
 	return nil
 }
@@ -269,7 +269,7 @@ func refuseUnderServer(instead string) error {
 // it to the end. Interrupting this stops only the following: the job belongs
 // to the server, and its panel shows and can stop it.
 func handOffReindex(inst *runningInstance, addr string) error {
-	keyed := fmt.Errorf("a wudict server is using this library at http://%s/ and asks for an access key - "+
+	keyed := fmt.Errorf("a DictShelf server is using this library at http://%s/ and asks for an access key - "+
 		"use Rebuild in its dictionary panel", addr)
 	if inst.Restricted {
 		return keyed

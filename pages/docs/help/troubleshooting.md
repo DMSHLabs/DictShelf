@@ -11,14 +11,14 @@ description: Symptoms, causes and fixes - missing dictionaries, port in use, no 
 | --- | --- |
 | The files are not in a dictionary folder | Compare the folders printed at startup, or shown in the folder summary, with where the files are |
 | A file is missing | A StarDict `.dict.dz` needs its `.ifo` and `.idx`; see [Formats](../dictionaries/formats.md) |
-| The files were added while wudict was running | <kbd>☰</kbd> → folder summary → <kbd>Rescan folders</kbd> |
+| The files were added while DictShelf was running | <kbd>☰</kbd> → folder summary → <kbd>Rescan folders</kbd> |
 | Wrong separator in `DICT_DIR` (environment) | `:` on macOS and Linux, `;` on Windows |
 
-``` sh title="the dictionaries wudict finds in a folder"
-wudict list ~/Dictionaries
+``` sh title="the dictionaries dictshelf finds in a folder"
+dictshelf list ~/Dictionaries
 ```
 
-## wudict does not start: DICT_DIR and DB_DIR are the same folder
+## DictShelf does not start: DICT_DIR and DB_DIR are the same folder
 
 The library ([`DB_DIR`](../reference/configuration.md#db_dir)) must be a
 different folder from every dictionary folder. Usually only `DICT_DIR` needs
@@ -29,7 +29,7 @@ setting; the library defaults to `~/.dmshlabs/dictshelf/db`.
 Another program uses the port; startup reports it. Choose another port:
 
 ``` sh title="for one run"
-wudict --port 9090
+dictshelf --port 9090
 ```
 
 ``` toml title="~/.dmshlabs/dictshelf/dictshelf.toml"
@@ -43,15 +43,16 @@ Then open `localhost:9090`.
 Open [localhost:6888](http://localhost:6888). A tab is not opened when
 [`NO_BROWSER`](../reference/configuration.md#no_browser) is set.
 
-Started without a console, wudict shows an icon instead of output: on Windows
+Started without a console, DictShelf shows an icon instead of output: on Windows
 in the notification area (log: `%USERPROFILE%\.dmshlabs\dictshelf\db.logs\dictshelf.log`), on macOS in
 the menu bar (log: `~/Library/Logs/DMSH Labs/DictShelf/dictshelf.log`).
 
 ## No sound { #audio }
 
 `.mp3`, `.ogg` and `.wav` play in the browser. Speex (`.spx`) is converted to
-WAV first: by the built-in decoder in `-cgo` builds, by the external
-`speexdec` program in `-purego` builds.
+WAV first, by the decoder compiled into the binary. With `SPEEX_BACKEND` set
+to `external` the `speexdec` program is used instead, and a missing one is
+reported when the server starts.
 
 ``` sh title="install speexdec"
 brew install speex     # macOS
@@ -65,7 +66,7 @@ A `.spx` file in a `res/` folder is not converted: use `.mp3` or `.wav` there.
 
 ## An article is broken, or its buttons do nothing
 
-A dictionary's stylesheet or script is damaged or missing. wudict logs a
+A dictionary's stylesheet or script is damaged or missing. DictShelf logs a
 warning when it serves a text resource that contains NUL bytes, with the
 `res/` path that would override it. A ⚠ in the dictionary's result header
 marks a script error.
@@ -80,7 +81,7 @@ In the browser's network panel, find the failing request to
 
 ## The CPU is busy indexing dictionaries
 
-wudict indexes new dictionaries in the background. The number of concurrent
+DictShelf indexes new dictionaries in the background. The number of concurrent
 dictionaries is calculated from the machine's logical processors, leaving one
 processor for other work when possible and sharing preparation workers across dictionaries.
 Search does not start an index job.
@@ -109,16 +110,16 @@ library folders whose dictionary files are gone, and deletes the ones you
 tick.
 
 ``` sh title="from a terminal"
-wudict clean              # list broken library folders and orphans
-wudict clean -f           # delete the broken ones
-wudict clean -f -orphans  # and the orphans
+dictshelf clean              # list broken library folders and orphans
+dictshelf clean -f           # delete the broken ones
+dictshelf clean -f -orphans  # and the orphans
 ```
 
 ## The Android app shows no dictionaries { #android-no-dictionaries }
 
 FOSS build:
 
-1. **No storage access.** *Settings → Apps → wuDict → Permissions*, or
+1. **No storage access.** *Settings → Apps → DictShelf → Permissions*, or
    Android's *All files access* list: allow it, then reopen the app.
 2. **Wrong folder.** The folder is *Internal storage → Dictionaries*, at the
    top level, not inside *Documents* or *Download*.
@@ -144,12 +145,12 @@ precedence. The setup page and `/api/config` show where each value comes from.
 
 ## Anything else
 
-Start wudict with `--verbose`: it logs every request, dictionary open, indexing
+Start DictShelf with `--verbose`: it logs every request, dictionary open, indexing
 step and audio conversion.
 
 ``` sh
-wudict --verbose
+dictshelf --verbose
 ```
 
 [Open an issue](https://github.com/DMSHLabs/DictShelf/issues) with that output
-and the output of `wudict --version`.
+and the output of `dictshelf --version`.

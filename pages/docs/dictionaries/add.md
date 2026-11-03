@@ -28,7 +28,7 @@ under **Add dictionaries**:
 
     Several links can be pasted at once.
 
-wudict lists the dictionaries found: the files of one dictionary (`.mdx` and
+DictShelf lists the dictionaries found: the files of one dictionary (`.mdx` and
 `.mdd`, `.ifo` and its companions) form one entry, and an entry shows whether
 it is already installed or needs a file that is missing. Tick the ones you want
 and click <kbd>Install</kbd>. They are installed into the first dictionary
@@ -50,7 +50,7 @@ A share link carries a link to a dictionary, an archive or a collection after
 `#`:
 
 ``` text
-https://legbehindneck.com/wudict#https://example.org/dicts/oxford.zip
+https://legbehindneck.com/dictshelf#https://example.org/dicts/oxford.zip
 ```
 
 On Android with DictShelf installed, opening a share link starts the import in the
@@ -60,8 +60,8 @@ app. Elsewhere, paste it on the setup page.
 
 See [Android app → Add dictionaries](../apps/android.md#add-dictionaries).
 
-## The wudict howto as a file
+## The DictShelf howto as a file
 
-**Put the wudict howto in this folder**, on the setup page, writes the howto
+**Put the DictShelf howto in this folder**, on the setup page, writes the howto
 guide as a [wudict markdown](formats.md#wudict-markdown) file into the
 dictionary folder. Edit it in a text editor, then <kbd>Rescan folders</kbd>.

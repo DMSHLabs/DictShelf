@@ -76,7 +76,7 @@ The result header of a dictionary answered at the second or third stage shows
 
 ## Inflected words
 
-When a single-word query returns nothing in a dictionary, wudict looks up the
+When a single-word query returns nothing in a dictionary, DictShelf looks up the
 word's lemma and searches that dictionary again: *knew* → **know**,
 *estuviera* → **estar**. A banner names the lemma.
 
@@ -90,7 +90,7 @@ English lemma data is built in. To install another language:
 -   <kbd>☰</kbd> → folder summary → <kbd>Lemmatization…</kbd>, or
     <kbd>🔤 Lemmatization</kbd> on the setup page, and tick the language. It
     applies from the next search. This is the only way on Android.
--   In a terminal: [`wudict lemmas download ru`](../reference/cli.md#lemmas).
+-   In a terminal: [`dictshelf lemmas download ru`](../reference/cli.md#lemmas).
     A running server uses it after a restart.
 
 Untick a language to delete its lemma data.
@@ -128,7 +128,7 @@ draws the hidden line dotted. Shown, secondary text is grey.
 
 - The next result opens the way you left the last one. The choice is stored
   with your other settings, so every browser and the Android app that use the
-  same wudict share it.
+  same DictShelf share it.
 - A full-text match inside secondary text, or a link to a place inside it,
   shows it for that result only.
 - <kbd>Ctrl</kbd>+<kbd>\*</kbd> shows or hides it in the section you are
@@ -198,28 +198,28 @@ On Android, `dictshelf://lookup?q=serendipity` opens the same search; see
 ## Search from the terminal
 
 ``` sh title="all dictionaries"
-wudict searchall phubbing                              # all dictionaries in DICT_DIR
-wudict searchall -dict-dir ~/Dictionaries/es phubbing  # one folder
-wudict searchall -format raw phubbing                  # the dictionaries' own HTML
-wudict searchall -format clean phubbing                # HTML without scripts and styles
+dictshelf searchall phubbing                              # all dictionaries in DICT_DIR
+dictshelf searchall -dict-dir ~/Dictionaries/es phubbing  # one folder
+dictshelf searchall -format raw phubbing                  # the dictionaries' own HTML
+dictshelf searchall -format clean phubbing                # HTML without scripts and styles
 ```
 
 ``` sh title="one dictionary"
-wudict lookup   ~/Dictionaries/Oxford.mdx phubbing
-wudict prefix   ~/Dictionaries/Oxford.mdx phubb
-wudict contains ~/.dmshlabs/dictshelf/db/Oxford phub
-wudict fts      ~/.dmshlabs/dictshelf/db/Oxford "sudden fear"
+dictshelf lookup   ~/Dictionaries/Oxford.mdx phubbing
+dictshelf prefix   ~/Dictionaries/Oxford.mdx phubb
+dictshelf contains ~/.dmshlabs/dictshelf/db/Oxford phub
+dictshelf fts      ~/.dmshlabs/dictshelf/db/Oxford "sudden fear"
 ```
 
 `contains` and `fts` need an indexed dictionary: pass its library folder.
 `lookup` and `prefix` work on any dictionary file. `searchall` uses exact mode
 unless `-mode` says otherwise.
 
-Full-text queries run as in the web UI. The shell removes quotes before wudict
+Full-text queries run as in the web UI. The shell removes quotes before DictShelf
 sees them; wrap the query in single quotes to keep double quotes:
 
 ``` sh
-wudict searchall -mode fts '"faux ami" NOT linguistics'
+dictshelf searchall -mode fts '"faux ami" NOT linguistics'
 ```
 
 [Command line reference](../reference/cli.md){ .md-button }

@@ -127,7 +127,7 @@ jobs:
             echo "::notice::signing secrets incomplete - building unsigned release APKs"
             exit 0
           fi
-          KS="$RUNNER_TEMP/wudict.keystore"
+          KS="$RUNNER_TEMP/dictshelf.keystore"
           echo "$KS_B64" | base64 -d > "$KS"
 
           # Prove the store opens and the alias exists BEFORE Gradle runs.
@@ -173,7 +173,7 @@ jobs:
           # (androidComponents.onVariants) and the Makefile exports the path,
           # so the published asset, `make apk-foss-release` and dist/ all carry
           # ONE name: dictshelf-android-arm64-v8a-foss.apk. The old copy step
-          # invented a second name (wudict-android-arm64.apk) that said nothing
+          # invented a second name for it that said nothing
           # about the flavour and existed nowhere else in the project.
           if [ "${{ steps.signing.outputs.enabled }}" = "true" ]; then
             SUFFIX=""

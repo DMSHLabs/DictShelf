@@ -1,11 +1,11 @@
 ---
 title: About
-description: WuWeiDict (wudict) - what it is, its HTTP API, resource overrides, the name and the licence.
+description: DictShelf - what it is, its HTTP API, resource overrides, the name and the licence.
 ---
 
-# About WuWeiDict
+# About DictShelf
 
-WuWeiDict (`wudict`) is a dictionary program that runs as a local web server
+DictShelf (`dictshelf`) is a dictionary program that runs as a local web server
 and is used in the browser. It searches all your dictionaries at once, in
 several dictionary formats, and keeps an indexed copy of each in its library.
 
@@ -26,12 +26,17 @@ replaces the dictionary's own.
 
 ## The name
 
-*Wú wéi* (無為) is the classical Chinese term for effortless action, or
-non-action. The program is called `wudict` for short.
+DictShelf is a shelf of dictionaries: one program, one library, every dictionary
+you own in one search box. The command is `dictshelf`.
+
+It is a fork of **wudict** (*WuWeiDict*, from *wú wéi* 無為, the classical
+Chinese term for effortless action): DictShelf keeps that program's dictionary
+formats, its library layout and its HTTP API, and is maintained under its own
+name by DmShAl.
 
 ## Licence
 
-WuWeiDict is free software under the GNU General Public License, version 3 or
+DictShelf is free software under the GNU General Public License, version 3 or
 later.
 
 [Licence and attribution](help/license.md){ .md-button }

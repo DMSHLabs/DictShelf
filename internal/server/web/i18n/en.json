@@ -881,7 +881,7 @@
   "pages.useDictionaries": "Use these dictionaries",
   "pages.restoreHowto": "Bring back the wudict howto",
   "pages.restoreHint": "— wudict's own guide, built into the app.",
-  "pages.supported": "Supported: MDict (.mdx + .mdd) · StarDict (.ifo) · Aard2 (.slob) · Lingvo (.lsd, .dsl, .dsl.dz, .dsl.dz2) · Babylon (.bgl) · ZIM (.zim) · wuDict markdown (.wudict.md, .md)",
+  "pages.supported": "Supported: MDict (.mdx + .mdd) · StarDict (.ifo) · Aard2 (.slob) · Lingvo (.lsd, .dsl, .dsl.dz, .dsl.dz2) · Babylon (.bgl) · ZIM (.zim) · wudict markdown (.wudict.md, .md)",
   "pages.close": "Close",
   "pages.unreachable": "✕ unreachable",
   "pages.noneFound": "✕ none found",

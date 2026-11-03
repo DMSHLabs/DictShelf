@@ -2,14 +2,14 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Command wudict is WuWeiDict's entry point - the only one.
+// Command dictshelf is DictShelf's entry point - the only one.
 //
 // Go names an installed binary after the last element of its package path, so
 // the module path github.com/DMSHLabs/DictShelf makes
 //
 //	go install github.com/DMSHLabs/DictShelf@latest
 //
-// yield "wudict" directly, with no second shim package (D28). Everything the
+// yield the built name directly, with no second shim package (D28). Everything the
 // program actually does lives in internal/cli.
 package main
 
@@ -19,7 +19,7 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/cli"
 )
 
-// The notices travel INSIDE the binary (`wudict licenses`), because a release
+// The notices travel INSIDE the binary (`dictshelf licenses`), because a release
 // is a bare executable and several third-party licences require their text to
 // accompany a binary distribution. Only this package can embed it: go:embed
 // cannot reach out of its own directory, and the file belongs at the root
