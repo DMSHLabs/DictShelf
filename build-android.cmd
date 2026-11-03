@@ -18,8 +18,9 @@ rem ============================================================
 rem DictShelf Android FOSS build: [debug|release|all] [intel|ABI] [--channel release|pre-release|beta]
 rem
 rem   intel  also ship the x86_64 Go/JNI bridge, so the same APK runs on the
-rem          x86_64 emulator as well as on arm64 hardware. Debug only:
-rem          release APKs default to arm64 (D52).
+rem          x86_64 emulator as well as on arm64 hardware. Debug only: the
+rem          x86_64 library is wired to the debug variant in build.gradle, so a
+rem          release build cannot package it (D52).
 rem   all    build arm64-v8a, armeabi-v7a and universal release APKs.
 rem ============================================================
 
@@ -140,8 +141,12 @@ if defined ABI_TOKEN (
     )
     if defined EMU_X86 (
     if /i "%BUILD_TYPE%"=="release" (
-        echo ERROR: intel is debug-only. The x86_64 emulator ABI must not reach a
-        echo   release APK - build one with: build-android.cmd release
+        echo ERROR: intel is debug-only, and not only as a policy: the emulator's
+        echo   x86_64 bridge is wired to the debug variant in app/build.gradle, so a
+        echo   release APK would carry no x86_64 library - it installs and then
+        echo   answers "Go runtime is unavailable". Build one with:
+        echo     build-android.cmd debug intel   ^(emulator^)
+        echo     build-android.cmd release        ^(arm64, the shipping ABI^)
         exit /b 1
     )
     )
