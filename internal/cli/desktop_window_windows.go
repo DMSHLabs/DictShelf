@@ -126,11 +126,6 @@ var desktopHotkeyCaptureActive bool
 var desktopKeyboardHook uintptr
 var desktopKeyboardHookReady bool
 var desktopHookCallback = syscall.NewCallback(desktopKeyboardHookProc)
-
-// TEMPORARY DIAGNOSTIC (revert): DICTSHELF_HOTKEY_DEBUG=1 logs every key the
-// global hook sees and stops discarding injected input, so a synthetic
-// keystroke can drive the hot-key path from a test harness.
-var desktopHotkeyDebug = os.Getenv("DICTSHELF_HOTKEY_DEBUG") != ""
 var desktopSwallowedKeysMu sync.Mutex
 var desktopSwallowedKeyUps = map[uint32]bool{}
 var desktopWindowSaveMu sync.Mutex
@@ -701,9 +696,6 @@ func desktopInstallKeyboardHook() bool {
 	}
 	desktopKeyboardHook = hook
 	desktopKeyboardHookReady = true
-	if desktopHotkeyDebug {
-		log.Printf("HKDBG hook installed handle=%#x", hook)
-	}
 	return true
 }
 
@@ -713,9 +705,6 @@ func desktopUninstallKeyboardHook() {
 		desktopKeyboardHook = 0
 	}
 	desktopKeyboardHookReady = false
-	if desktopHotkeyDebug {
-		log.Printf("HKDBG hook uninstalled")
-	}
 }
 
 func desktopKeyboardHookProc(code int, message, data uintptr) uintptr {
@@ -736,12 +725,7 @@ func desktopKeyboardHookProc(code int, message, data uintptr) uintptr {
 		return 0
 	}
 	event := *(*desktopKeyboardEvent)(unsafe.Pointer(data))
-	if desktopHotkeyDebug && (message == wmKeyDown || message == wmSysKeyDown) {
-		log.Printf("HKDBG hook keydown vk=%#x scan=%#x flags=%#x injected=%t mods=%#x ready=%t capture=%t",
-			event.VirtualKey, event.ScanCode, event.Flags, event.Flags&llkhfInjected != 0,
-			desktopCurrentModifierMask(), desktopKeyboardHookReady, desktopHotkeyCaptureActive)
-	}
-	if event.Flags&llkhfInjected != 0 && !desktopHotkeyDebug {
+	if event.Flags&llkhfInjected != 0 {
 		result, _, _ := windowCallNextHookEx.Call(0, uintptr(code), message, data)
 		return result
 	}
@@ -797,9 +781,6 @@ func desktopKeyboardHookProc(code int, message, data uintptr) uintptr {
 	}
 	hwnd := desktopHotkeyWindow
 	desktopHotkeyMu.Unlock()
-	if desktopHotkeyDebug {
-		log.Printf("HKDBG match scan=%#x mods=%#x hotkeyID=%d hwnd=%#x actions=%d", scanCode, mods, hotkeyID, hwnd, len(desktopHotkeyActions))
-	}
 	if hotkeyID == 0 {
 		result, _, _ := windowCallNextHookEx.Call(0, uintptr(code), message, data)
 		return result
@@ -1405,10 +1386,6 @@ func desktopHandleHotkey(hwnd uintptr, id, lparam uintptr) bool {
 	desktopHotkeyMu.Unlock()
 	switch action.action {
 	case 0:
-		if desktopHotkeyDebug {
-			iconic, _, _ := procIsIconic.Call(hwnd)
-			log.Printf("HKDBG toggle hwnd=%#x hidden=%t iconic=%t", hwnd, desktopWindowHidden.Load(), iconic != 0)
-		}
 		if desktopWindowHidden.Swap(false) || func() bool { iconic, _, _ := procIsIconic.Call(hwnd); return iconic != 0 }() {
 			desktopRestoreAndFocusWindow(hwnd)
 		} else {
