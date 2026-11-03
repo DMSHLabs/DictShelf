@@ -81,6 +81,7 @@ tags:
 paths:
   /api/exit:
     post:
+      operationId: exit
       summary: Stop the local Windows desktop server and exit the process
       responses:
         '202':
@@ -91,18 +92,21 @@ paths:
           description: This server has no desktop Exit action.
   /api/index-work:
     get:
+      operationId: indexWorkStatus
       summary: Read the active dictionary indexing progress across pages.
       description: '`done` counts attempted operations, including failures. `dictionaryDone` and `dictionaryTotal` count completed dictionaries out of the queue, and `elapsedMs` reports total job time. Each `busyProgress` row includes that dictionary’s elapsed time. `failed` lists per-operation errors; other queued operations continue. `error` describes a fatal job error.'
       responses:
         '200':
           description: Current job snapshot.
     post:
+      operationId: indexWorkStart
       summary: Start a server-owned sequence of index operations.
       description: A failed dictionary operation is recorded and skipped; the remaining queue continues. Stop still finishes the current atomic operation safely.
       responses:
         '202':
           description: Queue accepted; navigation does not stop it.
     delete:
+      operationId: indexWorkStop
       summary: Stop after completing the current index operation safely.
       responses:
         '200':
@@ -132,6 +136,7 @@ paths:
           description: Dictionary not found.
   /api/system-log:
     get:
+      operationId: systemLog
       summary: Download persistent server diagnostics, including the previous rotation
       responses:
         '200':
@@ -143,6 +148,7 @@ paths:
         '500':
           description: Could not read the log
     delete:
+      operationId: systemLogClear
       summary: Clear retained System Log history and older crash details
       responses:
         '200':
@@ -1618,8 +1624,7 @@ paths:
                 name: { type: string }
                 filter:
                   description: Selected filter retained for later relinking.
-                  nullable: true
-                  type: object
+                  type: [object, "null"]
                   properties:
                     facet: { type: string }
                     value: { type: string }
@@ -1775,8 +1780,7 @@ paths:
               properties:
                 group: { type: string }
                 filter:
-                  type: object
-                  nullable: true
+                  type: [object, "null"]
                   properties:
                     facet: { type: string }
                     value: { type: string }
@@ -2257,8 +2261,8 @@ paths:
               type: object
               required: [name]
               properties:
-                name: { type: string, description: 1–100 characters, no control characters. }
-                shell: { type: object, description: The shell's half, as the client sees it. }
+                name: { type: string, description: "1–100 characters, no control characters." }
+                shell: { type: object, description: "The shell's half, as the client sees it." }
       responses:
         '200':
           description: The looks, as stored after the save.
@@ -2286,7 +2290,7 @@ paths:
               required: [id]
               properties:
                 id: { type: string, description: The look's id. }
-                shell: { type: object, description: The shell's half, as the client sees it. }
+                shell: { type: object, description: "The shell's half, as the client sees it." }
       responses:
         '200':
           description: The looks, as stored after the change.
@@ -2353,7 +2357,7 @@ paths:
               properties:
                 id: { type: string, description: The look's id. }
                 confirm: { type: boolean, description: Apply rather than ask. }
-                shell: { type: object, description: The shell's half, as the client sees it now. }
+                shell: { type: object, description: "The shell's half, as the client sees it now." }
       responses:
         '200':
           description: >
@@ -2758,8 +2762,8 @@ paths:
           description: >
             With stream=1 and a complete separate-dictionary wildcard cache,
             search all cached dictionaries in one stream. Completion events
-        include dict and the effectiveQueries used for per-dictionary
-        lemmatization; matching pages remain addressable per dictionary.
+            include dict and the effectiveQueries used for per-dictionary
+            lemmatization; matching pages remain addressable per dictionary.
           schema: { type: string, enum: ['1'] }
         - name: wildcache
           in: query
@@ -2815,6 +2819,13 @@ paths:
                   partial:
                     type: boolean
                     description: True while the matching wildcard stream is still being collected.
+            application/x-ndjson:
+              schema:
+                type: string
+                description: >
+                  One object per line. type is block with words, progress for an updated
+                  count, done with the final count, or error if scanning fails after the
+                  stream starts. total is the number of matches found so far.
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -3150,13 +3161,6 @@ components:
         name: { type: string, description: "The file's name, as it would land beside the main file." }
         size:
           type: integer
-            application/x-ndjson:
-              schema:
-                type: string
-                description: >
-                  One object per line. type is block with words, progress for an updated
-                  count, done with the final count, or error if scanning fails after the
-                  stream starts. total is the number of matches found so far.
           description: >
             Bytes, when the server declared them. Zero means it did not, not
             that the file is empty.
