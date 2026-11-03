@@ -1234,6 +1234,8 @@
   "speech.settings": "Настройки речи…",
   "speech.noVoice": "На устройстве нет голоса для языка «{language}»",
   "speech.readAs": "Читать на языке «{language}»",
+  "speech.otherLanguages": "Другие языки…",
+  "speech.otherLanguagesHead": "Другие языки",
   "speech.online": "онлайн",
   "panel.prefsUnavailable": "⚠ Настройки не сохраняются — обновите страницу",
   "panel.audioFailed": "⚠ Не удалось воспроизвести звук",

@@ -1218,6 +1218,8 @@
   "speech.settings": "Speech settings…",
   "speech.noVoice": "No voice for {language} on this device",
   "speech.readAs": "Read as {language}",
+  "speech.otherLanguages": "Other languages…",
+  "speech.otherLanguagesHead": "Other languages",
   "speech.online": "online",
   "panel.prefsUnavailable": "⚠ settings are not being saved — reload the page",
   "panel.audioFailed": "⚠ could not play audio",
