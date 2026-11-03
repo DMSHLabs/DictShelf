@@ -153,12 +153,16 @@ android {
 
     // The emulator ABI (see emuX86 above). `src/emuX86/jniLibs` is a default
     // location for no source set, so this is the only thing that can make AGP
-    // look at it - and it is wired to `debug` alone, so a release build cannot
-    // package x86_64 even if someone passes the flag (which androidComponents
-    // refuses outright below).
+    // look at it. It is wired to BOTH variants: the bridge is built for x86_64
+    // whenever the flag is passed (build-android.cmd), and a release APK that
+    // carries it is a deliberate emulator build - the script names that artifact
+    // -emu, which is what keeps it out of a release rather than a missing ABI.
     if (emuX86) {
         sourceSets {
             debug {
+                jniLibs.srcDir 'src/emuX86/jniLibs'
+            }
+            release {
                 jniLibs.srcDir 'src/emuX86/jniLibs'
             }
         }
@@ -220,12 +224,13 @@ androidComponents {
     // selector().all() is passed explicitly: the no-selector overload is a
     // Kotlin default argument and is not callable from the Groovy DSL.
     onVariants(selector().all()) { variant ->
-        // The abi token is decided per variant, not per build: the x86_64 lib
-        // is wired to the debug source set alone, so on a release variant
-        // -PemuX86=1 is inert and the name must not claim otherwise. (This hook
-        // runs for EVERY variant, release ones included, even when only
-        // assembleFossDebug was asked for - so it must never throw.)
-        def abi = emuX86 && variant.buildType == 'debug' ? 'arm64-v8a-x86_64' : apkAbiName
+        // The abi token is decided per variant, not per build: -PemuX86=1 puts
+        // x86_64 in both source sets (see above), so both build types carry the
+        // library and may say so in the name. build-android.cmd is what marks a
+        // release one -emu. (This hook runs for EVERY variant, release ones
+        // included, even when only assembleFossDebug was asked for - so it must
+        // never throw.)
+        def abi = emuX86 ? 'arm64-v8a-x86_64' : apkAbiName
         def suffix = variant.buildType == 'release'
                 ? (apkSigned ? '' : '-unsigned')
                 : "-${variant.buildType}"

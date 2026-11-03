@@ -18,9 +18,9 @@ rem ============================================================
 rem DictShelf Android FOSS build: [debug|release|all] [intel|ABI] [--channel release|pre-release|beta]
 rem
 rem   intel  also ship the x86_64 Go/JNI bridge, so the same APK runs on the
-rem          x86_64 emulator as well as on arm64 hardware. Debug only: the
-rem          x86_64 library is wired to the debug variant in build.gradle, so a
-rem          release build cannot package it (D52).
+rem          x86_64 emulator as well as on arm64 hardware. In a release build
+rem          the artifact is named -emu: an emulator ABI is never published, and
+rem          the name is what keeps it out of a release.
 rem   all    build arm64-v8a, armeabi-v7a and universal release APKs.
 rem ============================================================
 
@@ -141,13 +141,10 @@ if defined ABI_TOKEN (
     )
     if defined EMU_X86 (
     if /i "%BUILD_TYPE%"=="release" (
-        echo ERROR: intel is debug-only, and not only as a policy: the emulator's
-        echo   x86_64 bridge is wired to the debug variant in app/build.gradle, so a
-        echo   release APK would carry no x86_64 library - it installs and then
-        echo   answers "Go runtime is unavailable". Build one with:
-        echo     build-android.cmd debug intel   ^(emulator^)
-        echo     build-android.cmd release        ^(arm64, the shipping ABI^)
-        exit /b 1
+        echo WARNING: an x86_64 emulator ABI in a RELEASE build. It is for the
+        echo   emulator only: the artifact is named -emu, and the shipping ABIs
+        echo   are arm64-v8a and armeabi-v7a ^(build-android.cmd release^).
+        set "APK_SUFFIX=%APK_SUFFIX%-emu"
     )
     )
 )
@@ -413,6 +410,17 @@ rem ------------------------------------------------------------
 rem Expected APK
 rem ------------------------------------------------------------
 
+
+rem Gradle composes the artifact name itself (androidComponents in
+rem app/build.gradle). The emulator release gets its -emu name here, so the
+rem ABI check, the summary and the staging below all see one file - and no
+rem release step can pick it up by name.
+if defined EMU_X86 if /i "%BUILD_TYPE%"=="release" (
+    if exist "android\app\build\outputs\apk\foss\release\dictshelf-android-%APK_ABI%-foss.apk" (
+        move /y "android\app\build\outputs\apk\foss\release\dictshelf-android-%APK_ABI%-foss.apk" "android\app\build\outputs\apk\foss\release\dictshelf-android-%APK_ABI%-foss%APK_SUFFIX%.apk" >nul
+    )
+)
+
 set "APK=android\app\build\outputs\apk\foss\%BUILD_TYPE%\dictshelf-android-%APK_ABI%-foss%APK_SUFFIX%.apk"
 
 if not exist "%APK%" (
@@ -482,9 +490,15 @@ if /i "%APK_SUFFIX%"=="-unsigned" (
 
 if defined EMU_X86 (
     echo.
-    echo This APK carries arm64-v8a AND x86_64, so it installs on the phone and on
-    echo   the x86_64 emulator alike. It is a debug build, which is also what lets
-    echo   chrome://inspect attach to its WebView.
+    if /i "%BUILD_TYPE%"=="release" (
+        echo This APK carries arm64-v8a AND x86_64 and is signed with the release
+        echo   key - the certificate the site's App Link file names. It is named
+        echo   -emu: an emulator ABI is not for publishing.
+    ) else (
+        echo This APK carries arm64-v8a AND x86_64, so it installs on the phone and
+        echo   on the x86_64 emulator alike. It is a debug build, which is also what
+        echo   lets chrome://inspect attach to its WebView.
+    )
 )
 echo.
 
