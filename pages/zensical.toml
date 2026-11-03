@@ -33,52 +33,61 @@ edit_uri = "edit/dev/pages/docs/"
 # ----------------------------------------------------------------------------
 nav = [
   { "Home" = "index.md" },
-  { "About" = "about.md" },
-  { "Quick Start" = [
-    "start/install.md",
-    "start/first-run.md",
-    "start/search.md",
-  ] },
-  { "Apps" = [
-    "apps/macos.md",
-    "apps/windows.md",
-    "apps/android.md",
-  ] },
-  { "Dictionaries" = [
-    "dictionaries/formats.md",
-    "dictionaries/add.md",
-    "dictionaries/library.md",
-    "dictionaries/groups.md",
-    "dictionaries/override.md",
-    "dictionaries/styles.md",
-  ] },
-  { "Browser extensions" = [
-    "extension.md",
-  ] },
-  { "Share a dictionary" = [
-    "share.md",
-  ] },
-  { "Run at startup" = [
-    "running.md",
-  ] },
-  { "Access from other devices" = [
-    "access.md",
-  ] },
-  { "Reference" = [
-    "reference/configuration.md",
-    "reference/cli.md",
-    "reference/fts-syntax.md",
-    "reference/api.md",
-    "reference/text-db.md",
-    "reference/building.md",
-  ] },
-  { "Help" = [
-    "help/troubleshooting.md",
-    "help/faq.md",
-    "help/license.md",
-    "privacy_policy.md",
-  ] },
+  { "Share a dictionary" = "share.md" },
 ]
+
+# The manual's own navigation, held back until its structure is settled:
+# the site is a landing page and the share page, and every manual page is
+# still built and reachable at its own address.
+#
+# nav = [
+#   { "Home" = "index.md" },
+#   { "About" = "about.md" },
+#   { "Quick Start" = [
+#     "start/install.md",
+#     "start/first-run.md",
+#     "start/search.md",
+#   ] },
+#   { "Apps" = [
+#     "apps/macos.md",
+#     "apps/windows.md",
+#     "apps/android.md",
+#   ] },
+#   { "Dictionaries" = [
+#     "dictionaries/formats.md",
+#     "dictionaries/add.md",
+#     "dictionaries/library.md",
+#     "dictionaries/groups.md",
+#     "dictionaries/override.md",
+#     "dictionaries/styles.md",
+#   ] },
+#   { "Browser extensions" = [
+#     "extension.md",
+#   ] },
+#   { "Share a dictionary" = [
+#     "share.md",
+#   ] },
+#   { "Run at startup" = [
+#     "running.md",
+#   ] },
+#   { "Access from other devices" = [
+#     "access.md",
+#   ] },
+#   { "Reference" = [
+#     "reference/configuration.md",
+#     "reference/cli.md",
+#     "reference/fts-syntax.md",
+#     "reference/api.md",
+#     "reference/text-db.md",
+#     "reference/building.md",
+#   ] },
+#   { "Help" = [
+#     "help/troubleshooting.md",
+#     "help/faq.md",
+#     "help/license.md",
+#     "privacy_policy.md",
+#   ] },
+# ]
 
 extra_css = ["stylesheets/extra.css"]
 

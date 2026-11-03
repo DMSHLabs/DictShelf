@@ -57,6 +57,5 @@ app; elsewhere, paste it on the setup page.
 You do not need this page to share a dictionary: any address with the link after
 `#` works, so wrapping the link in a page you already have is enough.
 
-[Add dictionaries → Import](dictionaries/add.md#import-a-file-or-a-link){ .md-button }
 
 </div>
