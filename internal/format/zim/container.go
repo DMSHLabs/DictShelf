@@ -26,8 +26,8 @@
 //
 // Of the four reference implementations available, pyglossary's `zimfile`,
 // `zim-cgo` and GoldenDict-ng's `zim.cc` all delegate to libzim and carry no
-// binary knowledge; cgo is disqualified here regardless (D4: a tag-less build
-// and `-tags purego` must both work). unidict's czim is the only from-scratch
+// binary knowledge; cgo is disqualified here regardless (this reader is pure
+// Go by design, like internal/format/zim/glass). unidict's czim is the only from-scratch
 // reader, and its layout - cross-checked against real files - is what this
 // follows. Two of its choices are deliberately NOT reproduced: a fixed 256-byte
 // buffer per MIME string, which silently truncates and desynchronises the list

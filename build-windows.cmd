@@ -28,7 +28,7 @@ rem The installer mode packages the exact GUI executable built by the default mo
 rem
 rem FLAVOUR. Windows desktop builds always use cgo - mattn SQLite with FTS5
 rem (D4) and the built-in speex .spx decoder. A compatible 64-bit mingw-w64
-rem GCC is required; this script never falls back to purego.
+rem GCC is required; there is no pure-Go flavour to fall back to any more.
 rem
 rem Machine-specific compiler overrides belong in the ignored
 rem build-windows.local.bat. Otherwise the C compiler is found from CC, PATH or
@@ -212,7 +212,7 @@ if defined CHANNEL_SPECIFIED (
 echo.
 
 rem ------------------------------------------------------------
-rem Windows desktop builds require cgo; never silently build purego
+rem Windows desktop builds require cgo; a driver-less build fails by name
 rem ------------------------------------------------------------
 
 set "CC_PATH="
@@ -220,7 +220,7 @@ call :find_gcc
 if not defined CC_PATH (
     echo ERROR: a 64-bit mingw-w64 GCC is required for the Windows cgo build.
     echo   Install one, or set GCC_PATH in build-windows.local.bat or CC in the environment.
-    echo   This script does not build the pure-Go flavour.
+    echo   This script builds the cgo flavour only.
     exit /b 1
 )
 "%CC_PATH%" --version >nul 2>&1

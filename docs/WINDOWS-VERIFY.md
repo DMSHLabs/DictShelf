@@ -53,11 +53,11 @@ them are in `docs/handoff-archive.md`.
   `CGO_ENABLED=1 go test -tags sqlite_fts5,sqlite_dbstat ./internal/<pkg> -run
   '...' -count=1`. The cgo driver needs `CC` (MinGW from `GCC_PATH` in
   `build-windows.local.bat`). **A build with no tags, or with `-tags
-  sqlite_fts5` and `CGO_ENABLED=0`, now fails on purpose** — it used to fall
-  silently to the pure-Go driver, which has dbstat and the cgo one does not
+  sqlite_fts5` and `CGO_ENABLED=0`, fails on purpose** — it used to fall
+  silently to the pure-Go driver, which had dbstat and the cgo one does not
   unless `sqlite_dbstat` is passed, so the same command could test a different
-  binary from the one shipped (`internal/store/driver_missing.go`). The pure-Go
-  driver is `-tags purego`, asked for by name.
+  binary from the one shipped (`internal/store/driver_missing.go`). There is no
+  second driver any more: `-tags purego` was removed on 2026-11-03.
 - **`build-windows.cmd [cli|server|installer] [--channel ...] [--update-icon]`** —
   the fork's Windows builds. The PE resource object `dictshelf_windows_amd64.syso`
   is generated on every build and holds the six icons (from
@@ -74,7 +74,7 @@ them are in `docs/handoff-archive.md`.
   `windows-2022` image's MinGW-w64 GCC from `C:\mingw64\bin` and passes its
   absolute path to the script. Windows
   desktop always requires cgo (`-tags sqlite_fts5,sqlite_dbstat`, CGO_ENABLED=1);
-  there is no purego option or fallback. If no compatible GCC is found, the
+  there is no other flavour. If no compatible GCC is found, the
   script exits before replacing
   the existing executable. This machine's ignored local settings select Qt GCC 13.1.0, which
   produces what `make build` and the CI cgo job ship. `cl.exe` is unusable: Go's
@@ -265,17 +265,13 @@ them are in `docs/handoff-archive.md`.
     TestIntakeUploadAndInstall, TestRescanRecoversFromDeletedPreparedFolder,
     TestResourceAndIndex, TestResourceOverrideFromLibraryFolder,
     TestSetupMultipleFolders and `internal/format/dsl`'s
-    TestMediaSourcesEveryZipSpelling all pass on the tag-less/pure-Go build now.
+    TestMediaSourcesEveryZipSpelling all pass now.
   - Flaky everywhere: TestFailedDemandIsRetried (TempDir cleanup races the
     ingest goroutine; failed 4/5 on clean HEAD once), TestPreviewEviction
     (a sweep measured against a live heap: seen once in a loaded full-suite run
     as "still 1050 bytes of preview open after the sweep", while passing 5/5 in
     isolation and in the runs either side of it — re-run before believing it),
-    and TestSearchBudgetRefusesUnpreparedDictionariesOnceSpent ("a dictionary
-    priced above the remaining budget must be refused, got <nil>" — the budget
-    refusal is timing/heap sensitive; passed 3/3 in isolation in the same tree
-    where a loaded full-suite run dropped it once), and
-    TestDictionaryListSharedByHTTPAndNativeWithoutRouter (seen once in a
+    and TestDictionaryListSharedByHTTPAndNativeWithoutRouter (seen once in a
     full-suite run on 2026-11-01, with the three transports' rows differing by
     the estimate a background stats pass had just written; passed alone, with
     two neighbours, and in the two full runs either side of it - the fixture's

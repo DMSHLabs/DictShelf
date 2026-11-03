@@ -371,10 +371,9 @@ Article text in prepared dictionaries is compressed when that reduces its size.
 ## Speex audio (.spx)
 
 Browsers cannot play Speex. wuDict internally transcodes
-`.spx` audio to WAV and caches the result. 
-If wuDict was built without the internal speex decoder (the purego flavours) 
-then the external `speexdec` utility can be used (for mac: `brew install speex`, 
-linux: `apt install speex`, etc).
+`.spx` audio to WAV and caches the result, with the decoder built in.
+With `SPEEX_BACKEND=external` the external `speexdec` utility is used instead
+(for mac: `brew install speex`, linux: `apt install speex`, etc).
 
 ## Building from source
 
@@ -385,7 +384,6 @@ default cgo build):
 make build          # native build (cgo sqlite, fastest) → ./wudict
 make install        # install the binary into GOBIN
 make check          # tidy + vet + tests
-make cross          # all release platforms (pure-Go sqlite, no C toolchain)
 make help           # every available target
 ```
 
@@ -398,19 +396,19 @@ Or with the Go toolchain alone:
 # recommended flavour, the fastest (cgo sqlite + built-in speex), needs a C compiler
 go install -tags sqlite_fts5 github.com/DMSHLabs/DictShelf@latest
 
-# no C compiler? drop the tag — pure-Go sqlite, .spx audio via external speexdec
-go install github.com/DMSHLabs/DictShelf@latest
 ```
 
-Both produce a working `wudict`; the tag only chooses the SQLite driver.
-Passing `-tags sqlite_fts5` on a machine without a C toolchain quietly
-falls back to the pure-Go build rather than failing.
+There is no other flavour: cgo is the only build this fork makes. A build with
+no tags, or with `CGO_ENABLED=0`, fails on purpose
+(`internal/store/driver_missing.go`) instead of quietly linking a different
+driver — the pure-Go one (modernc.org/sqlite, `-tags purego`) was removed on
+2026-11-03, so the measured index sizes and the tests always describe the
+binary that ships.
 
 CI builds are generated with github actions — [`.github/workflows/build-cgo.yml`](.github/workflows/build-cgo.yml)
-for the cgo flavour with internal speex decoder and optimized sqlite3, and
-[`.github/workflows/build-purego.yml`](.github/workflows/build-purego.yml) for purego builds.
-Supported OS's: macOS (arm64/amd64), Linux (amd64/arm64/armv7/armv6) and Windows
-(amd64/arm64).
+builds the cgo flavour with the internal speex decoder and optimized sqlite3,
+on each platform's own runner (cgo cannot cross the host arch/OS).
+Supported OS's: macOS (arm64/amd64), Linux (amd64/arm64) and Windows (amd64).
 
 More details: https://dmshlabs.github.io/DictShelf/reference/building/
 
@@ -463,10 +461,7 @@ on dictionaries and tools to read, write and convert data in these formats.
   dictionaries at once. **FTS5** made this project possible. 
 - Public domain, and maintained at that standard for twenty-five years.
 - **[mattn/go-sqlite3](https://github.com/mattn/go-sqlite3)** — cgo SQLite
-  driver; the default optimized build.
-- **[modernc.org/sqlite](https://gitlab.com/cznic/sqlite)** — SQLite translated
-  to pure Go, so releases build for every platform without a C toolchain. Both
-  drivers are first-class.
+  driver; the only driver since the pure-Go one was removed in 2026-11.
 - **[Speex](https://www.speex.org/)** — Jean-Marc Valin and the
   [Xiph.Org Foundation](https://xiph.org/). `internal/speex` vendors the
   reference decoder so `.spx` pronunciations play without an external tool, and

@@ -580,9 +580,9 @@ func TestStaleFoldIsReportedAndRebuildable(t *testing.T) {
 	}
 }
 
-// sqliteDriver names whichever SQLite driver this build registered - mattn
-// under cgo, modernc under purego (D29). The store package picks it at compile
-// time and keeps the name private, so a test that needs to write to a
+// sqliteDriver names the driver this build registered: mattn's "sqlite3" (D29)
+// - the fork's only driver since the pure-Go one was removed on 2026-11-03.
+// The store package keeps the name private, so a test that needs to write to a
 // text.db asks the sql package what got registered.
 func sqliteDriver() string {
 	for _, d := range sql.Drivers() {
@@ -590,5 +590,5 @@ func sqliteDriver() string {
 			return d
 		}
 	}
-	return "sqlite"
+	return "sqlite3"
 }

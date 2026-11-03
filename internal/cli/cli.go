@@ -348,7 +348,7 @@ SETTINGS
                           env/toml: VERBOSE=1
 
   --speexdec     <path>   The speexdec program, which converts Speex (.spx)
-                          audio to WAV in -purego builds
+                          audio to WAV when SPEEX_BACKEND=external
                           env: SPEEXDEC       toml: SPEEXDEC
                           default: speexdec on PATH, else /usr/bin/speexdec
 
@@ -1409,9 +1409,11 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	useExternalSpeex := cfg.SpeexBackend == "external"
 	srv.UseExternalSpeex = useExternalSpeex
 	// Only look for the external speexdec binary when it will actually be used:
-	// forced via SPEEX_BACKEND=external, or a purego build without the built-in
-	// decoder. A full cgo build uses its own in-process decoder and
-	// does not need the external speexdec.
+	// forced via SPEEX_BACKEND=external, or a build without the in-process
+	// decoder. cgo is the only supported build any more (D4 amendment,
+	// 2026-11-03), so `!speex.Available` now means CGO_ENABLED=0 - a binary
+	// that cannot start anyway; the cgo build uses its own decoder and needs
+	// no external speexdec.
 	var sxPath, sxSource string
 	if useExternalSpeex || !speex.Available {
 		sxPath, sxSource = resolveSpeexdec(cfg.Speexdec)

@@ -11,7 +11,8 @@ import (
 )
 
 // fakeDecoder stands in for libspeex so the padding arithmetic and the WAV
-// framing can be tested without the codec - and therefore under purego too.
+// framing can be tested without the codec - and therefore with CGO_ENABLED=0
+// too (that build cannot start, but this package still compiles).
 // Every sample it returns is its own index in the stream, so a test can say
 // exactly which samples survived the chop.
 type fakeDecoder struct {

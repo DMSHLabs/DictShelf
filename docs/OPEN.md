@@ -206,7 +206,7 @@ should decide the architecture.
 |---|---|---|---|
 | `client9/gospell` | `.aff`/`.dic` parser, affix expansion, compound rules, iconv. **Spell-check only — no analyze/stem** | ✅ | Best *parser* to borrow from; wrong API |
 | `shuLhan/share/lib/hunspell` | `Spell`/`Stem`/`Analyze`; many encodings; ASCII/UTF-8/long/num flags | ✅ | Closest to Hunspell semantics, but v0.x, a sub-package of a large grab-bag module, and inherits the empty-`analyze()` problem |
-| `sthorne/go-hunspell` et al. | cgo bindings to libhunspell | ❌ | **Disqualified by D4/D18** — `-tags purego` must build |
+| `sthorne/go-hunspell` et al. | cgo bindings to libhunspell | ❌ | **Rejected** — ruled out while `-tags purego` had to build (D4/D18, dropped 2026-11-03); not re-decided since |
 | `kljensen/snowball` · `blevesearch/snowballstem` | Snowball stemmers (7 / ~20 languages) | ✅ | See "a stemmer is the wrong tool" above |
 | `aaaton/golem` | Dictionary lemmatizer (en, fr, de, es, it, sv, ru); data as separate modules, ODbL | ✅ | Handles irregulars, which rules cannot. Several MB per language |
 | `smileart/lemmingo` | Lemmatizer + stemmer fallback | ❌ | cgo (Aspell/Snowball), documented thread-safety caveats |
@@ -279,7 +279,7 @@ maintenance surface, not a project with an end. **This is the main reason the it
 - Users look up **inflected forms encountered in text** — that is the entire premise. If they
   mostly look up citation forms, the whole item is worthless.
 - Prepared mode is primary (D15), so index-backed validation is available for most dictionaries.
-- `-tags purego` must keep building (D4/D18), which disqualifies every cgo binding outright.
+- cgo bindings were disqualified while `-tags purego` had to build (D4/D18). That requirement was dropped on 2026-11-03, so a cgo binding is no longer excluded on those grounds; none of the entries above was re-decided since.
 
 ---
 

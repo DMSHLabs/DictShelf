@@ -8,9 +8,8 @@
 # embedded into it: `wudict licenses` prints exactly what this script wrote.
 #
 # The dependency set is the UNION over every shipped build configuration - the
-# cgo and purego SQLite drivers pull different modules, and the tray pulls
-# different ones per OS - so a notice can never go missing because the release
-# that needed it was built with other tags.
+# tray pulls different ones per OS - so a notice can never go missing because
+# the release that needed it was built somewhere else.
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -20,16 +19,15 @@ tmp=$(mktemp)
 trap 'rm -f "$tmp" "$tmp.mods"' EXIT
 
 : > "$tmp.mods"
-# Every shipped configuration, which is now exactly two drivers per platform:
-# the cgo one the releases are built with (sqlite_fts5,sqlite_dbstat) and the
-# pure-Go one, which has to be asked for by name (driver_purego.go). A build
-# with neither driver fails on purpose (driver_missing.go), so an empty tag list
-# is not a configuration any more.
+# Every shipped configuration: the cgo driver (sqlite_fts5,sqlite_dbstat), which
+# is the only one since the pure-Go driver (modernc.org/sqlite, `-tags purego`)
+# was removed on 2026-11-03. The tag loop stays because it is the seam a second
+# configuration would come back through.
 for goos in darwin linux windows; do
-  for tags in purego sqlite_fts5,sqlite_dbstat; do
-    # CGO_ENABLED=1 for the cgo flavour, or `go list` would drop the C-backed
-    # SQLite driver from a cross-listed configuration and lose its notice.
-    cgo=0; case "$tags" in *sqlite_fts5*) cgo=1;; esac
+  for tags in sqlite_fts5,sqlite_dbstat; do
+    # CGO_ENABLED=1 is required, or `go list` drops the C-backed SQLite driver
+    # from the listing and loses its notice.
+    cgo=1
     CGO_ENABLED=$cgo GOOS=$goos GOARCH=amd64 go list -deps \
       -tags "$tags" \
       -f '{{if .Module}}{{.Module.Path}}	{{.Module.Version}}	{{.Module.Dir}}{{end}}' ./... \

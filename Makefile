@@ -20,8 +20,9 @@ BUILD_DIR  := dist
 #       the tag they read as zero on this driver.
 #     Requires a C compiler.
 #
-#   pure-Go is opt-in, not a fallback: `-tags purego` (driver_purego.go). A
-#   build that selects neither driver fails on purpose (driver_missing.go).
+#   cgo is the only flavour: a build that selects no driver fails on purpose
+#   (driver_missing.go). The pure-Go driver (`-tags purego`, modernc.org/sqlite)
+#   was removed on 2026-11-03.
 GO_TAGS      := sqlite_fts5,sqlite_dbstat
 GOFLAGS      := -tags $(GO_TAGS) -trimpath
 # VERSION must be defined BEFORE LDFLAGS: `:=` expands immediately, so the

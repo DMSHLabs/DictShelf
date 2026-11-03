@@ -95,12 +95,12 @@ to Raul Fernandes and Karl Grill.
 
 ### SQLite
 
-Both SQLite drivers embed SQLite itself, which is in the public domain: its
+The SQLite driver embeds SQLite itself, which is in the public domain: its
 authors "have dedicated all copyright to the public domain". See
 <https://sqlite.org/copyright.html>.
 
 ## Go modules linked into the binaries
 
-The union over every shipped build configuration — the cgo and pure-Go SQLite
-drivers, and each supported operating system — so nothing is missing from a
-release that happened to be built with other tags.
+The union over every shipped build configuration — each supported operating
+system — so nothing is missing from a release that happened to be built
+somewhere else.

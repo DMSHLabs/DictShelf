@@ -30,13 +30,13 @@ This repository is the whole project (`github.com/DMSHLabs/DictShelf`); there is
 - `internal/server` — registry, HTTP API, embedded UI (`web/index.html`, `web/setup.html`, `web/frame.js`).
 - `internal/gomdict` — inlined MDX/MDD parser. `internal/speex` — in-process .spx decoder (D18).
 - `internal/howto` — the **wudict howto**, the app's guide as an embedded wudict markdown dictionary (`wudict-howto.wudict.md` + `.files/`). Every headword starts with `wudict `; `howto_test.go` holds it to the format (gate, zero warnings, links resolve, a clean dump reproduces it byte for byte). Edit the guide there; `pages/` is the website and is not part of the app.
-- `android/` — the Android app (D52): a dependency-free Java WebView shell that execs the android/arm64 binary shipped inside the APK as `libwudict.so`. `make android-go` rebuilds the Go side (cgo flavour, D53: mattn FTS5 + built-in speex, needs the NDK; `make android-go-purego` is the NDK-less fallback), `make apk` the whole app; CI signs via repo secrets. The port adds no Go code and no build tags.
+- `android/` — the Android app (D52): a dependency-free Java WebView shell that execs the android/arm64 binary shipped inside the APK as `libwudict.so`. `make android-go` rebuilds the Go side (cgo flavour, D53: mattn FTS5 + built-in speex, needs the NDK), `make apk` the whole app; CI signs via repo secrets. The port adds no Go code and no build tags.
 - **The Makefile is the developer UI (D10): every action has a target, `make help` lists them, `make check` before declaring work done.**
 
 The reference projects this was built from (`mdict-go-web`, `draego`, `pyglossary`, the speex sources) have been **removed from disk**. `docs/FORMATS.md` still cites their file and function names: read those as provenance for where a rule came from, not as paths you can open.
 
 ## Conventions
-- Go, modules. `make build` uses cgo (`-tags sqlite_fts5` → mattn sqlite + built-in speex); a **tag-less** `go build`/`go install` gets the pure-Go driver and must keep working, because FTS5 is mandatory (D29). `-tags purego` must keep building and passing (D4, D18). Table-driven tests.
+- Go, modules. `make build` uses cgo (`-tags sqlite_fts5,sqlite_dbstat` → mattn sqlite + built-in speex). **cgo is the only supported build** (D4 amendment, 2026-11-03): a tag-less `go build`/`go install` and `CGO_ENABLED=0` fail on purpose (`internal/store/driver_missing.go`), because FTS5 is mandatory (D29) and there is no pure-Go driver to fall back to any more. Table-driven tests.
 - **Need-to-know (D102).** Internal mechanics and the UI are separate layers; some
   internals map 1:1 to a control, most must not surface at all. A mechanism reaches
   the UI only when the user must *decide* or *act* on it — never as an explanation of

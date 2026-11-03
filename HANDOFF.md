@@ -1,5 +1,14 @@
 # Agent handoff — current state
 
+The build has one flavour since 2026-11-03: cgo, `-tags sqlite_fts5,sqlite_dbstat` (MinGW on
+Windows, the NDK on Android, a native runner per platform in CI). The pure-Go SQLite driver
+(`modernc.org/sqlite`, `-tags purego`) was removed with its dependency, its notices and its
+build-tag prose; a build that selects no driver fails by name (`internal/store/driver_missing.go`).
+`internal/speex/backend_nocgo.go` stays: it is the `!cgo` stub of the speex package, not a SQLite
+flavour. `pages/docs` (the published site) still offers the upstream `-purego` downloads and the
+`make cross` / `make build-purego` / `make android-go-purego` targets this fork has never had -
+cleaning that page set is open.
+
 Dictionary management defaults to Contains for new profiles, and its setup and
 Edit Folders views explain the search-speed benefit and one-time indexing cost.
 

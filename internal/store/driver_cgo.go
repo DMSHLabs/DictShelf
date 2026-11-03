@@ -17,9 +17,10 @@ package store
 // && cgo half keeps CGO_ENABLED=0 away from mattn's !cgo stub, whose
 // registered driver refuses every Open.
 //
-// Anything this constraint rejects lands on driver_purego.go, which is
-// always correct if slower. The two constraints are exhaustive by
-// construction, so no flag combination can produce a binary without FTS5.
+// It is the ONLY driver: the pure-Go one (modernc.org/sqlite, `-tags purego`)
+// was removed on 2026-11-03, when every build this fork makes - Windows, Android
+// through the NDK, and the cgo release workflow - was already cgo. Anything this
+// constraint rejects lands on driver_missing.go, which fails the build by name.
 
 import (
 	"strconv"
