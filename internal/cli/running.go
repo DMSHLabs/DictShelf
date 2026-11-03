@@ -77,14 +77,14 @@ func probeRunning(addr string) (*runningInstance, bool) {
 func probeHost(addr string) string {
 	host := addr
 	// A wildcard bind answers on loopback too, and loopback is the one
-	// interface guaranteed to be up - so ask there. Both spellings of
-	// "wildcard" have to be recognised - "0.0.0.0", "::" and "[::]" - or a
-	// second launch gets a bind error it cannot explain instead of the
-	// running instance. A
+	// interface guaranteed to be up - so ask there. Every spelling of
+	// "wildcard" has to be recognised - "0.0.0.0", "::", "[::]" and the bare
+	// ":6888" that leaves the host empty - or a second launch gets a bind
+	// error it cannot explain instead of the running instance. A
 	// CONCRETE non-loopback bind is left alone on purpose: nothing is
 	// listening on loopback then.
 	if h, port, err := net.SplitHostPort(addr); err == nil {
-		if ip := net.ParseIP(h); ip != nil && ip.IsUnspecified() {
+		if ip := net.ParseIP(h); h == "" || (ip != nil && ip.IsUnspecified()) {
 			host = net.JoinHostPort("127.0.0.1", port)
 		}
 	}

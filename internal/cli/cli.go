@@ -1327,7 +1327,7 @@ func cmdServe(args []string) (err error) {
 					// so the key that would have been ours is the key it wants.
 					// This duplicate process exits immediately; a WebView owned by it
 					// would disappear with it. Open the existing server in the browser.
-					browserCmd(browseURL(url, token))
+					browserCmd(browserURL(cfg.Addr(), token))
 				}
 				return nil
 			}
@@ -1497,7 +1497,7 @@ Hint: pick another port with --port, e.g.:  dictshelf --port %s
 	}
 	desktopResource := desktopResourceHandler(srv.DesktopResource)
 	if !cfg.NoBrowser {
-		go openBrowser(browseURL(url, token), gui, stop, desktopRequest, desktopStream, desktopResource, listenerlessDesktop)
+		go openBrowser(browserURL(cfg.Addr(), token), gui, stop, desktopRequest, desktopStream, desktopResource, listenerlessDesktop)
 	}
 	go func() {
 		sig := make(chan os.Signal, 1)
@@ -1553,7 +1553,7 @@ Hint: pick another port with --port, e.g.:  dictshelf --port %s
 			return url
 		}(),
 		Open: func() {
-			openUI(browseURL(url, token), gui, stop, desktopRequest, desktopStream, desktopResource, listenerlessDesktop)
+			openUI(browserURL(cfg.Addr(), token), gui, stop, desktopRequest, desktopStream, desktopResource, listenerlessDesktop)
 		},
 		Rescan:   trayRescan(reg),
 		OpenDir:  trayOpenDir(reg.Dirs()),
@@ -1917,15 +1917,18 @@ func (m *multiFlag) Set(v string) error {
 // string a user can act on: a link that works. Empty in, empty out - no key
 // required means there is nothing to show, and a banner line that says
 // "access key: (none)" is an invitation to go looking for one.
-func keyURL(url, token string) string {
+//
+// The key is escaped: a typed AUTH_TOKEN may hold '+', '&', '#', '%' or a
+// space, and unescaped each of those changes what the server reads back.
+func keyURL(base, token string) string {
 	if token == "" {
 		return ""
 	}
 	sep := "?"
-	if strings.Contains(url, "?") {
+	if strings.Contains(base, "?") {
 		sep = "&"
 	}
-	return url + sep + "k=" + token
+	return base + sep + "k=" + url.QueryEscape(token)
 }
 
 // browseURL is the address a browser is opened on: the link carrying the access
@@ -1942,6 +1945,13 @@ func browseURL(url, token string) string {
 		return keyed
 	}
 	return url
+}
+
+// browserURL is the address the browser is actually sent to, built from the
+// address the server listens on: probeHost's loopback spelling of a wildcard,
+// because a browser told to open "http://0.0.0.0:6888/" connects to nothing.
+func browserURL(addr, token string) string {
+	return browseURL("http://"+probeHost(addr)+"/", token)
 }
 
 // webOriginsNote renders WEB_ORIGINS for the startup block. A wildcard is
@@ -2023,6 +2033,11 @@ func desktopWindowURLWithMarker(address string) string {
 }
 
 func browserCmd(url string) {
+	// Refused, not passed on: FileProtocolHandler hands an empty target to
+	// ShellExecute, which opens an Explorer window instead of failing.
+	if url == "" {
+		return
+	}
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
@@ -2032,7 +2047,14 @@ func browserCmd(url string) {
 	default:
 		cmd = exec.Command("xdg-open", url)
 	}
-	_ = cmd.Start()
+	if err := cmd.Start(); err != nil {
+		// A headless Linux box has no xdg-open; the banner carries the link.
+		logx.V("open browser: %v", err)
+		return
+	}
+	// Reaped: open(1) and xdg-open exit at once, and an unwaited child stays
+	// a zombie for the life of the server - one per tray "Open" click.
+	go cmd.Wait()
 }
 
 func cmdSearchAll(args []string) error {
