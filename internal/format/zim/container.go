@@ -56,6 +56,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 	"github.com/DMSHLabs/DictShelf/internal/resource"
 	"github.com/klauspost/compress/zstd"
 	"github.com/ulikunitz/xz"
@@ -85,11 +86,6 @@ const (
 	// surrounding compressed extent. This admits millions of blobs.
 	maxTableBytes = 16 << 20
 
-	// maxClusterBytes bounds one DECOMPRESSED cluster. Every codec here can
-	// be made to expand a bounded input without limit, and a cluster's
-	// compressed extent is attacker-controlled in a downloaded file.
-	maxClusterBytes = 256 << 20
-
 	// clusterCacheBytes is the decompressed-cluster budget. A cluster larger
 	// than the whole budget is still cached (alone), because evicting the
 	// entry just inserted would make every blob read decompress again.
@@ -109,6 +105,15 @@ const (
 	// cycle now costs 50 dirent reads before the error, which is nothing.
 	redirectHops = 50
 )
+
+// maxCluster bounds one DECOMPRESSED cluster (MAX_ZIM_CLUSTER). Every codec
+// here can be made to expand a bounded input without limit, and a cluster's
+// compressed extent is attacker-controlled in a downloaded file. It is a
+// function rather than a constant because the same number is what the zstd
+// decoder is built with, what the offset table is checked against, and what
+// the compressed extent read is sized by - so a lowered key has to lower all
+// of them, or it would only move the refusal after the allocation.
+func maxCluster() int64 { return limits.Get().ZIMCluster }
 
 // dirent is one directory entry: an article, a resource, or a redirect.
 type dirent struct {
@@ -660,8 +665,13 @@ func (c *container) cluster(i uint32) (*clusterData, error) {
 		return &clusterData{extended: extended, direct: true, body: int64(start) + 1, n: end - start - 1}, nil
 	}
 	// A gap after the compressed stream is not part of the cluster. The
-	// compressed input of a bounded cluster needs at most this much space.
-	n := min(end-start-1, uint64(2*maxClusterBytes))
+	// compressed input of a bounded cluster needs at most this much space:
+	// no codec here expands its input by 2x, so a cluster that decompresses
+	// under MAX_ZIM_CLUSTER has a compressed extent well under twice it, and
+	// one that does not is refused a moment later regardless. Sized FROM the
+	// key rather than from a constant, because otherwise a lowered limit
+	// would still read the whole extent of the cluster it is about to refuse.
+	n := min(end-start-1, uint64(2*maxCluster()))
 	raw := make([]byte, n)
 	if _, err := c.f.ReadAt(raw, int64(start)+1); err != nil {
 		return nil, fmt.Errorf("cluster %d: %w", i, err)
@@ -708,7 +718,7 @@ func (c *container) touch(i uint32) {
 	}
 }
 
-var errClusterTooLarge = errors.New("decompressed cluster exceeds limit")
+var errClusterTooLarge = errors.New("decompressed cluster exceeds the MAX_ZIM_CLUSTER limit")
 
 func (c *container) decompress(codec byte, data []byte, width uint64) ([]byte, error) {
 	if codec == 5 {
@@ -778,13 +788,13 @@ func readTableBounded(r io.Reader, width uint64) ([]byte, error) {
 	prev := first
 	for k := width; k < first; k += width {
 		off := tableOffset(out[k:k+width], width)
-		if off < prev || off > maxClusterBytes {
+		if off < prev || off > uint64(maxCluster()) {
 			return nil, fmt.Errorf("bad offset table entry %d: %d after %d", k/width, off, prev)
 		}
 		prev = off
 	}
 	last := prev
-	if last > maxClusterBytes {
+	if last > uint64(maxCluster()) {
 		return nil, errClusterTooLarge
 	}
 	out = append(out, make([]byte, int(last-first))...)
@@ -888,7 +898,7 @@ func (c *container) zstd() (*zstd.Decoder, error) {
 	}
 	zr, err := zstd.NewReader(nil,
 		zstd.WithDecoderConcurrency(1),
-		zstd.WithDecoderMaxMemory(maxClusterBytes))
+		zstd.WithDecoderMaxMemory(uint64(maxCluster())))
 	if err != nil {
 		return nil, err
 	}
@@ -897,12 +907,12 @@ func (c *container) zstd() (*zstd.Decoder, error) {
 }
 
 func readAllBounded(r io.Reader) ([]byte, error) {
-	out, err := io.ReadAll(io.LimitReader(r, maxClusterBytes+1))
+	out, err := io.ReadAll(io.LimitReader(r, maxCluster()+1))
 	if err != nil {
 		return nil, err
 	}
-	if len(out) > maxClusterBytes {
-		return nil, fmt.Errorf("%w: %d bytes", errClusterTooLarge, maxClusterBytes)
+	if int64(len(out)) > maxCluster() {
+		return nil, fmt.Errorf("%w: %s", errClusterTooLarge, limits.Format(maxCluster()))
 	}
 	return out, nil
 }
@@ -969,8 +979,8 @@ func (c *container) blob(cl, bl uint32) ([]byte, error) {
 	if !cd.direct {
 		return cd.data[lo:hi], nil
 	}
-	if hi-lo > maxClusterBytes {
-		return nil, fmt.Errorf("cluster %d blob %d: %d bytes exceeds %d", cl, bl, hi-lo, maxClusterBytes)
+	if hi-lo > uint64(maxCluster()) {
+		return nil, limits.Exceeded(fmt.Sprintf("cluster %d blob %d of %d bytes", cl, bl, hi-lo), "MAX_ZIM_CLUSTER", maxCluster())
 	}
 	out := make([]byte, hi-lo)
 	if _, err := c.f.ReadAt(out, cd.body+int64(lo)); err != nil {

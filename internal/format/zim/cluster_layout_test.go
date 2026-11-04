@@ -7,12 +7,15 @@ package zim
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 )
 
 // clusterFirstZIM changes the builder's physical order from dirents, clusters
@@ -179,5 +182,41 @@ func TestRedirectResolvesReferencesAtStoredArticlePath(t *testing.T) {
 	closeErr := rc.Close()
 	if readErr != nil || closeErr != nil || string(got) != "image" {
 		t.Fatalf("resolved resource = %q, read %v, close %v", got, readErr, closeErr)
+	}
+}
+
+// TestClusterLimitIsTheKey: what one cluster may decompress to is
+// MAX_ZIM_CLUSTER. The sample's clusters are kilobytes, so a lowered key
+// refuses one the default accepts - and it comes back as errClusterTooLarge,
+// the sentinel decompress uses to tell "genuinely too large" from "the decoder
+// disliked the tail", rather than as a panic or a truncated body.
+func TestClusterLimitIsTheKey(t *testing.T) {
+	limits.Set(limits.Limits{ZIMCluster: 1 << 10})
+	t.Cleanup(func() { limits.Set(limits.Default) })
+
+	f := sample()
+	for i := range f.clusters {
+		f.clusters[i].codec = 2 // zlib: the codec whose refusal is the sentinel
+	}
+	// A cluster the default accepts and a 1 KiB key does not. "cat" shares
+	// cluster 0 with this, so reading it is what trips the bound.
+	f.entries = append(f.entries, bEntry{
+		ns: 'C', path: "big.txt", mime: "text/plain",
+		body: bytes.Repeat([]byte("wudict"), 1<<10), cluster: 0,
+	})
+	d := openZIMBytes(t, buildZIM(t, f))
+	_, err := d.Exact("cat", 1)
+	if err == nil || !errors.Is(err, errClusterTooLarge) {
+		t.Fatalf("Exact under a 1 KiB MAX_ZIM_CLUSTER = %v, want errClusterTooLarge", err)
+	}
+	if !strings.Contains(err.Error(), "MAX_ZIM_CLUSTER") {
+		t.Fatalf("the refusal does not name the key: %v", err)
+	}
+	// The same archive reads once the default is back: the refusal was the
+	// key and nothing else.
+	limits.Set(limits.Default)
+	d2 := openZIMBytes(t, buildZIM(t, f))
+	if res, err := d2.Exact("cat", 1); err != nil || len(res) != 1 {
+		t.Fatalf("Exact at the default = %v, %v", res, err)
 	}
 }
