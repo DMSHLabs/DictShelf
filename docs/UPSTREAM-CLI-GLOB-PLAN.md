@@ -237,7 +237,23 @@
 
 ## 8. Порядок работы (шаг = коммит)
 
-0. `git status` — дерево чистое; ветка от `dev`: `git checkout -b cli-glob dev`.
+0. **Не переключай ветку в общем каталоге.** `D:\Projects\Android\DictShelf` делят несколько
+   сессий, а `git checkout -b` переносит чужие незакоммиченные правки на новую ветку. Работай в
+   отдельном worktree — он уже создан (2026-11-04, ветка `cli-glob` от `dev`):
+
+       cd D:/Projects/Android/DictShelf-cli-glob && git status    # ожидаем: ## cli-glob, дерево чистое
+
+   Если его нет (удалён), создай заново:
+
+       git -C D:/Projects/Android/DictShelf worktree add ../DictShelf-cli-glob -b cli-glob dev
+
+   Игнорируемых локальных файлов этой машины (`build-*.local.bat`) в worktree нет, поэтому gcc
+   для cgo бери из Qt — как и в основном каталоге:
+
+       export PATH="/c/Qt/Tools/mingw1310_64/bin:$PATH"; export CGO_ENABLED=1
+
+   Проверено 2026-11-04: `go build -tags sqlite_fts5,sqlite_dbstat ./...` в этом worktree
+   проходит без вывода компилятора.
 1. **Матчер:** `internal/resource/glob.go` + `glob_test.go` — как есть, собрать, прогнать
    `internal/resource`. Самодостаточно, ничего не подключено.
 2. **Общее для двух команд:** `internal/cli/extract.go` с решением по §4.4 (в теле коммита —
@@ -284,6 +300,8 @@
 - Удалить этот файл (`git rm docs/UPSTREAM-CLI-GLOB-PLAN.md`) и снять ссылку из
   `HANDOFF-NEXT.md`.
 - Завести/дополнить свой файл сессии в `docs/sessions/`.
+- **Убрать worktree:** `git -C D:/Projects/Android/DictShelf worktree remove ../DictShelf-cli-glob`
+  (и `git worktree prune`, если от неудачных попыток остались записи).
 
 ## 12. Что уже сделано в этом раунде (не переделывать)
 
