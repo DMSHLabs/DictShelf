@@ -32,6 +32,10 @@ because a reader of our own makes compatibility our burden and its failures sile
 
 Everything below is from `D:/Projects/Android/xapian-core` and was checked byte by byte against the
 `fulltext/xapian` blob of the Russian Wiktionary, so a reader can be written from this section alone.
+That tree is **1.4.32**, which is what libzim writes into a ZIM. The clone at
+`D:/Projects/Android/xapian` is **2.1.0** - a later generation of the format, useful only for
+seeing where it went; it is NOT the reference for what an archive contains, and a reader written
+from it would be reading a format no ZIM holds.
 
 **Integers.** `pack_uint` is LEB128 (7 bits per byte, high bit continues). `pack_string` is a packed
 length then the bytes. All values *inside blocks* are **big-endian** (`aligned_read4`, `unaligned_read2`).
