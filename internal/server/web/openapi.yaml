@@ -117,6 +117,12 @@ paths:
       operationId: demandDictionaryIndex
       x-internal: true
       summary: Start or prioritize a dictionary's required headword index
+      description: |
+        With `explicit`, a missing index is prepared; with `priority` too, a dictionary
+        already waiting in the running index queue is taken next instead of started.
+        With `promote`, only that reorder happens: a dictionary that is not in the
+        running queue is left alone and nothing is started for it. `promote` is what
+        Browse uses, so that opening a page can never begin indexing.
       requestBody:
         required: true
         content:
@@ -129,6 +135,7 @@ paths:
                 dict: {type: string}
                 explicit: {type: boolean}
                 priority: {type: boolean}
+                promote: {type: boolean}
       responses:
         '200':
           description: Indexing state for the requested dictionary.

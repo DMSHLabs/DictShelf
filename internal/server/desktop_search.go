@@ -498,6 +498,7 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 			Dict     string `json:"dict"`
 			Explicit bool   `json:"explicit"`
 			Priority bool   `json:"priority"`
+			Promote  bool   `json:"promote"`
 		}
 		if err := json.Unmarshal([]byte(argument), &request); err != nil {
 			values, queryErr := url.ParseQuery(argument)
@@ -507,8 +508,9 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 			request.Dict = values.Get("dict")
 			request.Explicit, _ = queryFlag(values, "explicit")
 			request.Priority, _ = queryFlag(values, "priority")
+			request.Promote, _ = queryFlag(values, "promote")
 		}
-		indexing, err := s.DemandDictionary(request.Dict, request.Explicit, request.Priority)
+		indexing, err := s.demandDictionary(request.Dict, request.Explicit, request.Priority, request.Promote)
 		if err != nil {
 			return nil, err
 		}

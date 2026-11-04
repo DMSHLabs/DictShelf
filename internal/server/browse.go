@@ -1623,6 +1623,9 @@ func browseUnprepared(w http.ResponseWriter, e *entry) {
 	_ = enc.Encode(map[string]any{
 		"error":    "This dictionary has no index. Create one in Dictionary Settings.",
 		"prepared": false,
+		// The name is what the page says while the queue works this dictionary
+		// ("Indexing <name>"); without it the card could only repeat the id.
+		"name": e.probeName(),
 	})
 }
 
