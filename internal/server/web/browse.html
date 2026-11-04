@@ -284,6 +284,11 @@ footer .browse-search-dock{width:100%;max-width:54rem}
 .msg b{display:block;font-size:16px;margin-bottom:.3rem}
 .msg p{margin:.3rem 0;color:var(--label);font-size:14px}
 .msg a{color:var(--accent)}
+.msg progress{display:block;width:100%;height:.45rem;margin:.8rem 0 .25rem;accent-color:var(--accent)}
+.msg .pc{font-size:12.5px;color:var(--label-quiet);font-variant-numeric:tabular-nums;min-height:1.2em}
+.msg button{font:inherit;font-size:13px;background:none;border:1px solid var(--line);color:var(--fg);
+  border-radius:8px;padding:.2rem .8rem;cursor:pointer}
+.msg button:hover{border-color:var(--accent);color:var(--accent)}
 .picks{display:flex;flex-direction:column;gap:.1rem;margin-top:.8rem}
 .picks a{color:var(--link);text-decoration:none;padding:.3rem .4rem;border-radius:6px}
 .picks a:hover{background:var(--line-soft);color:var(--fg)}
@@ -898,6 +903,7 @@ function finishBrowseProgress(kind,scope){
 }
 function clearBrowseProgress(){for(const [id,job] of browseProgressJobs)if(job.kind!=="alphabet"){browseProgressJobs.delete(id);if(job.taskID)window.wudictTasks?.finish(job.taskID)}}
 addEventListener("pagehide",()=>{
+  stopBrowseIndexWatch();
   for(const job of browseProgressJobs.values()){
     try{job.cancel?.()}catch(_){ }
     if(job.taskID)window.wudictTasks?.finish(job.taskID);
@@ -931,6 +937,7 @@ function card(html,chooserList=false){chooserSearch?.destroy();chooserSearch=nul
    sequence against the first. */
 async function show(opts,record){
   clearTimeout(poll);
+  stopBrowseIndexWatch();
   const seq=++browseSeq;
   const requestDictId=dictId;
   const started=performance.now();
@@ -1967,11 +1974,145 @@ document.addEventListener("keydown",event=>{if(event.key==="Escape"&&!$("browseW
 addEventListener("scroll",browseHideWordContextMenu,true);
 addEventListener("resize",browseHideWordContextMenu);
 
-/* Browsing needs the headword index. Create it from Dictionary Settings. */
-async function unprepared(){
+/* Browsing needs the headword index, and this page does not create one: the
+   index is built by the add queue or by an explicit action in the app - the
+   same rule the wmd reader states for its own prepared index. What arriving
+   here can do instead is honest. If this dictionary is already waiting in the
+   index queue that is running right now, the reader's request lifts it to the
+   FRONT of that queue, so the workers take it next instead of last; a
+   dictionary that is not in the queue is left exactly as it was, because
+   opening a page never begins indexing. The card then reports the work while
+   it lasts, and the words appear by themselves once it is done.
+
+   Nothing is drawn for the first 400 ms: below that the wait reads as instant,
+   and a card that flashes up for a small dictionary is noise. The uncounted
+   tail of a build (the optional indexes, the commit, ANALYZE) has no count of
+   its own, so the bar drops its value there rather than sitting full at 100 -
+   a bar parked at 100 while work goes on is a lie. */
+const BROWSE_INDEX_GRACE_MS=400,BROWSE_INDEX_POLL_MS=1500;
+let browseIndexWatch=null;
+function stopBrowseIndexWatch(){
+  if(!browseIndexWatch)return;
+  clearTimeout(browseIndexWatch.grace);
+  clearTimeout(browseIndexWatch.timer);
+  browseIndexWatch=null;
+}
+/* The work status and the promote request have three homes: the Android shell's
+   Go bridge, the Windows in-process window, and the network this page arrived
+   over - the same three browseFetch serves page requests in. */
+function browseWorkStatusRequest(){
+  if(window.wudictAndroidGo)return Promise.resolve(JSON.parse(window.wudictAndroidGo.indexWork("get","")).body||{});
+  if(typeof window.wudictNativeCall==="function")return window.wudictNativeCall("indexWork","");
+  return fetch("/api/index-work").then(r=>{if(!r.ok)throw new Error("index work status failed");return r.json()});
+}
+function promoteBrowseDictionaryRequest(){
+  const body=JSON.stringify({dict:dictId,explicit:true,priority:true,promote:true});
+  if(window.wudictAndroidGo){
+    const result=JSON.parse(window.wudictAndroidGo.indexWork("priority","",body));
+    if(result.status<200||result.status>=300)throw new Error("dictionary promotion failed");
+    return Promise.resolve(!!(result.body||{}).indexing);
+  }
+  if(typeof window.wudictNativeCall==="function")
+    return window.wudictNativeCall("demand",body).then(value=>!!(value&&value.indexing));
+  return fetch("/api/demand",{method:"POST",headers:{"Content-Type":"application/json"},body})
+    .then(r=>{if(!r.ok)throw new Error("dictionary promotion failed");return r.json()}).then(value=>!!value.indexing);
+}
+function drawBrowseIndexRequired(){
   card("<b>"+tx("browse.indexRequired")+"</b><p><a href=\"/\">"+
     tx("browse.openApp")+"</a></p><p><a href=\"/browse\">"+
     tx("browse.chooseAnother")+"</a></p>");
+}
+function drawBrowseIndexCard(watch){
+  card("<b>"+tx("browse.indexingTitle",{name:watch.name})+"</b>"+
+    '<progress id="browseIndexBar"></progress>'+
+    '<p class="pc" id="browseIndexCount"></p><p id="browseIndexPhase" aria-live="polite"></p>'+
+    "<p>"+tx("browse.indexingCanLeave")+' <a href="/">'+tx("browse.indexingSearchMeanwhile")+"</a></p>");
+  watch.drawn=true;
+  updateBrowseIndexCard(watch,null);
+}
+/* busy is the dictionary's own entry in the job's per-dictionary progress, or
+   null when it is queued but not yet in a worker. A build that reports no total
+   yet still reports what it has done, and that number is worth showing. */
+function updateBrowseIndexCard(watch,busy){
+  const bar=$("browseIndexBar"),count=$("browseIndexCount"),phase=$("browseIndexPhase");
+  if(!bar||!count)return;
+  const done=busy?Number(busy.done)||0:0,total=busy?Number(busy.total)||0:0;
+  let text="",message="",title=watch.name;
+  if(busy&&total>0&&done<total){
+    bar.max=total;bar.value=done;
+    text=t("browse.indexingWords",{done:num(done),total:num(total)});
+    title=Math.floor(done/total*100)+"% · "+watch.name;
+  }else{
+    bar.removeAttribute("value");
+    if(busy){
+      if(total>0){message=t("browse.indexingFinishing");text=t("browse.indexingCounted",{count:num(total)})}
+      else if(done>0)text=t("browse.indexingCounted",{count:num(done)});
+    }else message=t("browse.indexingWaiting");
+  }
+  count.textContent=text;
+  if(phase.textContent!==message)phase.textContent=message;
+  document.title=title;
+}
+function drawBrowseIndexFailure(watch,why){
+  stopBrowseIndexWatch();
+  document.title=watch.name;
+  card("<b>"+tx("browse.indexFailed",{name:watch.name})+"</b>"+(why?"<p>"+esc(why)+"</p>":"")+
+    '<p><button type="button" id="browseIndexRetry">'+tx("browse.tryAgain")+"</button> "+
+    '<a href="/browse">'+tx("browse.chooseAnother")+"</a></p>");
+  $("browseIndexRetry").onclick=()=>startBrowseIndexWatch(watch.name,false);
+}
+function startBrowseIndexWatch(name,promote){
+  if(browseIndexWatch&&browseIndexWatch.dictId===dictId)return;
+  stopBrowseIndexWatch();
+  const watch={dictId,name,promote,active:true,drawn:false,misses:0};
+  browseIndexWatch=watch;
+  const begin=()=>{
+    watch.grace=setTimeout(()=>{
+      if(browseIndexWatch!==watch)return;
+      drawBrowseIndexCard(watch);
+      // The card is drawn from the job's own answer at once: waiting a poll
+      // interval first would say "waiting for a worker" about work in hand.
+      pollBrowseIndex(watch);
+    },BROWSE_INDEX_GRACE_MS);
+  };
+  if(!promote)return begin();
+  promoteBrowseDictionaryRequest().catch(()=>false).then(queued=>{
+    if(browseIndexWatch!==watch)return;
+    /* Nothing is being done for this dictionary, and nothing may be begun from
+       this page: the card this page has always shown. */
+    if(!queued){watch.active=false;browseIndexWatch=null;return drawBrowseIndexRequired()}
+    begin();
+  });
+}
+async function pollBrowseIndex(watch){
+  if(browseIndexWatch!==watch)return;
+  let status=null;
+  try{status=await browseWorkStatusRequest()}catch(_){status=null}
+  if(browseIndexWatch!==watch)return;
+  if(!status){
+    /* Two missed answers: the server that owns the job no longer answers, which
+       is a failure the reader can act on rather than a wait. */
+    if(++watch.misses<2){watch.timer=setTimeout(()=>pollBrowseIndex(watch),BROWSE_INDEX_POLL_MS);return}
+    return drawBrowseIndexFailure(watch,t("browse.noAnswerBody"));
+  }
+  watch.misses=0;
+  const busy=(status.busyProgress||[]).find(job=>job.id===watch.dictId&&job.active)||null;
+  const listed=(status.pendingDicts||[]).includes(watch.dictId)||(status.busyDicts||[]).includes(watch.dictId);
+  if(busy||listed){
+    if(watch.drawn)updateBrowseIndexCard(watch,busy);else drawBrowseIndexCard(watch);
+    watch.timer=setTimeout(()=>pollBrowseIndex(watch),BROWSE_INDEX_POLL_MS);
+    return;
+  }
+  stopBrowseIndexWatch();
+  const failure=(status.failed||[]).find(item=>item.startsWith(watch.name+":"));
+  if(failure)return drawBrowseIndexFailure(watch,failure.slice(watch.name.length+1).trim());
+  /* The queue no longer holds it: the build either finished or was left behind.
+     Ask for the words - the answer is the page, or the same "no index" that put
+     us here, which then falls back to the plain card rather than another round. */
+  show(last,"none");
+}
+async function unprepared(j={}){
+  startBrowseIndexWatch((j&&j.name)||dictId,true);
 }
 
 let browseDictInfoRequest=0,browseDictInfoPress=null,browseDictInfoSuppress=null;
@@ -2267,6 +2408,7 @@ addEventListener("keydown",e=>{
 });
 
 addEventListener("popstate",()=>{
+  stopBrowseIndexWatch();
   const p=new URLSearchParams(location.search);
   if(!p.get("dict"))return chooser();
   dictId=p.get("dict");

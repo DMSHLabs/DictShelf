@@ -617,9 +617,34 @@ left, and why:
   StarDict indexes and the intake's space checks. Mind the ZIM one — it is the
   same package as the bullet above.
 - **Product decisions, not work**: MEGA links (`c9fcb3d3`), favorites
-  (`81949eda`), CLI globbing (`4b00e48b`), live Browse progress (`8a48536d`) —
-  each is cheap once it is decided, and each wants this fork's own CLI or UI
-  rather than a port.
+  (`81949eda`), CLI globbing (`4b00e48b`) — each is cheap once it is decided,
+  and each wants this fork's own CLI or UI rather than a port.
+- **`8a48536d`, live Browse progress — TAKEN 2026-11-04, without the launch.**
+  The fork had this once and removed it on purpose (`c2196377`): Browse must not
+  build indexes (the rule `internal/format/wmd/wmd.go` states for its own
+  prepared index), so what came back is the SHOWING of work that is already
+  running, and nothing else. `browse.html`'s `unprepared()` asks the server one
+  question — `POST /api/demand` with the new `promote` flag, which reorders the
+  running index queue and never starts anything (`demand.go`'s `promoteQueued`,
+  `PromoteDictionary`) — and then polls `GET /api/index-work` (no `?id=`, so the
+  auto-selected job is the initial queue or a reindex; `busyDicts`,
+  `busyProgress` and `pendingDicts` are read off it). The card waits 400 ms,
+  shows the dictionary's own words counted or "Finishing…" once the counted part
+  is over (the bar drops its `value` there — a bar parked at 100 while work goes
+  on is a lie), takes the words when the dictionary leaves the queue, and falls
+  back to the `browse.indexRequired` card when nothing is running. Ten keys —
+  `browse.indexing*`, `browse.indexFailed`, `browse.tryAgain` — went into both
+  catalogues; the browse 409 now carries `name` so the card can say which
+  dictionary it means; `promote` is in `openapi.yaml` and in the desktop/Android
+  `demand` bridge. Verified live against a preview server: the card appears at
+  ~0.4 s, the count grows, the page issues NO `/api/ingest` (nothing is
+  started), and the words take over at the end; killing the server mid-build
+  gives the failure card with "Try again". `internal/server` carries
+  `TestPromoteDictionaryReordersWithoutStarting` for the reorder-only contract.
+  **Left unverified in the wild**: a dictionary that is merely PENDING (queued,
+  not yet in a worker) when Browse opens — this machine has 24 cores so the test
+  library never queued one; that card state was checked only against a stubbed
+  `/api/index-work`.
 - **Already ours, so nothing to do**: `34541b56` (the undeclared-mime ZIM fix),
   the panel's rename/collapse/placeholder items, `groups.ini`, the macOS
   deployment target and the systray crash. Upstream's wildcard search and the
