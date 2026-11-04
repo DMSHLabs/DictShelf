@@ -31,6 +31,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 	"github.com/ulikunitz/xz/lzma"
 )
 
@@ -707,11 +708,11 @@ func (c *container) binContent(bin uint32, zlenOff int64) ([]byte, error) {
 	return data, nil
 }
 
-// maxItemBytes caps one decompressed bin. Slob items are articles and media
-// clips - kilobytes to a few megabytes - and every codec below would otherwise
-// inflate whatever a corrupt container declares. The same ceiling zim's
-// clusters get.
-const maxItemBytes = 256 << 20
+// maxBin caps one decompressed bin (MAX_SLOB_BIN). Slob items are articles and
+// media clips - kilobytes to a few megabytes - and every codec below would
+// otherwise inflate whatever a corrupt container declares. It is the same
+// default zim's clusters get.
+func maxBin() int64 { return limits.Get().SlobBin }
 
 func readAllBounded(r io.Reader, max int64) ([]byte, error) {
 	out, err := io.ReadAll(io.LimitReader(r, max+1))
@@ -719,12 +720,13 @@ func readAllBounded(r io.Reader, max int64) ([]byte, error) {
 		return nil, err
 	}
 	if int64(len(out)) > max {
-		return nil, fmt.Errorf("decompressed bin exceeds %d bytes", max)
+		return nil, limits.Exceeded("the decompressed bin", "MAX_SLOB_BIN", max)
 	}
 	return out, nil
 }
 
 func decompress(name string, data []byte) ([]byte, error) {
+	max := maxBin()
 	switch name {
 	case "":
 		return data, nil
@@ -734,15 +736,15 @@ func decompress(name string, data []byte) ([]byte, error) {
 			return nil, err
 		}
 		defer r.Close()
-		return readAllBounded(r, maxItemBytes)
+		return readAllBounded(r, max)
 	case "bz2":
-		return readAllBounded(bzip2.NewReader(bytes.NewReader(data)), maxItemBytes)
+		return readAllBounded(bzip2.NewReader(bytes.NewReader(data)), max)
 	case "lzma2":
 		r, err := lzma.Reader2Config{DictCap: 1 << 25}.NewReader2(bytes.NewReader(data))
 		if err != nil {
 			return nil, err
 		}
-		return readAllBounded(r, maxItemBytes)
+		return readAllBounded(r, max)
 	default:
 		return nil, fmt.Errorf("unsupported compression %q", name)
 	}

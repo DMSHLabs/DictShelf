@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 )
 
 func TestNormalize(t *testing.T) {
@@ -191,7 +193,7 @@ func TestFilePackCap(t *testing.T) {
 		t.Fatal(err)
 	}
 	chunk := bytes.Repeat([]byte("kot\tkota\n"), 1<<16) // 576 KB
-	for n := 0; n <= MaxPackBytes; n += len(chunk) {
+	for n := int64(0); n <= MaxPackBytes(); n += int64(len(chunk)) {
 		if _, err := zw.Write(chunk); err != nil {
 			t.Fatal(err)
 		}
@@ -204,9 +206,20 @@ func TestFilePackCap(t *testing.T) {
 	}
 
 	_, err = (filePack{code: "pl", path: path}).GetResource()
-	if err == nil || !strings.Contains(err.Error(), "larger than") {
-		t.Fatalf("oversized lemma data: err = %v, want a size refusal", err)
+	if err == nil || !strings.Contains(err.Error(), "MAX_LEMMA_SIZE") {
+		t.Fatalf("oversized lemma data: err = %v, want a size refusal naming the key", err)
 	}
+
+	// The cap is the KEY, not the number: the same file is refused under a
+	// lowered MAX_LEMMA_SIZE that the default accepts it under, and the
+	// refusal is what names the setting to raise.
+	limits.Set(limits.Limits{LemmaSize: 1 << 16})
+	t.Cleanup(func() { limits.Set(limits.Default) })
+	if _, err := (filePack{code: "pl", path: path}).GetResource(); err == nil ||
+		!strings.Contains(err.Error(), "MAX_LEMMA_SIZE") {
+		t.Fatalf("under a lowered key: err = %v, want a refusal naming it", err)
+	}
+	limits.Set(limits.Default)
 
 	// And the refusal must reach the caller as "no lemma", not as a panic or
 	// a half-built lemmatizer.

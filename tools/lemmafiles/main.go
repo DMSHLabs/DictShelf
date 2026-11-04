@@ -73,6 +73,7 @@ import (
 
 	"github.com/DMSHLabs/DictShelf/internal/lang"
 	"github.com/DMSHLabs/DictShelf/internal/lemmas"
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 	"github.com/DMSHLabs/DictShelf/internal/morph"
 )
 
@@ -229,21 +230,22 @@ func build(ctx context.Context, out string, in input) (lemmas.Entry, error) {
 	if err != nil {
 		return lemmas.Entry{}, err
 	}
-	raw, err := io.ReadAll(io.LimitReader(rc, morph.MaxPackBytes+1))
+	max := morph.MaxPackBytes()
+	raw, err := io.ReadAll(io.LimitReader(rc, max+1))
 	rc.Close()
 	if err != nil {
 		return lemmas.Entry{}, err
 	}
-	if len(raw) > morph.MaxPackBytes {
-		return lemmas.Entry{}, fmt.Errorf("source list larger than %d MB", morph.MaxPackBytes>>20)
+	if int64(len(raw)) > max {
+		return lemmas.Entry{}, fmt.Errorf("source list larger than %s", limits.Format(max))
 	}
 
 	data, lines := group(raw)
 	if lines == 0 {
 		return lemmas.Entry{}, fmt.Errorf("no usable lines")
 	}
-	if len(data) > morph.MaxPackBytes {
-		return lemmas.Entry{}, fmt.Errorf("grouped data larger than %d MB", morph.MaxPackBytes>>20)
+	if int64(len(data)) > max {
+		return lemmas.Entry{}, fmt.Errorf("grouped data larger than %s", limits.Format(max))
 	}
 
 	// Loading it here is the acceptance test: golem fails a whole file on one

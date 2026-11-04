@@ -13,6 +13,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 )
 
 // craft writes the smallest header a slob parser accepts, with storeOffset
@@ -132,5 +134,22 @@ func TestReadAllBoundedRefusesBombs(t *testing.T) {
 	out, err := readAllBounded(zr, 128)
 	if err != nil || len(out) != 100 {
 		t.Fatalf("honest bin = %d bytes err %v", len(out), err)
+	}
+}
+
+// TestBinLimitIsTheKey: what a bin may decompress to is MAX_SLOB_BIN, read
+// through decompress rather than passed in. A bin the default accepts is
+// refused under a lowered key, and the refusal names it.
+func TestBinLimitIsTheKey(t *testing.T) {
+	limits.Set(limits.Limits{SlobBin: 1 << 16})
+	t.Cleanup(func() { limits.Set(limits.Default) })
+
+	var bomb bytes.Buffer
+	zw := zlib.NewWriter(&bomb)
+	zw.Write(make([]byte, 1<<20)) // 1 MiB of zeros against a 64 KiB key
+	zw.Close()
+	if _, err := decompress("zlib", bomb.Bytes()); err == nil ||
+		!strings.Contains(err.Error(), "MAX_SLOB_BIN") {
+		t.Fatalf("the refusal does not name the key: %v", err)
 	}
 }

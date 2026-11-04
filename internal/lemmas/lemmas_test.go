@@ -93,7 +93,7 @@ func TestFetchRejects(t *testing.T) {
 		{"absurd size", manifestFor("hu.tsv.gz", 1<<30, good), "out of range"},
 		{"oversize raw",
 			strings.Replace(manifestFor("hu.tsv.gz", 20, good), `"raw_size":20`, `"raw_size":1073741824`, 1),
-			"exceeds the 64 MB limit"},
+			"exceeds the 64MB limit"},
 		{"bad digest", manifestFor("hu.tsv.gz", 20, "not-a-digest"), "not a sha256 digest"},
 		{"duplicate language",
 			strings.Replace(manifestFor("hu.tsv.gz", 20, good), `"license":"ODbL-1.0"}]}`,

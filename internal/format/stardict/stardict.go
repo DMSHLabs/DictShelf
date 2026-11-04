@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -24,6 +25,7 @@ import (
 	"sync"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 	"github.com/DMSHLabs/DictShelf/internal/resource"
 )
 
@@ -254,25 +256,26 @@ func readCompanion(base, ext string) ([]byte, error) {
 		filepath.Base(base+ext), compressedSuffixes[1])
 }
 
-// maxIndexBytes bounds one decompressed companion. An .idx of a real
-// dictionary runs to tens of MB, and it is loaded whole by design - but a gzip
-// bomb, a few KB that inflate to gigabytes, must cost one refused dictionary,
-// not the process.
-const maxIndexBytes = 256 << 20
-
 // readGzAll decompresses f whole, keeping what it got when the stream is
 // damaged at its TAIL. gzip verifies a CRC and a length that sit after the last
 // byte of data, so a file whose final bytes are malformed - the same class of
 // writer fault that skews a dictzip chunk table - yields every good record and
 // then an error. Discarding all of it over the last record loses the
 // dictionary; a header-level failure still does, because nothing decompressed.
+//
+// The ceiling is MAX_STARDICT_INDEX: an .idx of a real dictionary runs to tens
+// of MB and is loaded whole by design, but a gzip bomb, a few KB that inflate
+// to gigabytes, must cost one refused dictionary, not the process.
 func readGzAll(f *os.File) ([]byte, error) {
 	gr, err := gzip.NewReader(f)
 	if err != nil {
 		return nil, err
 	}
 	defer gr.Close()
-	return readGzBounded(gr, maxIndexBytes)
+	// Clamped to what an int holds: the key runs to 4 GB, which the int of a
+	// 32-bit build does not, and a ceiling that wrapped negative would refuse
+	// every index rather than a bomb.
+	return readGzBounded(gr, int(min(limits.Get().StarDictIndex, math.MaxInt-1)))
 }
 
 // readGzBounded is readGzAll's body with the ceiling made a parameter, so a
@@ -284,7 +287,7 @@ func readGzBounded(gr io.Reader, max int) ([]byte, error) {
 		return data, nil
 	}
 	if len(data) > max {
-		return nil, fmt.Errorf("decompressed index exceeds the %d byte limit", max)
+		return nil, limits.Exceeded("the unpacked index", "MAX_STARDICT_INDEX", int64(max))
 	}
 	return data, err
 }

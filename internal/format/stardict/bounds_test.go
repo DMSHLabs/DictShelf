@@ -8,8 +8,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 )
 
 // readerAtThatObjects records any ReadAt as a failure: readRange's bound
@@ -93,5 +97,32 @@ func TestReadGzBoundedRefusesBombs(t *testing.T) {
 	}
 	if _, err := readGzBounded(gr, 64<<10); err == nil || !strings.Contains(err.Error(), "limit") {
 		t.Fatalf("expected the index-size refusal, got %v", err)
+	}
+}
+
+// TestIndexLimitIsTheKey: readGzAll's ceiling is MAX_STARDICT_INDEX, not the
+// constant readGzBounded's parameter used to be given. An index the default
+// accepts is refused under a lowered key, and the refusal names it.
+func TestIndexLimitIsTheKey(t *testing.T) {
+	limits.Set(limits.Limits{StarDictIndex: 1 << 16})
+	t.Cleanup(func() { limits.Set(limits.Default) })
+
+	var bomb bytes.Buffer
+	zw := gzip.NewWriter(&bomb)
+	zw.Write(make([]byte, 1<<20)) // 1 MiB of zeros against a 64 KiB key
+	zw.Close()
+
+	path := filepath.Join(t.TempDir(), "bomb.idx.gz")
+	if err := os.WriteFile(path, bomb.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := readGzAll(f); err == nil ||
+		!strings.Contains(err.Error(), "MAX_STARDICT_INDEX") {
+		t.Fatalf("the refusal does not name the key: %v", err)
 	}
 }

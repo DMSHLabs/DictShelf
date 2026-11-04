@@ -49,6 +49,7 @@ import (
 	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/lang"
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 	"github.com/DMSHLabs/DictShelf/internal/morph"
 )
 
@@ -198,14 +199,14 @@ func (c *Catalog) validate() error {
 			return fmt.Errorf("%s: %q is not lemma data (%s)", code, e.File,
 				strings.Join(lemmaExts, ", "))
 		}
-		if e.Size <= 0 || e.Size > morph.MaxPackBytes {
+		if max := morph.MaxPackBytes(); e.Size <= 0 || e.Size > max {
 			return fmt.Errorf("%s: declared size %d is out of range", code, e.Size)
 		}
-		if e.RawSize < 0 || e.RawSize > morph.MaxPackBytes {
+		if max := morph.MaxPackBytes(); e.RawSize < 0 || e.RawSize > max {
 			// The cap that matters: morph refuses to decompress past it, so
 			// installing such a file would produce a language that never loads.
-			return fmt.Errorf("%s: uncompressed size %d exceeds the %d MB limit",
-				code, e.RawSize, morph.MaxPackBytes>>20)
+			return fmt.Errorf("%s: uncompressed size %d exceeds the %s limit",
+				code, e.RawSize, limits.Format(max))
 		}
 		if !isSHA256(e.SHA256) {
 			return fmt.Errorf("%s: %q is not a sha256 digest", code, e.SHA256)

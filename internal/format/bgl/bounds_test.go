@@ -10,12 +10,14 @@ import (
 	"encoding/binary"
 	"strings"
 	"testing"
+
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 )
 
 // A block header nibble below 4 hands the reader a length field of n+1 bytes;
-// four of them name up to 4 GiB. Without maxBlockBytes that length would go
-// straight into make - an OOM abort on a hostile or truncated file, which no
-// recover converts.
+// four of them name up to 4 GiB. Without the MAX_BGL_BLOCK bound that length
+// would go straight into make - an OOM abort on a hostile or truncated file,
+// which no recover converts.
 func TestReadBlockStreamRefusesHugeLength(t *testing.T) {
 	var b []byte
 	b = append(b, 0x31) // type 1, nibble 3: a 4-byte length follows
@@ -26,6 +28,26 @@ func TestReadBlockStreamRefusesHugeLength(t *testing.T) {
 	}
 	if err == nil || !strings.Contains(err.Error(), "limit") {
 		t.Fatalf("expected the block-size refusal, got %v", err)
+	}
+}
+
+// TestBlockLimitIsTheKey: the ceiling readBlockStream applies is
+// MAX_BGL_BLOCK. A block the default accepts is refused under a lowered key -
+// and the refusal names it, which is the whole point of the bound being a
+// setting rather than a constant.
+func TestBlockLimitIsTheKey(t *testing.T) {
+	limits.Set(limits.Limits{BGLBlock: 1 << 20})
+	t.Cleanup(func() { limits.Set(limits.Default) })
+
+	var b []byte
+	b = append(b, 0x31) // type 1, nibble 3: a 4-byte length follows
+	b = binary.BigEndian.AppendUint32(b, 2<<20)
+	_, _, ok, err := readBlockStream(bufio.NewReader(bytes.NewReader(b)))
+	if ok {
+		t.Fatal("a 2 MiB block was accepted under a 1 MiB MAX_BGL_BLOCK")
+	}
+	if err == nil || !strings.Contains(err.Error(), "MAX_BGL_BLOCK") {
+		t.Fatalf("the refusal does not name the key: %v", err)
 	}
 }
 
