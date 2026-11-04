@@ -1,18 +1,20 @@
 # DictShelf
 
-# Local Git checkout: `D:\Projects\Android\DictShelf\`.
-
 **Naming (D27, superseded 2026-11-03).** In anything a user reads the product is **DictShelf** and the command is **`dictshelf`** — prose, UI, help, docs, release artifacts and the built binary. The name **wudict** survives in exactly three kinds of place: the **wudict markdown** format (its name, its `wudict:` front-matter gate, its `.wudict.md` / `.wudict.files` naming, read by `internal/format/wmd` and written by `dictshelf dump -format md`); **legacy identifiers that are on disk or in a user's settings** — the config file `wudict.toml` (`config.LegacyName`), the data folders `~/.wudict` and `~/.wuDict2` (see `internal/cli/migration_windows.go`), the env vars `WUDICT_HOME` / `WUDICT_PORTABLE_HOME`, the WebView bridge and localStorage names (`wudictGet*`, `wudict_theme`, `window.wudictI18n`, `internal/cli/desktop_window_windows.go`) and the Android `libwudictbridge.so`; and one sentence recording that DictShelf is a fork of wudict. The Go module path is `github.com/DMSHLabs/DictShelf`.
 
 Go web dictionary app supporting MDX/MDD, StarDict, Aard2 Slob, Lingvo DSL, Babylon BGL, openZIM; wudict markdown (`.wudict.md`: standard CommonMark, read by `internal/format/wmd` and written by `wudict dump -format md`). Web search uses a prepared library folder — `<db dir>/<name>/{text.db, media.db, info.txt}` (D20), with an optional `icon.cache` sidecar — or ZIM's validated native index. New non-ZIM dictionaries enter the background index queue when added; search never starts indexing and skips dictionaries whose prepared index is not ready. *Contains* builds headword trigram and token FTS together; *full-text* independently indexes articles. Both are per-dictionary switches, and media packing is a third (D24). Main search shares Browse's headword modes and keeps article full-text separate.
 
-## Read this first (token discipline)
-- `docs/INDEX.md` — the map: one row per question, "what to read for what". Start there instead of guessing which document holds a fact, and keep its rows true when a fact moves.
-- `docs/SPEC.md` — architecture, schema, query engine. Read before writing any code.
-- `docs/FORMATS.md` — per-format facts + exact reference-code pointers. Read the section for the format you touch, nothing more.
-- `docs/WUDICT-MARKDOWN.md` — normative spec of wudict markdown (reader + writer). Read only when touching that format or its export. `entry://` is the canonical lookup link; `bword://` is a legacy alias: parse, never emit.
-- `docs/STYLE.md` — terms and register for every text a user reads (manual, README, UI, `--help`, howto). Read before writing any of it.
-- `docs/OPEN.md` — researched but **unscheduled** items (O-numbers). Check before proposing morphology, stemming or Unicode-folding work; do not start anything in it without being asked.
+## Read this first
+
+`AGENTS.md` holds the rules every session needs before it is asked anything
+(checkout, build flavour, branches, licence, dead upstream, the triggers).
+`docs/DOCS.md` holds the rules **for the documents**: what is must-read, where a
+fact lives, the ceilings and the gate. The map from a question to a file is
+`docs/INDEX.md` — start there instead of guessing which document holds a fact.
+
+Before writing code, the three that are not in the map: `docs/SPEC.md`
+(architecture, schema, query engine), the section of `docs/FORMATS.md` for the
+format you touch, and `docs/STYLE.md` before writing any text a user reads.
 
 **D-, P- and C-numbers** cited throughout the code (`D15`, `docs.local/PERF.md §3.1`,
 `P88`) refer to the maintainer's decision log, phase record, performance audit and
