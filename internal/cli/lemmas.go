@@ -20,6 +20,7 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/intake"
 	"github.com/DMSHLabs/DictShelf/internal/lang"
 	"github.com/DMSHLabs/DictShelf/internal/lemmas"
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
@@ -84,6 +85,9 @@ func lemmaPaths(dir, url string) (string, string) {
 			url = cfg.LemmaURL
 		}
 		insecure = cfg.ImportInsecure
+		// What one lemma file may unpack to, for the manifest's declared
+		// sizes: the same bound the reader applies when it loads one.
+		limits.Set(cfg.Limits)
 	}
 	if url == "" {
 		url = config.DefaultLemmaURL

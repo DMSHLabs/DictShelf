@@ -36,6 +36,7 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/howto"
 	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 	"github.com/DMSHLabs/DictShelf/internal/indexconst"
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
 	"github.com/DMSHLabs/DictShelf/internal/search"
 	"github.com/DMSHLabs/DictShelf/internal/server"
@@ -839,6 +840,7 @@ func cmdQuery(mode string, args []string) error {
 			return err
 		}
 	}
+	applyLimits()
 	d, err := dict.Open(fs.Arg(0))
 	if err != nil {
 		return err
@@ -878,6 +880,7 @@ func cmdKeys(args []string) error {
 	if fs.NArg() != 1 {
 		return fmt.Errorf("usage: dictshelf keys [-offset N] [-n count] <dictfile>")
 	}
+	applyLimits()
 	d, err := dict.Open(fs.Arg(0))
 	if err != nil {
 		return err
@@ -939,6 +942,9 @@ func cmdIngest(args []string) error {
 		if err != nil {
 			return err
 		}
+		// --config is read here for the folders; it names the file whose
+		// MAX_* bounds this run must use too, so they are taken again.
+		limits.Set(cfg.Limits)
 		srcs, origin = cfg.DictDirs, cfg.Origin("DICT_DIR")
 	}
 	// a folder argument may be a DICT_DIR-style list (folderArgs); a file is
@@ -1219,6 +1225,10 @@ func cmdServe(args []string) (err error) {
 		}
 		listenerlessDesktop = gui && runtime.GOOS == "windows" && !cfg.NoBrowser
 	}
+	// The MAX_* bounds, in force before the library is scanned or anything is
+	// imported. After the cleanup above, so that a value in the file it just
+	// rewrote is the one that applies.
+	limits.Set(cfg.Limits)
 	if cfg.Verbose {
 		logx.Enabled = true
 	}
@@ -1276,6 +1286,12 @@ func cmdServe(args []string) (err error) {
 	}
 	logx.V("config: source=%q dictDirs=%v dbDir=%q addr=%s speexdec=%s",
 		cfg.Source, cfg.DictDirs, cfg.DBDir, cfg.Addr(), cfg.Speexdec)
+	// A setting that set nothing is said once, at startup: this is how a MAX_*
+	// value refused for being outside its range reaches a user who never opens
+	// the setup page, and how a typo'd key stops being silent.
+	for _, p := range cfg.Problems {
+		logx.Warn("config: %s", p)
+	}
 
 	// The library (DB_DIR) is DictShelf's own working area, never a folder of
 	// user dictionaries. Using it as DICT_DIR is a
@@ -1637,16 +1653,31 @@ func openHeadlessLog() (*os.File, error) {
 
 // applyLibrarySettings gives the subcommands that touch the library the same
 // settings the server uses, so `dictshelf ingest` writes where the server looks:
-// DB_DIR from the flag, the environment or wudict.toml alike.
+// DB_DIR from the flag, the environment or wudict.toml alike. The MAX_* bounds
+// come with them: a subcommand opens the same dictionaries the server does, and
+// a bound raised for one has to hold for the other.
 func applyLibrarySettings() {
 	cfg, err := config.Load("", nil)
 	if err != nil {
 		return // a broken config must not stop a local command
 	}
 	store.SetDBDir(cfg.DBDir)
+	limits.Set(cfg.Limits)
 	if cfg.Verbose {
 		logx.Enabled = true
 	}
+}
+
+// applyLimits puts the MAX_* bounds in force for the commands that open a
+// dictionary file by path and have no other reason to read the config at all
+// (lookup/prefix/contains/fts, keys, res). applyLibrarySettings does the same
+// for the library subcommands, and cmdServe for the server.
+func applyLimits() {
+	cfg, err := config.Load("", nil)
+	if err != nil {
+		return // a broken config must not stop a local command
+	}
+	limits.Set(cfg.Limits)
 }
 
 // nextPort suggests port+1 for the port-in-use hint.
@@ -2115,6 +2146,9 @@ func cmdSearchAll(args []string) error {
 	if err != nil {
 		return err
 	}
+	// As in ingest: the file named by --config is also where the MAX_* bounds
+	// for this run come from.
+	limits.Set(cfg.Limits)
 	dirs := cfg.DictDirs
 	origin := cfg.Origin("DICT_DIR")
 	if dirArg != "" {
@@ -2316,6 +2350,7 @@ func cmdRes(args []string) error {
 	if fs.NArg() != 2 {
 		return fmt.Errorf("usage: wudict res [-o out] [-f] <dictfile> <name>")
 	}
+	applyLimits()
 	d, err := dict.Open(fs.Arg(0))
 	if err != nil {
 		return err

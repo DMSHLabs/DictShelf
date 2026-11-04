@@ -33,6 +33,7 @@ import (
 	_ "github.com/DMSHLabs/DictShelf/internal/format/wmd"
 	_ "github.com/DMSHLabs/DictShelf/internal/format/zim"
 	"github.com/DMSHLabs/DictShelf/internal/intake"
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
 	"github.com/DMSHLabs/DictShelf/internal/server"
 )
@@ -877,6 +878,10 @@ func WudictGoBridgeRuntimeStart(path, flagsJSON, version *C.char) C.int {
 	if err != nil {
 		return -2
 	}
+	// The phone's shell starts the server in this process rather than through
+	// the CLI, so the MAX_* bounds have to be put in force here too, before the
+	// library is scanned or anything is imported.
+	limits.Set(cfg.Limits)
 	if _, err = server.ConfigureLibrary(cfg); err != nil {
 		return -3
 	}
