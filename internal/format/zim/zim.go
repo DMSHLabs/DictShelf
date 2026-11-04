@@ -146,12 +146,28 @@ func (d *Dict) PreviewBytes() int64 {
 // format; the native path list already answers headword searches.
 func (d *Dict) SelfIndexed() bool { return true }
 
-// metadata reads one M/ namespace value. Metadata blobs are small and each
+// metadata reads one M/ namespace value, following a redirect if the file stores
+// one: libzim's FileImpl::findxMetadata resolves it, so an archive that keeps its
+// title (or language, or description) behind a redirect shows one here that this
+// reader would otherwise report as absent. Metadata blobs are small and each
 // costs one binary search plus a cluster read; only a handful are read, all at
 // open.
 func (c *container) metadata(name string) string {
-	_, d, ok := c.find('M', name)
-	if !ok || d.isRedirect() {
+	i, d, ok := c.find('M', name)
+	if !ok {
+		return ""
+	}
+	if d.isRedirect() {
+		var err error
+		if _, d, err = c.resolve(i); err != nil {
+			return ""
+		}
+	}
+	// A deletion marker is not an empty value: its cluster and blob fields are
+	// not its own any more, so reading them would hand back another entry's
+	// bytes as this key's value. Upstream has no such guard here; the reason it
+	// is safe there is nothing this fork wants to rely on.
+	if !d.isContent() {
 		return ""
 	}
 	b, err := c.content(d)
