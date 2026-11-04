@@ -21,6 +21,7 @@ require (
 	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808
 	github.com/klauspost/compress v1.19.0
 	github.com/mattn/go-sqlite3 v1.14.48
+	github.com/pierrec/lz4/v4 v4.1.27
 	github.com/ulikunitz/xz v0.5.16
 	github.com/yuin/goldmark/v2 v2.1.5
 	golang.org/x/net v0.57.0
@@ -34,7 +35,6 @@ require (
 	github.com/go-webgpu/goffi v0.6.3 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 // indirect
-	github.com/pierrec/lz4/v4 v4.1.27 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/stangelandcl/ppmd v0.1.1 // indirect
 	go4.org v0.0.0-20260112195520-a5071408f32f // indirect
