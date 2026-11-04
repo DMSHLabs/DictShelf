@@ -602,6 +602,17 @@ left, and why:
   this fork's own `internal/dict/activity.go` states in words, and nothing in the
   fork reads `dict.ActivityOf` at all. `bound_test.go` itself came back here: it
   had been lost in the 2026-10-11 merge `88a9ffeb`, not dropped on purpose.
+  **Re-checked 2026-11-04 and kept as the port decided**: restoring the clear was
+  tried (in `openSource`, with `bound_test.go` adapted to match) and reverted,
+  because it costs a permanent divergence in two upstream files - the reader AND
+  their test - to prevent a lie that nothing can currently read. The contract in
+  `internal/dict/activity.go` stands: the mark's cleaner is the CONSUMER (store's
+  ingest), so if a consumer appears for this fork's direct path - the natural
+  surface is the job status, `/api/index-work` - the clearing belongs on OUR
+  side, not in the reader. Until then the mark is a map keyed by source path and
+  **overwritten in place** (`m[path] = a`), never appended: it holds one small
+  in-memory entry per distinct path, keeps the last report for it, and is gone on
+  restart.
   **`ReaderVersion` stays 1** — `TestReaderGolden` did not move, so the rewrite
   changes how the text is read and not what it yields, and no library rebuilds.
   Measured in `internal/format/wmd/read_bench_test.go` on synthetic 20,000-entry
