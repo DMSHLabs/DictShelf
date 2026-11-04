@@ -171,7 +171,11 @@ win-installer: ## Compile the Windows per-user installer into dist/ (needs Inno 
 # ANDROID_API matches the app's minSdk.
 ANDROID_SDK  ?= $(or $(ANDROID_HOME),$(HOME)/Library/Android/sdk)
 ANDROID_NDK  ?= $(or $(ANDROID_NDK_HOME),$(lastword $(sort $(wildcard $(ANDROID_SDK)/ndk/*))))
-NDK_HOST     := $(if $(filter Darwin,$(shell uname)),darwin-x86_64,linux-x86_64)
+# The prebuilt NDK directory is per HOST triple. Git Bash on Windows reports
+# MINGW*/MSYS* from uname, and the NDK ships only windows-x86_64 there - so the
+# old "Darwin, else linux" rule sent cgo after a compiler that is not installed
+# and `make android-go` failed with a missing path (found 2026-11-04).
+NDK_HOST     := $(if $(filter Darwin,$(shell uname)),darwin-x86_64,$(if $(filter MINGW% MSYS% CYGWIN%,$(shell uname)),windows-x86_64,linux-x86_64))
 NDK_BIN      := $(ANDROID_NDK)/toolchains/llvm/prebuilt/$(NDK_HOST)/bin
 ANDROID_API  ?= 26
 ANDROID_BRIDGE := android/app/src/main/jniLibs/arm64-v8a/libwudictbridge.so
