@@ -18,8 +18,6 @@ import (
 	"strings"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
-	"github.com/DMSHLabs/DictShelf/internal/format/bgl"
-	"github.com/DMSHLabs/DictShelf/internal/format/dsl"
 	"github.com/DMSHLabs/DictShelf/internal/format/wmd"
 	"github.com/DMSHLabs/DictShelf/internal/fsx"
 	"github.com/DMSHLabs/DictShelf/internal/htmlref"
@@ -404,83 +402,6 @@ func dumpResources(src, format, resDir string, scope resScope) (files int, writt
 	return files, written, nil
 }
 
-// dumpRes is a dictionary opened for its resources alone.
-type dumpRes struct {
-	dict.ResourceOpener
-	list  func() []string // every resource name
-	close func() error
-}
-
-func (d *dumpRes) Close() error { return d.close() }
-
-// selfPrepared holds the formats whose Dictionary prepares a library folder
-// when opened, each with the containers its resources
-// are in. A dump reads these formats' resources from the containers and opens
-// no Dictionary, so it never indexes what it dumps (D157).
-var selfPrepared = map[string]func(path string) ([]resource.Source, error){
-	"dsl":      func(p string) ([]resource.Source, error) { return dsl.MediaSources(p), nil },
-	wmd.Format: func(p string) ([]resource.Source, error) { return wmd.MediaSources(p), nil },
-	"bgl": func(p string) ([]resource.Source, error) {
-		e, err := bgl.ReadEmbedded(p)
-		if err != nil {
-			return nil, err
-		}
-		return []resource.Source{e}, nil
-	},
-}
-
-// openResources opens src for its resources, given the format its entries
-// were read as. Each format is read from its source containers; any
-// other source - a format with an index of its own, a library folder's
-// text.db - opens as the Dictionary it is, which prepares nothing.
-func openResources(src, format string) (*dumpRes, error) {
-	if read, ok := selfPrepared[format]; ok && !store.IsTextDB(src) {
-		srcs, err := read(dict.MainFile(src))
-		if err != nil {
-			return nil, err
-		}
-		set := sourceSet(srcs)
-		return &dumpRes{ResourceOpener: set, list: func() []string { return resource.ListAll(srcs) }, close: set.Close}, nil
-	}
-	d, err := dict.Open(src)
-	if err != nil {
-		return nil, err
-	}
-	list := func() []string {
-		switch t := d.(type) {
-		case *store.Store:
-			return t.MediaNames() // packed media.db, if this library folder has one
-		case dict.ResourceLister:
-			return t.Resources()
-		}
-		return nil
-	}
-	return &dumpRes{ResourceOpener: d, list: list, close: d.Close}, nil
-}
-
-// sourceSet serves a name from the first container that holds it, in the
-// order the format's Dictionary searches them.
-type sourceSet []resource.Source
-
-func (s sourceSet) Resource(name string) (io.ReadCloser, string, error) {
-	for _, src := range s {
-		if rc, err := src.Open(name); err == nil {
-			return rc, resource.MIME(name), nil
-		}
-	}
-	return nil, "", dict.ErrNotFound
-}
-
-func (s sourceSet) Close() error {
-	var first error
-	for _, src := range s {
-		if err := src.Close(); err != nil && first == nil {
-			first = err
-		}
-	}
-	return first
-}
-
 func dumpOneResource(d dict.ResourceOpener, resDir, name string) (int64, error) {
 	dest := resFilePath(resDir, name)
 	if dest == "" {
@@ -503,53 +424,6 @@ func dumpOneResource(d dict.ResourceOpener, resDir, name string) (int64, error) 
 		err = cerr
 	}
 	return n, err
-}
-
-// resFilePath maps a stored resource name to a path inside resDir.
-//
-// The name comes from the DICTIONARY, and a container can hold "..", an
-// absolute path, a drive letter or a NUL. resource.Clean removes the climbing
-// and the leading slash; safeName then takes each remaining component, so
-// nothing this writes can land outside resDir. The structure BELOW resDir is
-// kept, unlike `wudict res` which flattens to a basename: there the user asked
-// for one file in a place they named, here the tree is the point - the HTML
-// being dumped alongside references these paths.
-func resFilePath(resDir, name string) string {
-	rel := resource.Clean(name)
-	if rel == "" {
-		return ""
-	}
-	parts := strings.Split(rel, "/")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if s := safeName(p); s != "" {
-			out = append(out, s)
-		}
-	}
-	if len(out) == 0 {
-		return ""
-	}
-	return filepath.Join(append([]string{resDir}, out...)...)
-}
-
-// safeName makes one path component legal on every host wudict runs on, the
-// same rules store.FolderName applies to a library folder - minus its length
-// cap, which would silently merge two resources into one file.
-func safeName(s string) string {
-	var b strings.Builder
-	for _, r := range s {
-		switch {
-		case r < 0x20, r == 0x7f:
-			// control characters (NUL included): drop
-		case strings.ContainsRune(`/\:*?"<>|`, r):
-			b.WriteByte('-')
-		default:
-			b.WriteRune(r)
-		}
-	}
-	// trailing dots and spaces are illegal in Windows names; "." and ".." are
-	// gone with them, so no component can mean "the parent".
-	return strings.TrimRight(strings.TrimSpace(b.String()), " .")
 }
 
 func firstWord(words []string) string {
