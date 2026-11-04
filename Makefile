@@ -56,6 +56,10 @@ i18n-check: ## Check interface catalogs, persistence, cache and English fallback
 i18n-check-js: ## Check JS plural rules and fallback (optional; requires Node, no npm)
 	node tools/i18n-test.cjs
 
+.PHONY: docs-check
+docs-check: ## Check the documents: ceilings, links, reachability, task files
+	python3 tools/docs-check.py
+
 # ---- meta ---------------------------------------------------------------
 
 .PHONY: help
@@ -438,7 +442,7 @@ tidy: ## go mod tidy
 	go mod tidy
 
 .PHONY: check
-check: tidy vet test ## Pre-commit gate: tidy + vet + test
+check: tidy vet test docs-check ## Pre-commit gate: tidy + vet + test + docs-check
 
 # ---- lemma data ---------------------------------------------------------
 # Only English is built into the binary (D87); every other language is a file
