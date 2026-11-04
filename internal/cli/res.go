@@ -42,7 +42,7 @@ func cmdRes(args []string) error {
 	dryRun := fs.Bool("dry-run", false, "write nothing: print each resource name and the file it would be written to")
 	fs.Parse(args)
 	if fs.NArg() < 2 {
-		return fmt.Errorf("usage: wudict res [-o out] [-f] [-dry-run] <dictfile> <name|pattern>…")
+		return fmt.Errorf("usage: dictshelf res [-o out] [-f] [-dry-run] <dictfile> <name|pattern>…")
 	}
 	// This fork's addition: the nine MAX_* bounds are put in force before the
 	// dictionary is opened, as in lookup/keys and beside the library
