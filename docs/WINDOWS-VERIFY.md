@@ -190,6 +190,23 @@ that produced them are in `docs/handoff-archive.md`.
   warning: an emulator ABI is never published, and the closing summary says so.
   Both AVDs here are x86_64 (see the note above on why an arm64-only APK cannot
   run there).
+- **The Go bridge alone can be compile-checked without Gradle.** That is what
+  settles "does `android/nativebridge` still build" after a Go-side change -
+  asked on 2026-11-04, after the `MAX_*` wiring added `limits.Set` to
+  `WudictGoBridgeRuntimeStart`. From Git Bash, with the NDK prebuilt for THIS
+  host:
+
+      NDK="$LOCALAPPDATA/Android/Sdk/ndk/30.0.16248370/toolchains/llvm/prebuilt/windows-x86_64/bin"
+      CC="$NDK/aarch64-linux-android26-clang" CXX="$NDK/aarch64-linux-android26-clang++" \
+        CGO_ENABLED=1 GOOS=android GOARCH=arm64 go build -buildmode=c-shared \
+        -tags sqlite_fts5,sqlite_dbstat -trimpath -o "$TEMP/libwudictbridge.so" ./android/nativebridge
+
+  Verified 2026-11-04: exit 0, `libwudictbridge.so` 37 787 560 bytes. `make
+  android-go` runs the same command and does **not** work here: `Makefile:174`
+  computes `NDK_HOST` as `linux-x86_64` for every host that is not Darwin, and
+  the NDK installed here ships `windows-x86_64` only, so cgo reports the
+  compiler missing and make exits 1. Use the command above, or
+  `build-android.cmd` for a whole APK.
 - **Launching one**: `"%LOCALAPPDATA%\Android\Sdk\emulator\emulator" -avd <name>`
   — the AVD used for the 2026-11-03 checks is `720x1600` (a phone geometry with
   the app's own breakpoints); `Small` is the older one. Wake a black screen with
