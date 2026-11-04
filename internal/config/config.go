@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"net"
 	"os"
 	"path/filepath"
@@ -20,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/DMSHLabs/DictShelf/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 )
 
 // Config holds all server settings.
@@ -83,13 +85,21 @@ type Config struct {
 	// machine has proved nothing, and the one irreversible operation is the
 	// wrong place to be generous. Set it to "1" when the server is bound to a
 	// network address and the LAN is trusted with deletions.
-	AllowRemoteDelete bool   // ALLOW_REMOTE_DELETE
-	MemoryLimit       int64  // MEMORY_LIMIT: soft heap ceiling in bytes (0 = none)
-	PreviewMemory     int64  // PREVIEW_MEMORY: cap on RAM held by unprepared dictionaries (0 = unlimited)
-	MorphCache        int    // MORPH_CACHE: how many lemma packs stay resident (0 = no lemmatization)
-	LemmaDir          string // LEMMA_DIR: folder of installed lemma files (adds/overrides languages)
-	LemmaURL          string // LEMMA_URL: manifest `wudict lemmas` installs languages from
-	Source            string // path of the wudict.toml that was loaded ("" if none)
+	AllowRemoteDelete bool  // ALLOW_REMOTE_DELETE
+	MemoryLimit       int64 // MEMORY_LIMIT: soft heap ceiling in bytes (0 = none)
+	PreviewMemory     int64 // PREVIEW_MEMORY: cap on RAM held by unprepared dictionaries (0 = unlimited)
+	MorphCache        int   // MORPH_CACHE: how many lemma packs stay resident (0 = no lemmatization)
+
+	// Limits holds the MAX_* bounds: how much a dictionary file or an import
+	// may make wudict allocate, or write to disk, before it is refused as
+	// damaged or hostile. Every entry point that opens a dictionary puts them
+	// in force with limits.Set, and each bound is read where it applies
+	// (internal/limits). See applyLimits for the range each key keeps to.
+	Limits limits.Limits
+
+	LemmaDir string // LEMMA_DIR: folder of installed lemma files (adds/overrides languages)
+	LemmaURL string // LEMMA_URL: manifest `wudict lemmas` installs languages from
+	Source   string // path of the wudict.toml that was loaded ("" if none)
 
 	// BrowserExtensions (BROWSER_EXTENSIONS) pins which browser-extension
 	// origins may read /api/dicts, /api/search and /res/ cross-origin. Empty =
@@ -183,6 +193,7 @@ func defaults() Config {
 		// so this only ever opens the LAN case, and that is opt-in.
 		AllowRemoteDelete: false,
 		LemmaURL:          DefaultLemmaURL,
+		Limits:            forkLimits(),
 	}
 }
 
@@ -305,6 +316,21 @@ func Load(configPath string, flags map[string]string) (Config, error) {
 	if v := get("MORPH_CACHE"); v != "" {
 		cfg.MorphCache = ParseCount(v)
 	}
+	// The MAX_* bounds. Every layer applies, as for anything else; a value
+	// that is unreadable, or outside the range its key keeps to, is reported
+	// and changes nothing, so a typo cannot disable a guard - and cannot lower
+	// one far enough to refuse a dictionary this build opens today either.
+	cfg.Problems = append(cfg.Problems, applyLimits(&cfg.Limits, map[string]string{
+		"MAX_ZIM_CLUSTER":    get("MAX_ZIM_CLUSTER"),
+		"MAX_SLOB_BIN":       get("MAX_SLOB_BIN"),
+		"MAX_MDICT_BLOCK":    get("MAX_MDICT_BLOCK"),
+		"MAX_STARDICT_INDEX": get("MAX_STARDICT_INDEX"),
+		"MAX_BGL_BLOCK":      get("MAX_BGL_BLOCK"),
+		"MAX_LEMMA_SIZE":     get("MAX_LEMMA_SIZE"),
+		"MAX_IMPORT_SIZE":    get("MAX_IMPORT_SIZE"),
+		"MAX_IMPORT_RATIO":   get("MAX_IMPORT_RATIO"),
+		"MAX_UPLOAD_SIZE":    get("MAX_UPLOAD_SIZE"),
+	})...)
 	if v := get("LEMMA_DIR"); v != "" {
 		cfg.LemmaDir = ExpandHome(v)
 	}
@@ -509,6 +535,28 @@ const configTemplate = `# DictShelf configuration  (~/.dmshlabs/dictshelf/dictsh
 #                                     # 127.0.0.1, and there is no undo.
 # USE_CACHED  = "0"                   # "1" = also list previously imported dictionaries kept in DB_DIR
 #                                     #       (set from the setup page: "Use these dictionaries")
+# ---- Advanced: safety limits ----------------------------------------------
+# Ceilings that stop a damaged or hostile file from making DictShelf use
+# unlimited memory or disk. Real dictionaries stay far below each of them, so
+# change one only when a dictionary you trust fails with "exceeds the ...
+# limit": raising it lets a bad file use that much memory, and lowering it
+# below what your dictionaries need stops them opening. Each key keeps to a
+# range (16MB to 4GB for the unpacked blocks, 8MB for Babylon; lemma data
+# 16MB to 1GB; imports and uploads 1GB to 64TB; the ratio 100 to 100000), and
+# a value outside it - or one that is not a positive size - changes nothing
+# and is reported at startup.
+# MAX_ZIM_CLUSTER    = "256MB"        # one ZIM cluster, unpacked
+# MAX_SLOB_BIN       = "256MB"        # one Aard 2 (.slob) bin, unpacked
+# MAX_MDICT_BLOCK    = "256MB"        # one MDict (.mdx/.mdd) block, unpacked
+# MAX_STARDICT_INDEX = "256MB"        # one compressed StarDict index (.idx.gz), unpacked
+# MAX_BGL_BLOCK      = "64MB"         # one Babylon (.bgl) block
+# MAX_LEMMA_SIZE     = "64MB"         # one lemma data file, unpacked
+# MAX_IMPORT_SIZE    = "64GB"         # one dictionary taken out of an archive, or
+#                                     # downloaded; "16GB" restores the stricter
+#                                     # download cap this build used to hard-code
+# MAX_IMPORT_RATIO   = "2000"         # how many times larger than its packed size one
+#                                     # file in an archive may unpack
+# MAX_UPLOAD_SIZE    = "16GB"         # one archive sent to the server from a browser or the app
 # BROWSER_EXTENSIONS = []             # which browser extensions may read this server from a web page
 #                                     # they run in. Blank = any installed extension may look words up
 #                                     # (it can read dictionaries and nothing else - never your
@@ -1149,6 +1197,75 @@ func ParseHostList(v string) []string {
 	return out
 }
 
+// limitKeys is the MAX_* bounds: the range each key keeps to, and where a
+// value that is inside it lands in limits.Limits. The ranges are the ones the
+// key is documented with - the floor is below any real dictionary of that
+// format (the largest lemma data published is 11.5 MB) and the ceiling is
+// what one allocation can be on a 32-bit build.
+var limitKeys = []struct {
+	Key      string
+	Ratio    bool // a plain count, not a size
+	Min, Max int64
+	Field    func(*limits.Limits) *int64
+}{
+	{"MAX_ZIM_CLUSTER", false, 16 << 20, blockMax, func(l *limits.Limits) *int64 { return &l.ZIMCluster }},
+	{"MAX_SLOB_BIN", false, 16 << 20, blockMax, func(l *limits.Limits) *int64 { return &l.SlobBin }},
+	{"MAX_MDICT_BLOCK", false, 16 << 20, blockMax, func(l *limits.Limits) *int64 { return &l.MDictBlock }},
+	{"MAX_STARDICT_INDEX", false, 16 << 20, blockMax, func(l *limits.Limits) *int64 { return &l.StarDictIndex }},
+	{"MAX_BGL_BLOCK", false, 8 << 20, blockMax, func(l *limits.Limits) *int64 { return &l.BGLBlock }},
+	{"MAX_LEMMA_SIZE", false, 16 << 20, 1 << 30, func(l *limits.Limits) *int64 { return &l.LemmaSize }},
+	{"MAX_IMPORT_SIZE", false, 1 << 30, 64 << 40, func(l *limits.Limits) *int64 { return &l.ImportSize }},
+	{"MAX_IMPORT_RATIO", true, 100, 100_000, func(l *limits.Limits) *int64 { return &l.ImportRatio }},
+	{"MAX_UPLOAD_SIZE", false, 1 << 30, 64 << 40, func(l *limits.Limits) *int64 { return &l.UploadSize }},
+}
+
+// blockMax is the ceiling of a per-block bound: 4 GB, or what one []byte holds
+// on a 32-bit build.
+const blockMax = min(4<<30, math.MaxInt)
+
+// forkLimits is the bounds this fork ships, which is not limits.Default.
+// ImportSize is the difference, and the reason it is one: upstream's default
+// of 256 GiB never applied here - intake has capped what it takes out of an
+// archive at 64 GiB (its own maxCandidateBytes) since the Android importer
+// landed - and it is also what a download may deliver, as upstream's own
+// maxDownloadBytes does. So the key is 64 GiB, and setting it to "16GB" gives
+// back the stricter download cap this fork used to hard-code. Nothing that
+// imports or opens today starts being refused, which is the rule: the MDict
+// port alone may tighten a bound, because the bound it replaces was that
+// number.
+func forkLimits() limits.Limits {
+	l := limits.Default
+	l.ImportSize = 64 << 30
+	return l
+}
+
+// applyLimits fills the MAX_* bound each raw value names. A value that cannot
+// be read, or that is outside its key's range, is reported and leaves that
+// bound alone: the ceiling is a guard against a damaged or hostile file, so
+// the way to fail is to keep it, not to move it to the nearest end where a
+// typo would silently weaken it.
+func applyLimits(l *limits.Limits, raw map[string]string) []string {
+	var problems []string
+	for _, k := range limitKeys {
+		v := raw[k.Key]
+		if v == "" {
+			continue
+		}
+		n := ParseSize(v)
+		if k.Ratio {
+			n = int64(ParseCount(v))
+		}
+		if n < k.Min || n > k.Max {
+			problems = append(problems, fmt.Sprintf(
+				"%s = %q is outside the %s..%s range it keeps to; the default %s stands",
+				k.Key, v, limits.Format(k.Min), limits.Format(k.Max), limits.Format(*k.Field(l))))
+			continue
+		}
+		*k.Field(l) = n
+	}
+	return problems
+}
+
 // ParseCount reads a small non-negative count. Anything unreadable is 0, which
 // for MORPH_CACHE means "off" - a typo in a config file disables a feature
 // rather than silently choosing a size nobody asked for.
@@ -1160,8 +1277,8 @@ func ParseCount(v string) int {
 	return n
 }
 
-// ParseSize reads a byte size: plain bytes, or with a K/M/G suffix
-// ("2GB", "1500MB", "512M"). Returns 0 for "off"/"none"/unparseable.
+// ParseSize reads a byte size: plain bytes, or with a K/M/G/T suffix
+// ("2GB", "1500MB", "512M", "64TB"). Returns 0 for "off"/"none"/unparseable.
 func ParseSize(v string) int64 {
 	v = strings.ToLower(strings.TrimSpace(strings.ReplaceAll(v, " ", "")))
 	if v == "" || v == "off" || v == "none" || v == "0" {
@@ -1176,12 +1293,20 @@ func ParseSize(v string) int64 {
 		mult, v = 1<<20, strings.TrimSuffix(v, "m")
 	case strings.HasSuffix(v, "g"):
 		mult, v = 1<<30, strings.TrimSuffix(v, "g")
+	case strings.HasSuffix(v, "t"):
+		mult, v = 1<<40, strings.TrimSuffix(v, "t")
 	}
 	f, err := strconv.ParseFloat(v, 64)
-	if err != nil || f <= 0 {
+	if err != nil || math.IsNaN(f) || f <= 0 {
 		return 0
 	}
-	return int64(f * float64(mult))
+	// "1e30GB" and "inf" are past what int64 holds, and a float conversion
+	// past it is undefined - in practice negative, which a caller would read
+	// as "no limit". Saturate instead.
+	if b := f * float64(mult); b < math.MaxInt64 {
+		return int64(b)
+	}
+	return math.MaxInt64
 }
 
 // Setting is one resolved config key: the value that is actually in effect,

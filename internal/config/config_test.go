@@ -5,6 +5,7 @@
 package config
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -373,9 +374,77 @@ func TestParseSize(t *testing.T) {
 	for in, want := range map[string]int64{
 		"4GB": 4 << 30, "512M": 512 << 20, "1500MB": 1500 << 20, "2048": 2048,
 		"1.5GB": int64(1.5 * float64(int64(1)<<30)), "0": 0, "off": 0, "": 0, "junk": 0,
+		"64TB": 64 << 40, "1TB": 1 << 40, "inf": math.MaxInt64, "1e30GB": math.MaxInt64,
 	} {
 		if got := ParseSize(in); got != want {
 			t.Errorf("ParseSize(%q) = %d, want %d", in, got, want)
+		}
+	}
+}
+
+// TestLimitKeysSetBound: each MAX_* key reaches the field it names. A key that
+// stops being wired reads as the default and fails here.
+func TestLimitKeysSetBound(t *testing.T) {
+	path := filepath.Join(t.TempDir(), Name)
+	if err := os.WriteFile(path, []byte(`
+MAX_ZIM_CLUSTER    = "128MB"
+MAX_SLOB_BIN       = "64MB"
+MAX_MDICT_BLOCK    = "32MB"
+MAX_STARDICT_INDEX = "100MB"
+MAX_BGL_BLOCK      = "16MB"
+MAX_LEMMA_SIZE     = "128MB"
+MAX_IMPORT_SIZE    = "2GB"
+MAX_IMPORT_RATIO   = "500"
+MAX_UPLOAD_SIZE    = "32GB"
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Problems) != 0 {
+		t.Fatalf("a value inside its range was reported: %v", cfg.Problems)
+	}
+	want := forkLimits()
+	want.ZIMCluster, want.SlobBin, want.MDictBlock = 128<<20, 64<<20, 32<<20
+	want.StarDictIndex, want.BGLBlock, want.LemmaSize = 100<<20, 16<<20, 128<<20
+	want.ImportSize, want.ImportRatio, want.UploadSize = 2<<30, 500, 32<<30
+	if cfg.Limits != want {
+		t.Errorf("Limits = %+v, want %+v", cfg.Limits, want)
+	}
+}
+
+// TestLimitKeysOutsideRangeAreRefused: a value outside the range its key keeps
+// to changes nothing and is reported with the key's name, so a typo cannot
+// silently weaken a guard - or tighten one until a dictionary stops opening.
+func TestLimitKeysOutsideRangeAreRefused(t *testing.T) {
+	path := filepath.Join(t.TempDir(), Name)
+	if err := os.WriteFile(path, []byte(`
+MAX_ZIM_CLUSTER  = "1MB"
+MAX_SLOB_BIN     = "junk"
+MAX_LEMMA_SIZE   = "2GB"
+MAX_IMPORT_RATIO = "10"
+MAX_UPLOAD_SIZE  = "1MB"
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Limits != forkLimits() {
+		t.Errorf("a refused value was applied: %+v", cfg.Limits)
+	}
+	for _, key := range []string{"MAX_ZIM_CLUSTER", "MAX_SLOB_BIN", "MAX_LEMMA_SIZE", "MAX_IMPORT_RATIO", "MAX_UPLOAD_SIZE"} {
+		named := false
+		for _, p := range cfg.Problems {
+			if strings.Contains(p, key) {
+				named = true
+			}
+		}
+		if !named {
+			t.Errorf("%s: no problem names it: %v", key, cfg.Problems)
 		}
 	}
 }
