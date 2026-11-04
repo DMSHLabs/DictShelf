@@ -757,8 +757,7 @@ itself offer a single dictionary?
 **Answered by the user (2026-09-21), and it is the first branch**: "При щелчке по слову должно
 открываться стандартное окно отображения словарей и там отобразится" — the jump out of the word
 list IS the requirement. The jump needed no code: it existed, and the whole round trip was
-verified instead (desktop Chromium against a throwaway server, `test_data/`'s three dictionaries —
-facts and method in `docs/ANDROID-UI-HANDOFF.md`, "Dictionary word list → article"):
+verified instead (desktop Chromium against a throwaway server, `test_data/`'s three dictionaries):
 `card → Browse → word` lands on `/?q=<word>&dict=<id>&mode=exact`, the scope selector and the
 chip name that one dictionary, only its section renders (the same word searched unscoped renders
 two), a Cyrillic headword round-trips, and Back from the article returns to the word list.
@@ -827,5 +826,5 @@ wanted: a `d:<id>` spelling beside `g:<facet>:<value>`, resolved by the same `di
 `[id]`, with the picker offering it only while the current scope is a single dictionary. That is
 the version that needs the resolver; the built one does not.
 
-*(Renumbered from O11 to O13 by the upstream sync of 2026-09-29 — upstream's O11 and O12 are the wumark bundle and admonitions. The references in docs/handoff-archive.md were updated with it.)*
+*(Renumbered from O11 to O13 by the upstream sync of 2026-09-29 — upstream's O11 and O12 are the wumark bundle and admonitions.)*
 
