@@ -19,6 +19,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 )
 
 // Every test here talks to a loopback httptest server, so the fetcher under
@@ -692,5 +694,30 @@ func TestClientUserAgent(t *testing.T) {
 	resp.Body.Close()
 	if ua := <-got; ua != "wudict" {
 		t.Errorf("User-Agent = %q, want wudict", ua)
+	}
+}
+
+// TestDownloadLimitIsTheKey: what one URL may deliver is MAX_IMPORT_SIZE. A
+// response the default accepts is refused under a lowered key, before a byte
+// is written, and the refusal names the setting.
+func TestDownloadLimitIsTheKey(t *testing.T) {
+	limits.Set(limits.Limits{ImportSize: 1 << 10})
+	t.Cleanup(func() { limits.Set(limits.Default) })
+
+	body := strings.Repeat("wudict", 5000) // 30 KB against a 1 KB key
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		_, _ = io.WriteString(w, body)
+	}))
+	defer srv.Close()
+
+	dest := t.TempDir()
+	_, err := loopback().Fetch(context.Background(), dest, srv.URL+"/bundle.zip", nil)
+	if err == nil || !strings.Contains(err.Error(), "MAX_IMPORT_SIZE") {
+		t.Fatalf("err = %v, want a refusal naming MAX_IMPORT_SIZE", err)
+	}
+	if ents, _ := os.ReadDir(DownloadDir(dest)); len(ents) != 0 {
+		t.Fatalf("refused download left %d files behind", len(ents))
 	}
 }

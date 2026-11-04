@@ -21,8 +21,10 @@ import (
 var ErrTooManyEntries = errors.New("archive holds too many files")
 
 // ErrCandidateTooLarge refuses an import whose combined files exceed the
-// intake's per-dictionary size ceiling.
-var ErrCandidateTooLarge = errors.New("dictionary exceeds the import size limit")
+// intake's per-dictionary size ceiling, which is MAX_IMPORT_SIZE - named here
+// because a dictionary that trips it is one the user may simply be allowed to
+// raise the key for.
+var ErrCandidateTooLarge = errors.New("dictionary exceeds the MAX_IMPORT_SIZE limit")
 
 // Sniff lists an archive and reports the dictionaries in it. No byte is
 // written, and the answer comes from names and the directory's declared sizes
@@ -133,7 +135,7 @@ func Sniff(a Archive) ([]Candidate, error) {
 				c.Size = addCandidateSize(c.Size, e.Size)
 			}
 		}
-		if c.Size > maxCandidateBytes {
+		if c.Size > maxCandidateBytes() {
 			continue
 		}
 		out = append(out, c)
@@ -211,8 +213,8 @@ func buildCandidate(main Entry, companions []Entry) Candidate {
 }
 
 func addCandidateSize(total, size int64) int64 {
-	if size < 0 || total < 0 || size > maxCandidateBytes-total {
-		return maxCandidateBytes + 1
+	if size < 0 || total < 0 || size > maxCandidateBytes()-total {
+		return maxCandidateBytes() + 1
 	}
 	return total + size
 }

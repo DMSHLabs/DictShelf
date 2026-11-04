@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 )
 
 // The classifier asks the format registry what a main file is, and the
@@ -476,5 +477,39 @@ func TestCandidateNames(t *testing.T) {
 				t.Fatalf("marshalled %s, want name %q and files %v", b, cands[0].Name, tc.want)
 			}
 		})
+	}
+}
+
+// The extraction ceiling and the ratio are keys, not constants: a candidate
+// and an entry the defaults accept are refused under a lowered one, and each
+// refusal names the setting to change.
+func TestImportSizeLimitIsTheKey(t *testing.T) {
+	limits.Set(limits.Limits{ImportSize: 1 << 20})
+	t.Cleanup(func() { limits.Set(limits.Default) })
+
+	a := &fakeArchive{
+		entries: []Entry{{Name: "x.mdx", Base: "x.mdx", Size: 2 << 20, Compressed: 2 << 20}},
+		bodies:  map[string]string{"x.mdx": "x"},
+	}
+	c := Candidate{Name: "x", Format: ".mdx", Main: "x.mdx", Files: []string{"x.mdx"}, Size: 2 << 20}
+	err := Extract(context.Background(), a, c, t.TempDir(), nil)
+	if !errors.Is(err, ErrCandidateTooLarge) || !strings.Contains(err.Error(), "MAX_IMPORT_SIZE") {
+		t.Fatalf("err = %v, want a refusal naming MAX_IMPORT_SIZE", err)
+	}
+}
+
+func TestImportRatioLimitIsTheKey(t *testing.T) {
+	// Ratio 200 against a lowered 100; the default of 2000 accepts it.
+	limits.Set(limits.Limits{ImportRatio: 100})
+	t.Cleanup(func() { limits.Set(limits.Default) })
+
+	a := &fakeArchive{
+		entries: []Entry{{Name: "y.mdx", Base: "y.mdx", Size: 200 << 20, Compressed: 1 << 20}},
+		bodies:  map[string]string{"y.mdx": "irrelevant"},
+	}
+	c := Candidate{Name: "y", Format: ".mdx", Main: "y.mdx", Files: []string{"y.mdx"}, Size: 200 << 20}
+	err := Extract(context.Background(), a, c, t.TempDir(), nil)
+	if !errors.Is(err, ErrBomb) || !strings.Contains(err.Error(), "MAX_IMPORT_RATIO") {
+		t.Fatalf("err = %v, want a refusal naming MAX_IMPORT_RATIO", err)
 	}
 }

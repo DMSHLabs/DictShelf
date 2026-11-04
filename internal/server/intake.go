@@ -20,6 +20,7 @@ import (
 
 	"github.com/DMSHLabs/DictShelf/internal/config"
 	"github.com/DMSHLabs/DictShelf/internal/intake"
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
@@ -36,12 +37,14 @@ import (
 // None of these may answer cross-origin (D69): every one of them writes to the
 // user's library, and the first names a path on their disk.
 
-// maxIntakeUpload bounds a streamed archive. It is not a memory bound - the
-// body is spooled to disk as it arrives and never held - but a bound on what a
-// dropped connection can leave behind before the sweep notices, and a number
-// that makes a mis-aimed upload fail while there is still room on the device.
-// Dictionary bundles of several gigabytes are real, so it is generous.
-const maxIntakeUpload = 16 << 30
+// maxIntakeUpload bounds a streamed archive (MAX_UPLOAD_SIZE). It is not a
+// memory bound - the body is spooled to disk as it arrives and never held -
+// but a bound on what a dropped connection can leave behind before the sweep
+// notices, and a number that makes a mis-aimed upload fail while there is
+// still room on the device. Dictionary bundles of several gigabytes are real,
+// so the default is generous.
+func maxIntakeUpload() int64 { return limits.Get().UploadSize }
+
 const desktopIntakeChunkLimit = 4 << 20
 
 type desktopIntakeUpload struct {
@@ -136,7 +139,7 @@ func (s *Server) desktopIntakeUploadStart(name string, size int64, requestedDir 
 		return nil, err
 	}
 	name = filepath.Base(strings.TrimSpace(name))
-	if name == "" || name == "." || name == string(filepath.Separator) || size < 0 || size > maxIntakeUpload {
+	if name == "" || name == "." || name == string(filepath.Separator) || size < 0 || size > maxIntakeUpload() {
 		return nil, errors.New("invalid archive file")
 	}
 	var token [16]byte
@@ -190,9 +193,9 @@ func (s *Server) desktopIntakeUploadChunk(argument string) error {
 		s.desktopUploadsMu.Unlock()
 		return errors.New("file transfer expired")
 	}
-	if upload.written+int64(len(data)) > maxIntakeUpload {
+	if upload.written+int64(len(data)) > maxIntakeUpload() {
 		s.desktopUploadsMu.Unlock()
-		return errors.New("that file is too large to import")
+		return limits.Exceeded("that file", "MAX_UPLOAD_SIZE", maxIntakeUpload())
 	}
 	if upload.size > 0 && upload.written+int64(len(data)) > upload.size {
 		s.desktopUploadsMu.Unlock()
@@ -394,11 +397,11 @@ func (s *Server) handleIntake(w http.ResponseWriter, r *http.Request) {
 	if name == "" || name == "." || name == string(filepath.Separator) {
 		name = "archive.zip"
 	}
-	src, err := intake.Spool(dest, name, http.MaxBytesReader(w, r.Body, maxIntakeUpload))
+	src, err := intake.Spool(dest, name, http.MaxBytesReader(w, r.Body, maxIntakeUpload()))
 	if err != nil {
 		var mbe *http.MaxBytesError
 		if errors.As(err, &mbe) {
-			httpErr(w, http.StatusRequestEntityTooLarge, "that file is too large to import")
+			httpErr(w, http.StatusRequestEntityTooLarge, "%v", limits.Exceeded("that file", "MAX_UPLOAD_SIZE", maxIntakeUpload()))
 			return
 		}
 		httpErr(w, http.StatusInternalServerError, "could not receive the file: %v", err)

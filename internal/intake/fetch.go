@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 )
 
 // Fetching an archive over https.
@@ -66,10 +67,12 @@ const DownloadDirName = dict.DownloadDirName
 // tomorrow, not to fetch two gigabytes again.
 const partialStale = 7 * 24 * time.Hour
 
-// maxDownloadBytes bounds what a single URL may deliver. Not a memory bound -
-// the body is written straight to disk - but a bound on how much of somebody's
-// storage one mistyped link can consume.
-const maxDownloadBytes = 16 << 30
+// maxDownloadBytes bounds what a single URL may deliver: MAX_IMPORT_SIZE, the
+// same key that bounds one dictionary's extraction. Not a memory bound - the
+// body is written straight to disk - but a bound on how much of somebody's
+// storage one mistyped link can consume, so a build that wants the old
+// stricter cap sets MAX_IMPORT_SIZE = "16GB".
+func maxDownloadBytes() int64 { return maxCandidateBytes() }
 
 // maxRedirects is the hop limit. Each hop is re-checked against the same
 // scheme and host rules, so a redirect cannot be the way around them.
@@ -318,8 +321,8 @@ func (f Fetcher) Fetch(ctx context.Context, dest, raw string, progress Progress)
 	if resp.ContentLength < 0 {
 		total = 0
 	}
-	if total > maxDownloadBytes {
-		return Source{}, errors.New("that file is too large to download")
+	if total > maxDownloadBytes() {
+		return Source{}, limits.Exceeded("that file", "MAX_IMPORT_SIZE", maxDownloadBytes())
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return Source{}, err
@@ -635,8 +638,8 @@ func copyBody(ctx context.Context, w io.Writer, r io.Reader, offset, total int64
 		}
 		n, err := r.Read(buf)
 		if n > 0 {
-			if done+int64(n) > maxDownloadBytes {
-				return done, errors.New("that file is too large to download")
+			if done+int64(n) > maxDownloadBytes() {
+				return done, limits.Exceeded("that file", "MAX_IMPORT_SIZE", maxDownloadBytes())
 			}
 			if _, werr := w.Write(buf[:n]); werr != nil {
 				return done, werr

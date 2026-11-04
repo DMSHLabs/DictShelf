@@ -553,7 +553,7 @@ func (m *Manager) Confirm(dest string, pick []int, opts Options) (Job, error) {
 					size = addCandidateSize(size, extra.Size)
 				}
 			}
-			if size > maxCandidateBytes {
+			if size > maxCandidateBytes() {
 				return Job{}, ErrCandidateTooLarge
 			}
 		}

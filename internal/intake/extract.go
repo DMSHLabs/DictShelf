@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 )
 
 // Errors an extraction refuses on. Each names a claim the archive made that
@@ -50,7 +52,7 @@ func Extract(ctx context.Context, a Archive, c Candidate, dest string, progress 
 	if !c.Complete() {
 		return fmt.Errorf("%w: %s", ErrIncomplete, strings.Join(c.Missing, ", "))
 	}
-	if c.Size < 0 || c.Size > maxCandidateBytes {
+	if c.Size < 0 || c.Size > maxCandidateBytes() {
 		return ErrCandidateTooLarge
 	}
 	root, err := filepath.Abs(dest)
@@ -107,8 +109,10 @@ func writeEntry(ctx context.Context, a Archive, e Entry, out string, buf []byte,
 	// An archive is free to declare a large entry and free to store a small
 	// one; declaring a small stored size AND a vast uncompressed one is the
 	// shape of a bomb and of nothing else. Checked before the handle exists.
-	if e.Compressed > 0 && e.Size/e.Compressed > maxRatio {
-		return fmt.Errorf("%w: %s", ErrBomb, e.Name)
+	// The key is named because the ratio is a heuristic, and a dictionary that
+	// really is that compressible is one the user can vouch for.
+	if e.Compressed > 0 && e.Size/e.Compressed > maxRatio() {
+		return fmt.Errorf("%w: %s exceeds the MAX_IMPORT_RATIO limit of %s", ErrBomb, e.Name, limits.Format(maxRatio()))
 	}
 	src, err := a.Open(e.Name)
 	if err != nil {

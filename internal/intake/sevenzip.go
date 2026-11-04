@@ -103,7 +103,7 @@ func indexSevenZip(rc *sevenzip.ReadCloser) ([]Entry, []*sevenzip.File, map[stri
 		if !mode.IsRegular() || mode&fs.ModeSymlink != 0 {
 			continue
 		}
-		if f.UncompressedSize > maxCandidateBytes {
+		if f.UncompressedSize > uint64(maxCandidateBytes()) {
 			// Larger than any single dictionary this package will install, so
 			// it can only ever be refused - and dropping it here keeps the
 			// declared size inside int64, where the candidate arithmetic

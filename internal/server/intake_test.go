@@ -8,13 +8,16 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/DMSHLabs/DictShelf/internal/config"
 	"github.com/DMSHLabs/DictShelf/internal/intake"
+	"github.com/DMSHLabs/DictShelf/internal/limits"
 )
 
 // intakeServer is a server over an EMPTY dictionary folder: the state a user
@@ -237,5 +240,23 @@ func TestIntakeConfirmRejectsAnUnknownExtra(t *testing.T) {
 	}
 	if st := s.importer().Status(); st.State != intake.StateReady {
 		t.Fatalf("state = %q, want the job still waiting for a real answer", st.State)
+	}
+}
+
+// TestUploadLimitIsTheKey: the archive a browser may send is MAX_UPLOAD_SIZE.
+// A body the default accepts is refused under a lowered key, and the answer
+// says 413 and names the setting that would allow it.
+func TestUploadLimitIsTheKey(t *testing.T) {
+	limits.Set(limits.Limits{UploadSize: 1 << 10})
+	t.Cleanup(func() { limits.Set(limits.Default) })
+
+	s, _ := intakeServer(t)
+	body := bytes.Repeat([]byte("wudict"), 2048) // 12 KB against a 1 KB key
+	rec := post(t, s, "/api/intake?name=bundle.zip", body, nil)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("code = %d, want 413 (body %q)", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "MAX_UPLOAD_SIZE") {
+		t.Fatalf("body = %q, want it to name MAX_UPLOAD_SIZE", rec.Body.String())
 	}
 }
