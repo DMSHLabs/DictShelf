@@ -622,11 +622,28 @@ left, and why:
   goldmark v2.1.5's own quadratic in the definitions of ONE paragraph. The store
   half of that commit (`pipeline.go`/`ingest.go`/`compress.go`) stays this fork's
   own ground.
-- **P6 of the transfer plan** (`c8b92dda`, `f1c5fb27`) — `internal/limits` itself
-  now exists (it came in with the MDict port), so what remains is WIRING it: the
-  `MAX_*` config keys, and the bounds at ZIM cluster decompression, slob bins,
-  StarDict indexes and the intake's space checks. Mind the ZIM one — it is the
-  same package as the bullet above.
+- **P6 of the transfer plan** (`c8b92dda`, `f1c5fb27`) — **DONE 2026-11-04.** The nine
+  `MAX_*` keys exist in the config and every bound reads its own key: the config parses,
+  range-checks and reports a value that is outside its range (refusing it rather than moving
+  it), each entry that opens a dictionary puts them in force with `limits.Set` (`cmdServe`,
+  `applyLibrarySettings` for the library subcommands, `applyLimits` for lookup/keys/res, and
+  the Android in-process start), and the readers that were constants now read them — ZIM's
+  cluster (the zstd decoder included, so a lowered key bounds the decompression and not just
+  the check after it), slob bins, StarDict indexes, BGL blocks, lemma files, the intake's
+  extraction and download, and the server's upload. Two fork decisions to keep:
+  - **`MAX_IMPORT_SIZE` defaults to 64 GiB** — not upstream's 256 GiB, and not the 16 GiB the
+    task file named. One key covers both what one archive member may extract to (64 GiB here
+    since the Android importer landed) and what one URL may deliver (16 GiB until now), and
+    the rule is that nothing which imports today may start being refused — a full Wikipedia
+    ZIM runs past 100 GB — so the larger number is the default.
+    `MAX_IMPORT_SIZE = "16GB"` gives back the stricter download cap.
+  - **StarDict's ceiling is still flat**, not upstream's "the larger of the key and 16x the
+    compressed size". That ratio only ever accepts more, so leaving it out refuses nothing
+    that works today, and an oversized `.idx` now has a key to raise. The field comment in
+    `internal/limits` describes upstream's ratio, not this fork's — that is the one place the
+    file is ahead of our code.
+  Every other default is the number the fork's constant carried, and `limits.Default` is
+  untouched. Session notes: [`docs/sessions/2026-11-04-limits-wiring.md`](docs/sessions/2026-11-04-limits-wiring.md).
 - **Product decisions, not work**: MEGA links (`c9fcb3d3`), favorites
   (`81949eda`), CLI globbing (`4b00e48b`) — each is cheap once it is decided,
   and each wants this fork's own CLI or UI rather than a port.

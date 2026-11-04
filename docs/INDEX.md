@@ -26,6 +26,7 @@ documents to read end to end.
 | Porting upstream format/resource work into this fork | [`UPSTREAM-TRANSFER-PLAN.md`](UPSTREAM-TRANSFER-PLAN.md) |
 | Researched but **not scheduled** - do not start any of it unasked | [`OPEN.md`](OPEN.md) |
 | What happened in earlier sessions (grep, never read whole) | [`handoff-archive.md`](handoff-archive.md) |
+| How a session reasoned while it worked: its decisions and why, its doubts, its mistakes (one file per session, read one whole) | [`sessions/`](sessions/README.md) |
 | Licence notices for the vendored code and the modules in the binaries | [`../THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md) |
 | The user-facing manual (the published site, `pages/`) | [`../pages/docs/index.md`](../pages/docs/index.md) |
 
