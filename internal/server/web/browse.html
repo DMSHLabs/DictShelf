@@ -938,6 +938,7 @@ function card(html,chooserList=false){chooserSearch?.destroy();chooserSearch=nul
 async function show(opts,record){
   clearTimeout(poll);
   stopBrowseIndexWatch();
+  browseIndexCardShown=false;
   const seq=++browseSeq;
   const requestDictId=dictId;
   const started=performance.now();
@@ -1991,6 +1992,11 @@ addEventListener("resize",browseHideWordContextMenu);
    a bar parked at 100 while work goes on is a lie. */
 const BROWSE_INDEX_GRACE_MS=400,BROWSE_INDEX_POLL_MS=1500;
 let browseIndexWatch=null;
+/* Whether the card on screen is the indexing one. A page restored from the
+   back-forward cache comes back with its timers stopped (pagehide) and its card
+   frozen at the last thing it drew; this is what says that card needs asking
+   again - see the pageshow listener at the end of this script. */
+let browseIndexCardShown=false;
 function stopBrowseIndexWatch(){
   if(!browseIndexWatch)return;
   clearTimeout(browseIndexWatch.grace);
@@ -2006,7 +2012,9 @@ function browseWorkStatusRequest(){
   return fetch("/api/index-work").then(r=>{if(!r.ok)throw new Error("index work status failed");return r.json()});
 }
 function promoteBrowseDictionaryRequest(){
-  const body=JSON.stringify({dict:dictId,explicit:true,priority:true,promote:true});
+  /* `promote` alone: the start flags belong to the search results' "N+" button,
+     and a page that may only reorder must not carry a request to start. */
+  const body=JSON.stringify({dict:dictId,promote:true});
   if(window.wudictAndroidGo){
     const result=JSON.parse(window.wudictAndroidGo.indexWork("priority","",body));
     if(result.status<200||result.status>=300)throw new Error("dictionary promotion failed");
@@ -2018,11 +2026,13 @@ function promoteBrowseDictionaryRequest(){
     .then(r=>{if(!r.ok)throw new Error("dictionary promotion failed");return r.json()}).then(value=>!!value.indexing);
 }
 function drawBrowseIndexRequired(){
+  browseIndexCardShown=true;
   card("<b>"+tx("browse.indexRequired")+"</b><p><a href=\"/\">"+
     tx("browse.openApp")+"</a></p><p><a href=\"/browse\">"+
     tx("browse.chooseAnother")+"</a></p>");
 }
 function drawBrowseIndexCard(watch){
+  browseIndexCardShown=true;
   card("<b>"+tx("browse.indexingTitle",{name:watch.name})+"</b>"+
     '<progress id="browseIndexBar"></progress>'+
     '<p class="pc" id="browseIndexCount"></p><p id="browseIndexPhase" aria-live="polite"></p>'+
@@ -2055,6 +2065,7 @@ function updateBrowseIndexCard(watch,busy){
 }
 function drawBrowseIndexFailure(watch,why){
   stopBrowseIndexWatch();
+  browseIndexCardShown=true;
   document.title=watch.name;
   card("<b>"+tx("browse.indexFailed",{name:watch.name})+"</b>"+(why?"<p>"+esc(why)+"</p>":"")+
     '<p><button type="button" id="browseIndexRetry">'+tx("browse.tryAgain")+"</button> "+
@@ -2438,5 +2449,15 @@ addEventListener("pageshow",event=>{
   flushArticleReturnDiagnostic();
   logBrowseReturn("browse_return_bfcache");
   requestAnimationFrame(()=>requestAnimationFrame(()=>logBrowseReturn("browse_return_ready")));
+});
+/* A page restored from the back-forward cache comes back with its timers
+   stopped and its card frozen at the last thing it drew. If that card was the
+   indexing one, ask again: the build may have finished, failed or moved on while
+   the page was away, and a card that never updates is a lie. `show` re-requests
+   the page, which either draws the words or puts the card back with a fresh
+   watch - and it never starts anything, because the watch only promotes. */
+addEventListener("pageshow",event=>{
+  if(!event.persisted||!dictId||!browseIndexCardShown)return;
+  show(last,"none");
 });
 </script>

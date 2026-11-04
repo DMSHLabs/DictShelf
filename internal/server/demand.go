@@ -24,7 +24,10 @@ func (s *Server) DemandDictionary(id string, explicit bool, priority ...bool) (b
 // exactly as it was. `true` means the dictionary is in the queue (or already
 // being indexed under it).
 func (s *Server) PromoteDictionary(id string) (bool, error) {
-	return s.demandDictionary(id, true, true, true)
+	// Only the promote flag. The other two are the START path's, and passing
+	// them here would leave this call safe only by the order of the checks in
+	// demandDictionary - a reorder request must not carry a start request.
+	return s.demandDictionary(id, false, false, true)
 }
 
 // handleDemand supports explicit features that require a prepared headword

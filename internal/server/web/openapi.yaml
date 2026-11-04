@@ -122,7 +122,9 @@ paths:
         already waiting in the running index queue is taken next instead of started.
         With `promote`, only that reorder happens: a dictionary that is not in the
         running queue is left alone and nothing is started for it. `promote` is what
-        Browse uses, so that opening a page can never begin indexing.
+        Browse uses, so that opening a page can never begin indexing - and a request
+        that only reorders sends `promote` alone, because `explicit` is what asks for
+        a start.
       requestBody:
         required: true
         content:
@@ -130,7 +132,7 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [dict, explicit]
+              required: [dict]
               properties:
                 dict: {type: string}
                 explicit: {type: boolean}

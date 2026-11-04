@@ -652,6 +652,13 @@ left, and why:
   started), and the words take over at the end; killing the server mid-build
   gives the failure card with "Try again". `internal/server` carries
   `TestPromoteDictionaryReordersWithoutStarting` for the reorder-only contract.
+  Two refinements the same day, both from reviewing that work: the reorder request
+  now carries `promote` ALONE — the page and `PromoteDictionary` no longer send
+  `explicit`/`priority` beside it, so "Browse never starts" does not rest on the
+  order of the checks in `demandDictionary`, and `openapi.yaml` no longer requires
+  `explicit` (it is what asks for a start) — and a card restored from the
+  back-forward cache asks again on `pageshow`, because `pagehide` stops the timers
+  and a card frozen at "175 000 words" is a lie.
   **Left unverified in the wild**: a dictionary that is merely PENDING (queued,
   not yet in a worker) when Browse opens — this machine has 24 cores so the test
   library never queued one; that card state was checked only against a stubbed
