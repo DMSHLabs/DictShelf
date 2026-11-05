@@ -10,21 +10,21 @@
     </div>
     <div class="folders-dialog-scroll">
       <section id="indexDefaults">
-        <p>{{T:pages.indexDefaultsHint}}</p>
+        <details class="setup-copy"><summary><span>{{T:pages.indexDefaultsHint}}</span></summary><p>{{T:pages.indexDefaultsHint}}</p></details>
         <div class="dsl-default-row"><div>
           <label><input type="checkbox" id="newIndexContains" checked>{{T:dictUI.contains}}</label>
           <label><input type="checkbox" id="newIndexFullText">{{T:dictUI.fts}}</label>
         </div></div>
-        <p class="index-defaults-note">{{T:pages.containsRecommendation}}</p>
+        <details class="setup-copy index-defaults-note"><summary><span>{{T:pages.containsRecommendation}}</span></summary><p>{{T:pages.containsRecommendation}}</p></details>
         <p id="indexDefaultsError" class="err" role="alert" hidden></p>
       </section>
-      <p class="formats">{{T:pages.supported}}</p>
+      <details class="setup-copy formats"><summary><span>{{T:pages.supported}}</span></summary><p>{{T:pages.supported}}</p></details>
       <div class="setup-tabs" role="tablist" aria-label="{{T:pages.setupTabs}}">
         <button type="button" id="foldersTab" class="setup-tab" role="tab" aria-controls="foldersPanel" aria-selected="true">{{T:pages.point}}</button>
         <button type="button" id="downloadTab" class="setup-tab" role="tab" aria-controls="downloadPanel" aria-selected="false" tabindex="-1" disabled>{{T:pages.downloadDictionary}}</button>
       </div>
       <section id="foldersPanel" class="setup-panel" role="tabpanel" aria-labelledby="foldersTab">
-      <p>{{T:pages.folderHint}}</p>
+      <details class="setup-copy"><summary><span>{{T:pages.folderHint}}</span></summary><p>{{T:pages.folderHint}}</p></details>
       <div id="rows"></div>
       <button type="button" id="addRow" class="link">{{T:pages.addFolder}}</button>
       <div id="origin" class="warn hidden"></div>
@@ -38,12 +38,13 @@
       <div id="importTargetRow" class="frow">
         <input id="importTarget" placeholder="{{T:pages.chooseImportFolder}}" spellcheck="false">
         <button type="button" id="importTargetPick" class="pick" title="{{T:pages.chooseFolder}}">📁</button>
+        <div class="android-download-info"><span>{{T:pages.androidDownloadFolder}}</span> <code id="androidDownloadPath"></code></div>
       </div>
       <p id="importTargetWarning" class="warn hidden" role="alert">{{T:pages.importFolderRequired}}</p>
       <div id="addSection" class="hidden">
         <hr class="sep">
         <h2>{{T:pages.addDictionaries}}</h2>
-        <p>{{T:pages.addHint}} {{T:pages.assetsHint}}</p>
+        <details class="setup-copy"><summary><span>{{T:pages.addHint}} {{T:pages.assetsHint}}</span></summary><p>{{T:pages.addHint}} {{T:pages.assetsHint}}</p></details>
         <div id="drop">
           <input type="file" id="file" accept=".zip,.7z,.mdx,.mdd,.ifo,.idx,.dict,.dz,.syn,.dsl,.slob,.bgl,.zim,.md,.gz" hidden>
           <button type="button" id="choose" class="link">{{T:pages.chooseFile}}</button>
