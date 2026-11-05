@@ -264,6 +264,7 @@ func (m *Manager) Begin(dest string, src Source) (Job, error) {
 // going to be fetched gets a refusal rather than a job to poll and cancel.
 func (m *Manager) BeginURL(dest, raw string, f Fetcher) (Job, error) {
 	if dest == "" {
+		logx.Download("intake URL rejected reason=no-destination")
 		return Job{}, ErrNoDestination
 	}
 	// What was pasted may be one link, a share link wrapping one, or several
@@ -271,11 +272,13 @@ func (m *Manager) BeginURL(dest, raw string, f Fetcher) (Job, error) {
 	// are a collection with nothing to fetch first.
 	raw = strings.TrimSpace(raw)
 	if IsSharePage(raw) {
+		logx.Download("intake URL rejected reason=share-page input_bytes=%d", len(raw))
 		return Job{}, ErrSharePage
 	}
 	pasted := parseText(raw, nil)
 	switch {
 	case len(pasted.links) > 1:
+		logx.Download("intake URL parsed as collection links=%d input_bytes=%d", len(pasted.links), len(raw))
 		return m.beginPasted(dest, pasted, f)
 	case len(pasted.links) == 1 && strings.ContainsAny(raw, " \t\r\n"):
 		raw = pasted.links[0].String()
@@ -287,15 +290,19 @@ func (m *Manager) BeginURL(dest, raw string, f Fetcher) (Job, error) {
 	}
 	u, err := f.Check(raw)
 	if err != nil {
+		logx.Download("intake URL validation failed input_bytes=%d error=%v", len(raw), err)
 		return Job{}, err
 	}
 	if isMegaFolderURL(u) {
+		logx.Download("intake URL accepted kind=mega-folder host=%s", u.Hostname())
 		return m.beginMegaFolder(dest, raw, f, u.Hostname())
 	}
+	logx.Download("intake URL accepted kind=file host=%s", u.Hostname())
 
 	m.mu.Lock()
 	if m.busyLocked() {
 		m.mu.Unlock()
+		logx.Download("intake URL rejected reason=another-import-running host=%s", u.Hostname())
 		return Job{}, ErrBusy
 	}
 	m.clearLocked()
@@ -330,6 +337,7 @@ func (m *Manager) beginMegaFolder(dest, raw string, f Fetcher, host string) (Job
 	m.mu.Lock()
 	if m.busyLocked() {
 		m.mu.Unlock()
+		logx.Download("mega folder job rejected reason=another-import-running host=%s", host)
 		return Job{}, ErrBusy
 	}
 	m.clearLocked()
@@ -348,6 +356,7 @@ func (m *Manager) beginMegaFolder(dest, raw string, f Fetcher, host string) (Job
 		defer m.wg.Done()
 		defer cancel()
 		started := time.Now()
+		logx.Download("mega folder job started host=%s phase=listing", host)
 		logx.Download("mega folder list start host=%s", host)
 		l, err := fetchListing(ctx, f, raw)
 		logx.Download("mega folder list finished host=%s files=%d elapsed=%s error=%v", host, len(l.files), time.Since(started).Round(time.Millisecond), err)
@@ -356,9 +365,11 @@ func (m *Manager) beginMegaFolder(dest, raw string, f Fetcher, host string) (Job
 			m.mu.Lock()
 			j.pub.Phase, j.pub.Source = "checking", ""
 			m.mu.Unlock()
+			logx.Download("mega folder phase changed phase=checking host=%s direct_files=%d", host, len(l.files))
 			buildStarted := time.Now()
 			logx.Download("mega folder inspect start host=%s files=%d", host, len(l.files))
 			c, err = buildWithProgress(ctx, f, dest, m.library(), l, func(name string) {
+				logx.Download("mega folder checking file name=%q", name)
 				m.mu.Lock()
 				if m.cur == j {
 					j.pub.Source = name
@@ -372,6 +383,7 @@ func (m *Manager) beginMegaFolder(dest, raw string, f Fetcher, host string) (Job
 			title = "MEGA"
 		}
 		m.ready(j, c, title, err)
+		logx.Download("mega folder job finished host=%s elapsed=%s candidates=%d extras=%d folder_files=%d error=%v", host, time.Since(started).Round(time.Millisecond), len(c.cands), len(c.extras), len(c.folderFiles), err)
 	}()
 	return pub, nil
 }

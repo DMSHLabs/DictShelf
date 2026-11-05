@@ -480,8 +480,10 @@ func buildWithProgress(ctx context.Context, f Fetcher, dest string, lib []string
 		files = pickFiles(f, l.links)
 	}
 	if len(files) == 0 {
+		logx.Download("collection inspect stopped reason=no-files links=%d", len(l.links))
 		return collection{}, ErrNoLinks
 	}
+	logx.Download("collection inspect start files=%d folder_mode=%t text_list=%t", len(files), l.files != nil, l.text)
 	drive := false
 	for _, rf := range files {
 		if u, err := url.Parse(rf.url); err == nil && driveID(u) != "" {
@@ -502,6 +504,7 @@ func buildWithProgress(ctx context.Context, f Fetcher, dest string, lib []string
 		named[strings.ToLower(rf.name)] = true
 		alive = append(alive, rf)
 	}
+	logx.Download("collection file selection files=%d usable_names=%d", len(files), len(alive))
 	if len(alive) == 0 && ctx.Err() == nil {
 		if drive {
 			return collection{}, ErrDriveRefused
@@ -527,16 +530,19 @@ func buildWithProgress(ctx context.Context, f Fetcher, dest string, lib []string
 		}
 		entries = append(entries, Entry{Name: rf.name, Base: rf.name, Size: rf.size, Compressed: rf.size})
 	}
+	logx.Download("collection dictionary inspection entries=%d standalone_archives=%d", len(entries), len(archives))
 	sniffStarted := time.Now()
 	logx.Download("inspect folder dictionaries start entries=%d", len(entries))
 	cands, err := Sniff(&remoteArchive{ctx: ctx, f: f, entries: entries, files: byName, progress: progress})
 	logx.Download("inspect folder dictionaries finished entries=%d candidates=%d elapsed=%s error=%v", len(entries), len(cands), time.Since(sniffStarted).Round(time.Millisecond), err)
 	if err != nil {
+		logx.Download("collection dictionary inspection aborted error=%v", err)
 		return collection{}, err
 	}
 	// Marked BEFORE the media come out of Files: "unchanged" is a claim about
 	// every file of the dictionary, and an .mdd that grew is a change.
 	markStarted := time.Now()
+	logx.Download("compare installed dictionaries start candidates=%d library_entries=%d", len(cands), len(lib))
 	markExisting(dest, lib, cands)
 	logx.Download("compare installed dictionaries finished candidates=%d elapsed=%s", len(cands), time.Since(markStarted).Round(time.Millisecond))
 	for _, rf := range archives {
@@ -549,6 +555,9 @@ func buildWithProgress(ctx context.Context, f Fetcher, dest string, lib []string
 		})
 	}
 	sort.SliceStable(cands, func(i, j int) bool { return strings.ToLower(cands[i].Name) < strings.ToLower(cands[j].Name) })
+	for i, c := range cands {
+		logx.Download("collection candidate index=%d name=%q format=%q files=%q missing=%q complete=%t existing=%t unchanged=%t size=%d", i, c.Name, c.Format, c.Files, c.Missing, c.Complete(), c.Existing != "", c.Unchanged, c.Size)
+	}
 
 	var c collection
 	c.folderMode = l.files != nil
@@ -602,6 +611,7 @@ func buildWithProgress(ctx context.Context, f Fetcher, dest string, lib []string
 		}
 	}
 	c.cands = cands
+	logx.Download("collection companions mapped candidates=%d extras=%d", len(c.cands), len(c.extras))
 	if c.folderMode {
 		groups := map[string]int{}
 		usable := map[int]bool{}
@@ -615,6 +625,9 @@ func buildWithProgress(ctx context.Context, f Fetcher, dest string, lib []string
 		for _, ex := range c.extras {
 			extraGroups[strings.ToLower(ex.Name)] = ex.row
 		}
+		for i, ex := range c.extras {
+			logx.Download("collection extra index=%d name=%q need=%d size=%d row=%d", i, ex.Name, ex.Need, ex.Size, ex.row)
+		}
 		for _, rf := range l.files {
 			row := FolderFile{Name: rf.name, Size: rf.size, Group: -1, Extra: -1}
 			if g, ok := groups[strings.ToLower(rf.name)]; ok {
@@ -626,11 +639,24 @@ func buildWithProgress(ctx context.Context, f Fetcher, dest string, lib []string
 				row.Selectable = usable[g]
 			}
 			c.folderFiles = append(c.folderFiles, row)
+			logx.Download("mega folder selection row name=%q size=%d group=%d extra=%d selectable=%t", row.Name, row.Size, row.Group, row.Extra, row.Selectable)
 		}
+		mapped, selectable := 0, 0
+		for _, row := range c.folderFiles {
+			if row.Group >= 0 || row.Extra >= 0 {
+				mapped++
+			}
+			if row.Selectable {
+				selectable++
+			}
+		}
+		logx.Download("mega folder selection model rows=%d mapped=%d selectable=%d candidates=%d extras=%d", len(c.folderFiles), mapped, selectable, len(c.cands), len(c.extras))
 	}
 	if len(c.cands) == 0 {
+		logx.Download("collection inspect finished without candidates files=%d", len(files))
 		return collection{}, ErrNoLinks
 	}
+	logx.Download("collection inspect complete candidates=%d extras=%d folder_files=%d", len(c.cands), len(c.extras), len(c.folderFiles))
 	return c, nil
 }
 
@@ -840,6 +866,7 @@ func (a *remoteArchive) Open(name string) (io.ReadCloser, error) {
 		return nil, err
 	}
 	req.Header.Set("Range", "bytes=0-"+strconv.Itoa(sniffHeadBytes-1))
+	logx.Download("inspect remote range request name=%q host=%s range_bytes=%d", rf.name, req.URL.Hostname(), sniffHeadBytes)
 	client := a.f.Client()
 	if mf != nil {
 		client = a.f.megaFetcher().Client()
@@ -850,6 +877,7 @@ func (a *remoteArchive) Open(name string) (io.ReadCloser, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	logx.Download("inspect remote range response name=%q status=%d content_length=%d content_range=%q", rf.name, resp.StatusCode, resp.ContentLength, resp.Header.Get("Content-Range"))
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		logx.Download("inspect remote file failed name=%q stage=response status=%d elapsed=%s", rf.name, resp.StatusCode, time.Since(started).Round(time.Millisecond))
 		return nil, errors.New("the site did not answer")

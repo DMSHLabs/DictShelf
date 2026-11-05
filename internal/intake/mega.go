@@ -102,7 +102,13 @@ func (f Fetcher) megaResolve(ctx context.Context, id string, linkKey []byte) (*m
 	return f.megaResolveContext(ctx, id, linkKey, "")
 }
 
-func (f Fetcher) megaResolveContext(ctx context.Context, id string, linkKey []byte, folder string) (*megaFile, error) {
+func (f Fetcher) megaResolveContext(ctx context.Context, id string, linkKey []byte, folder string) (file *megaFile, resultErr error) {
+	started := time.Now()
+	stage := "policy"
+	logx.Download("mega file resolve start folder=%t key_bytes=%d", folder != "", len(linkKey))
+	defer func() {
+		logx.Download("mega file resolve finished folder=%t stage=%s elapsed=%s error=%v", folder != "", stage, time.Since(started).Round(time.Millisecond), resultErr)
+	}()
 	api, err := f.megaCheck(megaAPI + "?id=" + strconv.FormatUint(uint64(rand.Uint32()), 10))
 	if err != nil {
 		return nil, err
@@ -119,6 +125,8 @@ func (f Fetcher) megaResolveContext(ctx context.Context, id string, linkKey []by
 		q.Set("n", folder)
 		api.RawQuery = q.Encode()
 	}
+	stage = "api-request"
+	logx.Download("mega file resolve request action=g host=%s", api.Hostname())
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, api.String(), bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -126,30 +134,39 @@ func (f Fetcher) megaResolveContext(ctx context.Context, id string, linkKey []by
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := f.megaFetcher().Client().Do(req)
 	if err != nil {
+		stage = "api-do"
 		return nil, err
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	if err != nil {
+		stage = "api-body"
 		return nil, err
 	}
+	logx.Download("mega file resolve response status=%d bytes=%d content_length=%d", resp.StatusCode, len(b), resp.ContentLength)
 	// An error is a bare number ([-9], or -3 unwrapped), which fails to
 	// decode into the struct: every refusal reads the same to the user.
 	var out []struct {
 		G  string `json:"g"`
 		At string `json:"at"`
 	}
-	if resp.StatusCode != http.StatusOK || json.Unmarshal(b, &out) != nil || len(out) != 1 || out[0].G == "" {
+	decodeErr := json.Unmarshal(b, &out)
+	if resp.StatusCode != http.StatusOK || decodeErr != nil || len(out) != 1 || out[0].G == "" {
+		stage = "api-rejected"
+		logx.Download("mega file resolve response rejected status=%d bytes=%d decode_error=%v result_count=%d download_address_present=%t", resp.StatusCode, len(b), decodeErr, len(out), len(out) == 1 && out[0].G != "")
 		return nil, ErrMegaRefused
 	}
+	stage = "decrypt-name"
 	dl, err := url.Parse(out[0].G)
 	if err != nil {
+		logx.Download("mega file resolve download address rejected parse_error=%v", err)
 		return nil, ErrMegaRefused
 	}
 	if dl.Scheme == "http" && !f.Insecure {
 		dl.Scheme = "https" // MEGA's storage hosts serve both
 	}
 	if dl, err = f.megaCheck(dl.String()); err != nil {
+		logx.Download("mega file resolve storage host rejected error=%v", err)
 		return nil, err
 	}
 	m := &megaFile{url: dl, key: make([]byte, 16), iv: linkKey[16:24]}
@@ -158,8 +175,12 @@ func (f Fetcher) megaResolveContext(ctx context.Context, id string, linkKey []by
 	}
 	m.name = safeDirName(filepath.Base(megaName(out[0].At, m.key)))
 	if !Installable(m.name) {
+		stage = "name-not-installable"
+		logx.Download("mega file resolved name=%q installable=false", m.name)
 		return nil, ErrNotArchive
 	}
+	stage = "complete"
+	logx.Download("mega file resolved name=%q storage_host=%s", m.name, dl.Hostname())
 	return m, nil
 }
 
@@ -177,18 +198,22 @@ func (f Fetcher) megaFolderListing(ctx context.Context, u *url.URL) (listing, bo
 	id := strings.TrimSuffix(rest, "/")
 	key, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(u.Fragment, "="))
 	if err != nil || !megaIDRE.MatchString(id) || len(key) != 16 {
-		return listing{}, false, ErrMegaRefused
+		logx.Download("mega folder link rejected host=%s id_valid=%t key_bytes=%d key_decode_error=%v", u.Hostname(), megaIDRE.MatchString(id), len(key), err)
+		return listing{}, true, ErrMegaRefused
 	}
+	logx.Download("mega folder link accepted host=%s key_bytes=%d recursive=false", u.Hostname(), len(key))
 	ctx, cancel := context.WithTimeout(ctx, megaRequestTimeout)
 	defer cancel()
 	api, err := f.megaCheck(megaAPI + "?id=" + strconv.FormatUint(uint64(rand.Uint32()), 10))
 	if err != nil {
+		logx.Download("mega folder API policy failed error=%v", err)
 		return listing{}, true, err
 	}
 	api.RawQuery += "&n=" + url.QueryEscape(id)
 	body, _ := json.Marshal([]map[string]any{{"a": "f", "c": 1, "r": 0, "ca": 1}})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, api.String(), bytes.NewReader(body))
 	if err != nil {
+		logx.Download("mega folder API request build failed error=%v", err)
 		return listing{}, true, err
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -202,8 +227,10 @@ func (f Fetcher) megaFolderListing(ctx context.Context, u *url.URL) (listing, bo
 	defer resp.Body.Close()
 	b, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
+		logx.Download("mega api folder body failed status=%d bytes=%d elapsed=%s error=%v", resp.StatusCode, len(b), time.Since(started).Round(time.Millisecond), err)
 		return listing{}, true, err
 	}
+	logx.Download("mega api folder response status=%d bytes=%d content_length=%d elapsed=%s", resp.StatusCode, len(b), resp.ContentLength, time.Since(started).Round(time.Millisecond))
 	var response []struct {
 		F []struct {
 			H string `json:"h"`
@@ -214,14 +241,17 @@ func (f Fetcher) megaFolderListing(ctx context.Context, u *url.URL) (listing, bo
 			A string `json:"a"`
 		} `json:"f"`
 	}
-	if resp.StatusCode != 200 || json.Unmarshal(b, &response) != nil {
-		logx.Download("mega api folder response rejected status=%d bytes=%d elapsed=%s", resp.StatusCode, len(b), time.Since(started).Round(time.Millisecond))
+	decodeErr := json.Unmarshal(b, &response)
+	if resp.StatusCode != 200 || decodeErr != nil {
+		logx.Download("mega api folder response rejected status=%d bytes=%d decode_error=%v elapsed=%s", resp.StatusCode, len(b), decodeErr, time.Since(started).Round(time.Millisecond))
 		return listing{}, true, ErrMegaRefused
 	}
 	if len(response) != 1 {
+		logx.Download("mega api folder response rejected result_count=%d", len(response))
 		return listing{}, true, ErrMegaRefused
 	}
 	nodes := response[0].F
+	logx.Download("mega api folder nodes received=%d", len(nodes))
 	root := ""
 	for _, n := range nodes {
 		if n.T == 1 && strings.Contains(n.K, n.H+":") {
@@ -230,16 +260,27 @@ func (f Fetcher) megaFolderListing(ctx context.Context, u *url.URL) (listing, bo
 		}
 	}
 	if root == "" {
+		logx.Download("mega api folder root node missing nodes=%d", len(nodes))
 		return listing{}, true, ErrMegaRefused
 	}
+	logx.Download("mega api folder root resolved")
 	l := listing{title: "MEGA"}
-	count := 0
+	count, skippedKey, skippedName, skippedType, skippedParent := 0, 0, 0, 0, 0
 	for _, n := range nodes {
-		if n.T != 0 || n.P != root || n.S < 0 {
+		if n.T != 0 {
+			skippedType++
+			continue
+		}
+		if n.P != root {
+			skippedParent++
+			continue
+		}
+		if n.S < 0 {
 			continue
 		}
 		count++
 		if count > maxLinks {
+			logx.Download("mega folder direct-file limit exceeded limit=%d", maxLinks)
 			return listing{}, true, errMegaFolderTooLarge
 		}
 		var enc []byte
@@ -251,6 +292,7 @@ func (f Fetcher) megaFolderListing(ctx context.Context, u *url.URL) (listing, bo
 			}
 		}
 		if len(enc) != 32 {
+			skippedKey++
 			continue
 		}
 		block, _ := aes.NewCipher(key)
@@ -267,12 +309,15 @@ func (f Fetcher) megaFolderListing(ctx context.Context, u *url.URL) (listing, bo
 		}
 		plainName := megaName(n.A, contentKey)
 		if plainName == "" {
+			skippedName++
 			continue
 		}
 		name := safeDirName(plainName)
 		fileURL := "https://mega.nz/file/" + n.H + "?folder=" + url.QueryEscape(id) + "#" + base64.RawURLEncoding.EncodeToString(lk)
 		l.files = append(l.files, &remoteFile{name: name, url: fileURL, size: n.S})
+		logx.Download("mega folder file decrypted name=%q size=%d extension=%q", name, n.S, strings.ToLower(filepath.Ext(name)))
 	}
+	logx.Download("mega folder node processing finished direct_nodes=%d accepted=%d skipped_type=%d skipped_parent=%d skipped_key=%d skipped_name=%d", count, len(l.files), skippedType, skippedParent, skippedKey, skippedName)
 	if len(l.files) == 0 {
 		logx.Download("mega api folder listing complete direct_files=0 elapsed=%s", time.Since(started).Round(time.Millisecond))
 		return listing{}, true, ErrNoLinks
