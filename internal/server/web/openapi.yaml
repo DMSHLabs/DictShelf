@@ -3084,8 +3084,8 @@ components:
             a line to put on somebody's screen. Absent for a local import.
         phase:
           type: string
-          enum: [listing]
-          description: The server is reading a folder listing before downloading files.
+          enum: [listing, checking]
+          description: The server is reading a remote folder list or checking listed dictionary files before downloading.
         dir: { type: string, description: The folder an import installs into. }
         keep:
           type: string

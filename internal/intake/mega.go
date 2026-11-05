@@ -47,6 +47,8 @@ var errMegaFolderTooLarge = errors.New("MEGA folder contains too many files")
 // server in its place.
 var megaAPI = "https://g.api.mega.co.nz/cs"
 
+const megaRequestTimeout = 60 * time.Second
+
 var megaIDRE = regexp.MustCompile(`^[A-Za-z0-9_-]{8}$`)
 
 // megaCheck extends an already accepted MEGA link's host policy to MEGA's API
@@ -177,6 +179,8 @@ func (f Fetcher) megaFolderListing(ctx context.Context, u *url.URL) (listing, bo
 	if err != nil || !megaIDRE.MatchString(id) || len(key) != 16 {
 		return listing{}, false, ErrMegaRefused
 	}
+	ctx, cancel := context.WithTimeout(ctx, megaRequestTimeout)
+	defer cancel()
 	api, err := f.megaCheck(megaAPI + "?id=" + strconv.FormatUint(uint64(rand.Uint32()), 10))
 	if err != nil {
 		return listing{}, true, err

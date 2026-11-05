@@ -123,7 +123,7 @@ type Job struct {
 	// site is this arriving from" is exactly what a person watching a phone
 	// download on their own data wants to know. Empty for a local import.
 	Host  string `json:"host,omitempty"`
-	Phase string `json:"phase,omitempty"` // listing while a folder is read before files are downloaded
+	Phase string `json:"phase,omitempty"` // listing/checking while a remote folder is read before downloads
 	// Candidates is what the archive turned out to hold, in the order the
 	// user is shown them; the index into this slice is what Confirm takes.
 	Candidates []Candidate `json:"candidates,omitempty"`
@@ -353,9 +353,18 @@ func (m *Manager) beginMegaFolder(dest, raw string, f Fetcher, host string) (Job
 		logx.Download("mega folder list finished host=%s files=%d elapsed=%s error=%v", host, len(l.files), time.Since(started).Round(time.Millisecond), err)
 		var c collection
 		if err == nil {
+			m.mu.Lock()
+			j.pub.Phase, j.pub.Source = "checking", ""
+			m.mu.Unlock()
 			buildStarted := time.Now()
 			logx.Download("mega folder inspect start host=%s files=%d", host, len(l.files))
-			c, err = build(ctx, f, dest, m.library(), l)
+			c, err = buildWithProgress(ctx, f, dest, m.library(), l, func(name string) {
+				m.mu.Lock()
+				if m.cur == j {
+					j.pub.Source = name
+				}
+				m.mu.Unlock()
+			})
 			logx.Download("mega folder inspect finished host=%s candidates=%d folder_files=%d elapsed=%s error=%v", host, len(c.cands), len(c.folderFiles), time.Since(buildStarted).Round(time.Millisecond), err)
 		}
 		title := l.title

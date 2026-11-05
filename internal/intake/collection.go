@@ -471,6 +471,10 @@ type collection struct {
 // dictionaries (Sniff, over remoteArchive), and which are already installed
 // (markExisting, from names and sizes).
 func build(ctx context.Context, f Fetcher, dest string, lib []string, l listing) (collection, error) {
+	return buildWithProgress(ctx, f, dest, lib, l, nil)
+}
+
+func buildWithProgress(ctx context.Context, f Fetcher, dest string, lib []string, l listing, progress func(string)) (collection, error) {
 	files := l.files
 	if files == nil {
 		files = pickFiles(f, l.links)
@@ -525,7 +529,7 @@ func build(ctx context.Context, f Fetcher, dest string, lib []string, l listing)
 	}
 	sniffStarted := time.Now()
 	logx.Download("inspect folder dictionaries start entries=%d", len(entries))
-	cands, err := Sniff(&remoteArchive{ctx: ctx, f: f, entries: entries, files: byName})
+	cands, err := Sniff(&remoteArchive{ctx: ctx, f: f, entries: entries, files: byName, progress: progress})
 	logx.Download("inspect folder dictionaries finished entries=%d candidates=%d elapsed=%s error=%v", len(entries), len(cands), time.Since(sniffStarted).Round(time.Millisecond), err)
 	if err != nil {
 		return collection{}, err
@@ -792,10 +796,11 @@ func isMedia(name, mainExt string) bool {
 // is needed only for a name whose content decides (".md") and reads the head
 // of that one file, never the whole of it.
 type remoteArchive struct {
-	ctx     context.Context
-	f       Fetcher
-	entries []Entry
-	files   map[string]*remoteFile
+	ctx      context.Context
+	f        Fetcher
+	entries  []Entry
+	files    map[string]*remoteFile
+	progress func(string)
 }
 
 func (a *remoteArchive) Entries() []Entry { return a.entries }
@@ -806,6 +811,11 @@ func (a *remoteArchive) Open(name string) (io.ReadCloser, error) {
 	if rf == nil {
 		return nil, errors.New("no such file")
 	}
+	if a.progress != nil {
+		a.progress(rf.name)
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, megaRequestTimeout)
+	defer cancel()
 	started := time.Now()
 	logx.Download("inspect remote file start name=%q size=%d", rf.name, rf.size)
 	u, err := url.Parse(rf.url)
@@ -815,7 +825,7 @@ func (a *remoteArchive) Open(name string) (io.ReadCloser, error) {
 	}
 	var mf *megaFile
 	if id, key, ok := megaLink(u); ok {
-		mf, err = a.f.megaResolveContext(a.ctx, id, key, u.Query().Get("folder"))
+		mf, err = a.f.megaResolveContext(ctx, id, key, u.Query().Get("folder"))
 		if err != nil {
 			logx.Download("inspect remote file failed name=%q stage=resolve elapsed=%s error=%v", rf.name, time.Since(started).Round(time.Millisecond), err)
 			return nil, err
@@ -825,7 +835,7 @@ func (a *remoteArchive) Open(name string) (io.ReadCloser, error) {
 	if mf != nil {
 		target = mf.url.String()
 	}
-	req, err := http.NewRequestWithContext(a.ctx, http.MethodGet, target, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -527,6 +527,10 @@ function impRender(j){
       $("found").classList.add("hidden");
       return;
     }
+    if(j.phase==="checking"){
+      const text=j.source?tx("pages.checkingFolderFileHost",{name:j.source,host:j.host||tx("pages.site")}):tx("pages.checkingFolderHost",{host:j.host||tx("pages.site")});
+      impSay(text);$("found").classList.add("hidden");return;
+    }
     // No percentage when the server declared no length — a made-up one that
     // sticks is worse than a line that only says work is happening.
     const pct=j.total>0?Math.min(99,Math.floor(j.done*100/j.total))+"%":sizeMB(j.done||0);

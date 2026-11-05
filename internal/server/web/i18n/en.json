@@ -898,6 +898,8 @@
   "pages.connecting": "Connecting…",
   "pages.connectingTo": "Connecting to {host}…",
   "pages.readingFolderHost": "Reading the file list from {host}…",
+  "pages.checkingFolderHost": "Checking dictionary files from {host}…",
+  "pages.checkingFolderFileHost": "Checking {name} from {host}…",
   "pages.importFolderChecking": "Checking access and adding to Dictionary folders…",
   "pages.importFolderWriteDenied": "DictShelf cannot write to this folder. Choose another folder.",
   "pages.importFolderManaged": "Dictionary folders are controlled by the launch settings, so this folder cannot be added here.",
