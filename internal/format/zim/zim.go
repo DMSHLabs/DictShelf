@@ -263,10 +263,17 @@ func (d *Dict) Prefix(word string, limit int) ([]dict.Result, error) {
 
 // results renders entries, following redirects and dropping duplicates that
 // resolve to the same article.
+//
+// The walk is ours, so it is watched (internal/watchdog): this is where an
+// entry is read and its cluster decompressed, which is where a corrupt archive
+// stops moving. The record is the entry's own index in the archive's directory.
 func (d *Dict) results(idxs []int, limit int) ([]dict.Result, error) {
 	var out []dict.Result
 	seen := map[int]bool{}
+	records := d.watch("archive-records")
+	defer records.Done()
 	for _, i := range idxs {
+		records.Moved(int64(i))
 		src, err := d.c.entry(i)
 		if err != nil {
 			return nil, err

@@ -89,6 +89,15 @@ type DB struct {
 	Stats        Stats
 	versionBytes int // where the version file ends
 
+	// Progress, when set, is called with every posting's document id as the
+	// walks visit it: the movement a caller watching for a walk that stops
+	// needs (internal/watchdog). A reader that does not care leaves it nil, and
+	// the walks then cost one nil check per posting. It is called from the
+	// walk's own goroutine and must be cheap; it is the CALLER's business to
+	// set it before a walk and clear it after, because a database carries no
+	// idea of who is reading it.
+	Progress func(docid uint32)
+
 	// The index's own description - its language and stopwords - read on first
 	// search and kept, because it decides how every query is stemmed.
 	metaOnce sync.Once

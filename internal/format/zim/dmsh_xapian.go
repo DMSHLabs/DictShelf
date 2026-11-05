@@ -133,7 +133,7 @@ func (d *Dict) FullText(query string, limit int) ([]dict.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	res, err := db.Search(query)
+	res, err := d.searchIndex(db, query)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", dict.ErrUnsupported, err)
 	}
@@ -162,7 +162,10 @@ func (d *Dict) FullText(query string, limit int) ([]dict.Result, error) {
 	}
 	idxs := make([]int, 0, want)
 	seen := map[int]bool{}
+	records := d.watch("archive-records")
+	defer records.Done()
 	for _, h := range candidates {
+		records.Moved(int64(h.DocID))
 		path, err := db.DocPath(h.DocID)
 		if err != nil {
 			continue
@@ -178,5 +181,9 @@ func (d *Dict) FullText(query string, limit int) ([]dict.Result, error) {
 			break
 		}
 	}
+	// The candidates are resolved: the watch goes before the articles are read,
+	// or this finished loop would look like a stopped one while results() runs
+	// (its own watch is the one that names a stall there).
+	records.Done()
 	return d.results(idxs, 0)
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/watchdog"
 )
 
 var errHeadwordSearchComplete = errors.New("headword search limit reached")
@@ -165,7 +166,9 @@ func (s *Store) streamBrowseHeadwords(ctx context.Context, query string, mask bo
 		if compileErr != nil {
 			return compileErr
 		}
-		stream := newBrowseRowStream(s.meta.EntryCount, interval, batchSize, emit)
+		watch := s.watch("browse-headwords")
+		defer watch.Done()
+		stream := newBrowseRowStream(s.meta.EntryCount, interval, batchSize, emit, watch)
 		strategy := s.MaskCandidateStrategy(query)
 		if strategy == "exact_key" {
 			folded := dict.Fold(query)
@@ -219,11 +222,17 @@ func (s *Store) streamBrowseHeadwords(ctx context.Context, query string, mask bo
 	}
 	defer rows.Close()
 	terms := dict.HeadwordTermMatcher(query)
-	return streamBrowseRows(ctx, rows, terms, s.meta.EntryCount, emit)
+	return s.streamBrowseRows(ctx, rows, terms, emit)
 }
 
-func streamBrowseRows(ctx context.Context, rows *sql.Rows, matches func(string) bool, scanTotal int, emit func([]string, int, bool, int, int) error) error {
-	stream := newBrowseRowStream(scanTotal, time.Second, dict.MaskPageSize, emit)
+// streamBrowseRows streams one query's rows into the shared row stream. The
+// scan is ours, so it is watched (internal/watchdog): a headword walk that
+// stops moving is reported with the dictionary and the row it stopped on, and
+// the record is the number of rows scanned.
+func (s *Store) streamBrowseRows(ctx context.Context, rows *sql.Rows, matches func(string) bool, emit func([]string, int, bool, int, int) error) error {
+	watch := s.watch("browse-headwords")
+	defer watch.Done()
+	stream := newBrowseRowStream(s.meta.EntryCount, time.Second, dict.MaskPageSize, emit, watch)
 	if err := stream.rows(ctx, rows, matches); err != nil {
 		return err
 	}
@@ -240,10 +249,11 @@ type browseRowStream struct {
 	nextProgress time.Time
 	interval     time.Duration
 	batchSize    int
+	watch        *watchdog.Watch
 	emit         func([]string, int, bool, int, int) error
 }
 
-func newBrowseRowStream(scanTotal int, interval time.Duration, batchSize int, emit func([]string, int, bool, int, int) error) *browseRowStream {
+func newBrowseRowStream(scanTotal int, interval time.Duration, batchSize int, emit func([]string, int, bool, int, int) error, watch *watchdog.Watch) *browseRowStream {
 	if interval <= 0 {
 		interval = time.Second
 	}
@@ -251,7 +261,7 @@ func newBrowseRowStream(scanTotal int, interval time.Duration, batchSize int, em
 		batchSize = dict.MaskPageSize
 	}
 	return &browseRowStream{words: make([]string, 0, dict.MaskPageSize), scanTotal: scanTotal,
-		nextProgress: time.Now().Add(interval), interval: interval, batchSize: batchSize, emit: emit}
+		nextProgress: time.Now().Add(interval), interval: interval, batchSize: batchSize, watch: watch, emit: emit}
 }
 
 func (s *browseRowStream) rows(ctx context.Context, rows *sql.Rows, matches func(string) bool) error {
@@ -269,6 +279,7 @@ func (s *browseRowStream) rows(ctx context.Context, rows *sql.Rows, matches func
 		}
 		s.previous = word
 		s.scanned++
+		s.watch.Moved(int64(s.scanned))
 		if matches(word) {
 			s.words = append(s.words, word)
 			s.total++
@@ -324,10 +335,13 @@ func (s *Store) FindHeadwords(ctx context.Context, query string, offset, limit i
 			return nil, 0, err
 		}
 		defer rows.Close()
+		watch := s.watch("browse-headwords")
+		defer watch.Done()
 		matcher := dict.HeadwordTermMatcher(query)
 		words := make([]string, 0, limit)
 		total := 0
 		previous := ""
+		scanned := 0
 		for rows.Next() {
 			if err := ctx.Err(); err != nil {
 				return nil, 0, err
@@ -336,6 +350,8 @@ func (s *Store) FindHeadwords(ctx context.Context, query string, offset, limit i
 			if err := rows.Scan(&word); err != nil {
 				return nil, 0, err
 			}
+			scanned++
+			watch.Moved(int64(scanned))
 			if word == previous || !matcher(word) {
 				continue
 			}
@@ -437,8 +453,11 @@ func (s *Store) FindHeadwordsMode(ctx context.Context, query, mode string, offse
 		return nil, 0, nil, err
 	}
 	defer rows.Close()
+	watch := s.watch("browse-headwords")
+	defer watch.Done()
 	words := make([]string, 0, limit)
 	total := 0
+	scanned := 0
 	for rows.Next() {
 		if err := ctx.Err(); err != nil {
 			return nil, 0, nil, err
@@ -447,6 +466,8 @@ func (s *Store) FindHeadwordsMode(ctx context.Context, query, mode string, offse
 		if err := rows.Scan(&word); err != nil {
 			return nil, 0, nil, err
 		}
+		scanned++
+		watch.Moved(int64(scanned))
 		if !matcher(word) {
 			continue
 		}
@@ -519,7 +540,7 @@ func (s *Store) StreamBrowseHeadwordsMode(ctx context.Context, query, mode strin
 	if err != nil {
 		return err
 	}
-	return streamBrowseRows(ctx, rows, matcher, s.meta.EntryCount, emit)
+	return s.streamBrowseRows(ctx, rows, matcher, emit)
 }
 
 func buildWholeWordMatch(input, column string) string {
@@ -607,7 +628,9 @@ func (s *Store) FindHeadwordsMaskWithinMode(ctx context.Context, query, within, 
 	}
 	words := make([]string, 0, limit)
 	positions := make([]int, 0, limit)
-	total, basePosition := 0, 0
+	total, basePosition, scanned := 0, 0, 0
+	watch := s.watch("browse-headwords")
+	defer watch.Done()
 	var sections dict.MaskSections
 	visit := func(rows *sql.Rows) error {
 		defer rows.Close()
@@ -619,6 +642,8 @@ func (s *Store) FindHeadwordsMaskWithinMode(ctx context.Context, query, within, 
 			if err := rows.Scan(&word); err != nil {
 				return err
 			}
+			scanned++
+			watch.Moved(int64(scanned))
 			if !re.MatchString(word) {
 				continue
 			}
@@ -816,12 +841,17 @@ func (s *Store) PageWithStats(offset, n int) ([]string, BrowsePageStats, error) 
 // StreamBrowseMaskAlphabet builds one jump label for every paged headword
 // block. Browse's regular alphabet is intentionally sparse; the Wildcards
 // all-words ribbon must instead address each MaskPageSize block.
+//
+// The walk is ours, so it is watched (internal/watchdog); the record is the
+// number of rows scanned.
 func (s *Store) StreamBrowseMaskAlphabet(ctx context.Context, progress func(scanned, total int) error) ([]dict.Letter, int, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT w FROM entry WHERE `+browseWhere+browseOrder)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer rows.Close()
+	watch := s.watch("browse-alphabet")
+	defer watch.Done()
 	sections := dict.MaskSections{}
 	scanned, scanTotal := 0, max(0, s.meta.EntryCount)
 	for rows.Next() {
@@ -834,6 +864,7 @@ func (s *Store) StreamBrowseMaskAlphabet(ctx context.Context, progress func(scan
 		}
 		sections.Add(word)
 		scanned++
+		watch.Moved(int64(scanned))
 		if progress != nil && scanned%30000 == 0 {
 			if err := progress(scanned, scanTotal); err != nil {
 				return nil, scanned, err

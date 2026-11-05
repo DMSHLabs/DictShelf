@@ -103,6 +103,10 @@ func (db *DB) walkPostings(term string, chunkPrefix []byte, fn func(docid, wdf u
 		span    uint32
 		key     = []byte(term)
 	)
+	// Movement is reported per posting, which is the finest step this walk has:
+	// a caller watching for a stop (internal/watchdog) sees every document the
+	// list visits, and a list that is merely long is not a stopped one.
+	progress := db.Progress
 	if docFreq, p, err = unpackUint(tag, p); err != nil {
 		return 0, 0, false, fmt.Errorf("glass: term %q: document frequency: %w", term, err)
 	}
@@ -126,6 +130,9 @@ func (db *DB) walkPostings(term string, chunkPrefix []byte, fn func(docid, wdf u
 			return 0, 0, false, fmt.Errorf("glass: term %q: first frequency: %w", term, err)
 		}
 		for {
+			if progress != nil {
+				progress(did)
+			}
 			if !fn(did, wdf) {
 				return docFreq, collFreq, false, nil
 			}

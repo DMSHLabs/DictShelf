@@ -32,6 +32,8 @@ func (s *Store) EachEntry(fn func(headword string, alts []string, body string) e
 		return err
 	}
 	defer aliases.Close()
+	watch := s.watch("entry-scan")
+	defer watch.Done()
 
 	var aID int64
 	var aWord string
@@ -54,6 +56,7 @@ func (s *Store) EachEntry(fn func(headword string, alts []string, body string) e
 		if err := entries.Scan(&id, &w, &body); err != nil {
 			return err
 		}
+		watch.Moved(id)
 		// An alias whose entry is gone would otherwise be attributed to the
 		// next entry that happens to follow it; skip past instead.
 		for aOK && aID < id {

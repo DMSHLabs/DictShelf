@@ -44,7 +44,7 @@ path is in `../DictShelf_Priv/build-tools.md`.
 - `internal/dict` — the format-agnostic core: interfaces, format registry, discovery.
 - `internal/format/<fmt>` — `mdx`, `stardict`, `slob`, `dsl`, `lsd`, `bgl`, `wmd`, `zim`. Each implements both `Dictionary` (runtime lookup) and `Reader` (one-shot ingest scan).
 - `internal/store` — the ingested SQLite backend: schema, ingest, library folders, media, `Reconcile`, and the fork's `dmsh_*` pieces (mask ranges, article results, articles split/rebuild).
-- `internal/search` — the per-dictionary query and the streaming fan-out; `internal/ftsq` lowers a typed query into the readings; `internal/hilite` marks the matched spans.
+- `internal/search` — the per-dictionary query and the streaming fan-out; `internal/ftsq` lowers a typed query into the readings; `internal/hilite` marks the matched spans; `internal/watchdog` reports a loop that is ours when it stops moving (a diagnostic, never a clock or a cancellation).
 - `internal/server` — the persistent HTTP server, the API and the embedded UI (`web/index.html`, `web/setup.html`, `web/frame.js`, `web/openapi.yaml`).
 - `internal/intake` — arbitrary bytes (archive, URL, folder) → candidate dictionaries → installed; `internal/config` — flag > env > toml layering; `internal/fsx` — the file handling every package shares.
 - `internal/lang`, `internal/morph`, `internal/lemmas` — the language a dictionary is indexed in, inflection → dictionary form (O3), and the lemma data that morph reads (D88).

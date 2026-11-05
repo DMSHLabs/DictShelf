@@ -120,6 +120,11 @@ func (s *Store) StreamArticleIDs(ctx context.Context, query, mode, fullTextMatch
 	if rows != nil {
 		defer rows.Close()
 	}
+	// The scan is ours, so it is watched (internal/watchdog); the MATCH that
+	// produced the hits is opaque and is not (indexconst). The record is the
+	// entry id being visited.
+	watch := s.watch("article-ids")
+	defer watch.Done()
 	// The pages are built the same way whether the rows came from one query or
 	// from two: the first hit goes out alone (a search must paint something
 	// immediately), then a page every 300.
@@ -144,6 +149,7 @@ func (s *Store) StreamArticleIDs(ctx context.Context, query, mode, fullTextMatch
 			if err := ctx.Err(); err != nil {
 				return err
 			}
+			watch.Moved(h.ID)
 			if err := add(h.ID, h.W); err != nil {
 				return err
 			}
@@ -159,6 +165,7 @@ func (s *Store) StreamArticleIDs(ctx context.Context, query, mode, fullTextMatch
 		if err := rows.Scan(&id, &word); err != nil {
 			return err
 		}
+		watch.Moved(id)
 		if err := add(id, word); err != nil {
 			return err
 		}
@@ -237,6 +244,8 @@ func (s *Store) EntryIDsForHeadwords(ctx context.Context, words []string) ([]int
 	}
 	out := make([]int64, 0, len(words))
 	seen := make(map[int64]bool, len(words))
+	watch := s.watch("article-id-lookup")
+	defer watch.Done()
 	for start := 0; start < len(words); start += entryIDBatch {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -277,6 +286,7 @@ func (s *Store) EntryIDsForHeadwords(ctx context.Context, words []string) ([]int
 			seen[id] = true
 			out = append(out, id)
 		}
+		watch.Moved(int64(len(out)))
 	}
 	return out, nil
 }
