@@ -626,7 +626,7 @@ func buildWithProgress(ctx context.Context, f Fetcher, dest string, lib []string
 			extraGroups[strings.ToLower(ex.Name)] = ex.row
 		}
 		for i, ex := range c.extras {
-			logx.Download("collection extra index=%d name=%q need=%d size=%d row=%d", i, ex.Name, ex.Need, ex.Size, ex.row)
+			logx.Download("collection extra index=%d name=%q need=%s size=%d row=%d", i, ex.Name, ex.Need, ex.Size, ex.row)
 		}
 		for _, rf := range l.files {
 			row := FolderFile{Name: rf.name, Size: rf.size, Group: -1, Extra: -1}
