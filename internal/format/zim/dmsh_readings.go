@@ -89,7 +89,7 @@ func (d *Dict) verifiedFullText(query string, limit, maxCheck int, keep func(tok
 	if err != nil {
 		return nil, err
 	}
-	res, err := db.Search(query)
+	res, err := d.searchIndex(db, query)
 	if err != nil {
 		return nil, err
 	}
@@ -102,6 +102,8 @@ func (d *Dict) verifiedFullText(query string, limit, maxCheck int, keep func(tok
 	var out []dict.Result
 	checked := 0
 	var bound error
+	records := d.watch("archive-records")
+	defer records.Done()
 	for _, h := range res.Hits {
 		if checked >= maxCheck || len(out) >= limit {
 			if checked >= maxCheck && checked < len(res.Hits) {
@@ -109,6 +111,7 @@ func (d *Dict) verifiedFullText(query string, limit, maxCheck int, keep func(tok
 			}
 			break
 		}
+		records.Moved(int64(h.DocID))
 		path, err := db.DocPath(h.DocID)
 		if err != nil {
 			continue
@@ -296,11 +299,13 @@ func (d *Dict) streamHeadwords(query string, maxCheck int, keep func(tokens []st
 	if err != nil {
 		return err
 	}
-	res, err := db.Search(query)
+	res, err := d.searchIndex(db, query)
 	if err != nil {
 		return err
 	}
 	checked := 0
+	records := d.watch("archive-records")
+	defer records.Done()
 	for _, h := range res.Hits {
 		if keep != nil && maxCheck > 0 && checked >= maxCheck {
 			// The bound, and the honest half of it: the caller is told that the
@@ -308,6 +313,7 @@ func (d *Dict) streamHeadwords(query string, maxCheck int, keep func(tokens []st
 			// here, exactly like a finished walk.
 			return fmt.Errorf("%w: %d candidates, %d read", ErrCheckBound, len(res.Hits), checked)
 		}
+		records.Moved(int64(h.DocID))
 		path, err := db.DocPath(h.DocID)
 		if err != nil {
 			continue

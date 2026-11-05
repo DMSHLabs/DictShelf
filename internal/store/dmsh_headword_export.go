@@ -11,12 +11,14 @@ import (
 )
 
 // ExportHeadwords streams Browse-visible titles, including aliases and repeated titles.
-func (s *Store) ExportHeadwords(ctx context.Context, out io.Writer, progress func(int64)) error {
+func (s *Store) ExportHeadwords(ctx context.Context, out io.Writer, report func(int64)) error {
 	rows, err := s.db.QueryContext(ctx, "SELECT w FROM entry WHERE "+browseWhere+browseOrder)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
+	watch := s.watch("headword-export")
+	defer watch.Done()
 	var count int64
 	clean := strings.NewReplacer("\r", " ", "\n", " ")
 	for rows.Next() {
@@ -31,13 +33,14 @@ func (s *Store) ExportHeadwords(ctx context.Context, out io.Writer, progress fun
 			return err
 		}
 		count++
+		watch.Moved(count)
 		if count%4096 == 0 {
-			progress(count)
+			report(count)
 		}
 	}
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	progress(count)
+	report(count)
 	return ctx.Err()
 }
