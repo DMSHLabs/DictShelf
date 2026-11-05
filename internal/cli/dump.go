@@ -55,7 +55,7 @@ func cmdDump(args []string) error {
 	fs.StringVar(&modeFlag, "mode", "html", "md only: html (each article's HTML kept) or clean (markdown only, lossy)")
 	fs.StringVar(&compress, "compress", "", "md only: gz")
 	fs.StringVar(&resFlag, "resources", "all", "all, text (only .css, .js and other text files), or none")
-	fs.Var(&include, "include", "write only the resources that match this pattern (as `wudict res` reads one); repeat for several")
+	fs.Var(&include, "include", "write only the resources that match this pattern (as `dictshelf res` reads one); repeat for several")
 	fs.Var(&exclude, "exclude", "do not write the resources that match this pattern; repeat for several")
 	articles := fs.Bool("articles", true, "write the articles; -articles=false writes the resources only")
 	fs.Parse(args)

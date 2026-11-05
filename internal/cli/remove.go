@@ -42,7 +42,7 @@ func cmdRemove(args []string) error {
 	keepIndex := fs.Bool("keep-index", false, "delete the original files only, leaving the prepared dictionary")
 	fs.Parse(args)
 	if fs.NArg() != 1 {
-		return fmt.Errorf("usage: wudict rm [-f] [-keep-index] <name|path>")
+		return fmt.Errorf("usage: dictshelf rm [-f] [-keep-index] <name|path>")
 	}
 	dropPrepared, dropSource := !*keepIndex, true
 
@@ -60,7 +60,7 @@ func cmdRemove(args []string) error {
 		}
 		if len(allSources) > 0 && len(dict.CompanionMedia(allSources[0])) > 0 &&
 			!fsx.FileExists(store.MediaDBPath(preparedDir)) {
-			return fmt.Errorf("pack media for %q first (wudict ingest -full) - its images and audio are still only in the original files", name)
+			return fmt.Errorf("pack media for %q first (dictshelf ingest -full) - its images and audio are still only in the original files", name)
 		}
 	}
 

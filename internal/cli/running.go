@@ -128,7 +128,7 @@ func announceRunning(inst *runningInstance, url string, wantDirs []string, willO
 	out := logx.Output()
 	const bar = "========================================================================"
 	fmt.Fprintf(out, "\n%s\n", bar)
-	fmt.Fprintf(out, "  wudict IS ALREADY RUNNING  --  this launch is doing nothing\n")
+	fmt.Fprintf(out, "  dictshelf IS ALREADY RUNNING  --  this launch is doing nothing\n")
 	fmt.Fprintf(out, "%s\n\n", bar)
 
 	if inst.Version != "" && inst.Version != Version {

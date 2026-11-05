@@ -159,7 +159,7 @@ func TestCleanFailureMessage(t *testing.T) {
 	}
 	want := `entry "run" (#1234): a heading cannot be written as clean markdown: it would read as the start of an entry
 hint: keep the dictionary's HTML instead:
-  wudict dump -format md -mode html -o out '/dicts/My Dict.mdx'`
+  dictshelf dump -format md -mode html -o out '/dicts/My Dict.mdx'`
 	if got := f.Error(); got != want {
 		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}
