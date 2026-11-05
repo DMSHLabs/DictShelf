@@ -57,7 +57,7 @@
         <div id="found" class="hidden">
           <p class="formats hidden" id="candAll">{{T:pages.select}} <a href="#" id="candAllOn">{{T:pages.selectAll}}</a> · <a href="#" id="candAllOff">{{T:pages.selectNone}}</a></p>
           <div id="cands"></div><div id="extras" class="hidden"></div>
-          <div id="folderFilePane"><div id="folderFileHeader"><span></span><span>{{T:pages.folderFileName}}</span><span>{{T:pages.folderFileSize}}</span></div><div id="folderFileRows"></div><div id="folderFileSearch" class="list-search-dock" role="search"></div></div>
+          <div id="folderFilesKeepHome" hidden></div>
           <label class="keep" id="srcKeepWrap"><input type="checkbox" id="srcKeep" checked>
             <span>{{T:pages.keep}} <b id="srcName"></b> {{T:pages.afterwards}} <em>{{T:pages.keepFailed}}</em></span></label>
           <button type="button" id="install" class="btn">{{T:pages.install}}</button>
@@ -76,6 +76,24 @@
       <p id="migrationError" class="migration-error" role="alert" hidden></p>
       <div class="migration-actions" id="migrationActions"></div>
     </section>
+  </div>
+</dialog>
+<dialog id="folderFilesDialog" lang="{{T:locale}}" class="group-dialog panel-card folder-files-dialog" aria-labelledby="folderFilesTitle">
+  <div class="folder-files-shell">
+    <header class="folder-files-top"><h2 id="folderFilesTitle">{{T:pages.folderFilesTitle}}</h2></header>
+    <div id="folderFileHeader" class="folder-files-columns">
+      <span aria-hidden="true"></span>
+      <button type="button" id="folderFileSortName" aria-sort="ascending">{{T:pages.folderFileName}} <span class="sort-indicator" aria-hidden="true">↑</span></button>
+      <button type="button" id="folderFileSortSize" aria-sort="none">{{T:pages.folderFileSize}} <span class="sort-indicator" aria-hidden="true"></span></button>
+    </div>
+    <div id="folderFileRows" class="folder-files-rows"></div>
+    <div id="folderFilesKeep"></div>
+    <div id="folderFileSearch" class="list-search-dock" role="search"></div>
+    <p id="folderFilesStatus" role="status" aria-live="polite"></p>
+    <footer class="folder-files-actions">
+      <button type="button" class="btn" id="folderFilesCancel">{{T:pages.cancel}}</button>
+      <button type="button" class="btn" id="folderFilesInstall" disabled>{{T:pages.install}}</button>
+    </footer>
   </div>
 </dialog>
 <link rel="stylesheet" href="/assets/folders-dialog.css?v={{FOLDERSDIALOGCSS}}">

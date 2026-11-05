@@ -523,6 +523,7 @@ Background preparation reuses fresh indexes matching the requested plan and remo
 
 - `GET /api/config` — folders with per-root status, library dir + prepared count, the absolute path of the config file in use, the origin of `DICT_DIR` (flag/env/file/default) and whether saving to the file can take effect, the platform reveal label, and whether the caller is on loopback. Windows reports `wudict2.toml`; other platforms report `wudict.toml`.
 - `GET /setup` — compatibility URL that redirects to `/?manageFolders=1`, opening the in-app folder editor. The same dialog is reachable from the empty-state link and app menu; folder management and dictionary import are separate tabs in that dialog.
+- MEGA folder intake lists direct files only in a full-window selection dialog. The file-name header sorts A–Z/Z–A; the size header sorts dictionary groups by their combined file size and keeps each dictionary's files together. Selecting a dictionary selects its associated files, with optional media independently removable.
 - `GET /api/reveal?path=` — opens the platform file manager (`open -R` / `explorer /select,` / `xdg-open <dir>`). Refused unless the path is one the UI already displays **and** the request comes from loopback.
 - Panel: a collapsed "Folders & configuration" section carries all of the above plus **Rescan folders**, which was moved out of the panel header — it re-walks every folder and re-opens every dictionary, too expensive to be a one-click curiosity.
 

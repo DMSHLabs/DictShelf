@@ -926,6 +926,7 @@
   "pages.file": "файл",
   "pages.folderFileName": "Имя файла",
   "pages.folderFileSize": "Размер",
+  "pages.folderFilesTitle": "Файлы в каталоге",
   "pages.downloadedFiles": "загруженные файлы",
   "pages.nothingInstallable": "✕ Здесь нет словарей для установки",
   "pages.needed": "обязательно — без этого файла словарь не работает",

@@ -914,6 +914,7 @@
   "pages.file": "the file",
   "pages.folderFileName": "File name",
   "pages.folderFileSize": "Size",
+  "pages.folderFilesTitle": "Files in folder",
   "pages.downloadedFiles": "the downloaded files",
   "pages.nothingInstallable": "✕ nothing here can be installed",
   "pages.needed": "needed — it will not work without this",

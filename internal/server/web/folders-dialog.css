@@ -8,6 +8,11 @@ dialog#foldersDialog.group-dialog.panel-card.workspace-dialog{position:fixed;ins
   background:var(--paper-bg,var(--bg));box-shadow:none;overflow:hidden}
 dialog#foldersDialog.group-dialog.panel-card.workspace-dialog:not([open]){display:none}
 dialog#foldersDialog.group-dialog.panel-card.workspace-dialog[open]{display:flex}
+dialog#folderFilesDialog.group-dialog.panel-card.folder-files-dialog{position:fixed;inset:var(--wd-inset-top,0px) 0 var(--wd-inset-bottom,0px);
+  display:none;flex-direction:column;width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:10px;border:0;border-radius:0;
+  background:var(--paper-bg,var(--bg));box-shadow:none;overflow:hidden}
+dialog#folderFilesDialog.group-dialog.panel-card.folder-files-dialog[open]{display:flex}
+dialog#folderFilesDialog::backdrop{background:color-mix(in srgb,var(--bg) 46%,transparent);backdrop-filter:blur(2px)}
 .folders-dialog-shell{position:relative;box-sizing:border-box;display:flex;flex-direction:column;gap:.65em;
   width:100%;height:100%;min-height:0;padding:1em;border:1px solid var(--line);border-radius:12px;
   background:var(--paper-bg,var(--bg));overflow:hidden}
@@ -116,11 +121,30 @@ html:not([data-folder-picker]) #foldersDialog .frow .pick{display:none}
 .folders-dialog-scroll #extras{margin:.618em 0 0}.folders-dialog-scroll #extras .head{font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label);margin:0 0 .3em}
 .folders-dialog-scroll #folderFilePane{display:none;flex-direction:column;height:38vh;min-height:180px;margin:.618em 0 0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .folders-dialog-scroll #folderFileHeader{display:grid;grid-template-columns:2em minmax(0,1fr) auto;gap:.55em;padding:.35em .55em;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem);border-bottom:1px solid var(--line)}
-.folders-dialog-scroll #folderFileRows{flex:1;min-height:0;overflow:auto}
-.folders-dialog-scroll #folderFileRows .folder-file{display:grid;grid-template-columns:2em minmax(0,1fr) auto;gap:.55em;align-items:center;padding:.38em .55em;border-bottom:1px solid color-mix(in srgb,var(--line) 45%,transparent)}
-.folders-dialog-scroll #folderFileRows .folder-file .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.folders-dialog-scroll #folderFileRows .folder-file .n{font-variant-numeric:tabular-nums;color:var(--label)}
-.folders-dialog-scroll #folderFileRows .folder-file.disabled{opacity:.55}
+.folder-files-shell{box-sizing:border-box;display:flex;flex-direction:column;gap:.55em;width:100%;height:100%;min-height:0;padding:1em;border:1px solid var(--line);border-radius:12px;background:var(--paper-bg,var(--bg));overflow:hidden}
+html[data-shell-image] dialog#folderFilesDialog,html[data-shell-image] .folder-files-shell{background-color:var(--paper-bg);
+  background-image:linear-gradient(rgba(255,245,220,.18),rgba(255,245,220,.18)),var(--paper-bk-image,none);
+  background-size:100% 100%,100% 100%;background-position:center;background-repeat:no-repeat;background-attachment:fixed}
+html:has(link[data-preset="sepia"]) dialog#folderFilesDialog,html:has(link[data-preset="sepia"]) .folder-files-shell{background:var(--bg)}
+.folder-files-top{display:flex;align-items:center;flex:none;min-height:calc(var(--ui-main-control-height) * 1em);border-bottom:1px solid var(--line)}
+.folder-files-top h2{font-size:calc(var(--ui-font-title) * 1rem);margin:0}
+.folder-files-columns{display:grid;grid-template-columns:2em minmax(0,1fr) minmax(5em,auto);gap:.55em;align-items:center;flex:none;padding:.35em .55em;border:1px solid var(--line);border-radius:8px 8px 0 0;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem)}
+.folder-files-columns button{display:flex;align-items:center;gap:.45em;min-width:0;margin:0;padding:.15em .25em;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.folder-files-columns button:last-child{justify-content:flex-end;text-align:right}
+.folder-files-columns button:focus-visible{outline:2px solid var(--focus);outline-offset:1px;border-radius:4px}
+.folder-files-columns .sort-indicator{min-width:1em;color:var(--accent);font-variant-numeric:tabular-nums}
+.folder-files-rows{flex:1;min-height:0;overflow:auto;border:1px solid var(--line);border-top:0;border-radius:0 0 8px 8px}
+.folder-files-rows .folder-file{display:grid;grid-template-columns:2em minmax(0,1fr) minmax(5em,auto);gap:.55em;align-items:center;padding:.38em .55em;border-bottom:1px solid color-mix(in srgb,var(--line) 45%,transparent)}
+.folder-files-rows .folder-file .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.folder-files-rows .folder-file .n{font-variant-numeric:tabular-nums;color:var(--label);text-align:right}
+.folder-files-rows .folder-file.disabled{opacity:.55}
+.folder-files-shell #folderFilesKeep{flex:none}.folder-files-shell .keep{display:flex;gap:.5em;align-items:flex-start;color:var(--label);margin:0}
+.folder-files-shell .keep input{margin:.25em 0 0}.folder-files-shell .keep em{font-style:normal;color:var(--label-quiet);font-size:calc(var(--ui-hint-font-size) * 1rem)}
+.folder-files-shell #folderFilesStatus{flex:none;min-height:1.4em;margin:0;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem)}
+.folder-files-shell #folderFilesStatus.err{color:var(--danger)}.folder-files-shell #folderFilesStatus.ok{color:var(--safe)}
+.folder-files-actions{display:flex;justify-content:space-between;align-items:center;gap:1em;flex:none;padding-top:.5em;border-top:1px solid var(--line)}
+.folder-files-actions #folderFilesCancel{margin-right:auto}.folder-files-actions #folderFilesInstall{margin-left:auto}
+.folder-files-actions .btn{box-sizing:border-box;min-width:calc(var(--ui-main-control-height) * 2em);min-height:calc(var(--ui-edit_control-height) * 1.5rem);font-size:calc(var(--ui-edit_control-font) * 1rem)}
 .folders-dialog-scroll #impMsg{font-size:calc(var(--ui-hint-font-size) * 1rem);margin-top:.618em}
 .folders-dialog-scroll #impMsg.ok{color:var(--safe)}.folders-dialog-scroll #impMsg.err{color:var(--danger)}
 .folders-dialog-scroll #save,.folders-dialog-scroll #install{box-sizing:border-box;min-height:calc(var(--ui-edit_control-height) * 1.5rem);font-size:calc(var(--ui-edit_control-font) * 1rem)}
@@ -129,7 +153,7 @@ html:not([data-folder-picker]) #foldersDialog .frow .pick{display:none}
 .folders-setup-status{display:flex;align-items:center;gap:.6em;flex:none;min-width:0;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem)}
 .folders-setup-status span{flex:1;min-width:0;overflow-wrap:anywhere}.folders-setup-status[hidden]{display:none}
 .folders-setup-status button{flex:none}
-@media(max-width:600px){dialog#foldersDialog.group-dialog.panel-card.workspace-dialog{padding:10px}.folders-dialog-shell{padding:1em .8em}}
+@media(max-width:600px){dialog#foldersDialog.group-dialog.panel-card.workspace-dialog,dialog#folderFilesDialog.group-dialog.panel-card.folder-files-dialog{padding:10px}.folders-dialog-shell,.folder-files-shell{padding:1em .8em}}
 @media(max-width:520px){.folders-dialog-scroll .frow{flex-wrap:wrap;row-gap:.15em;margin-bottom:.7em}
   .folders-dialog-scroll .frow .brk{display:block;flex:0 0 100%;height:0}
   .folders-dialog-scroll .frow input{flex:1 1 0}

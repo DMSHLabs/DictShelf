@@ -24,7 +24,7 @@ if(foldersDialogEmbedded){
     else if(event.data?.type==="wudict-archive-picked"){const callback=archivePicked;archivePicked=null;if(callback&&typeof event.data.path==="string")callback(event.data.path)}
   });
 }
-const $=id=>foldersDialogEmbedded?foldersDialogRoot.querySelector("#"+id):document.getElementById(id);
+const $=id=>foldersDialogEmbedded?(foldersDialogRoot.querySelector("#"+id)||document.getElementById(id)):document.getElementById(id);
 const tx=window.wudictI18n.t;
 const nativeSetupCall=wudictDialogMode&&typeof parent.wudictNativeCall==="function"
   ? parent.wudictNativeCall.bind(parent) : window.wudictNativeCall;
@@ -242,7 +242,7 @@ let impTimer=null,impBusy=false;
 // decimal, the rule of index.html's mb and the server's logx.Size
 const sizeMB=n=>n<1e3?n+" B":n<1e6?Math.round(n/1e3)+" kB":n<1e7?(n/1e6).toFixed(1)+" MB":n<1e9?Math.round(n/1e6)+" MB":(n/1e9).toFixed(1)+" GB";
 
-function impSay(text,cls){const m=$("impMsg");m.textContent=text;m.className=cls||""}
+function impSay(text,cls){const m=megaFolderMode?document.getElementById("folderFilesStatus"):$("impMsg");if(!m)return;m.textContent=text;m.className=cls||""}
 
 async function impGET(){
   try{ return window.wudictAndroidGo?androidIntakeCall("status") : typeof nativeSetupCall==="function"
@@ -354,32 +354,49 @@ async function impFetch(){
    four files and a resource folder, and the list must not become the row. The
    same cut as the phone's, so the two surfaces say the same sentence. */
 const FILES_SHOWN=3;
-let folderFileGroups=new Set(), folderSearch=null;
-function showFolderFiles(j){
-  const pane=$("folderFilePane"), rows=$("folderFileRows"), enabled=!!j.megaFolder;
-  pane.style.display=enabled?"flex":"none";
-  $("cands").style.display=enabled?"none":""; $("extras").style.display=enabled?"none":"";
-  if(!enabled)return;
-  rows.textContent=""; folderFileGroups=new Set();
-  (j.candidates||[]).forEach((c,i)=>{if(!c.missing?.length&&!c.unchanged)folderFileGroups.add(i)});
-  if(!folderSearch)folderSearch=window.wudictListSearch.create({root:rows,itemSelector:".folder-file",dock:$("folderFileSearch"),highlightSelector:".nm",initiallyFiltering:true});
-  (j.folderFiles||[]).forEach(f=>{
-    const row=el("label","folder-file"+(f.selectable?"":" disabled"));
-    const cb=el("input");cb.type="checkbox";cb.disabled=!f.selectable;cb.dataset.group=f.group;cb.dataset.extra=f.extra;cb.checked=f.selectable&&folderFileGroups.has(f.group);
+let folderFileGroups=new Set(),folderFileExtras=new Set(),folderSearch=null,megaFolderMode=false,folderFileEntries=[],folderFileSort={field:"name",direction:1};
+function folderFileGroup(f){return f.group>=0?"g:"+f.group:"f:"+f.name}
+function folderFileOrder(){
+  const compareName=(a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:"base"});
+  if(folderFileSort.field==="name")return folderFileEntries.slice().sort((a,b)=>compareName(a,b)*folderFileSort.direction);
+  const groups=new Map();
+  for(const f of folderFileEntries){const key=folderFileGroup(f);if(!groups.has(key))groups.set(key,{total:0,name:f.name,rows:[]});const g=groups.get(key);g.total+=Number(f.size)||0;if(compareName({name:f.name},{name:g.name})<0)g.name=f.name;g.rows.push(f)}
+  return [...groups.values()].sort((a,b)=>(a.total-b.total)*folderFileSort.direction||compareName(a,b)).flatMap(g=>g.rows.sort(compareName));
+}
+function renderFolderFileRows(){
+  const rows=document.getElementById("folderFileRows");rows.textContent="";
+  for(const f of folderFileOrder()){
+    const row=el("label","folder-file"+(f.selectable?"":" disabled")),cb=el("input");
+    cb.type="checkbox";cb.disabled=!f.selectable;cb.dataset.group=f.group;cb.dataset.extra=f.extra;
+    cb.checked=f.selectable&&(f.extra>=0?folderFileExtras.has(f.extra):folderFileGroups.has(f.group));
     row.appendChild(cb);row.appendChild(el("span","nm",f.name));row.appendChild(el("span","n",f.size?sizeMB(f.size):""));
     cb.addEventListener("change",()=>{
-      if(cb.checked){folderFileGroups.add(f.group);for(const other of rows.querySelectorAll('input[type="checkbox"]'))if(+other.dataset.group===f.group)other.checked=true}
-      else if(f.extra>=0){/* Large media can be left out after selecting its dictionary. */}
-      else {folderFileGroups.delete(f.group);for(const other of rows.querySelectorAll('input[type="checkbox"]'))if(+other.dataset.group===f.group)other.checked=false}
-      window.__folderExtras=[...rows.querySelectorAll('input[type="checkbox"]:checked')].filter(x=>+x.dataset.extra>=0&&folderFileGroups.has(+x.dataset.group)).map(x=>+x.dataset.extra);
-      updateFolderInstall()
-    });
-    rows.appendChild(row);
-  });
-  window.__folderExtras=[...rows.querySelectorAll('input[type="checkbox"]:checked')].filter(x=>+x.dataset.extra>=0&&folderFileGroups.has(+x.dataset.group)).map(x=>+x.dataset.extra);
-  folderSearch.refresh(); updateFolderInstall();
+      if(f.extra>=0){if(cb.checked)folderFileExtras.add(f.extra);else folderFileExtras.delete(f.extra)}
+      else if(cb.checked){folderFileGroups.add(f.group);for(const other of folderFileEntries)if(other.group===f.group&&other.selectable&&other.extra>=0)folderFileExtras.add(other.extra)}
+      else{folderFileGroups.delete(f.group);for(const other of folderFileEntries)if(other.group===f.group&&other.extra>=0)folderFileExtras.delete(other.extra)}
+      renderFolderFileRows();window.__folderExtras=[...folderFileExtras].sort((a,b)=>a-b);updateFolderInstall();
+    });rows.appendChild(row);
+  }
+  if(folderSearch)folderSearch.refresh();
 }
-function updateFolderInstall(){const ok=folderFileGroups.size>0;$("install").disabled=!ok}
+function setFolderFileSort(field){
+  if(folderFileSort.field===field)folderFileSort.direction*=-1;else folderFileSort={field,direction:1};
+  for(const [key,id] of [["name","folderFileSortName"],["size","folderFileSortSize"]]){const b=document.getElementById(id),active=folderFileSort.field===key;b.setAttribute("aria-sort",active?(folderFileSort.direction===1?"ascending":"descending"):"none");b.querySelector(".sort-indicator").textContent=active?(folderFileSort.direction===1?"↑":"↓"):""}
+  renderFolderFileRows();
+}
+function showFolderFiles(j){
+  if(!j.megaFolder)return;
+  megaFolderMode=true;folderFileGroups=new Set();folderFileExtras=new Set();folderFileEntries=j.folderFiles||[];folderFileSort={field:"name",direction:1};
+  (j.candidates||[]).forEach((c,i)=>{if(!c.missing?.length&&!c.unchanged)folderFileGroups.add(i)});
+  for(const f of folderFileEntries)if(f.selectable&&f.extra>=0&&folderFileGroups.has(f.group))folderFileExtras.add(f.extra);
+  const keep=$("srcKeepWrap"),keepSlot=document.getElementById("folderFilesKeep");if(keep&&keepSlot)keepSlot.appendChild(keep);keep.style.display=j.keep==="ask"?"":"none";
+  if(!folderSearch)folderSearch=window.wudictListSearch.create({root:document.getElementById("folderFileRows"),itemSelector:".folder-file",dock:document.getElementById("folderFileSearch"),highlightSelector:".nm",initiallyFiltering:true});else folderSearch.clear();
+  for(const field of ["name","size"])document.getElementById("folderFileSort"+(field==="name"?"Name":"Size")).onclick=()=>setFolderFileSort(field);
+  renderFolderFileRows();window.__folderExtras=[...folderFileExtras].sort((a,b)=>a-b);updateFolderInstall();
+  document.getElementById("folderFilesStatus").textContent="";
+  const dlg=document.getElementById("folderFilesDialog");if(!dlg.open)dlg.showModal();
+}
+function updateFolderInstall(){const b=document.getElementById("folderFilesInstall");if(b)b.disabled=folderFileGroups.size===0}
 function fileList(files){
   if(!files||!files.length)return "";
   const head=files.slice(0,FILES_SHOWN);
@@ -388,7 +405,8 @@ function fileList(files){
 }
 
 function showCandidates(j){
-  showFolderFiles(j);
+  if(j.megaFolder){$("found").classList.add("hidden");showFolderFiles(j);return}
+  if(megaFolderMode){megaFolderMode=false;const keep=$("srcKeepWrap"),home=document.getElementById("folderFilesKeepHome");if(keep&&home)home.parentElement.insertBefore(keep,home.nextSibling);document.getElementById("folderFilesDialog").close()}
   const box=$("cands");box.textContent="";
   let usable=0;
   // A missing companion stops being a refusal when the same companion was
@@ -488,11 +506,11 @@ function showExtras(j){
 
 async function impInstall(){
   if(!await saveIndexDefaults())return;
-  const folderMode=$("folderFilePane").style.display==="flex";
+  const folderMode=megaFolderMode;
   const pick=folderMode?[...folderFileGroups].sort((a,b)=>a-b):[...foldersDialogRoot.querySelectorAll("#cands input:checked")].map(i=>+i.value);
-  const extras=folderMode?(window.__folderExtras||[]):[...foldersDialogRoot.querySelectorAll("#extras input:checked")].map(i=>+i.value);
+  const extras=folderMode?[...folderFileExtras].sort((a,b)=>a-b):[...foldersDialogRoot.querySelectorAll("#extras input:checked")].map(i=>+i.value);
   const dir=requireImportDestination();if(!dir||!pick.length)return;
-  $("install").disabled=true;
+  (folderMode?document.getElementById("folderFilesInstall"):$("install")).disabled=true;
   let r,j;
   try{
     const body=JSON.stringify({pick:pick,keep:$("srcKeep").checked,extras:extras,dir});
@@ -500,9 +518,10 @@ async function impInstall(){
     else if(typeof nativeSetupCall==="function")j=await nativeSetupCall("intakeConfirm",body);
     else {r=await browserHTTP("/api/intake?confirm=1&dir="+encodeURIComponent(dir),{method:"POST",
       headers:{"Content-Type":"application/json"},body});j=await r.json()}
-  }catch(e){ impSay("✕ "+(window.wudictI18n.errorText(e.message)||tx("pages.cannotStartMark")),"err"); return }
+  }catch(e){ impSay("✕ "+(window.wudictI18n.errorText(e.message)||tx("pages.cannotStartMark")),"err");
+    (folderMode?document.getElementById("folderFilesInstall"):$("install")).disabled=false;return }
   if(r&&!r.ok||j.error){impSay("✕ "+(window.wudictI18n.errorText(j&&j.error)||tx("pages.cannotStart")),"err");
-    $("install").disabled=false;return}
+    (folderMode?document.getElementById("folderFilesInstall"):$("install")).disabled=false;return}
   $("found").classList.add("hidden");
   impPoll();
 }
@@ -570,6 +589,7 @@ async function impCancel(){
     else if(typeof nativeSetupCall==="function")await nativeSetupCall("intakeCancel");
     else await browserHTTP("/api/intake",{method:"DELETE"})}catch(e){}
   $("found").classList.add("hidden");
+  if(megaFolderMode){megaFolderMode=false;document.getElementById("folderFilesDialog").close();const keep=$("srcKeepWrap"),home=document.getElementById("folderFilesKeepHome");if(keep&&home)home.parentElement.insertBefore(keep,home.nextSibling)}
   impSay("");
 }
 
@@ -709,6 +729,9 @@ function wireIntake(dir){
     f.setSelectionRange(a+v.length,a+v.length);
   });
   $("install").addEventListener("click",impInstall);
+  document.getElementById("folderFilesInstall").addEventListener("click",impInstall);
+  document.getElementById("folderFilesCancel").addEventListener("click",impCancel);
+  document.getElementById("folderFilesDialog").addEventListener("cancel",e=>{e.preventDefault();impCancel()});
   for(const [id,on] of [["candAllOn",true],["candAllOff",false]])$(id).addEventListener("click",e=>{
     e.preventDefault();
     for(const cb of foldersDialogRoot.querySelectorAll("#cands input:not(:disabled)"))cb.checked=on;
