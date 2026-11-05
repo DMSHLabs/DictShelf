@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // Collections: one link that names several dictionaries.
@@ -522,13 +523,18 @@ func build(ctx context.Context, f Fetcher, dest string, lib []string, l listing)
 		}
 		entries = append(entries, Entry{Name: rf.name, Base: rf.name, Size: rf.size, Compressed: rf.size})
 	}
+	sniffStarted := time.Now()
+	logx.Download("inspect folder dictionaries start entries=%d", len(entries))
 	cands, err := Sniff(&remoteArchive{ctx: ctx, f: f, entries: entries, files: byName})
+	logx.Download("inspect folder dictionaries finished entries=%d candidates=%d elapsed=%s error=%v", len(entries), len(cands), time.Since(sniffStarted).Round(time.Millisecond), err)
 	if err != nil {
 		return collection{}, err
 	}
 	// Marked BEFORE the media come out of Files: "unchanged" is a claim about
 	// every file of the dictionary, and an .mdd that grew is a change.
+	markStarted := time.Now()
 	markExisting(dest, lib, cands)
+	logx.Download("compare installed dictionaries finished candidates=%d elapsed=%s", len(cands), time.Since(markStarted).Round(time.Millisecond))
 	for _, rf := range archives {
 		// An archive is a row of its own, named after itself: what is inside
 		// is not known until it is here, and is then installed whole, less
@@ -800,14 +806,18 @@ func (a *remoteArchive) Open(name string) (io.ReadCloser, error) {
 	if rf == nil {
 		return nil, errors.New("no such file")
 	}
+	started := time.Now()
+	logx.Download("inspect remote file start name=%q size=%d", rf.name, rf.size)
 	u, err := url.Parse(rf.url)
 	if err != nil {
+		logx.Download("inspect remote file failed name=%q stage=parse error=%v", rf.name, err)
 		return nil, err
 	}
 	var mf *megaFile
 	if id, key, ok := megaLink(u); ok {
 		mf, err = a.f.megaResolveContext(a.ctx, id, key, u.Query().Get("folder"))
 		if err != nil {
+			logx.Download("inspect remote file failed name=%q stage=resolve elapsed=%s error=%v", rf.name, time.Since(started).Round(time.Millisecond), err)
 			return nil, err
 		}
 	}
@@ -826,10 +836,12 @@ func (a *remoteArchive) Open(name string) (io.ReadCloser, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
+		logx.Download("inspect remote file failed name=%q stage=request elapsed=%s error=%v", rf.name, time.Since(started).Round(time.Millisecond), err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		logx.Download("inspect remote file failed name=%q stage=response status=%d elapsed=%s", rf.name, resp.StatusCode, time.Since(started).Round(time.Millisecond))
 		return nil, errors.New("the site did not answer")
 	}
 	var body io.Reader = resp.Body
@@ -838,7 +850,9 @@ func (a *remoteArchive) Open(name string) (io.ReadCloser, error) {
 	}
 	b, err := io.ReadAll(io.LimitReader(body, sniffHeadBytes))
 	if err != nil {
+		logx.Download("inspect remote file failed name=%q stage=read elapsed=%s error=%v", rf.name, time.Since(started).Round(time.Millisecond), err)
 		return nil, err
 	}
+	logx.Download("inspect remote file finished name=%q bytes=%d elapsed=%s", rf.name, len(b), time.Since(started).Round(time.Millisecond))
 	return io.NopCloser(bytes.NewReader(b)), nil
 }

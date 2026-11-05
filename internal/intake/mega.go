@@ -21,6 +21,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // MEGA file links: mega.nz/file/<id>#<key>, and the older mega.nz/#!<id>!<key>.
@@ -30,8 +33,8 @@ import (
 // the size and the encrypted attributes holding the file name; the bytes are
 // then an ordinary download decrypted as they land - AES-128-CTR, so a resume
 // continues the keystream at offset/16 and the size on the wire is the file's.
-// Folder links are not handled. The MAC is not checked: TLS guards the
-// transfer and every reader here rejects a corrupt file.
+// Folder links use MEGA's public folder listing API below. The MAC is not
+// checked: TLS guards the transfer and every reader here rejects a corrupt file.
 
 // ErrMegaRefused is MEGA declining the link: removed, wrong, or over the
 // anonymous download quota.
@@ -185,8 +188,11 @@ func (f Fetcher) megaFolderListing(ctx context.Context, u *url.URL) (listing, bo
 		return listing{}, true, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	started := time.Now()
+	logx.Download("mega api folder request start host=%s", api.Hostname())
 	resp, err := f.megaFetcher().Client().Do(req)
 	if err != nil {
+		logx.Download("mega api folder request failed host=%s elapsed=%s error=%v", api.Hostname(), time.Since(started).Round(time.Millisecond), err)
 		return listing{}, true, err
 	}
 	defer resp.Body.Close()
@@ -205,6 +211,7 @@ func (f Fetcher) megaFolderListing(ctx context.Context, u *url.URL) (listing, bo
 		} `json:"f"`
 	}
 	if resp.StatusCode != 200 || json.Unmarshal(b, &response) != nil {
+		logx.Download("mega api folder response rejected status=%d bytes=%d elapsed=%s", resp.StatusCode, len(b), time.Since(started).Round(time.Millisecond))
 		return listing{}, true, ErrMegaRefused
 	}
 	if len(response) != 1 {
@@ -263,8 +270,10 @@ func (f Fetcher) megaFolderListing(ctx context.Context, u *url.URL) (listing, bo
 		l.files = append(l.files, &remoteFile{name: name, url: fileURL, size: n.S})
 	}
 	if len(l.files) == 0 {
+		logx.Download("mega api folder listing complete direct_files=0 elapsed=%s", time.Since(started).Round(time.Millisecond))
 		return listing{}, true, ErrNoLinks
 	}
+	logx.Download("mega api folder listing complete direct_files=%d elapsed=%s", len(l.files), time.Since(started).Round(time.Millisecond))
 	return l, true, nil
 }
 

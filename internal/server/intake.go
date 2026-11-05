@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -123,7 +124,15 @@ func (s *Server) desktopIntakeStatus() intakeStatus {
 }
 
 func (s *Server) desktopImportTarget() map[string]string {
-	return map[string]string{"dir": s.reg.prefs.importTarget()}
+	dir := s.reg.prefs.importTarget()
+	if runtime.GOOS == "android" && strings.TrimSpace(dir) == "" {
+		dir = s.importDir()
+	}
+	result := map[string]string{"dir": dir}
+	if runtime.GOOS == "android" && dir != "" {
+		result["downloadDir"] = filepath.Join(dir, intake.DownloadDirName)
+	}
+	return result
 }
 
 func (s *Server) selectImportTarget(requested string) (map[string]any, error) {
@@ -165,7 +174,11 @@ func (s *Server) selectImportTarget(requested string) (map[string]any, error) {
 	if err := s.reg.prefs.setImportTarget(dir); err != nil {
 		return nil, fmt.Errorf("could not remember the selected folder: %w", err)
 	}
-	return map[string]any{"dir": dir, "added": added}, nil
+	result := map[string]any{"dir": dir, "added": added}
+	if runtime.GOOS == "android" {
+		result["downloadDir"] = filepath.Join(dir, intake.DownloadDirName)
+	}
+	return result, nil
 }
 
 func dirInList(dirs []string, path string) bool {

@@ -38,7 +38,7 @@ extern char *WudictGoBridgeUserStorage(char *method, char *argument);
 extern char *WudictGoBridgeSavePrefs(char *body);
 extern char *WudictGoBridgeSaveLanguage(char *body);
 extern char *WudictGoBridgeSystemLogSnapshot(void);
-extern int WudictGoBridgeSystemLogOptions(int enabled, int baseEvents, int webEvents);
+extern int WudictGoBridgeSystemLogOptions(int enabled, int baseEvents, int webEvents, int downloadEvents);
 extern char *WudictGoBridgeWebResource(char *rawURL, char *headers);
 extern char *WudictGoBridgeMediaOpen(char *rawURL, char *headers);
 extern int WudictGoBridgeMediaRead(long long handle, char *dst, int size);
@@ -653,10 +653,10 @@ Java_com_dmshlabs_dictshelf_GoBridge_nativeSystemLogSnapshot(JNIEnv *env, jclass
 
 JNIEXPORT jint JNICALL
 Java_com_dmshlabs_dictshelf_GoBridge_nativeSystemLogOptions(JNIEnv *env, jclass owner,
-    jboolean enabled, jboolean baseEvents, jboolean webEvents) {
+    jboolean enabled, jboolean baseEvents, jboolean webEvents, jboolean downloadEvents) {
     (void)env;
     (void)owner;
-    return (jint)WudictGoBridgeSystemLogOptions(enabled, baseEvents, webEvents);
+    return (jint)WudictGoBridgeSystemLogOptions(enabled, baseEvents, webEvents, downloadEvents);
 }
 
 JNIEXPORT jstring JNICALL

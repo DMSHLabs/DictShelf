@@ -4,6 +4,7 @@
 
 (function(){
 "use strict";
+if(window.wudictAndroidGo)document.documentElement.setAttribute("data-android-go","");
 const foldersDialogRoot=document.getElementById("foldersDialog")||document;
 const foldersDialogEmbedded=foldersDialogRoot!==document;
 const wudictDialogMode=foldersDialogEmbedded||new URLSearchParams(location.search).get("wudict_dialog")==="1";
@@ -656,7 +657,11 @@ async function restoreImportTarget(){
     else if(typeof nativeSetupCall==="function")result=await nativeSetupCall("intakeTarget");
     else result=await(await browserHTTP("/api/intake?target=1")).json();
   }catch(_){return}
-  if(result&&result.dir){$("importTarget").value=result.dir;await validateImportTarget(result.dir)}
+  if(result&&result.dir){
+    $("importTarget").value=result.dir;
+    if(window.wudictAndroidGo&&$("androidDownloadPath"))$("androidDownloadPath").textContent=result.downloadDir||result.dir.replace(/[\\/]+$/g,"")+"/Downloads";
+    await validateImportTarget(result.dir)
+  }else if(window.wudictAndroidGo&&$("androidDownloadPath"))$("androidDownloadPath").textContent="—";
 }
 function wireIntake(dir){
   $("downloadTab").disabled=false;

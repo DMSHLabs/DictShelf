@@ -347,10 +347,16 @@ func (m *Manager) beginMegaFolder(dest, raw string, f Fetcher, host string) (Job
 	go func() {
 		defer m.wg.Done()
 		defer cancel()
+		started := time.Now()
+		logx.Download("mega folder list start host=%s", host)
 		l, err := fetchListing(ctx, f, raw)
+		logx.Download("mega folder list finished host=%s files=%d elapsed=%s error=%v", host, len(l.files), time.Since(started).Round(time.Millisecond), err)
 		var c collection
 		if err == nil {
+			buildStarted := time.Now()
+			logx.Download("mega folder inspect start host=%s files=%d", host, len(l.files))
 			c, err = build(ctx, f, dest, m.library(), l)
+			logx.Download("mega folder inspect finished host=%s candidates=%d folder_files=%d elapsed=%s error=%v", host, len(c.cands), len(c.folderFiles), time.Since(buildStarted).Round(time.Millisecond), err)
 		}
 		title := l.title
 		if title == "" {
@@ -369,11 +375,14 @@ func (m *Manager) beginMegaFolder(dest, raw string, f Fetcher, host string) (Job
 // why nothing here disposes of anything: the download is not an intermediary,
 // it is the file the user asked for.
 func (m *Manager) download(ctx context.Context, j *jobState, f Fetcher, raw string) {
+	started := time.Now()
+	logx.Download("fetch start host=%s", j.pub.Host)
 	src, err := f.Fetch(ctx, j.dest, raw, func(name string, done, total int64) {
 		m.mu.Lock()
 		j.pub.Source, j.pub.Done, j.pub.Total = name, done, total
 		m.mu.Unlock()
 	})
+	logx.Download("fetch finished host=%s name=%q bytes=%d elapsed=%s error=%v", j.pub.Host, src.Name, fileSize(src.Path), time.Since(started).Round(time.Millisecond), err)
 	if errors.Is(err, ErrNotArchive) {
 		// Not a dictionary: perhaps a folder of them, or a list. The headers
 		// said no before a byte of body was taken, so this is the first read

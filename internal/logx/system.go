@@ -27,6 +27,7 @@ var emptySystemErrorField = regexp.MustCompile(`(?i)\berror=""`)
 var systemLogEnabled = true
 var systemLogBaseEvents = true
 var systemLogWebEvents = true
+var systemLogDownloadEvents bool
 var systemHasErrors bool
 var systemErrorStatusKnown bool
 
@@ -67,11 +68,12 @@ func StartSystemLogSession() error {
 
 // ConfigureSystemLog controls the retained diagnostic file. It does not
 // change terminal output or error handling in callers.
-func ConfigureSystemLog(enabled, baseEvents, webEvents bool) {
+func ConfigureSystemLog(enabled, baseEvents, webEvents, downloadEvents bool) {
 	systemMu.Lock()
 	systemLogEnabled = enabled
 	systemLogBaseEvents = baseEvents
 	systemLogWebEvents = webEvents
+	systemLogDownloadEvents = downloadEvents
 	systemMu.Unlock()
 }
 
@@ -85,13 +87,19 @@ func systemDir() string {
 // System writes diagnostics independently of verbose console output. Logging
 // failures never replace the original failure and never recurse into logging.
 func System(format string, args ...any) {
-	writeSystem(false, false, format, args...)
+	writeSystem(false, false, false, format, args...)
 }
 
 // SystemDiagnostic writes an explicitly enabled diagnostic without requiring
 // the basic-events or WebView-events categories to be enabled.
 func SystemDiagnostic(format string, args ...any) {
-	writeSystem(false, true, format, args...)
+	writeSystem(false, true, false, format, args...)
+}
+
+// Download records an event from a user requested dictionary or companion
+// download. Its own opt-in keeps routine import detail out of ordinary logs.
+func Download(format string, args ...any) {
+	writeSystem(false, false, true, "download "+format, args...)
 }
 
 // SystemDiagnosticIf records an explicitly enabled diagnostic. When it is
@@ -109,10 +117,10 @@ func SystemDiagnosticIf(enabled bool, format string, args ...any) {
 
 // SystemError records an error and makes it visible in the panel's Info section.
 func SystemError(format string, args ...any) {
-	writeSystem(true, false, "error: "+format, args...)
+	writeSystem(true, false, false, "error: "+format, args...)
 }
 
-func writeSystem(isError, diagnostic bool, format string, args ...any) {
+func writeSystem(isError, diagnostic, download bool, format string, args ...any) {
 	message := fmt.Sprintf(format, args...)
 	// URL queries can carry access keys. Keep the host/path for diagnosis.
 	message = diagnosticURL.ReplaceAllStringFunc(message, func(value string) string {
@@ -138,8 +146,9 @@ func writeSystem(isError, diagnostic bool, format string, args ...any) {
 	systemMu.Lock()
 	defer systemMu.Unlock()
 	errorEvent := isError || isSystemError(message)
-	if !systemLogEnabled || !diagnostic && !errorEvent && (isWebSystemEvent(message) && !systemLogWebEvents ||
-		!isWebSystemEvent(message) && !systemLogBaseEvents) {
+	if !systemLogEnabled || !diagnostic && !errorEvent && (download && !systemLogDownloadEvents ||
+		!download && isWebSystemEvent(message) && !systemLogWebEvents ||
+		!download && !isWebSystemEvent(message) && !systemLogBaseEvents) {
 		return
 	}
 	root := systemDir()

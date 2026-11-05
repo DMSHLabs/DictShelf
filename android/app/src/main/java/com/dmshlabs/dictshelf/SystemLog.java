@@ -24,6 +24,7 @@ final class SystemLog {
     private static volatile boolean enabled = true;
     private static volatile boolean baseEvents = true;
     private static volatile boolean detailedEvents;
+    private static volatile boolean downloadEvents;
     private static volatile boolean systemSettingsDiagnostics;
 
     static void initialize(Context app) {
@@ -34,6 +35,7 @@ final class SystemLog {
             enabled = prefs.getBoolean("enabled", true);
             baseEvents = prefs.getBoolean("base-events", true);
             detailedEvents = prefs.getBoolean("detailed-events", false);
+            downloadEvents = prefs.getBoolean("download-events", false);
             systemSettingsDiagnostics = prefs.getBoolean("system-settings-diagnostics", false);
         }
         record("application start build=" + BuildConfig.VERSION_NAME
@@ -98,15 +100,18 @@ final class SystemLog {
     static boolean detailedEnabled() { return enabled && detailedEvents; }
     static boolean baseEvents() { return baseEvents; }
     static boolean detailedEvents() { return detailedEvents; }
+    static boolean downloadEvents() { return downloadEvents; }
 
-    static void configure(Context app, boolean on, boolean base, boolean detailed) {
+    static void configure(Context app, boolean on, boolean base, boolean detailed, boolean downloads) {
         app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putBoolean("enabled", on)
                 .putBoolean("base-events", base)
-                .putBoolean("detailed-events", detailed).apply();
+                .putBoolean("detailed-events", detailed)
+                .putBoolean("download-events", downloads).apply();
         enabled = on;
         baseEvents = base;
         detailedEvents = detailed;
+        downloadEvents = downloads;
     }
 
     private static void write(String message) {

@@ -384,7 +384,6 @@ func WudictGoBridgeHeadwordExport(action, argument *C.char) *C.char {
 	return C.CString(string(data))
 }
 
-
 //export WudictGoBridgeIntake
 func WudictGoBridgeIntake(action, argument *C.char) *C.char {
 	if action == nil || argument == nil {
@@ -733,8 +732,8 @@ func WudictGoBridgeSystemLogSnapshot() *C.char {
 }
 
 //export WudictGoBridgeSystemLogOptions
-func WudictGoBridgeSystemLogOptions(enabled, baseEvents, webEvents C.int) C.int {
-	logx.ConfigureSystemLog(enabled != 0, baseEvents != 0, webEvents != 0)
+func WudictGoBridgeSystemLogOptions(enabled, baseEvents, webEvents, downloadEvents C.int) C.int {
+	logx.ConfigureSystemLog(enabled != 0, baseEvents != 0, webEvents != 0, downloadEvents != 0)
 	return 1
 }
 

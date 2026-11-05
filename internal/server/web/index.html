@@ -1159,6 +1159,7 @@ window.wudictFontScale=(function(){
     <label class="sys-row"><input type="checkbox" id="sysLogEnabled"><span class="sys-label">{{T:system.logEnable}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysLogBase"><span class="sys-label">{{T:system.logBase}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysLogWeb"><span class="sys-label">{{T:system.logWeb}}</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysLogDownload"><span class="sys-label">{{T:system.logDownload}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysSearchArticleDiagnostics"><span class="sys-label">{{T:system.searchArticleDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysArticlePageCacheDiagnostics"><span class="sys-label">{{T:system.articlePageCacheDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysBrowseArticleDiagnostics"><span class="sys-label">{{T:system.browseArticleDiagnostics}}</span></label>
@@ -4692,9 +4693,10 @@ function sysPaint(state){
     $(pair[0]).checked=!!pair[1];
   }
   for(const pair of [["sysLogEnabled",state.logEnabled],["sysLogBase",state.logBaseEvents],
-      ["sysLogWeb",state.logWebEvents]])$(pair[0]).checked=!!pair[1];
+      ["sysLogWeb",state.logWebEvents],["sysLogDownload",state.logDownloadEvents]])$(pair[0]).checked=!!pair[1];
   $("sysLogBase").disabled=!state.logEnabled;
   $("sysLogWeb").disabled=!state.logEnabled;
+  $("sysLogDownload").disabled=!state.logEnabled;
   $("sysBrowseDiagnostics").checked=browseDiagnosticsEnabled();
   $("sysMergedFTS").checked=wildcardSearchIndexEnabled("fts");
   $("sysMergedTrigram").checked=wildcardSearchIndexEnabled("trigram");
@@ -5165,6 +5167,7 @@ async function showSystemSettings(){
     logEnabled:$("sysLogEnabled").parentElement,
     logBase:$("sysLogBase").parentElement,
     logWeb:$("sysLogWeb").parentElement,
+    logDownload:$("sysLogDownload").parentElement,
     searchArticleDiagnostics:$("sysSearchArticleDiagnostics").parentElement,
     articlePageCacheDiagnostics:$("sysArticlePageCacheDiagnostics").parentElement
   };
@@ -5276,15 +5279,17 @@ async function showSystemSettings(){
   const logHint=document.createElement("p");logHint.className="sys-hint";
   logHint.textContent=tx("system.logHint");body.append(logHint);
   body.append(systemSettingsNodes.logEnabled,systemSettingsNodes.logBase,systemSettingsNodes.logWeb,
-    systemSettingsNodes.searchArticleDiagnostics,systemSettingsNodes.articlePageCacheDiagnostics);
+    systemSettingsNodes.logDownload,systemSettingsNodes.searchArticleDiagnostics,systemSettingsNodes.articlePageCacheDiagnostics);
   if(diagnosticControl)body.append(diagnosticControl.row,diagnosticControl.hint);
   const desktopLog=desktopSystemLogOptions();
   if(!window.wudictAndroidShell){
     $("sysLogEnabled").checked=desktopLog.enabled;
     $("sysLogBase").checked=desktopLog.baseEvents;
     $("sysLogWeb").checked=desktopLog.webEvents;
+    $("sysLogDownload").checked=desktopLog.downloadEvents;
     $("sysLogBase").disabled=!desktopLog.enabled;
     $("sysLogWeb").disabled=!desktopLog.enabled;
+    $("sysLogDownload").disabled=!desktopLog.enabled;
   }
   $("sysSearchArticleDiagnostics").checked=searchArticleDiagnosticsEnabled();
   $("sysArticlePageCacheDiagnostics").checked=articlePageCacheDiagnosticsEnabled();
@@ -5893,8 +5898,10 @@ function folderDiagnosticsEnabled(){try{return localStorage.getItem("wudict_fold
 function setFolderDiagnostics(on){try{if(on)localStorage.setItem("wudict_folder_diagnostics","1");else localStorage.removeItem("wudict_folder_diagnostics")}catch(_){}}
 function sysLogChange(){
   const options={enabled:$("sysLogEnabled").checked,
-    baseEvents:$("sysLogBase").checked,webEvents:$("sysLogWeb").checked};
+    baseEvents:$("sysLogBase").checked,webEvents:$("sysLogWeb").checked,
+    downloadEvents:$("sysLogDownload").checked};
   $("sysLogBase").disabled=!options.enabled;$("sysLogWeb").disabled=!options.enabled;
+  $("sysLogDownload").disabled=!options.enabled;
   syncSystemSettingSwitches($("sysSettings"));
   if(window.wudictAndroidShell){
     sysSet({action:"set",field:"log",...options});
@@ -5910,10 +5917,11 @@ function desktopSystemLogOptions(){
   try{
     const value=JSON.parse(localStorage.getItem("wudict_system_log_options")||"null");
     if(value&&typeof value==="object")return{
-      enabled:value.enabled!==false,baseEvents:value.baseEvents!==false,webEvents:value.webEvents===true
+      enabled:value.enabled!==false,baseEvents:value.baseEvents!==false,
+      webEvents:value.webEvents===true,downloadEvents:value.downloadEvents===true
     };
   }catch(_){}
-  return {enabled:true,baseEvents:true,webEvents:false};
+  return {enabled:true,baseEvents:true,webEvents:false,downloadEvents:false};
 }
 if(window.wudictWindowsShell&&typeof window.wudictNativeCall==="function"){
   const options=desktopSystemLogOptions();
@@ -5922,6 +5930,7 @@ if(window.wudictWindowsShell&&typeof window.wudictNativeCall==="function"){
 $("sysLogEnabled").addEventListener("change",sysLogChange);
 $("sysLogBase").addEventListener("change",sysLogChange);
 $("sysLogWeb").addEventListener("change",sysLogChange);
+$("sysLogDownload").addEventListener("change",sysLogChange);
 $("sysBrowseDiagnostics").addEventListener("change",e=>setBrowseDiagnostics(e.target.checked));
 $("sysIndexParallelismDiagnostics").addEventListener("change",e=>setIndexParallelismDiagnostics(e.target.checked));
 $("sysSearchParallelismDiagnostics").addEventListener("change",e=>setSearchParallelismDiagnostics(e.target.checked));

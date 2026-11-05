@@ -259,14 +259,15 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 		return map[string]bool{"saved": true}, s.reg.prefs.setDesktopWindowSize(value)
 	case "systemLogOptions":
 		var options struct {
-			Enabled    bool `json:"enabled"`
-			BaseEvents bool `json:"baseEvents"`
-			WebEvents  bool `json:"webEvents"`
+			Enabled        bool `json:"enabled"`
+			BaseEvents     bool `json:"baseEvents"`
+			WebEvents      bool `json:"webEvents"`
+			DownloadEvents bool `json:"downloadEvents"`
 		}
 		if err := json.Unmarshal([]byte(argument), &options); err != nil {
 			return nil, errors.New("invalid system log settings")
 		}
-		logx.ConfigureSystemLog(options.Enabled, options.BaseEvents, options.WebEvents)
+		logx.ConfigureSystemLog(options.Enabled, options.BaseEvents, options.WebEvents, options.DownloadEvents)
 		return map[string]bool{"saved": true}, nil
 	case "storageState":
 		exists, err := s.userStorageExists()
@@ -315,8 +316,12 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 	case "intakeStatus":
 		return s.desktopIntakeStatus(), nil
 	case "intakeTarget":
-		if strings.TrimSpace(argument) == "" { return s.desktopImportTarget(), nil }
-		if len(argument) > 65536 { return nil, errors.New("folder path is too long") }
+		if strings.TrimSpace(argument) == "" {
+			return s.desktopImportTarget(), nil
+		}
+		if len(argument) > 65536 {
+			return nil, errors.New("folder path is too long")
+		}
 		return s.selectImportTarget(argument)
 	case "intakeURL":
 		if len(argument) > 32768 {

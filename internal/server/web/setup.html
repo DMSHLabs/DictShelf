@@ -194,6 +194,11 @@ html[data-shell-tone="dark"] {
   cursor:pointer;padding:0 .2em;margin:0;line-height:1}
 .frow .pick:hover{color:var(--accent)}
 html:not([data-folder-picker]) .frow .pick{display:none}
+.android-download-info{display:none;flex:1;min-width:0;padding:.65em .8em;border:1px solid var(--line);border-radius:.55em;color:var(--label)}
+.android-download-info code{overflow-wrap:anywhere;color:var(--text)}
+html[data-android-go] .android-download-info{display:block}
+html[data-android-go] #importTarget{display:none}
+html[data-android-go] #importTargetPick{display:none}
 .frow .brk{display:none}
 .frow .st{flex:none;font-size:12px;min-width:8.5em;text-align:right;color:var(--label)}
 .frow .st.ok{color:var(--ok)}.frow .st.err{color:var(--err)}
@@ -309,6 +314,14 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
 #rows .frow .st,#msg,#indexDefaultsError{font-size:calc(var(--ui-hint-font-size) * 1rem)}
 #addRow{font-size:calc(var(--ui-font-addition) * 1rem)}
 #addSection>p code{font-size:inherit;padding:0 .3em}
+.setup-copy{margin:.65em 0;font-size:calc(var(--ui-font-addition) * 1rem);min-width:0}
+.setup-copy summary{cursor:pointer;display:flex;align-items:center;gap:.4em;list-style:none;min-width:0}
+.setup-copy summary::-webkit-details-marker{display:none}
+.setup-copy summary::before{content:"▸";flex:none}
+.setup-copy[open] summary::before{content:"▾"}
+.setup-copy summary span{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.setup-copy[open] summary{margin-bottom:.35em}
+.setup-copy p{margin:0;white-space:normal;overflow-wrap:anywhere}
 #drop{box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
   gap:.3em;min-height:calc(var(--ui-edit_control-height) * 3em);
   padding:.4em .8em;font-size:calc(var(--ui-font-addition) * 1rem)}
@@ -357,15 +370,15 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
 <p>{{INTRO}}</p>
 
 <section id="indexDefaults">
-  <p>{{T:pages.indexDefaultsHint}}</p>
+  <details class="setup-copy"><summary><span>{{T:pages.indexDefaultsHint}}</span></summary><p>{{T:pages.indexDefaultsHint}}</p></details>
   <div class="dsl-default-row"><div>
     <label><input type="checkbox" id="newIndexContains" checked>{{T:dictUI.contains}}</label>
     <label><input type="checkbox" id="newIndexFullText">{{T:dictUI.fts}}</label>
   </div></div>
-  <p class="index-defaults-note">{{T:pages.containsRecommendation}}</p>
+  <details class="setup-copy index-defaults-note"><summary><span>{{T:pages.containsRecommendation}}</span></summary><p>{{T:pages.containsRecommendation}}</p></details>
   <p id="indexDefaultsError" class="err" role="alert" hidden></p>
 </section>
-<p class="formats">{{T:pages.supported}}</p>
+<details class="setup-copy formats"><summary><span>{{T:pages.supported}}</span></summary><p>{{T:pages.supported}}</p></details>
 
 <div class="setup-tabs" role="tablist" aria-label="{{T:pages.setupTabs}}">
   <button type="button" id="foldersTab" class="setup-tab" role="tab" aria-controls="foldersPanel" aria-selected="true">{{T:pages.point}}</button>
@@ -373,7 +386,7 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
 </div>
 
 <section id="foldersPanel" class="setup-panel" role="tabpanel" aria-labelledby="foldersTab">
-<p>{{T:pages.folderHint}}</p>
+<details class="setup-copy"><summary><span>{{T:pages.folderHint}}</span></summary><p>{{T:pages.folderHint}}</p></details>
 <div id="rows"></div>
 <button type="button" id="addRow" class="link">{{T:pages.addFolder}}</button>
 <div id="origin" class="warn hidden"></div>
@@ -388,13 +401,14 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
 <div id="importTargetRow" class="frow">
   <input id="importTarget" placeholder="{{T:pages.chooseImportFolder}}" spellcheck="false">
   <button type="button" id="importTargetPick" class="pick" title="{{T:pages.chooseFolder}}">📁</button>
+  <div class="android-download-info"><span>{{T:pages.androidDownloadFolder}}</span> <code id="androidDownloadPath"></code></div>
 </div>
 <p id="importTargetWarning" class="warn hidden" role="alert">{{T:pages.importFolderRequired}}</p>
 
 <div id="addSection" class="hidden">
   <hr class="sep">
   <h2>{{T:pages.addDictionaries}}</h2>
-  <p>{{T:pages.addHint}} {{T:pages.assetsHint}}</p>
+  <details class="setup-copy"><summary><span>{{T:pages.addHint}} {{T:pages.assetsHint}}</span></summary><p>{{T:pages.addHint}} {{T:pages.assetsHint}}</p></details>
   <div id="drop">
     <input type="file" id="file" accept=".zip,.7z,.mdx,.mdd,.ifo,.idx,.dict,.dz,.dz2,.syn,.dsl,.slob,.bgl,.zim,.md,.gz" hidden>
     <button type="button" id="choose" class="link">{{T:pages.chooseFile}}</button>

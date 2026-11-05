@@ -49,6 +49,34 @@ func TestSystemLogErrorDetection(t *testing.T) {
 	}
 }
 
+func TestSystemLogDownloadCategoryIsOptIn(t *testing.T) {
+	isolatedSystemLog(t)
+	systemMu.Lock()
+	oldEnabled, oldBase, oldWeb, oldDownload := systemLogEnabled, systemLogBaseEvents, systemLogWebEvents, systemLogDownloadEvents
+	systemMu.Unlock()
+	t.Cleanup(func() { ConfigureSystemLog(oldEnabled, oldBase, oldWeb, oldDownload) })
+
+	ConfigureSystemLog(true, true, false, false)
+	Download("mega folder listing started")
+	contents, err := SystemSnapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(contents), "mega folder listing started") {
+		t.Fatal("download event was logged while its category was off")
+	}
+
+	ConfigureSystemLog(true, true, false, true)
+	Download("mega folder listing started")
+	contents, err = SystemSnapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(contents), "download mega folder listing started") {
+		t.Fatal("download event was not logged while its category was on")
+	}
+}
+
 func TestSystemHasErrorsIgnoresSuccessfulJobRecords(t *testing.T) {
 	root := isolatedSystemLog(t)
 	if err := os.MkdirAll(root, 0o700); err != nil {
