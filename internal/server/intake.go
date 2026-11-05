@@ -51,12 +51,16 @@ var errImportFolderNotWritable = errors.New("writing is not permitted in this fo
 
 var checkImportDirectoryWritable = func(dir string) error {
 	f, err := os.CreateTemp(dir, ".dictshelf-write-check-*")
-	if err != nil { return errImportFolderNotWritable }
+	if err != nil {
+		return errImportFolderNotWritable
+	}
 	name := f.Name()
 	_, writeErr := f.Write([]byte{0})
 	closeErr := f.Close()
 	removeErr := os.Remove(name)
-	if writeErr != nil || closeErr != nil || removeErr != nil { return errImportFolderNotWritable }
+	if writeErr != nil || closeErr != nil || removeErr != nil {
+		return errImportFolderNotWritable
+	}
 	return nil
 }
 
@@ -122,12 +126,55 @@ func (s *Server) desktopImportTarget() map[string]string {
 	return map[string]string{"dir": s.reg.prefs.importTarget()}
 }
 
-func (s *Server) selectImportTarget(requested string) (map[string]string, error) {
-	dir, err := s.resolveImportDir(requested)
-	if err != nil { return nil, errors.New("select a configured dictionary folder") }
-	if err := checkImportDirectoryWritable(dir); err != nil { return nil, errImportFolderNotWritable }
-	if err := s.reg.prefs.setImportTarget(dir); err != nil { return nil, fmt.Errorf("could not remember the selected folder: %w", err) }
-	return map[string]string{"dir": dir}, nil
+func (s *Server) selectImportTarget(requested string) (map[string]any, error) {
+	requested = config.ExpandHome(strings.TrimSpace(requested))
+	dir, err := filepath.Abs(requested)
+	if err != nil || requested == "" {
+		return nil, errors.New("choose a folder for dictionary downloads")
+	}
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		return nil, errors.New("that folder does not exist")
+	}
+	if err := checkImportDirectoryWritable(dir); err != nil {
+		return nil, errImportFolderNotWritable
+	}
+	added := false
+	if !dirInList(s.reg.Dirs(), dir) {
+		if !s.DictDirEditable {
+			return nil, errors.New("dictionary folders are controlled by the launch settings")
+		}
+		dirs, _, err := s.resolveDirs(append(s.reg.Dirs(), dir))
+		if err != nil {
+			return nil, err
+		}
+		if err := s.reg.SetDirsDeferred(dirs); err != nil {
+			return nil, fmt.Errorf("could not add the folder to Dictionary folders: %w", err)
+		}
+		if err := s.reg.Rescan(); err != nil {
+			return nil, fmt.Errorf("could not scan the new dictionary folder: %w", err)
+		}
+		s.reg.Warm()
+		if s.ConfigPath != "" {
+			if err := config.SaveKeyRaw(s.ConfigPath, "DICT_DIR", config.FormatList(dirs)); err != nil {
+				return nil, fmt.Errorf("folder added for this session, but its setting could not be saved: %w", err)
+			}
+		}
+		added = true
+	}
+	if err := s.reg.prefs.setImportTarget(dir); err != nil {
+		return nil, fmt.Errorf("could not remember the selected folder: %w", err)
+	}
+	return map[string]any{"dir": dir, "added": added}, nil
+}
+
+func dirInList(dirs []string, path string) bool {
+	for _, dir := range dirs {
+		if same, err := filepath.Abs(dir); err == nil && strings.EqualFold(filepath.Clean(same), filepath.Clean(path)) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) desktopIntakeURL(raw, requestedDir string) (intakeStatus, error) {
@@ -377,7 +424,10 @@ func (s *Server) handleIntake(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	if q.Has("target") {
 		result, err := s.selectImportTarget(q.Get("dir"))
-		if err != nil { intakeErr(w, err); return }
+		if err != nil {
+			intakeErr(w, err)
+			return
+		}
 		writeJSON(w, result)
 		return
 	}
@@ -554,7 +604,10 @@ func (s *Server) fetcher() intake.Fetcher {
 // answer the page acts on, and it must not have to tell that apart from a
 // request that did not arrive.
 func (s *Server) handleIntakeStatus(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Query().Has("target") { writeJSON(w, s.desktopImportTarget()); return }
+	if r.URL.Query().Has("target") {
+		writeJSON(w, s.desktopImportTarget())
+		return
+	}
 	writeJSON(w, s.desktopIntakeStatus())
 }
 

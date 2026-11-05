@@ -1185,7 +1185,8 @@ paths:
           in: query
           description: >
             With POST and no other import parameters, validate and remember
-            the writable configured dictionary folder in `dir`.
+            the writable folder in `dir`, adding a new folder to `DICT_DIR`
+            when that setting is editable.
           schema: { type: string, enum: ['1'] }
         - name: dir
           in: query
@@ -3125,9 +3126,12 @@ components:
 
     ImportTarget:
       type: object
-      description: The last configured dictionary folder checked for write access.
+      description: The last dictionary folder checked for write access.
       properties:
         dir: { type: string }
+        added:
+          type: boolean
+          description: Whether this request added the folder to Dictionary folders.
       required: [dir]
 
     IntakeCandidate:

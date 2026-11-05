@@ -117,16 +117,40 @@ func TestIntakeUploadAndInstall(t *testing.T) {
 
 func TestIntakeTargetChecksAndRemembersWritableFolder(t *testing.T) {
 	s, dir := intakeServer(t)
-	var selected map[string]string
+	var selected map[string]any
 	if r := post(t, s, "/api/intake?target=1&dir="+url.QueryEscape(dir), nil, &selected); r.Code != http.StatusOK {
 		t.Fatalf("select target: %d %s", r.Code, r.Body.String())
 	}
-	if selected["dir"] != dir || s.reg.prefs.importTarget() != dir {
+	if selected["dir"] != dir || selected["added"] != false || s.reg.prefs.importTarget() != dir {
 		t.Fatalf("selected=%v saved=%q", selected, s.reg.prefs.importTarget())
 	}
 	var remembered map[string]string
 	getJSON(t, s, "/api/intake?target=1", &remembered)
-	if remembered["dir"] != dir { t.Fatalf("remembered target = %v", remembered) }
+	if remembered["dir"] != dir {
+		t.Fatalf("remembered target = %v", remembered)
+	}
+}
+
+func TestIntakeTargetAddsNewFolderWithoutDictionaries(t *testing.T) {
+	s, oldDir := intakeServer(t)
+	newDir := t.TempDir()
+	s.DictDirEditable = true
+	s.ConfigPath = filepath.Join(t.TempDir(), "dictshelf.toml")
+	var selected map[string]any
+	r := post(t, s, "/api/intake?target=1&dir="+url.QueryEscape(newDir), nil, &selected)
+	if r.Code != http.StatusOK {
+		t.Fatalf("select target: %d %s", r.Code, r.Body.String())
+	}
+	if selected["dir"] != newDir || selected["added"] != true {
+		t.Fatalf("selected=%v", selected)
+	}
+	if got := s.reg.Dirs(); len(got) != 2 || !dirInList(got, oldDir) || !dirInList(got, newDir) {
+		t.Fatalf("dictionary folders after selection = %v", got)
+	}
+	configText, err := os.ReadFile(s.ConfigPath)
+	if err != nil || !strings.Contains(string(configText), newDir) {
+		t.Fatalf("saved folders: %q, %v", configText, err)
+	}
 }
 
 func TestIntakeTargetReportsWriteDenial(t *testing.T) {
@@ -139,7 +163,9 @@ func TestIntakeTargetReportsWriteDenial(t *testing.T) {
 	if r.Code != http.StatusBadRequest || result["error"] != errImportFolderNotWritable.Error() {
 		t.Fatalf("write denial: status=%d result=%v", r.Code, result)
 	}
-	if got := s.reg.prefs.importTarget(); got != "" { t.Fatalf("denied folder was remembered: %q", got) }
+	if got := s.reg.prefs.importTarget(); got != "" {
+		t.Fatalf("denied folder was remembered: %q", got)
+	}
 }
 
 // A spooled upload that turns out to hold nothing is answered, not stored: the

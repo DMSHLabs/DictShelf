@@ -613,33 +613,33 @@ function requireImportDestination(){
 async function ensureImportDestination(){
   const current=importDestination();if(current)return current;
   const path=$("importTarget").value.trim();
-  if(path&&importDirs.some(dir=>importTargetNorm(dir.path)===importTargetNorm(path))){
-    const validated=await validateImportTarget(path);if(validated)return validated;
-  }
+  if(path){const validated=await validateImportTarget(path);if(validated)return validated}
   requireImportDestination();return "";
 }
 async function validateImportTarget(raw){
   const run=++importTargetCheck,path=String(raw||"").trim();
   importTargetValidated="";
   if(!path){importTargetErrorKey="pages.importFolderRequired";$("importTargetWarning").textContent=tx(importTargetErrorKey);$("importTargetWarning").classList.remove("hidden");return ""}
-  const match=importDirs.find(dir=>importTargetNorm(dir.path)===importTargetNorm(path));
-  if(!match){importTargetErrorKey="pages.importFolderNotConfigured";$("importTargetWarning").textContent=tx(importTargetErrorKey);$("importTargetWarning").classList.remove("hidden");impSay("✕ "+tx(importTargetErrorKey),"err");return ""}
   importTargetErrorKey="pages.importFolderChecking";
   $("importTargetWarning").textContent=tx(importTargetErrorKey);$("importTargetWarning").classList.remove("hidden");
   try{
     let result;
-    if(window.wudictAndroidGo)result=androidIntakeCall("target",match.path);
-    else if(typeof nativeSetupCall==="function")result=await nativeSetupCall("intakeTarget",match.path);
-    else {const response=await browserHTTP("/api/intake?target=1&dir="+encodeURIComponent(match.path),{method:"POST"});result=await response.json();if(!response.ok||result.error)throw new Error(result.error||response.statusText)}
+    if(window.wudictAndroidGo)result=androidIntakeCall("target",path);
+    else if(typeof nativeSetupCall==="function")result=await nativeSetupCall("intakeTarget",path);
+    else {const response=await browserHTTP("/api/intake?target=1&dir="+encodeURIComponent(path),{method:"POST"});result=await response.json();if(!response.ok||result.error)throw new Error(result.error||response.statusText)}
     if(run!==importTargetCheck)return "";
-    importTargetValidated=result.dir||match.path;$("importTarget").value=importTargetValidated;
+    importTargetValidated=result.dir||path;$("importTarget").value=importTargetValidated;
+    if(!importDirs.some(dir=>importTargetNorm(dir.path)===importTargetNorm(importTargetValidated))){
+      importDirs.push({path:importTargetValidated});
+      if(!rowInputs().some(input=>importTargetNorm(input.value.trim())===importTargetNorm(importTargetValidated))){addRow(importTargetValidated);validateAll()}
+    }
     importTargetErrorKey="pages.importFolderRequired";$("importTargetWarning").classList.add("hidden");
     if($("impMsg").classList.contains("err"))impSay("");
     return importTargetValidated;
   }catch(e){
     if(run!==importTargetCheck)return "";
     const message=String(e.message||"");
-    importTargetErrorKey=message.includes("writing is not permitted in this folder")?"pages.importFolderWriteDenied":"pages.importFolderRequired";
+    importTargetErrorKey=message.includes("writing is not permitted in this folder")?"pages.importFolderWriteDenied":message.includes("controlled by the launch settings")?"pages.importFolderManaged":"pages.importFolderRequired";
     $("importTargetWarning").textContent=tx(importTargetErrorKey);$("importTargetWarning").classList.remove("hidden");
     impSay("✕ "+tx(importTargetErrorKey),"err");return "";
   }
