@@ -2132,7 +2132,7 @@ func cmdSearchAll(args []string) error {
 	case 2:
 		dirArg, term = fs.Arg(0), fs.Arg(1)
 	default:
-		return fmt.Errorf("usage: wudict searchall [-mode m] [-n perDict] [-format f] [-dict-dir path] [<dir>] <term>")
+		return fmt.Errorf("usage: dictshelf searchall [-mode m] [-n perDict] [-format f] [-dict-dir path] [<dir>] <term>")
 	}
 
 	mode, err := search.ParseMode(*modeStr)

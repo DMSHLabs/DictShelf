@@ -24,7 +24,7 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
-// `wudict lemmas` - obtaining the lemma data LEMMA_DIR holds (D88).
+// `dictshelf lemmas` - obtaining the lemma data LEMMA_DIR holds (D88).
 //
 // wudict compiles in English and nothing else, so every other language is a
 // file the user has to get from somewhere. `make lemma-files` is not that
@@ -34,7 +34,7 @@ import (
 // program - a list with the installed ones ticked, and a download that takes
 // language names as readily as codes.
 
-const lemmasUsage = `usage: wudict lemmas <command>
+const lemmasUsage = `usage: dictshelf lemmas <command>
 
   list                    show installed and available languages
   download <lang…>        install one or more ("ru sk", "russian slovak")
@@ -194,8 +194,8 @@ func cmdLemmasList(args []string) error {
 	w.Flush()
 
 	fmt.Println()
-	fmt.Println("  wudict lemmas download ru sk    install       [x] ready   [ ] not installed")
-	fmt.Println("  wudict lemmas remove sk         delete        [!] installed, differs from the catalogue")
+	fmt.Println("  dictshelf lemmas download ru sk    install       [x] ready   [ ] not installed")
+	fmt.Println("  dictshelf lemmas remove sk         delete        [!] installed, differs from the catalogue")
 
 	for _, s := range shadowed {
 		fmt.Fprintln(os.Stderr, "warning:", s)
@@ -330,7 +330,7 @@ func cmdLemmasDownload(args []string) error {
 	}
 	// The CLI is not the running server, so it cannot tell that one to re-read
 	// the folder. Saying so is more useful than a silent partial effect.
-	fmt.Println("restart wudict for a running server to pick these up")
+	fmt.Println("restart dictshelf for a running server to pick these up")
 	return nil
 }
 

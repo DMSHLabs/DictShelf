@@ -45,7 +45,7 @@ func (f *cleanFailure) Error() string {
 	if len(f.names) > 0 {
 		name = f.names[0]
 	}
-	return fmt.Sprintf("entry %q (#%d): %v\nhint: keep the dictionary's HTML instead:\n  wudict dump -format md -mode html -o %s %s",
+	return fmt.Sprintf("entry %q (#%d): %v\nhint: keep the dictionary's HTML instead:\n  dictshelf dump -format md -mode html -o %s %s",
 		name, f.index, f.err, shellQuote(f.out), shellQuote(f.src))
 }
 
