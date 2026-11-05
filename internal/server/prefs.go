@@ -302,6 +302,7 @@ type prefsFile struct {
 	DSLRemoved     map[string]bool   `json:"dslRemoved,omitempty"`
 	Damaged        map[string]string `json:"damagedSources,omitempty"` // source path → size:mtime signature
 	Language       string            `json:"language,omitempty"`       // interface language choice: system, en or ru; never the dictionary language
+	ImportTarget   string            `json:"importTarget,omitempty"`   // last writable configured dictionary folder used for imports
 	DesktopHotkeys desktopHotkeys    `json:"desktopHotkeys,omitempty"`
 	DesktopWindow  desktopWindowSize `json:"desktopWindow,omitempty"`
 
@@ -319,6 +320,12 @@ type desktopHotkeys struct {
 type desktopWindowSize struct {
 	Width  int `json:"width,omitempty"`
 	Height int `json:"height,omitempty"`
+}
+
+func (p *Prefs) importTarget() string { f, _ := p.data(); return f.ImportTarget }
+
+func (p *Prefs) setImportTarget(path string) error {
+	return p.mutate(func(f *prefsFile) { f.ImportTarget = path })
 }
 
 // Prefs is the state file (state.json), an ownedFile (ownedfile.go): read

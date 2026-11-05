@@ -394,6 +394,8 @@ func WudictGoBridgeIntake(action, argument *C.char) *C.char {
 	switch C.GoString(action) {
 	case "status":
 		method = "intakeStatus"
+	case "target":
+		method = "intakeTarget"
 	case "url":
 		method = "intakeURL"
 	case "path":

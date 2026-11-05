@@ -1181,6 +1181,18 @@ paths:
         and not a setting - deleting somebody's only copy after an import that
         did not work cannot be undone.
       parameters:
+        - name: target
+          in: query
+          description: >
+            With POST and no other import parameters, validate and remember
+            the writable configured dictionary folder in `dir`.
+          schema: { type: string, enum: ['1'] }
+        - name: dir
+          in: query
+          description: >
+            Configured destination folder. Required with `target`; otherwise
+            used as the destination for an import.
+          schema: { type: string }
         - name: path
           in: query
           description: >
@@ -1324,7 +1336,13 @@ paths:
       description: >
         The poll. Always 200: an empty `state` means nothing is happening, which
         is an answer the page acts on and must not have to tell apart from a
-        request that did not arrive. `done` and `total` are bytes.
+        request that did not arrive. `done` and `total` are bytes. With
+        `target=1`, returns the remembered import folder instead.
+      parameters:
+        - name: target
+          in: query
+          description: Return the remembered import destination instead of the current job.
+          schema: { type: string, enum: ['1'] }
       x-codeSamples:
         - lang: Shell
           label: curl
@@ -1332,10 +1350,13 @@ paths:
             curl -s 'http://127.0.0.1:6888/api/intake' | jq -r '.state'
       responses:
         '200':
-          description: The current job, or an empty one.
+          description: The current job, an empty job, or the remembered destination with `target=1`.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/IntakeJob' }
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/IntakeJob' }
+                  - { $ref: '#/components/schemas/ImportTarget' }
     delete:
       tags: [internal]
       operationId: cancelImport
@@ -3101,6 +3122,13 @@ components:
             The candidates came from a folder, a list or several links rather
             than from one file: nothing is downloaded yet, `source` is the
             collection's title, and `extras` are each dictionary's media.
+
+    ImportTarget:
+      type: object
+      description: The last configured dictionary folder checked for write access.
+      properties:
+        dir: { type: string }
+      required: [dir]
 
     IntakeCandidate:
       type: object

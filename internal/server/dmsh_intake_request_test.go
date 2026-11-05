@@ -58,7 +58,7 @@ func TestIntakePathWantsAJSONRequestNotABarePath(t *testing.T) {
 func TestTheIntakeActionsAreTheOnesTheAndroidBridgeNames(t *testing.T) {
 	known := map[string]bool{}
 	s, _ := aboutServer(t, "")
-	for _, action := range []string{"intakeURL", "intakePath", "intakeStatus", "intakeConfirm", "intakeCancel"} {
+	for _, action := range []string{"intakeURL", "intakePath", "intakeStatus", "intakeTarget", "intakeConfirm", "intakeCancel"} {
 		_, err := s.DesktopJSON("http://127.0.0.1:6888", action, `{}`)
 		if err != nil && strings.Contains(err.Error(), "unknown") {
 			known[action] = false

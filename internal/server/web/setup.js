@@ -253,7 +253,7 @@ async function impGET(){
    the native bridge; browser and Android keep the streaming HTTP upload. */
 async function impSend(file){
   if(!file||impBusy)return;
-  const dir=importDestination();if(!dir)return;
+  const dir=requireImportDestination();if(!dir)return;
   impBusy=true;
   impSay(tx("pages.reading",{name:file.name}));
   $("found").classList.add("hidden");
@@ -311,7 +311,7 @@ async function impSendAndroidFile(file){
 
 async function impSendPath(path){
   if(!path||impBusy)return;
-  const dir=importDestination();if(!dir)return;
+  const dir=requireImportDestination();if(!dir)return;
   impBusy=true;
   impSay(tx("pages.reading",{name:path.split(/[\\/]/).pop()}));
   $("found").classList.add("hidden");
@@ -331,9 +331,10 @@ async function impSendPath(path){
 async function impFetch(){
   const u=$("url").value.trim();
   if(!u||impBusy)return;
-  const dir=importDestination();if(!dir)return;
   impBusy=true;
-  impSay(tx("pages.connecting"));
+  const dir=await ensureImportDestination();if(!dir){impBusy=false;return}
+  let host="";try{host=new URL(u).hostname}catch(_){}
+  impSay(host?tx("pages.connectingTo",{host}):tx("pages.connecting"));
   $("found").classList.add("hidden");
   let r,j;
   try{
@@ -489,7 +490,7 @@ async function impInstall(){
   const folderMode=$("folderFilePane").style.display==="flex";
   const pick=folderMode?[...folderFileGroups].sort((a,b)=>a-b):[...foldersDialogRoot.querySelectorAll("#cands input:checked")].map(i=>+i.value);
   const extras=folderMode?(window.__folderExtras||[]):[...foldersDialogRoot.querySelectorAll("#extras input:checked")].map(i=>+i.value);
-  const dir=importDestination();if(!dir||!pick.length)return;
+  const dir=requireImportDestination();if(!dir||!pick.length)return;
   $("install").disabled=true;
   let r,j;
   try{
@@ -590,29 +591,86 @@ async function howtoCopy(e){
 
 let intakeWired=false;
 let importDirs=[];
+let importTargetValidated="", importTargetErrorKey="pages.importFolderRequired", importTargetCheck=0, importTargetTimer=null;
+const importTargetNorm=s=>s.replace(/[\\/]+$/g,"").toLocaleLowerCase();
 function importDestination(){
   const value=$("importTarget").value.trim();
-  const norm=s=>s.replace(/[\\/]+$/g,"").toLocaleLowerCase();
-  const match=importDirs.find(dir=>norm(dir.path)===norm(value));
-  $("importTargetWarning").classList.toggle("hidden",!!match);
-  return match?.path||"";
+  const match=importDirs.find(dir=>importTargetNorm(dir.path)===importTargetNorm(value));
+  const valid=!!match&&importTargetNorm(match.path)===importTargetNorm(importTargetValidated);
+  $("importTargetWarning").classList.toggle("hidden",valid);
+  return valid?match.path:"";
+}
+function requireImportDestination(){
+  const dir=importDestination();if(dir)return dir;
+  const path=$("importTarget").value.trim();
+  if(!path)importTargetErrorKey="pages.importFolderRequired";
+  $("importTargetWarning").textContent=tx(importTargetErrorKey);
+  $("importTargetWarning").classList.remove("hidden");
+  impSay("✕ "+tx(importTargetErrorKey),"err");
+  $("importTargetPick").focus();
+  return "";
+}
+async function ensureImportDestination(){
+  const current=importDestination();if(current)return current;
+  const path=$("importTarget").value.trim();
+  if(path&&importDirs.some(dir=>importTargetNorm(dir.path)===importTargetNorm(path))){
+    const validated=await validateImportTarget(path);if(validated)return validated;
+  }
+  requireImportDestination();return "";
+}
+async function validateImportTarget(raw){
+  const run=++importTargetCheck,path=String(raw||"").trim();
+  importTargetValidated="";
+  if(!path){importTargetErrorKey="pages.importFolderRequired";$("importTargetWarning").textContent=tx(importTargetErrorKey);$("importTargetWarning").classList.remove("hidden");return ""}
+  const match=importDirs.find(dir=>importTargetNorm(dir.path)===importTargetNorm(path));
+  if(!match){importTargetErrorKey="pages.importFolderNotConfigured";$("importTargetWarning").textContent=tx(importTargetErrorKey);$("importTargetWarning").classList.remove("hidden");impSay("✕ "+tx(importTargetErrorKey),"err");return ""}
+  importTargetErrorKey="pages.importFolderChecking";
+  $("importTargetWarning").textContent=tx(importTargetErrorKey);$("importTargetWarning").classList.remove("hidden");
+  try{
+    let result;
+    if(window.wudictAndroidGo)result=androidIntakeCall("target",match.path);
+    else if(typeof nativeSetupCall==="function")result=await nativeSetupCall("intakeTarget",match.path);
+    else {const response=await browserHTTP("/api/intake?target=1&dir="+encodeURIComponent(match.path),{method:"POST"});result=await response.json();if(!response.ok||result.error)throw new Error(result.error||response.statusText)}
+    if(run!==importTargetCheck)return "";
+    importTargetValidated=result.dir||match.path;$("importTarget").value=importTargetValidated;
+    importTargetErrorKey="pages.importFolderRequired";$("importTargetWarning").classList.add("hidden");
+    if($("impMsg").classList.contains("err"))impSay("");
+    return importTargetValidated;
+  }catch(e){
+    if(run!==importTargetCheck)return "";
+    const message=String(e.message||"");
+    importTargetErrorKey=message.includes("writing is not permitted in this folder")?"pages.importFolderWriteDenied":"pages.importFolderRequired";
+    $("importTargetWarning").textContent=tx(importTargetErrorKey);$("importTargetWarning").classList.remove("hidden");
+    impSay("✕ "+tx(importTargetErrorKey),"err");return "";
+  }
+}
+async function restoreImportTarget(){
+  let result;
+  try{
+    if(window.wudictAndroidGo)result=androidIntakeCall("target");
+    else if(typeof nativeSetupCall==="function")result=await nativeSetupCall("intakeTarget");
+    else result=await(await browserHTTP("/api/intake?target=1")).json();
+  }catch(_){return}
+  if(result&&result.dir){$("importTarget").value=result.dir;await validateImportTarget(result.dir)}
 }
 function wireIntake(dir){
-  if(!dir)return; // nowhere to install into yet: the folder above comes first
   $("downloadTab").disabled=false;
   $("addSection").classList.remove("hidden");
   if(intakeWired)return;
   intakeWired=true;
-  $("importTarget").addEventListener("input",importDestination);
+  $("importTarget").addEventListener("input",()=>{
+    clearTimeout(importTargetTimer);importTargetValidated="";importTargetErrorKey="pages.importFolderRequired";importDestination();
+    importTargetTimer=setTimeout(()=>validateImportTarget($("importTarget").value),450);
+  });
   $("importTargetPick").addEventListener("click",()=>{
     if(typeof window.wudictPickFolder!=="function")return;
     window.wudictPickFolder(path=>{
       if(typeof path!=="string"||!path.trim())return;
-      $("importTarget").value=path.trim();importDestination();
+      $("importTarget").value=path.trim();validateImportTarget(path.trim());
     }).catch(()=>{});
   });
   $("choose").addEventListener("click",()=>{
-    if(!importDestination())return;
+    if(!requireImportDestination())return;
     if(typeof nativeSetupCall==="function"&&typeof window.wudictPickArchive==="function"){
       window.wudictPickArchive(impSendPath);
       return;
@@ -726,7 +784,9 @@ async function start(cachedConfig=null){
   syncIndexDefaults();
   const dirs=(cfg&&cfg.roots||[]).map(r=>r.path);
   importDirs=(cfg&&cfg.roots||[]);
+  importTargetValidated="";importTargetErrorKey="pages.importFolderRequired";
   $("importTarget").value="";
+  $("importTargetWarning").textContent=tx("pages.importFolderRequired");
   $("importTargetWarning").classList.remove("hidden");
   if(dirs.length)dirs.forEach(d=>addRow(d)); else addRow("");
   /* howtoRemoved is a fact about the host: it stays false while the builtin
@@ -753,6 +813,7 @@ async function start(cachedConfig=null){
   // The importer needs somewhere to install into, and a job may already be
   // running from before this page was loaded.
   wireIntake(dirs[0]||"");
+  restoreImportTarget();
   impGET().then(st=>{
     wireIntake(st&&st.dir||dirs[0]||"");
     if(st&&st.state){impRender(st);

@@ -314,6 +314,10 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 		return map[string]any{"status": http.StatusInternalServerError, "error": err.Error()}, nil
 	case "intakeStatus":
 		return s.desktopIntakeStatus(), nil
+	case "intakeTarget":
+		if strings.TrimSpace(argument) == "" { return s.desktopImportTarget(), nil }
+		if len(argument) > 65536 { return nil, errors.New("folder path is too long") }
+		return s.selectImportTarget(argument)
 	case "intakeURL":
 		if len(argument) > 32768 {
 			return nil, errors.New("import link is too long")

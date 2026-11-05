@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -112,6 +113,33 @@ func TestIntakeUploadAndInstall(t *testing.T) {
 	if n := s.reg.Count(); n != 1 {
 		t.Errorf("registry holds %d dictionaries after the import, want 1", n)
 	}
+}
+
+func TestIntakeTargetChecksAndRemembersWritableFolder(t *testing.T) {
+	s, dir := intakeServer(t)
+	var selected map[string]string
+	if r := post(t, s, "/api/intake?target=1&dir="+url.QueryEscape(dir), nil, &selected); r.Code != http.StatusOK {
+		t.Fatalf("select target: %d %s", r.Code, r.Body.String())
+	}
+	if selected["dir"] != dir || s.reg.prefs.importTarget() != dir {
+		t.Fatalf("selected=%v saved=%q", selected, s.reg.prefs.importTarget())
+	}
+	var remembered map[string]string
+	getJSON(t, s, "/api/intake?target=1", &remembered)
+	if remembered["dir"] != dir { t.Fatalf("remembered target = %v", remembered) }
+}
+
+func TestIntakeTargetReportsWriteDenial(t *testing.T) {
+	s, dir := intakeServer(t)
+	previous := checkImportDirectoryWritable
+	checkImportDirectoryWritable = func(string) error { return os.ErrPermission }
+	t.Cleanup(func() { checkImportDirectoryWritable = previous })
+	var result map[string]any
+	r := post(t, s, "/api/intake?target=1&dir="+url.QueryEscape(dir), nil, &result)
+	if r.Code != http.StatusBadRequest || result["error"] != errImportFolderNotWritable.Error() {
+		t.Fatalf("write denial: status=%d result=%v", r.Code, result)
+	}
+	if got := s.reg.prefs.importTarget(); got != "" { t.Fatalf("denied folder was remembered: %q", got) }
 }
 
 // A spooled upload that turns out to hold nothing is answered, not stored: the
