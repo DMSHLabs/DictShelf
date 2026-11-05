@@ -258,7 +258,8 @@ type listing struct {
 	// folder page. A folder page shows every file there is; a list may name
 	// only the main files and leave the rest to be found beside them, exactly
 	// as a single pasted link does (probe.go).
-	text bool
+	text  bool
+	files []*remoteFile // already resolved nodes, used by MEGA public folders
 }
 
 // parseText reads a list: one entry per line, a file name (resolved against
@@ -364,6 +365,9 @@ func fetchListing(ctx context.Context, f Fetcher, raw string) (listing, error) {
 	if err != nil {
 		return listing{}, err
 	}
+	if l, ok, err := f.megaFolderListing(ctx, u); ok {
+		return l, err
+	}
 	// A Nextcloud share's page is drawn by script and names no file; its
 	// WebDAV listing does (nextcloud.go).
 	if l, ok, err := shareListing(ctx, f, u); ok {
@@ -454,9 +458,11 @@ type colRow struct {
 // in the same order as rows), the media offered beside them, and what to
 // download for each.
 type collection struct {
-	cands  []Candidate
-	extras []Extra
-	rows   []colRow
+	cands       []Candidate
+	extras      []Extra
+	rows        []colRow
+	folderMode  bool
+	folderFiles []FolderFile
 }
 
 // build describes the files a listing names, without downloading any of
@@ -464,7 +470,10 @@ type collection struct {
 // dictionaries (Sniff, over remoteArchive), and which are already installed
 // (markExisting, from names and sizes).
 func build(ctx context.Context, f Fetcher, dest string, lib []string, l listing) (collection, error) {
-	files := pickFiles(f, l.links)
+	files := l.files
+	if files == nil {
+		files = pickFiles(f, l.links)
+	}
 	if len(files) == 0 {
 		return collection{}, ErrNoLinks
 	}
@@ -474,13 +483,15 @@ func build(ctx context.Context, f Fetcher, dest string, lib []string, l listing)
 			drive = true
 		}
 	}
-	describe(ctx, f, files)
+	if l.files == nil {
+		describe(ctx, f, files)
+	}
 	// Only now is every name known: a Drive file was named by the server's
 	// answer, or by nothing - and then Drive sent a page, not the file. Two links can turn out to be one name; the first stays.
 	var alive []*remoteFile
 	named := map[string]bool{}
 	for _, rf := range files {
-		if rf == nil || !takeable(rf.name) || named[strings.ToLower(rf.name)] {
+		if rf == nil || (l.files == nil && !takeable(rf.name)) || rf.name == "" || named[strings.ToLower(rf.name)] {
 			continue
 		}
 		named[strings.ToLower(rf.name)] = true
@@ -530,6 +541,7 @@ func build(ctx context.Context, f Fetcher, dest string, lib []string, l listing)
 	sort.SliceStable(cands, func(i, j int) bool { return strings.ToLower(cands[i].Name) < strings.ToLower(cands[j].Name) })
 
 	var c collection
+	c.folderMode = l.files != nil
 	for i := range cands {
 		cand := &cands[i]
 		ext := dict.MainExt(cand.Main)
@@ -554,11 +566,71 @@ func build(ctx context.Context, f Fetcher, dest string, lib []string, l listing)
 		}
 		c.rows = append(c.rows, row)
 	}
+	// A MEGA folder has no sibling probe: its direct-child listing is the
+	// complete set. Offer same-stem files the format contract does not consume
+	// as optional companions so selecting a dictionary selects its whole set.
+	if l.files != nil {
+		known := map[string]bool{}
+		for _, cand := range cands {
+			for _, name := range cand.Files {
+				known[strings.ToLower(name)] = true
+			}
+		}
+		for _, ex := range c.extras {
+			known[strings.ToLower(ex.Name)] = true
+		}
+		for i, cand := range cands {
+			stem := strings.ToLower(dict.Stem(cand.Main))
+			for _, rf := range alive {
+				key := strings.ToLower(rf.name)
+				if known[key] || strings.ToLower(dict.Stem(rf.name)) != stem {
+					continue
+				}
+				known[key] = true
+				c.extras = append(c.extras, Extra{Name: rf.name, Size: rf.size, Need: NeedExtra, url: rf.url, row: i})
+			}
+		}
+	}
 	c.cands = cands
+	if c.folderMode {
+		groups := map[string]int{}
+		usable := map[int]bool{}
+		for i, cand := range c.cands {
+			usable[i] = cand.Complete()
+			for _, n := range cand.Files {
+				groups[strings.ToLower(n)] = i
+			}
+		}
+		extraGroups := map[string]int{}
+		for _, ex := range c.extras {
+			extraGroups[strings.ToLower(ex.Name)] = ex.row
+		}
+		for _, rf := range l.files {
+			row := FolderFile{Name: rf.name, Size: rf.size, Group: -1, Extra: -1}
+			if g, ok := groups[strings.ToLower(rf.name)]; ok {
+				row.Group = g
+				row.Selectable = usable[g]
+			} else if g, ok := extraGroups[strings.ToLower(rf.name)]; ok {
+				row.Group = g
+				row.Extra = extraIndex(c.extras, rf.name)
+				row.Selectable = usable[g]
+			}
+			c.folderFiles = append(c.folderFiles, row)
+		}
+	}
 	if len(c.cands) == 0 {
 		return collection{}, ErrNoLinks
 	}
 	return c, nil
+}
+
+func extraIndex(extras []Extra, name string) int {
+	for i, e := range extras {
+		if strings.EqualFold(e.Name, name) {
+			return i
+		}
+	}
+	return -1
 }
 
 // pickFiles keeps the links that name a file this build can take - a
@@ -728,12 +800,31 @@ func (a *remoteArchive) Open(name string) (io.ReadCloser, error) {
 	if rf == nil {
 		return nil, errors.New("no such file")
 	}
-	req, err := http.NewRequestWithContext(a.ctx, http.MethodGet, rf.url, nil)
+	u, err := url.Parse(rf.url)
+	if err != nil {
+		return nil, err
+	}
+	var mf *megaFile
+	if id, key, ok := megaLink(u); ok {
+		mf, err = a.f.megaResolveContext(a.ctx, id, key, u.Query().Get("folder"))
+		if err != nil {
+			return nil, err
+		}
+	}
+	target := rf.url
+	if mf != nil {
+		target = mf.url.String()
+	}
+	req, err := http.NewRequestWithContext(a.ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Range", "bytes=0-"+strconv.Itoa(sniffHeadBytes-1))
-	resp, err := a.f.Client().Do(req)
+	client := a.f.Client()
+	if mf != nil {
+		client = a.f.megaFetcher().Client()
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -741,7 +832,11 @@ func (a *remoteArchive) Open(name string) (io.ReadCloser, error) {
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		return nil, errors.New("the site did not answer")
 	}
-	b, err := io.ReadAll(io.LimitReader(resp.Body, sniffHeadBytes))
+	var body io.Reader = resp.Body
+	if mf != nil {
+		body = mf.reader(resp.Body, 0)
+	}
+	b, err := io.ReadAll(io.LimitReader(body, sniffHeadBytes))
 	if err != nil {
 		return nil, err
 	}

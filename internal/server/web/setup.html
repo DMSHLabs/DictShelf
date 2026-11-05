@@ -268,6 +268,13 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
 #extras .row input[type=checkbox]{--ds-checkbox-margin:0}
 #extras .row .need{color:var(--label);font-size:11.5px}
 #extras .row .need.req{color:var(--err)}
+#folderFilePane{display:none;flex-direction:column;height:38vh;min-height:180px;margin:.618em 0 0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+#folderFileHeader{display:grid;grid-template-columns:2em minmax(0,1fr) auto;gap:.55em;padding:.35em .55em;color:var(--label);font-size:11.5px;border-bottom:1px solid var(--line)}
+#folderFileRows{flex:1;min-height:0;overflow:auto}
+#folderFileRows .folder-file{display:grid;grid-template-columns:2em minmax(0,1fr) auto;gap:.55em;align-items:center;padding:.38em .55em;border-bottom:1px solid color-mix(in srgb,var(--line) 45%,transparent)}
+#folderFileRows .folder-file .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#folderFileRows .folder-file .n{font-variant-numeric:tabular-nums;color:var(--label)}
+#folderFileRows .folder-file.disabled{opacity:.55}
 /* One line, as the whole of the progress report: a bar per file, a byte
    counter or an entry name would all be the machinery of extraction rather
    than something the user decides on (D102). */
@@ -403,6 +410,7 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
       <a href="#" id="candAllOff">{{T:pages.selectNone}}</a></p>
     <div id="cands"></div>
     <div id="extras" class="hidden"></div>
+    <div id="folderFilePane"><div id="folderFileHeader"><span></span><span>{{T:pages.folderFileName}}</span><span>{{T:pages.folderFileSize}}</span></div><div id="folderFileRows"></div><div id="folderFileSearch" class="list-search-dock" role="search"></div></div>
     <label class="keep" id="srcKeepWrap"><input type="checkbox" id="srcKeep" checked>
       <span>{{T:pages.keep}} <b id="srcName"></b> {{T:pages.afterwards}}
       <em>{{T:pages.keepFailed}}</em></span></label>
@@ -422,6 +430,7 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
 </section>
 </div>
 </div>
+<script src="/assets/list-search.js?v={{LISTSEARCHJS}}"></script>
 <script src="/assets/setup.js?v={{SETUPJS}}"></script>
 </body>
 </html>

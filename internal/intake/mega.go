@@ -38,11 +38,26 @@ import (
 var ErrMegaRefused = errors.New("MEGA did not hand over the file: check the link, " +
 	"or try again later if MEGA's download quota is used up")
 
+var errMegaFolderTooLarge = errors.New("MEGA folder contains too many files")
+
 // megaAPI is MEGA's API endpoint; a variable only so a test can stand a local
 // server in its place.
 var megaAPI = "https://g.api.mega.co.nz/cs"
 
 var megaIDRE = regexp.MustCompile(`^[A-Za-z0-9_-]{8}$`)
+
+// megaCheck extends an already accepted MEGA link's host policy to MEGA's API
+// and its file storage subdomains, while retaining scheme and address checks.
+func (f Fetcher) megaCheck(raw string) (*url.URL, error) {
+	return f.megaFetcher().Check(raw)
+}
+
+func (f Fetcher) megaFetcher() Fetcher {
+	if len(f.Hosts) > 0 {
+		f.Hosts = append(append([]string(nil), f.Hosts...), "mega.nz", "mega.co.nz")
+	}
+	return f
+}
 
 type megaFile struct {
 	url  *url.URL
@@ -79,17 +94,32 @@ func megaLink(u *url.URL) (id string, key []byte, ok bool) {
 
 // megaResolve asks MEGA for the download address and name of a file link.
 func (f Fetcher) megaResolve(ctx context.Context, id string, linkKey []byte) (*megaFile, error) {
-	api, err := f.Check(megaAPI + "?id=" + strconv.FormatUint(uint64(rand.Uint32()), 10))
+	return f.megaResolveContext(ctx, id, linkKey, "")
+}
+
+func (f Fetcher) megaResolveContext(ctx context.Context, id string, linkKey []byte, folder string) (*megaFile, error) {
+	api, err := f.megaCheck(megaAPI + "?id=" + strconv.FormatUint(uint64(rand.Uint32()), 10))
 	if err != nil {
 		return nil, err
 	}
-	body, _ := json.Marshal([]map[string]any{{"a": "g", "g": 1, "ssl": 2, "p": id}})
+	cmd := map[string]any{"a": "g", "g": 1, "ssl": 2}
+	if folder != "" {
+		cmd["n"] = id
+	} else {
+		cmd["p"] = id
+	}
+	body, _ := json.Marshal([]map[string]any{cmd})
+	if folder != "" {
+		q := api.Query()
+		q.Set("n", folder)
+		api.RawQuery = q.Encode()
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, api.String(), bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := f.Client().Do(req)
+	resp, err := f.megaFetcher().Client().Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +144,7 @@ func (f Fetcher) megaResolve(ctx context.Context, id string, linkKey []byte) (*m
 	if dl.Scheme == "http" && !f.Insecure {
 		dl.Scheme = "https" // MEGA's storage hosts serve both
 	}
-	if dl, err = f.Check(dl.String()); err != nil {
+	if dl, err = f.megaCheck(dl.String()); err != nil {
 		return nil, err
 	}
 	m := &megaFile{url: dl, key: make([]byte, 16), iv: linkKey[16:24]}
@@ -126,6 +156,116 @@ func (f Fetcher) megaResolve(ctx context.Context, id string, linkKey []byte) (*m
 		return nil, ErrNotArchive
 	}
 	return m, nil
+}
+
+// megaFolderListing resolves just the immediate files in a public folder.
+// It requests a non-recursive listing and checks parent and type again before
+// exposing a node, so descendants and child folders cannot enter the import.
+func (f Fetcher) megaFolderListing(ctx context.Context, u *url.URL) (listing, bool, error) {
+	if strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.") != "mega.nz" && strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.") != "mega.co.nz" {
+		return listing{}, false, nil
+	}
+	rest, ok := strings.CutPrefix(u.Path, "/folder/")
+	if !ok {
+		return listing{}, false, nil
+	}
+	id := strings.TrimSuffix(rest, "/")
+	key, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(u.Fragment, "="))
+	if err != nil || !megaIDRE.MatchString(id) || len(key) != 16 {
+		return listing{}, false, ErrMegaRefused
+	}
+	api, err := f.megaCheck(megaAPI + "?id=" + strconv.FormatUint(uint64(rand.Uint32()), 10))
+	if err != nil {
+		return listing{}, true, err
+	}
+	api.RawQuery += "&n=" + url.QueryEscape(id)
+	body, _ := json.Marshal([]map[string]any{{"a": "f", "c": 1, "r": 0, "ca": 1}})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, api.String(), bytes.NewReader(body))
+	if err != nil {
+		return listing{}, true, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := f.megaFetcher().Client().Do(req)
+	if err != nil {
+		return listing{}, true, err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return listing{}, true, err
+	}
+	var response []struct {
+		F []struct {
+			H string `json:"h"`
+			P string `json:"p"`
+			T int    `json:"t"`
+			S int64  `json:"s"`
+			K string `json:"k"`
+			A string `json:"a"`
+		} `json:"f"`
+	}
+	if resp.StatusCode != 200 || json.Unmarshal(b, &response) != nil {
+		return listing{}, true, ErrMegaRefused
+	}
+	if len(response) != 1 {
+		return listing{}, true, ErrMegaRefused
+	}
+	nodes := response[0].F
+	root := ""
+	for _, n := range nodes {
+		if n.T == 1 && strings.Contains(n.K, n.H+":") {
+			root = n.H
+			break
+		}
+	}
+	if root == "" {
+		return listing{}, true, ErrMegaRefused
+	}
+	l := listing{title: "MEGA"}
+	count := 0
+	for _, n := range nodes {
+		if n.T != 0 || n.P != root || n.S < 0 {
+			continue
+		}
+		count++
+		if count > maxLinks {
+			return listing{}, true, errMegaFolderTooLarge
+		}
+		var enc []byte
+		for _, part := range strings.Split(n.K, "/") {
+			owner, val, has := strings.Cut(part, ":")
+			if owner == root && has {
+				enc, _ = base64.RawURLEncoding.DecodeString(strings.TrimRight(val, "="))
+				break
+			}
+		}
+		if len(enc) != 32 {
+			continue
+		}
+		block, _ := aes.NewCipher(key)
+		block.Decrypt(enc[:16], enc[:16])
+		block.Decrypt(enc[16:], enc[16:])
+		words := make([]uint32, 8)
+		for i := range words {
+			words[i] = binary.BigEndian.Uint32(enc[i*4:])
+		}
+		lk := append([]byte(nil), enc...)
+		contentKey := make([]byte, 16)
+		for i := 0; i < 4; i++ {
+			binary.BigEndian.PutUint32(contentKey[i*4:], words[i]^words[i+4])
+		}
+		plainName := megaName(n.A, contentKey)
+		if plainName == "" {
+			continue
+		}
+		name := safeDirName(plainName)
+		fileURL := "https://mega.nz/file/" + n.H + "?folder=" + url.QueryEscape(id) + "#" + base64.RawURLEncoding.EncodeToString(lk)
+		l.files = append(l.files, &remoteFile{name: name, url: fileURL, size: n.S})
+	}
+	if len(l.files) == 0 {
+		return listing{}, true, ErrNoLinks
+	}
+	return l, true, nil
 }
 
 // megaName decrypts the attributes - AES-CBC, zero IV, "MEGA{json}" padded

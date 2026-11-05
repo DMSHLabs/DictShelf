@@ -5,6 +5,7 @@
 package intake
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,30 @@ import (
 	"testing"
 	"time"
 )
+
+func TestMegaFolderGroupsSameStemFiles(t *testing.T) {
+	l := listing{files: []*remoteFile{
+		{name: "Longman.mdx", url: "https://mega.nz/file/AAAAAAAA", size: 10},
+		{name: "Longman.mdd", url: "https://mega.nz/file/BBBBBBBB", size: 100},
+		{name: "Longman.jpg", url: "https://mega.nz/file/CCCCCCCC", size: 4},
+		{name: "unrelated.bin", url: "https://mega.nz/file/DDDDDDDD", size: 1},
+	}}
+	c, err := build(context.Background(), Fetcher{}, t.TempDir(), nil, l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.cands) != 1 || len(c.extras) != 2 || len(c.folderFiles) != 4 {
+		t.Fatalf("candidates=%d extras=%d files=%d", len(c.cands), len(c.extras), len(c.folderFiles))
+	}
+	for _, f := range c.folderFiles[:3] {
+		if !f.Selectable || f.Group != 0 {
+			t.Errorf("same-stem file not grouped: %+v", f)
+		}
+	}
+	if c.folderFiles[3].Selectable {
+		t.Errorf("unrelated file is selectable: %+v", c.folderFiles[3])
+	}
+}
 
 func TestUnwrap(t *testing.T) {
 	for _, tc := range []struct{ in, want string }{

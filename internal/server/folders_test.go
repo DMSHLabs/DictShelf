@@ -185,6 +185,9 @@ func TestConfigEndpointAndSetupPage(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "Serving 1 dictionary from 2 folders") {
 		t.Errorf("intro should summarise, not list every path: %q", firstLines(rec.Body.String()))
 	}
+	if !strings.Contains(rec.Body.String(), "/assets/list-search.js?v=") || strings.Contains(rec.Body.String(), "{{LISTSEARCHJS}}") {
+		t.Error("setup page must load the shared list filter with its content version")
+	}
 	// "/" still serves the app, not setup, while dictionaries are in use
 	rec = httptest.NewRecorder()
 	s.ServeHTTP(rec, newRequest("GET", "/", nil))

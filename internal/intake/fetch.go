@@ -303,12 +303,17 @@ func (f Fetcher) Fetch(ctx context.Context, dest, raw string, progress Progress)
 	get := u
 	var mf *megaFile
 	if id, key, ok := megaLink(u); ok {
-		if mf, err = f.megaResolve(ctx, id, key); err != nil {
+		folder := u.Query().Get("folder")
+		if mf, err = f.megaResolveContext(ctx, id, key, folder); err != nil {
 			return Source{}, err
 		}
 		get = mf.url
 	}
-	resp, offset, err := f.get(ctx, get, offset, prev, reuse)
+	downloadFetcher := f
+	if mf != nil {
+		downloadFetcher = f.megaFetcher()
+	}
+	resp, offset, err := downloadFetcher.get(ctx, get, offset, prev, reuse)
 	if errors.Is(err, errNotModified) {
 		// Nothing was transferred and nothing is temporary: this is the file
 		// the user downloaded before, handed back under its own name.

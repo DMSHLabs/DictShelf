@@ -150,3 +150,61 @@ func TestMegaFetch(t *testing.T) {
 		t.Fatal("a folder link is not a file link")
 	}
 }
+
+func TestMegaFolderListsOnlyDirectFiles(t *testing.T) {
+	folderKey := bytes.Repeat([]byte{0x39}, 16)
+	contentKey := bytes.Repeat([]byte{0x71}, 16)
+	fileKey := make([]byte, 32)
+	for i := range fileKey {
+		fileKey[i] = byte(i*11 + 5)
+	}
+	// The first four words XOR the last four to the content key.
+	for i := 0; i < 16; i++ {
+		fileKey[i] = contentKey[i] ^ fileKey[i+16]
+	}
+	seal := func(b []byte, key []byte) []byte {
+		block, _ := aes.NewCipher(key)
+		out := append([]byte(nil), b...)
+		for i := 0; i < len(out); i += aes.BlockSize {
+			block.Encrypt(out[i:i+aes.BlockSize], out[i:i+aes.BlockSize])
+		}
+		return out
+	}
+	attrs := func(name string) string {
+		b := []byte(`MEGA{"n":"` + name + `"}`)
+		b = append(b, make([]byte, (16-len(b)%16)%16)...)
+		block, _ := aes.NewCipher(contentKey)
+		cipher.NewCBCEncrypter(block, make([]byte, 16)).CryptBlocks(b, b)
+		return base64.RawURLEncoding.EncodeToString(b)
+	}
+	root := "Ldp3iDhI"
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("n") != "PVQmBb7Q" {
+			t.Errorf("folder context = %q", r.URL.Query().Get("n"))
+		}
+		var cmd []map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil || len(cmd) != 1 || cmd[0]["r"] != float64(0) {
+			t.Errorf("folder listing was not non-recursive: %v %v", cmd, err)
+		}
+		nodes := []map[string]any{
+			{"h": root, "p": "TA5X2bgC", "t": 1, "k": root + ":" + base64.RawURLEncoding.EncodeToString(make([]byte, 32))},
+			{"h": "FileNode", "p": root, "t": 0, "s": 314, "k": root + ":" + base64.RawURLEncoding.EncodeToString(seal(fileKey, folderKey)), "a": attrs("sample.mdx")},
+			{"h": "Image001", "p": root, "t": 0, "s": 27, "k": root + ":" + base64.RawURLEncoding.EncodeToString(seal(fileKey, folderKey)), "a": attrs("sample.bmp")},
+			{"h": "Nested01", "p": root, "t": 1, "k": root + ":" + base64.RawURLEncoding.EncodeToString(make([]byte, 32))},
+			{"h": "Child001", "p": "Nested01", "t": 0, "s": 99, "k": root + ":" + base64.RawURLEncoding.EncodeToString(seal(fileKey, folderKey)), "a": attrs("sample.mdd")},
+		}
+		_ = json.NewEncoder(w).Encode([]any{map[string]any{"f": nodes}})
+	}))
+	defer api.Close()
+	old := megaAPI
+	megaAPI = api.URL
+	defer func() { megaAPI = old }()
+	u, _ := url.Parse("https://mega.nz/folder/PVQmBb7Q#" + base64.RawURLEncoding.EncodeToString(folderKey))
+	l, ok, err := (Fetcher{Insecure: true}).megaFolderListing(context.Background(), u)
+	if err != nil || !ok {
+		t.Fatalf("listing: ok=%v err=%v", ok, err)
+	}
+	if len(l.files) != 2 || l.files[0].name != "sample.mdx" || l.files[0].size != 314 || l.files[1].name != "sample.bmp" || l.files[1].size != 27 {
+		t.Fatalf("direct files = %#v", l.files)
+	}
+}

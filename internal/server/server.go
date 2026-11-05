@@ -719,6 +719,7 @@ func setupPage(dirs []string, serving int, presetLinks string, language string) 
 	page = strings.ReplaceAll(page, "{{CHECKBOXCSS}}", assetTag(checkboxCSS))
 	page = strings.ReplaceAll(page, "{{WORKSPACECSS}}", assetTag(workspaceCSS))
 	page = strings.ReplaceAll(page, "{{SETUPJS}}", assetTag(setupJS))
+	page = strings.ReplaceAll(page, "{{LISTSEARCHJS}}", assetTag(listSearchJS))
 	return strings.ReplaceAll(page, "{{PRESETS}}", presetLinks)
 }
 

@@ -144,7 +144,18 @@ type Job struct {
 	// pasted links rather than from one file: nothing has been downloaded
 	// yet, Source is the collection's title, and each candidate is fetched
 	// and installed in turn once confirmed (collection.go).
-	Collection bool `json:"collection,omitempty"`
+	Collection  bool         `json:"collection,omitempty"`
+	MegaFolder  bool         `json:"megaFolder,omitempty"`
+	FolderFiles []FolderFile `json:"folderFiles,omitempty"`
+}
+
+// FolderFile is one direct child of a MEGA folder and the selection group it belongs to.
+type FolderFile struct {
+	Name       string `json:"name"`
+	Size       int64  `json:"size"`
+	Group      int    `json:"group"`
+	Extra      int    `json:"extra"`
+	Selectable bool   `json:"selectable"`
 }
 
 // Manager owns the single job. The zero value is usable.
@@ -333,7 +344,7 @@ func (m *Manager) download(ctx context.Context, j *jobState, f Fetcher, raw stri
 			c, berr := build(ctx, f, j.dest, m.library(), l)
 			m.ready(j, c, l.title, berr)
 			return
-		} else if errors.Is(lerr, ErrDriveRefused) {
+		} else if errors.Is(lerr, ErrDriveRefused) || errors.Is(lerr, ErrMegaRefused) || errors.Is(lerr, errMegaFolderTooLarge) {
 			err = lerr
 		}
 	}
@@ -436,6 +447,10 @@ func (m *Manager) ready(j *jobState, c collection, title string, err error) {
 	}
 	j.coll, j.extras = &c, c.extras
 	j.pub.State, j.pub.Source, j.pub.Collection = StateReady, title, true
+	if c.folderMode {
+		j.pub.MegaFolder = true
+		j.pub.FolderFiles = append([]FolderFile(nil), c.folderFiles...)
+	}
 	j.pub.Candidates = append([]Candidate(nil), c.cands...)
 	j.pub.Extras = append([]Extra(nil), c.extras...)
 	j.pub.Done, j.pub.Total = 0, 0
@@ -1371,6 +1386,7 @@ func (j Job) copy() Job {
 	c.Candidates = append([]Candidate(nil), j.Candidates...)
 	c.Extras = append([]Extra(nil), j.Extras...)
 	c.Installed = append([]string(nil), j.Installed...)
+	c.FolderFiles = append([]FolderFile(nil), j.FolderFiles...)
 	return c
 }
 

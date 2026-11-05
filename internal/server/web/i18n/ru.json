@@ -917,6 +917,8 @@
   "pages.alreadyIn": "уже в {where}",
   "pages.replacesIn": "заменяет вашу копию в {where}",
   "pages.file": "файл",
+  "pages.folderFileName": "Имя файла",
+  "pages.folderFileSize": "Размер",
   "pages.downloadedFiles": "загруженные файлы",
   "pages.nothingInstallable": "✕ Здесь нет словарей для установки",
   "pages.needed": "обязательно — без этого файла словарь не работает",

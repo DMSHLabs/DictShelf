@@ -352,6 +352,32 @@ async function impFetch(){
    four files and a resource folder, and the list must not become the row. The
    same cut as the phone's, so the two surfaces say the same sentence. */
 const FILES_SHOWN=3;
+let folderFileGroups=new Set(), folderSearch=null;
+function showFolderFiles(j){
+  const pane=$("folderFilePane"), rows=$("folderFileRows"), enabled=!!j.megaFolder;
+  pane.style.display=enabled?"flex":"none";
+  $("cands").style.display=enabled?"none":""; $("extras").style.display=enabled?"none":"";
+  if(!enabled)return;
+  rows.textContent=""; folderFileGroups=new Set();
+  (j.candidates||[]).forEach((c,i)=>{if(!c.missing?.length&&!c.unchanged)folderFileGroups.add(i)});
+  if(!folderSearch)folderSearch=window.wudictListSearch.create({root:rows,itemSelector:".folder-file",dock:$("folderFileSearch"),highlightSelector:".nm",initiallyFiltering:true});
+  (j.folderFiles||[]).forEach(f=>{
+    const row=el("label","folder-file"+(f.selectable?"":" disabled"));
+    const cb=el("input");cb.type="checkbox";cb.disabled=!f.selectable;cb.dataset.group=f.group;cb.dataset.extra=f.extra;cb.checked=f.selectable&&folderFileGroups.has(f.group);
+    row.appendChild(cb);row.appendChild(el("span","nm",f.name));row.appendChild(el("span","n",f.size?sizeMB(f.size):""));
+    cb.addEventListener("change",()=>{
+      if(cb.checked){folderFileGroups.add(f.group);for(const other of rows.querySelectorAll('input[type="checkbox"]'))if(+other.dataset.group===f.group)other.checked=true}
+      else if(f.extra>=0){/* Large media can be left out after selecting its dictionary. */}
+      else {folderFileGroups.delete(f.group);for(const other of rows.querySelectorAll('input[type="checkbox"]'))if(+other.dataset.group===f.group)other.checked=false}
+      window.__folderExtras=[...rows.querySelectorAll('input[type="checkbox"]:checked')].filter(x=>+x.dataset.extra>=0&&folderFileGroups.has(+x.dataset.group)).map(x=>+x.dataset.extra);
+      updateFolderInstall()
+    });
+    rows.appendChild(row);
+  });
+  window.__folderExtras=[...rows.querySelectorAll('input[type="checkbox"]:checked')].filter(x=>+x.dataset.extra>=0&&folderFileGroups.has(+x.dataset.group)).map(x=>+x.dataset.extra);
+  folderSearch.refresh(); updateFolderInstall();
+}
+function updateFolderInstall(){const ok=folderFileGroups.size>0;$("install").disabled=!ok}
 function fileList(files){
   if(!files||!files.length)return "";
   const head=files.slice(0,FILES_SHOWN);
@@ -360,6 +386,7 @@ function fileList(files){
 }
 
 function showCandidates(j){
+  showFolderFiles(j);
   const box=$("cands");box.textContent="";
   let usable=0;
   // A missing companion stops being a refusal when the same companion was
@@ -427,7 +454,7 @@ function showCandidates(j){
   $("candAll").classList.toggle("hidden",usable<2);
   $("found").classList.remove("hidden");
   impSay(usable?"":tx("pages.nothingInstallable"),usable?"":"err");
-  $("install").disabled=!usable;
+  $("install").disabled=j.megaFolder?folderFileGroups.size===0:!usable;
 }
 
 /* Companion files found beside a downloaded one, offered rather than taken.
@@ -459,8 +486,9 @@ function showExtras(j){
 
 async function impInstall(){
   if(!await saveIndexDefaults())return;
-  const pick=[...foldersDialogRoot.querySelectorAll("#cands input:checked")].map(i=>+i.value);
-  const extras=[...foldersDialogRoot.querySelectorAll("#extras input:checked")].map(i=>+i.value);
+  const folderMode=$("folderFilePane").style.display==="flex";
+  const pick=folderMode?[...folderFileGroups].sort((a,b)=>a-b):[...foldersDialogRoot.querySelectorAll("#cands input:checked")].map(i=>+i.value);
+  const extras=folderMode?(window.__folderExtras||[]):[...foldersDialogRoot.querySelectorAll("#extras input:checked")].map(i=>+i.value);
   const dir=importDestination();if(!dir||!pick.length)return;
   $("install").disabled=true;
   let r,j;
