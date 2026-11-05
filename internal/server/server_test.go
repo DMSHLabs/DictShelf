@@ -510,7 +510,7 @@ func TestIngestSSEAndMedia(t *testing.T) {
 	}
 }
 
-// TestSetupFlow: empty dict dir → "/" serves the setup page; /api/setup
+// TestSetupFlow: empty dict dir → "/" serves the app; /api/setup
 // validates, rejects empty folders, then switches live and persists.
 func TestSetupFlow(t *testing.T) {
 	emptyDir := t.TempDir()

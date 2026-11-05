@@ -68,6 +68,14 @@
       </section>
     </div>
   </div>
+  <div id="migrationShade" class="migration-shade" hidden>
+    <section class="migration-dialog" role="dialog" aria-modal="true" aria-labelledby="migrationTitle">
+      <h2 id="migrationTitle">{{T:pages.migrationTitle}}</h2>
+      <p id="migrationIntro"></p>
+      <p id="migrationError" class="migration-error" role="alert" hidden></p>
+      <div class="migration-actions" id="migrationActions"></div>
+    </section>
+  </div>
 </dialog>
 <link rel="stylesheet" href="/assets/folders-dialog.css?v={{FOLDERSDIALOGCSS}}">
 <script defer src="/assets/setup.js?v={{SETUPJS}}"></script>

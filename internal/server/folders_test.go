@@ -7,6 +7,7 @@ package server
 import (
 	"database/sql"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -107,9 +108,9 @@ func TestRevealLabel(t *testing.T) {
 	}
 }
 
-// /api/config is what the panel's Folders section reads, and /setup must stay
-// reachable after first run so folders can be seen and edited from the app.
-func TestConfigEndpointAndSetupPage(t *testing.T) {
+// /api/config is what the panel's Folders section reads. The old /setup URL
+// remains a shortcut into the app's single folder editor.
+func TestConfigEndpointAndSetupRedirect(t *testing.T) {
 	isolatedDBDir(t)
 	dicts := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dicts, "x.dsl"), []byte(sampleDSL), 0o644); err != nil {
@@ -171,39 +172,18 @@ func TestConfigEndpointAndSetupPage(t *testing.T) {
 		t.Errorf("loopback request should be offered reveal: %s", rec0.Body.String())
 	}
 
-	// the setup page is served on demand, not only while the registry is empty
+	// Old links open the in-app editor, regardless of whether dictionaries exist.
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, newRequest("GET", "/setup", nil))
-	/* Told apart by a class in its own markup, not by its <title>: the title is
-	   a translated string (pages.setupTitle, "Dictionary management" now, "Edit
-	   Folders" when this test was written), so asserting on it made the positive
-	   check fail on a rename and the negative one below pass for ever. The class
-	   is on setup.html's <body> and on no other page's. */
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "workspace-folders") {
-		t.Fatalf("/setup not served: %d", rec.Code)
+	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/?manageFolders=1" {
+		t.Fatalf("/setup redirect = %d %q", rec.Code, rec.Header().Get("Location"))
 	}
-	if !strings.Contains(rec.Body.String(), "Serving 1 dictionary from 2 folders") {
-		t.Errorf("intro should summarise, not list every path: %q", firstLines(rec.Body.String()))
-	}
-	if !strings.Contains(rec.Body.String(), "/assets/list-search.js?v=") || strings.Contains(rec.Body.String(), "{{LISTSEARCHJS}}") {
-		t.Error("setup page must load the shared list filter with its content version")
-	}
-	// "/" still serves the app, not setup, while dictionaries are in use
+	// The destination is the same main app used on first run.
 	rec = httptest.NewRecorder()
-	s.ServeHTTP(rec, newRequest("GET", "/", nil))
-	if strings.Contains(rec.Body.String(), "workspace-folders") {
-		t.Error("/ should serve the app once dictionaries are in use")
+	s.ServeHTTP(rec, newRequest("GET", "/?manageFolders=1", nil))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `id="editFolders"`) {
+		t.Error("folder editor redirect target is not the main app")
 	}
-}
-
-func firstLines(s string) string {
-	if i := strings.Index(s, "<h2"); i > 0 && i < len(s) {
-		return s[:i]
-	}
-	if len(s) > 400 {
-		return s[:400]
-	}
-	return s
 }
 
 // The registry must collapse a folder given twice, however it is spelled -

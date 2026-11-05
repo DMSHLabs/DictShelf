@@ -769,24 +769,21 @@ async function start(cachedConfig=null){
     if(cfg){
       // The main window already fetched this snapshot while opening its
       // dictionary list; use it to paint the folder rows without another trip.
+      if(window.wudictAndroidGo)migration=androidSetupCall("setup","migration=status");
+      else if(typeof nativeSetupCall==="function")migration=await nativeSetupCall("setup","migration=status");
+      else migration=await(await browserHTTP("/api/setup?migration=status")).json();
     }else if(window.wudictAndroidGo){
       cfg=JSON.parse(window.wudictAndroidGo.config());
-      if(!foldersDialogEmbedded)migration=androidSetupCall("setup","migration=status");
+      migration=androidSetupCall("setup","migration=status");
     }else if(typeof nativeSetupCall==="function"){
-      if(foldersDialogEmbedded)cfg=await nativeSetupCall("config");
-      else [cfg,migration]=await Promise.all([nativeSetupCall("config"),nativeSetupCall("setup","migration=status")]);
+      [cfg,migration]=await Promise.all([nativeSetupCall("config"),nativeSetupCall("setup","migration=status")]);
     }else{
-      if(foldersDialogEmbedded){
-        const configResponse=await browserHTTP("/api/config");
-        cfg=await configResponse.json();
-      }else{
-        const [configResponse,migrationResponse]=await Promise.all([browserHTTP("/api/config"),browserHTTP("/api/setup?migration=status")]);
-        [cfg,migration]=await Promise.all([configResponse.json(),migrationResponse.json()]);
-      }
+      const [configResponse,migrationResponse]=await Promise.all([browserHTTP("/api/config"),browserHTTP("/api/setup?migration=status")]);
+      [cfg,migration]=await Promise.all([configResponse.json(),migrationResponse.json()]);
     }
   }catch(e){try{cfg=window.wudictAndroidGo?JSON.parse(window.wudictAndroidGo.config()):typeof nativeSetupCall==="function"
     ? await nativeSetupCall("config") : await (await browserHTTP("/api/config")).json()}catch(_){}}
-  if(migration&&migration.available&&!foldersDialogEmbedded)await showMigrationDialog(migration.forked);
+  if(migration&&migration.available)await showMigrationDialog(migration.forked);
   for(const [feature,suffix] of [["contains","Contains"],["fullText","FullText"]]){
     $("newIndex"+suffix).checked=cfg?.indexDefaults
       ? !!cfg.indexDefaults[feature] : feature==="contains";
@@ -831,6 +828,7 @@ async function start(cachedConfig=null){
   });
 }
 
+let migrationDialogResolve=null;
 function showMigrationDialog(forked){
   const intro=$("migrationIntro"),actions=$("migrationActions"),shade=$("migrationShade");
   intro.textContent=tx(forked?"pages.migrationForked":"pages.migrationUpstream");
@@ -838,12 +836,13 @@ function showMigrationDialog(forked){
     [["copy","pages.migrationCopy"],["move","pages.migrationMove"],["new","pages.migrationNew"]]:
     [["import","pages.migrationImport"],["new","pages.migrationNew"]];
   return new Promise(resolve=>{
+    migrationDialogResolve=resolve;
     for(const [choice,key] of choices){
       const button=document.createElement("button");
       button.type="button";button.className=choice==="new"?"btn ghost":"btn";
       button.textContent=tx(key);
       button.addEventListener("click",()=>{
-        if(choice==="new"){shade.hidden=true;resolve();return}
+        if(choice==="new"){shade.hidden=true;migrationDialogResolve=null;resolve();return}
         applyMigration(choice,button);
       });
       actions.appendChild(button);
@@ -866,7 +865,12 @@ async function applyMigration(choice,button){
       const result=await response.json();
       if(!response.ok||result.error)throw new Error(result.error||response.statusText);
     }
-    location.assign(setupNavigation("/setup"));
+    if(foldersDialogEmbedded){
+      $("migrationShade").hidden=true;
+      const resolveMigration=migrationDialogResolve;migrationDialogResolve=null;resolveMigration?.();
+      await start();
+    }
+    else location.assign(setupNavigation("/?manageFolders=1"));
   }catch(e){
     error.textContent=window.wudictI18n.errorText(e.message);error.hidden=false;
     buttons.forEach(b=>b.disabled=false);button.focus();setSetupNotice("");

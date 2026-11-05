@@ -52,7 +52,7 @@ it is a different thing.
 | **resource override** | a file in a library folder's `res/` that DictShelf serves instead of the dictionary's own | patch, repair, fix, replacement |
 | **dictionary panel** | the panel the <kbd>☰</kbd> button opens | ☰ panel, settings, the panel (on first mention) |
 | **folder summary** | the row at the top of the dictionary panel (<kbd>⚙ 2 folders · 105 dictionaries</kbd>) and the actions it expands to | ⚙ box, cog menu, settings |
-| **setup page** | `/setup` | settings page, configuration page |
+| **Manage dictionary folders dialog** | the app's in-app folder editor | setup page, configuration page |
 | **dictionary picker** | the dictionary drop-down next to the search box | dropdown, selector |
 | **group** | a set of dictionaries the picker offers, defined in `groups.ini` | facet, category, tag |
 | **enabled** | included in *All dictionaries* searches | active, on, selected |

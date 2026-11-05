@@ -253,7 +253,7 @@ func (s *Server) desktopPage(path string, query url.Values, acceptLanguage strin
 		page, etag := s.indexPageFor(query.Get("style") == "off", acceptLanguage)
 		return page, etag, "no-cache", true
 	case "/setup":
-		return s.setupPageFor(acceptLanguage), "", "no-cache", true
+		return desktopSetupRedirect(query), "", "no-store", true
 	case "/lemmas":
 		return s.lemmasPageFor(acceptLanguage), "", "no-cache", true
 	case "/groups":
@@ -265,6 +265,12 @@ func (s *Server) desktopPage(path string, query url.Values, acceptLanguage strin
 	default:
 		return nil, "", "", false
 	}
+}
+
+func desktopSetupRedirect(query url.Values) []byte {
+	target := setupRedirectTarget(query)
+	page := `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=` + target + `"><script>location.replace(` + strconv.Quote(target) + `)</script>`
+	return []byte(page)
 }
 
 func desktopWebResourceRoute(path string) bool {

@@ -47,10 +47,6 @@ import (
 var indexHTMLSrc []byte
 var indexHTML = webAsset(indexHTMLSrc, htmlAsset)
 
-//go:embed web/setup.html
-var setupHTMLSrc []byte
-var setupHTML = string(webAsset(setupHTMLSrc, htmlAsset))
-
 //go:embed web/groups.html
 var groupsHTMLSrc []byte
 var groupsHTML = webAsset(groupsHTMLSrc, htmlAsset) // the groups.ini editor (D162)
@@ -93,7 +89,7 @@ var browseHTML = webAsset(browseHTMLSrc, htmlAsset) // the page-by-page headword
 
 //go:embed web/setup.css
 var setupCSSSrc []byte
-var setupCSS = webAsset(setupCSSSrc, cssAsset) // palette and controls shared by setup.html and lemmas.html
+var setupCSS = webAsset(setupCSSSrc, cssAsset) // palette and controls shared by the folder dialog and lemmas.html
 
 //go:embed web/setup.js
 var setupJSSrc []byte
@@ -221,7 +217,7 @@ type Server struct {
 	// DictShelf host leaves it disabled and prepares indexes only on explicit action.
 	AutoIndex bool
 
-	// First-run Windows data migration is offered on the setup page after it
+	// First-run Windows data migration is offered in the folder dialog after it
 	// has loaded. The host supplies filesystem operations; other platforms leave
 	// these callbacks nil.
 	FirstRunMigrationStatus func() FirstRunMigration
@@ -260,7 +256,7 @@ type Server struct {
 	DictDirEditable bool
 
 	// ConfigProblems are the config file's lines that set nothing
-	// (config.Config.Problems), shown on the setup page.
+	// (config.Config.Problems), shown in the folder dialog.
 	ConfigProblems []string
 
 	// Effective is every tunable key's resolved value and origin, published by
@@ -649,78 +645,18 @@ func (s *Server) pageForLanguage(dayTag, nightTag, presetLinks, language, choice
 	return s.styledPage, s.styledETag
 }
 
-// handleSetupPage serves the folder editor on demand. Reachable at any time so "which folders am I scanning?" is always
-// answerable from the app itself, never only from a terminal.
+// handleSetupPage keeps old links working by opening the in-app folder editor.
 func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Add("Vary", "Accept-Language")
-	_, _ = w.Write(s.setupPageFor(r.Header.Get("Accept-Language")))
+	w.Header().Set("Cache-Control", "no-store")
+	http.Redirect(w, r, setupRedirectTarget(r.URL.Query()), http.StatusFound)
 }
 
-func (s *Server) setupPage() []byte {
-	return s.setupPageFor("")
-}
-
-func (s *Server) setupPageFor(acceptLanguage string) []byte {
-	choice := s.reg.prefs.Language()
-	language := s.reg.prefs.ResolvedLanguage(acceptLanguage)
-	page := setupPage(s.reg.Dirs(), s.reg.UserCount(), s.pagePresetLinks(), language)
-	return s.renderUserUIChoice(page, language, choice)
-}
-
-// setupPage renders the folder chooser/editor. The intro names a single
-// folder, but never repeats a list the editable rows below already show -
-// four long paths in a sentence pushed the actual controls off the screen.
-//
-// presetLinks is what the page gets from the presets that asked to be here
-// (presets.go's pagePresetLinks) - empty in the ordinary case, and the reason
-// a "Quiet labels" choice reaches this page at all: it is a document of its
-// own, and the app's layer machinery cannot reach it.
-func setupPage(dirs []string, serving int, presetLinks string, language string) string {
-	var intro string
-	switch {
-	case serving > 0:
-		intro = fmt.Sprintf("Serving %s from %s.",
-			logx.Plural(serving, "dictionary", "dictionaries"), logx.Plural(len(dirs), "folder", "folders"))
-	case len(dirs) == 1:
-		state := "contains no dictionaries yet"
-		if _, err := os.Stat(dirs[0]); err != nil {
-			state = "does not exist"
-		}
-		intro = fmt.Sprintf("Your dictionary folder <code>%s</code> %s.", htmlEscape(dirs[0]), state)
-	case len(dirs) > 1:
-		intro = fmt.Sprintf("None of your %d dictionary folders hold dictionaries yet.", len(dirs))
-	default:
-		intro = "No dictionary folder is configured yet."
+func setupRedirectTarget(query url.Values) string {
+	target := url.Values{"manageFolders": []string{"1"}}
+	if query.Get("wudict_webview2") == "1" {
+		target.Set("wudict_webview2", "1")
 	}
-	if uiLanguage(language) != "en" {
-		key := "pages.noFolderIntro"
-		params := map[string]string{"count": fmt.Sprint(serving), "folders": fmt.Sprint(len(dirs))}
-		switch {
-		case serving > 0:
-			key = "pages.servingIntro"
-		case len(dirs) == 1:
-			key = "pages.emptyFolderIntro"
-			if _, err := os.Stat(dirs[0]); err != nil {
-				key = "pages.missingFolderIntro"
-			}
-			params["path"] = "<code>" + htmlEscape(dirs[0]) + "</code>"
-		case len(dirs) > 1:
-			key = "pages.emptyFoldersIntro"
-			params["count"] = fmt.Sprint(len(dirs))
-		}
-		// Escape catalog text first; only the path's code wrapper is markup.
-		intro = uiParameter.ReplaceAllStringFunc(htmlEscape(uiText(language, key)), func(slot string) string {
-			return params[slot[1:len(slot)-1]]
-		})
-	}
-	page := strings.ReplaceAll(strings.ReplaceAll(setupHTML, "{{INTRO}}", intro), "{{CSS}}", cssTag)
-	page = strings.ReplaceAll(page, "{{CHECKBOXCSS}}", assetTag(checkboxCSS))
-	page = strings.ReplaceAll(page, "{{WORKSPACECSS}}", assetTag(workspaceCSS))
-	page = strings.ReplaceAll(page, "{{SETUPJS}}", assetTag(setupJS))
-	page = strings.ReplaceAll(page, "{{LISTSEARCHJS}}", assetTag(listSearchJS))
-	return strings.ReplaceAll(page, "{{PRESETS}}", presetLinks)
+	return "/?" + target.Encode()
 }
 
 // cssTag content-addresses the shared stylesheet, so its week-long cache is
@@ -743,7 +679,7 @@ func (s *Server) lemmasPage() []byte {
 }
 
 func (s *Server) lemmasPageFor(acceptLanguage string) []byte {
-	// {{PRESETS}} is the same courtesy setup.html gets: the app halves of the
+	// {{PRESETS}} is the same courtesy the folder dialog gets: the app halves of the
 	// presets that asked to be on this page too (presets.go). Rendered per
 	// request rather than precomputed: the page carries {{T:…}} keys and is
 	// served in the reader's language.
@@ -754,11 +690,6 @@ func (s *Server) lemmasPageFor(acceptLanguage string) []byte {
 	choice := s.reg.prefs.Language()
 	language := s.reg.prefs.ResolvedLanguage(acceptLanguage)
 	return s.renderUserUIChoice(string(bytes.ReplaceAll(page, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))), language, choice)
-}
-
-func htmlEscape(s string) string {
-	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;")
-	return r.Replace(s)
 }
 
 // handleLibrary lists the previously imported dictionaries kept in the db dir

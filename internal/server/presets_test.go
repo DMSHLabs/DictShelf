@@ -149,7 +149,6 @@ func TestGreyTextIsOnlyForDisabledStates(t *testing.T) {
 		{"group-editor.css", string(groupEditorCSS), appGrey},
 		{"history.css", string(historyCSS), appGrey},
 		{"setup.css", string(setupCSS), pageGrey},
-		{"setup.html", setupHTML, pageGrey},
 		{"lemmas.html", string(lemmasHTML), pageGrey},
 		{"browse.html", string(browseHTML), pageGrey},
 	}

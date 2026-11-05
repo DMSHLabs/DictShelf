@@ -45,7 +45,6 @@ func TestAppearanceContract(t *testing.T) {
 	}
 	docs := []doc{
 		{"the app page", "/", []string{string(appCSS), string(groupEditorCSS), string(historyCSS), string(i18nCSS)}, "data-shell-sepia"},
-		{"Dictionary management", "/setup", []string{string(setupCSS), string(i18nCSS)}, "data-shell-tone"},
 		{"Lemmatization", "/lemmas", []string{string(setupCSS)}, "data-shell-tone"},
 		{"Browse", "/browse", []string{string(i18nCSS)}, "data-shell-tone"},
 	}

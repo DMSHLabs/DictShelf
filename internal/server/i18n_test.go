@@ -101,7 +101,7 @@ func TestI18nPagesAndCache(t *testing.T) {
 	if ru.Code != 200 || ru.Header().Get("ETag") == systemRu.Header().Get("ETag") {
 		t.Fatal("language did not invalidate the cached page")
 	}
-	for _, path := range []string{"/", "/setup", "/browse", "/lemmas"} {
+	for _, path := range []string{"/", "/browse", "/lemmas"} {
 		r := serve(s, newRequest("GET", path, nil))
 		body := r.Body.String()
 		if r.Code != 200 || strings.Contains(body, "{{") || !strings.Contains(body, `"language":"ru"`) {
@@ -113,11 +113,7 @@ func TestI18nPagesAndCache(t *testing.T) {
 		if path != "/" && strings.Contains(body, `id="languageBtn"`) {
 			t.Errorf("temporary language selector remains on %s", path)
 		}
-		// The expected title is read from the catalogue rather than copied as a
-		// literal: the setup page's title was renamed once already
-		// ("Dictionary folders" → "Dictionary management"), and a hardcoded
-		// copy here turns that into a fake failure instead of a caught bug.
-		for route, key := range map[string]string{"/setup": "pages.setupTitle", "/lemmas": "pages.lemmas"} {
+		for route, key := range map[string]string{"/lemmas": "pages.lemmas"} {
 			if path == route && !strings.Contains(body, "<title>"+uiText("ru", key)+"</title>") {
 				t.Errorf("page title not translated: %s", path)
 			}
@@ -175,28 +171,6 @@ func TestResolveUILanguageFromAcceptLanguage(t *testing.T) {
 	}
 }
 
-func TestI18nFolderIntro(t *testing.T) {
-	dir := t.TempDir()
-	for _, tc := range []struct {
-		dirs  []string
-		count int
-		want  string
-	}{
-		{nil, 0, "Папка словарей ещё не задана."},
-		{[]string{dir}, 0, "пока нет словарей."},
-		{[]string{dir, dir}, 0, "ни в одной из папок (2)."},
-		{[]string{dir}, 22, "Используется словарей: 22. Папок: 1."},
-		{[]string{`missing/<b>{count}</b>`}, 0, `<code>missing/&lt;b&gt;{count}&lt;/b&gt;</code> не существует.`},
-	} {
-		if page := setupPage(tc.dirs, tc.count, "", "ru"); !strings.Contains(page, tc.want) {
-			t.Errorf("intro missing %q", tc.want)
-		}
-	}
-	if page := setupPage([]string{dir}, 2, "", "en"); !strings.Contains(page, "Serving 2 dictionaries from 1 folder.") {
-		t.Fatal("English intro changed")
-	}
-}
-
 func TestI18nCatalogs(t *testing.T) {
 	params := regexp.MustCompile(`\{[a-zA-Z0-9_]+\}`)
 	placeholders := func(s string) []string { v := params.FindAllString(s, -1); slices.Sort(v); return slices.Compact(v) }
@@ -245,7 +219,7 @@ func TestI18nCatalogs(t *testing.T) {
 	// This checks explicit translation references, not arbitrary new English
 	// upstream literals. Those still need review when merging upstream changes.
 	refs := regexp.MustCompile(`\b(?:t|tx)\("([a-zA-Z0-9_.]+)"`)
-	for _, file := range []string{"web/index.html", "web/setup.html", "web/lemmas.html", "web/browse.html", "web/i18n.js", "web/looks.js", "web/group-editor.js", "web/speak.js", "web/list-search.js"} {
+	for _, file := range []string{"web/index.html", "web/lemmas.html", "web/browse.html", "web/i18n.js", "web/looks.js", "web/group-editor.js", "web/speak.js", "web/list-search.js"} {
 		data, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)

@@ -25,18 +25,19 @@ search for `dictshelf` to list its topics.
 ## 2. Set the dictionary folders
 
 The default dictionary folder is `~/Dictionaries`, subfolders included. If it
-is missing or empty, the main page shows the howto with a link to the setup
-page, [localhost:6888/setup](http://localhost:6888/setup).
+is missing or empty, the main page shows the howto and an empty-state link that
+opens the folder management dialog. The same dialog is available from the app
+menu.
 
-On the setup page, enter the path of a folder with dictionary files (`~` is
-allowed). The page checks the path as you type and shows how many dictionaries
+In the dialog, enter the path of a folder with dictionary files (`~` is
+allowed). The dialog checks the path as you type and shows how many dictionaries
 it contains. <kbd>Use this folder</kbd> saves it to `~/.dmshlabs/dictshelf/dictshelf.toml`;
 no restart is needed.
 
-To open the setup page later: <kbd>☰</kbd> → folder summary →
+To open the dialog later: <kbd>☰</kbd> → folder summary →
 <kbd>Edit folders…</kbd>.
 
-The folders can also be set without the setup page:
+The folders can also be set without the dialog:
 
 === "Config file"
 
@@ -57,7 +58,7 @@ The folders can also be set without the setup page:
     ```
 
 A command-line flag overrides the environment variable, which overrides
-`dictshelf.toml`. The setup page shows when a folder list is overridden.
+`dictshelf.toml`. The dialog shows when a folder list is overridden.
 
 [All settings](../reference/configuration.md){ .md-button }
 

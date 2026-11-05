@@ -64,7 +64,6 @@ func TestServedAssets(t *testing.T) {
 		kind   assetKind
 	}{
 		{"index.html", indexHTML, htmlAsset},
-		{"setup.html", []byte(setupHTML), htmlAsset},
 		{"lemmas.html", lemmasHTML, htmlAsset},
 		{"groups.html", groupsHTML, htmlAsset},
 		{"browse.html", browseHTML, htmlAsset},
