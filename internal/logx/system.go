@@ -75,6 +75,7 @@ func ConfigureSystemLog(enabled, baseEvents, webEvents, downloadEvents bool) {
 	systemLogWebEvents = webEvents
 	systemLogDownloadEvents = downloadEvents
 	systemMu.Unlock()
+	SystemDiagnostic("system log options applied enabled=%t base_events=%t web_events=%t download_events=%t", enabled, baseEvents, webEvents, downloadEvents)
 }
 
 func systemDir() string {
