@@ -1,24 +1,24 @@
-# DictShelf — based on WuWeiDict
+# DictShelf
 
-**DictShelf** is a cross-platform dictionary app based on the WuWeiDict codebase.
-Its source, releases and maintained documentation live in the
+**DictShelf** is a cross-platform dictionary app. Its source, releases and
+maintained documentation live in the
 [DMSHLabs/DictShelf repository](https://github.com/DMSHLabs/DictShelf). The app
 is a fast, _native_, self-contained, multi-format dictionary server that runs
 in your browser at [http://localhost:6888](http://localhost:6888).
 
-DictShelf keeps the original format support and adds its own product identity and platform work:
+DictShelf began as a fork of the **WuWeiDict** project
+([`wuweidict/wudict`](https://github.com/wuweidict/wudict)) and keeps its format
+support, its GPL-3.0-or-later licence and the upstream copyright notices in every
+file upstream wrote. What the fork adds is its own product identity and platform
+work:
 
-- Its own Android identity — launcher name **DictShelf** — so it installs and
-  runs **beside** the upstream DictShelf app.
-- A different default server port, **6889** (upstream uses 6888), so both apps
-  can run at the same time on one device.
+- Its own Android identity — package `com.dmshlabs.dictshelf`, launcher name
+  **DictShelf** — so it installs and runs **beside** the upstream wudict app.
 - Android-focused UI work: an extended Appearance sheet (window background
   color and image, CSS presets as toggleable layers), a native folder picker,
   and ongoing reliability fixes.
-- The Go server, the supported formats and the GPL-3.0-or-later license stay
-  upstream-compatible; upstream copyright notices remain in place, and the files
-  this fork authored carry its own — `Copyright (C) 2026 DmShAl (Shepeta
-  Dmitry)`, under the same license.
+- The files this fork authored carry its own notice — `Copyright (C) 2026 DmShAl
+  (Shepeta Dmitry)` — under the same licence.
 
 Desktop builds and the general manual live in this repository. To build the
 Android app from source, see the
@@ -496,12 +496,12 @@ on dictionaries and tools to read, write and convert data in these formats.
 
 Not affiliated with, or endorsed by, any of the above.
 
-## License
+## Licence
 
 GPL-3.0-or-later — see [LICENSE](LICENSE).
 
 The files this fork authored, and its changes to the ones it inherited, are
-© 2026 DmShAl (Shepeta Dmitry), under the same license; upstream's copyright
+© 2026 DmShAl (Shepeta Dmitry), under the same licence; upstream's copyright
 notices remain in place where upstream wrote the file.
 
 `dictshelf licenses` prints the full third-party notices from inside the binary;
@@ -516,7 +516,7 @@ Third-party code included in this repository:
 | `internal/speex/clib` (Speex decoder) | [Speex](https://www.speex.org/), © Jean-Marc Valin / Xiph.Org, Analog Devices | BSD-3-Clause |
 | `internal/speex/clib` (`kiss_fft`) | [kissfft](https://github.com/mborgerding/kissfft), © Mark Borgerding | BSD-3-Clause |
 
-Dependencies fetched at build time keep their own licenses; every one of them,
-with its license text, is listed in
+Dependencies fetched at build time keep their own licences; every one of them,
+with its licence text, is listed in
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) (regenerate with
 `make notices`).

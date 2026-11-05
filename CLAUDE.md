@@ -1,50 +1,67 @@
-# WuWeiDict
+# DictShelf — the code, and the rules of this tree
 
-**Naming (D27, amended 2026-09-28).** In anything a user reads, prefer **`wudict`** (lowercase; **wuDict** in the Android app and browser extensions); **WuWeiDict** is the official full name, used only where the official name is required. The technical name is **`wudict`** everywhere else — binary, env prefix (`WUDICT_*`), user folders (`~/.wudict`; `wudict` in each XDG base dir on Linux/BSD, `internal/basedir`), db format prefix (`wudict:`), localStorage keys, CSS classes. The module path is `github.com/wuweidict/wudict` because the repo is `wudict`.
+**This file is the fork's, not upstream's.** Upstream has its own `CLAUDE.md`
+describing upstream's code — module `github.com/wuweidict/wudict`, pure-Go and
+`purego` builds, `wudict` everywhere — and **none of that is true here**. On an
+upstream sync, resolve `CLAUDE.md` to THIS side; it is the only file in the tree
+that must not be taken from upstream.
 
-Go web dictionary app supporting MDX/MDD, StarDict, Aard2 Slob, Lingvo DSL, Babylon BGL, openZIM; wudict markdown (`.wudict.md`: standard CommonMark, read by `internal/format/wmd` and written by `wudict dump -format md`). Dual-backend: a dictionary is searched through its own format ("preview", D15) until it is **prepared** into a library folder — `<db dir>/<name>/{text.db, media.db, info.txt}` (D20) — which is the primary mode. Preparation is automatic and cheap (headwords only, `AUTO_INDEX`); *full-text* is a per-dictionary switch, and media packing a second (D24). Search modes are exact · prefix · full-text · wildcard (D16, D167 — "fuzzy" and "contains" are retired, D170).
+The product is **DictShelf**, the command is **`dictshelf`**, and the module is
+`github.com/DMSHLabs/DictShelf` (D27). The fork's **working notes are not in this
+repository**: the state of the fork, the plans, the session records, the document
+gate and the rules that govern them live beside it in `../DictShelf_Priv` —
+start at `../DictShelf_Priv/AGENTS.md`. The **tool names of the machine you are
+on** (the cgo compiler, the real name of `make`, Python, the SDKs) are in
+`../DictShelf_Priv/build-tools.md`: read it before the first build. The rules
+that must not be broken by not knowing them (branches, markers, licence, dead
+upstream, monolith) are in `AGENTS.md` next to this file.
 
-## Read this first (token discipline)
-Every doc below is long; read the section your change touches, never a whole file. `grep -n '^##' <file>` is the map.
-- `docs/SPEC.md` — architecture, schema, query engine (78 KB). Read the § you touch before writing code there.
-- `docs/FORMATS.md` — per-format facts + exact reference-code pointers. Read the section for the format you touch, nothing more.
-- `docs/WUDICT-MARKDOWN.md` — normative spec of wudict markdown (reader + writer). Read only when touching that format or its export. `entry://` is the canonical lookup link; `bword://` is a legacy alias: parse, never emit.
-- `docs/STYLE.md` — terms and register for every text a user reads (manual, README, UI, `--help`, howto). Read before writing any of it.
-- `docs/OPEN.md` — researched but **unscheduled** items (O-numbers). Check before proposing morphology, stemming or Unicode-folding work; do not start anything in it without being asked.
+**The name `wudict` survives in exactly three kinds of place**, and nowhere else:
+the **wudict markdown** format (its name, its `wudict:` front-matter gate, its
+`.wudict.md` / `.wudict.files` naming, read by `internal/format/wmd` and written
+by `dictshelf dump -format md`); **legacy identifiers that are on disk or in a
+user's settings** — the config file `wudict.toml` (`config.LegacyName`), the data
+folders `~/.wudict` and `~/.wuDict2` (`internal/cli/migration_windows.go`), the
+env vars `WUDICT_HOME` / `WUDICT_PORTABLE_HOME`, the WebView bridge and
+localStorage names (`wudictGet*`, `wudict_theme`, `window.wudictI18n`,
+`internal/cli/desktop_window_windows.go`) and the Android `libwudictbridge.so`;
+and one sentence in `README.md` recording that DictShelf is a fork of WuWeiDict.
 
-**D-, P- and C-numbers** cited throughout the code (`D15`, `docs.local/PERF.md §3.1`,
-`P88`) refer to the maintainer's decision log, phase record, performance audit and
-review backlog. Those are working records kept outside the repository and are not
-distributed with it; the citations are provenance, so treat a reference you cannot
-open as a note on *why* the code is the way it is, not as a missing file.
+## The build
+
+One flavour: **cgo**, `-tags sqlite_fts5,sqlite_dbstat`. A tag-less build or
+`CGO_ENABLED=0` **fails on purpose** (`internal/store/driver_missing.go`) — the
+pure-Go driver was removed on 2026-11-03, so the failure is the feature, not a
+bug to fix. `make check` before declaring work done (the Makefile is the
+developer UI, D10: `make help` lists every target); `make api-test` keeps
+`internal/server/web/openapi.yaml` matched to the routes, and `make api-lint`
+validates it with Redocly (needs Node). This machine's command with the compiler
+path is in `../DictShelf_Priv/build-tools.md`.
 
 ## Layout
 
-This repository is the whole project (`github.com/wuweidict/wudict`); there is no enclosing workspace.
-
-- `internal/cli` — the CLI and server entry point (all of it). One `package main` shim builds from it: `./main.go` at the module root → `wudict` (D28). The version stamp targets `internal/cli.Version`, not `main.version`.
-- `internal/dict` — core interfaces, format registry, discovery, `Fold`.
-- `internal/format/<fmt>` — mdx, stardict, slob, dsl, bgl, zim, wmd backends.
-- `internal/store` — the prepared SQLite backend: schema, ingest, library folders, media, `Reconcile`.
-- `internal/server` — registry, HTTP API (`web/openapi.yaml`, kept honest by `make api-test`), embedded UI (`web/index.html`, `web/setup.html`, `web/frame.js`).
-- `internal/search` — the per-dictionary query and the streaming fan-out; `internal/ftsq` full-text query plans; `internal/wildcard`.
-- `internal/htmlref` — article HTML: resource-reference rewriting and sanitising. `internal/resource` — resource-name matching inside containers.
-- `internal/basedir` — where the user's files live (`~/.wudict`, or the XDG base dirs on Linux/BSD) and the one-time move between them.
-- `internal/intake` — archive/URL/folder → candidate dictionaries → installed. `internal/config` — flag > env > toml layering.
-- `internal/lang`, `internal/morph`, `internal/lemmas` — language attribution and lemmatisation (D82, D88).
-- `internal/gomdict` — inlined MDX/MDD parser. `internal/speex` — in-process .spx decoder (D18).
-- `internal/howto` — the **wudict howto**, the app's guide as an embedded wudict markdown dictionary (`wudict-howto.wudict.md` + `.files/`). Every headword starts with `wudict `; `howto_test.go` holds it to the format (gate, zero warnings, links resolve, a clean dump reproduces it byte for byte). Edit the guide there; `pages/` is the website and is not part of the app.
-- `android/` — the Android app (D52): a dependency-free Java WebView shell that execs the android/arm64 binary shipped inside the APK as `libwudict.so`. `make android-go` rebuilds the Go side (cgo flavour, D53: mattn FTS5 + built-in speex, needs the NDK; `make android-go-purego` is the NDK-less fallback), `make apk-foss-debug` / `apk-foss-release` / `aab-play` the whole app; CI signs via repo secrets. The port adds no Go code and no build tags.
-- **The Makefile is the developer UI (D10): every action has a target, `make help` lists them, `make check` before declaring work done.**
-
-The reference projects this was built from (`mdict-go-web`, `draego`, `pyglossary`, the speex sources) have been **removed from disk**. `docs/FORMATS.md` still cites their file and function names: read those as provenance for where a rule came from, not as paths you can open.
+- `internal/cli` — the CLI and the server entry point (all of it); one `package main` shim at the module root builds `dictshelf`. The version stamp targets `internal/cli.Version`.
+- `internal/dict` — the format-agnostic core: interfaces, format registry, discovery.
+- `internal/format/<fmt>` — `mdx`, `stardict`, `slob`, `dsl`, `lsd`, `bgl`, `wmd`, `zim`. Each implements both `Dictionary` (runtime lookup) and `Reader` (one-shot ingest scan).
+- `internal/store` — the ingested SQLite backend: schema, ingest, library folders, media, `Reconcile`, and the fork's `dmsh_*` pieces (mask ranges, article results, articles split/rebuild).
+- `internal/search` — the per-dictionary query and the streaming fan-out; `internal/ftsq` lowers a typed query into the readings; `internal/hilite` marks the matched spans.
+- `internal/server` — the persistent HTTP server, the API and the embedded UI (`web/index.html`, `web/setup.html`, `web/frame.js`, `web/openapi.yaml`).
+- `internal/intake` — arbitrary bytes (archive, URL, folder) → candidate dictionaries → installed; `internal/config` — flag > env > toml layering; `internal/fsx` — the file handling every package shares.
+- `internal/lang`, `internal/morph`, `internal/lemmas` — the language a dictionary is indexed in, inflection → dictionary form (O3), and the lemma data that morph reads (D88).
+- `internal/limits` — the `MAX_*` bounds on how much a file, an import or a download may occupy; `internal/indexconst` — the shared sizes and intervals of prepared indexes.
+- `internal/htmlref` — resource references inside one article; `internal/resource` — matching the name an article asks for; `internal/artmark` — the markup contract for articles this app writes.
+- `internal/estimate` — what an index will cost before it is built; `internal/facet` — the groups a dictionary belongs to; `internal/logx` — the app-wide message channel; `internal/sysmem` — what memory the machine has and has free; `internal/tray` — the optional system-tray icon.
+- `internal/gomdict` — the inlined MDX/MDD parser; `internal/speex` — the in-process `.spx` decoder (D18).
+- `internal/howto` — the app's own guide, embedded as a wudict-markdown dictionary; edit it there, not in `pages/`.
+- `internal/wildcard` — **upstream's wildcard queries, kept UNWIRED** (dead code: take upstream's side verbatim on a sync, never wire it; the registry and the `dmsh_` naming convention are in `../DictShelf_Priv/docs/DEAD-UPSTREAM.md`).
+- `android/` — the Java WebView shell and the Go library it execs (no Go code of its own, no build tags); `pages/` — the published site; `packaging/` — installer and brand assets; `tools/` — the scripts the Makefile targets call.
 
 ## Conventions
-- Go, modules. `make build` uses cgo (`-tags sqlite_fts5` → mattn sqlite + built-in speex); a **tag-less** `go build`/`go install` gets the pure-Go driver and must keep working, because FTS5 is mandatory (D29). `-tags purego` must keep building and passing (D4, D18). Table-driven tests.
-- **Need-to-know (D102).** Internal mechanics and the UI are separate layers; some
-  internals map 1:1 to a control, most must not surface at all. A mechanism reaches
-  the UI only when the user must *decide* or *act* on it — never as an explanation of
-  how the app works. Applies to every label, hint and message.
-- Each format package implements both `Dictionary` (direct runtime lookup) and `Reader` (sequential ingest scan) — parsing logic written once, shared by both. Ingesters are one-shot batch paths.
-- **Comments state the present (D161).** Invariants, reasons, measurements and D/P/§ citations; never "used to" narratives - history belongs in the decision log.
-- **Prepared data changes only through `store.Reconcile` (D157).** A new way to prepare, rebuild or pack states a `store.Target`; it never calls `IngestPlan`/`IngestMedia` itself, and it judges a prepared database through one `store.Inspect` read. A dictionary never prepared starts from headwords only everywhere — the app, `wudict ingest`, the self-preparing formats (D24, D152 Am. 1).
+
+- **Need-to-know (D102).** Internals and the UI are separate layers: a mechanism reaches the UI only when the user must *decide* or *act* on it, never as an explanation of how the app works. Applies to every label, hint and message.
+- **Comments state the present (D161).** Invariants, reasons, measurements and D/P/§ citations — never "used to" narratives; history belongs to the commit.
+- **Prepared data changes only through `store.Reconcile` (D157).** A new way to prepare, rebuild or pack states a `store.Target`, judges a prepared database through one `store.Inspect` read, and never calls `IngestPlan`/`IngestMedia` itself.
+- **The build is monolithic**: the server runs inside the app (WebView2 on Windows, Go/JNI on Android). The "browser against a separate server" mode is kept in the code and **is not tested** — verify a server change on the in-process path.
+- **Licence.** GPL-3.0-or-later; the `SPDX-License-Identifier` line belongs in every file that has a header at all. A file **this fork authored** carries `Copyright (C) 2026 DmShAl (Shepeta Dmitry)` above the SPDX line; a file **inherited from upstream keeps upstream's notice untouched** — no fork line, no rewritten name. Which is which follows the CONTENT, not the path (`git diff --name-status master dev`, then compare the text). Never edit `LICENSE`; the canonical statement is the Licence section of `README.md`.
+- **`D-`, `P-` and `C-` numbers** cited in the code (`D15`, `docs.local/PERF.md §3.1`, `P88`) refer to the maintainer's decision log, phase record, performance audit and review backlog — working records kept outside the repository. The citations are provenance: treat one you cannot open as a note on *why* the code is the way it is, not as a missing file. The same goes for the reference projects this fork was built from (`mdict-go-web`, `draego`, `pyglossary`, the speex sources), which are **removed from disk**: `docs/FORMATS.md` still cites their file and function names as the provenance of a rule, not as paths.
+- Before writing code: the section of `docs/SPEC.md` (architecture, schema, query engine) and of `docs/FORMATS.md` (per format) that you touch. Before writing any text a user reads: `docs/STYLE.md`.
