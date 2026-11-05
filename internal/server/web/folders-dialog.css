@@ -67,6 +67,7 @@ html[data-shell-image] .folders-dialog-scroll code,html[data-shell-image] .folde
 .folders-dialog-scroll .setup-copy summary::-webkit-details-marker{display:none}
 .folders-dialog-scroll .setup-copy summary::before{content:"▸";flex:none}
 .folders-dialog-scroll .setup-copy[open] summary::before{content:"▾"}
+.folders-dialog-scroll .setup-copy[open] summary span{display:none}
 .folders-dialog-scroll .setup-copy summary span{display:block;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .folders-dialog-scroll .setup-copy[open] summary{margin-bottom:.35em}
 .folders-dialog-scroll .setup-copy p{margin:0;white-space:normal;overflow-wrap:anywhere}
