@@ -208,3 +208,32 @@ func TestMegaFolderListsOnlyDirectFiles(t *testing.T) {
 		t.Fatalf("direct files = %#v", l.files)
 	}
 }
+
+func TestBeginMegaFolderStartsInListingPhase(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("n") != "Folder01" {
+			t.Errorf("folder context = %q", r.URL.Query().Get("n"))
+		}
+		_ = json.NewEncoder(w).Encode([]any{map[string]any{"f": []map[string]any{
+			{"h": "Root0001", "p": "Parent01", "t": 1, "k": "Root0001:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"},
+		}}})
+	}))
+	defer api.Close()
+	old := megaAPI
+	megaAPI = api.URL
+	t.Cleanup(func() { megaAPI = old })
+
+	m := &Manager{}
+	job, err := m.BeginURL(t.TempDir(), "https://mega.nz/folder/Folder01#AAAAAAAAAAAAAAAAAAAAAA", Fetcher{Insecure: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.State != StateDownloading || job.Phase != "listing" {
+		t.Fatalf("initial job state = %#v", job)
+	}
+	m.wg.Wait()
+	job = m.Status()
+	if job.State != StateError || job.Error != ErrNoLinks.Error() || job.Phase != "" {
+		t.Fatalf("completed listing state = %#v", job)
+	}
+}

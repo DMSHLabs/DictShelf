@@ -909,6 +909,7 @@
   "pages.noDictionaries": "✕ Словари не найдены",
   "pages.connecting": "Соединение…",
   "pages.connectingTo": "Подключение к {host}…",
+  "pages.readingFolderHost": "Читаю список файлов с {host}…",
   "pages.importFolderChecking": "Проверка записи и добавление в список папок словарей…",
   "pages.importFolderWriteDenied": "DictShelf не может записывать в эту папку. Выберите другую папку.",
   "pages.importFolderManaged": "Список папок задан параметрами запуска, поэтому добавить сюда новую папку нельзя.",

@@ -268,6 +268,14 @@ func (f Fetcher) megaFolderListing(ctx context.Context, u *url.URL) (listing, bo
 	return l, true, nil
 }
 
+func isMegaFolderURL(u *url.URL) bool {
+	if u == nil {
+		return false
+	}
+	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
+	return (host == "mega.nz" || host == "mega.co.nz") && strings.HasPrefix(u.Path, "/folder/")
+}
+
 // megaName decrypts the attributes - AES-CBC, zero IV, "MEGA{json}" padded
 // with NULs - and returns the file name they carry, or "".
 func megaName(at string, key []byte) string {

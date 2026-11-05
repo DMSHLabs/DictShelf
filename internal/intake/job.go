@@ -48,7 +48,7 @@ import (
 // phone connection, it has a progress number somebody watches, and it cannot
 // be held inside the request that asked for it.
 const (
-	StateDownloading = "downloading" // fetching the archive named by a URL
+	StateDownloading = "downloading" // fetching a URL or reading a remote folder listing
 	StateReady       = "ready"       // sniffed; waiting for the user to choose
 	StateInstalling  = "installing"  // extracting the chosen candidates
 	StateDone        = "done"        // finished; the list of what was installed
@@ -122,7 +122,8 @@ type Job struct {
 	// and that is not a line to put on somebody's screen (D102) - while "which
 	// site is this arriving from" is exactly what a person watching a phone
 	// download on their own data wants to know. Empty for a local import.
-	Host string `json:"host,omitempty"`
+	Host  string `json:"host,omitempty"`
+	Phase string `json:"phase,omitempty"` // listing while a folder is read before files are downloaded
 	// Candidates is what the archive turned out to hold, in the order the
 	// user is shown them; the index into this slice is what Confirm takes.
 	Candidates []Candidate `json:"candidates,omitempty"`
@@ -288,6 +289,9 @@ func (m *Manager) BeginURL(dest, raw string, f Fetcher) (Job, error) {
 	if err != nil {
 		return Job{}, err
 	}
+	if isMegaFolderURL(u) {
+		return m.beginMegaFolder(dest, raw, f, u.Hostname())
+	}
 
 	m.mu.Lock()
 	if m.busyLocked() {
@@ -318,6 +322,41 @@ func (m *Manager) BeginURL(dest, raw string, f Fetcher) (Job, error) {
 		defer m.wg.Done()
 		defer cancel()
 		m.download(ctx, j, f, raw)
+	}()
+	return pub, nil
+}
+
+func (m *Manager) beginMegaFolder(dest, raw string, f Fetcher, host string) (Job, error) {
+	m.mu.Lock()
+	if m.busyLocked() {
+		m.mu.Unlock()
+		return Job{}, ErrBusy
+	}
+	m.clearLocked()
+	ctx, cancel := context.WithCancel(context.Background())
+	j := &jobState{
+		dest: dest, fetch: f, cancel: cancel,
+		pub:  Job{ID: jobID(), State: StateDownloading, Host: host, Phase: "listing"},
+		seen: time.Now(),
+	}
+	m.cur = j
+	pub := j.pub.copy()
+	m.mu.Unlock()
+
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		defer cancel()
+		l, err := fetchListing(ctx, f, raw)
+		var c collection
+		if err == nil {
+			c, err = build(ctx, f, dest, m.library(), l)
+		}
+		title := l.title
+		if title == "" {
+			title = "MEGA"
+		}
+		m.ready(j, c, title, err)
 	}()
 	return pub, nil
 }
@@ -369,7 +408,7 @@ func (m *Manager) download(ctx context.Context, j *jobState, f Fetcher, raw stri
 		return // cancelled, or replaced by another import while this ran
 	}
 	if err != nil {
-		j.pub.State, j.pub.Error = StateError, errorText(err)
+		j.pub.State, j.pub.Error, j.pub.Phase = StateError, errorText(err), ""
 		return
 	}
 	j.src, j.extras = src, extras
@@ -442,11 +481,11 @@ func (m *Manager) ready(j *jobState, c collection, title string, err error) {
 		return
 	}
 	if err != nil {
-		j.pub.State, j.pub.Error = StateError, errorText(err)
+		j.pub.State, j.pub.Error, j.pub.Phase = StateError, errorText(err), ""
 		return
 	}
 	j.coll, j.extras = &c, c.extras
-	j.pub.State, j.pub.Source, j.pub.Collection = StateReady, title, true
+	j.pub.State, j.pub.Source, j.pub.Collection, j.pub.Phase = StateReady, title, true, ""
 	if c.folderMode {
 		j.pub.MegaFolder = true
 		j.pub.FolderFiles = append([]FolderFile(nil), c.folderFiles...)

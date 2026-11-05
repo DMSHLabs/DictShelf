@@ -3082,6 +3082,10 @@ components:
             Where a downloaded file is coming from, for the life of the job. The
             host and not the link: a URL can carry a session token, which is not
             a line to put on somebody's screen. Absent for a local import.
+        phase:
+          type: string
+          enum: [listing]
+          description: The server is reading a folder listing before downloading files.
         dir: { type: string, description: The folder an import installs into. }
         keep:
           type: string
