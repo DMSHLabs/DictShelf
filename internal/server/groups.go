@@ -149,6 +149,8 @@ func (s *Server) groupsPageHTML() []byte {
 
 func (s *Server) groupsPageHTMLFor(acceptLanguage string) []byte {
 	page := bytes.ReplaceAll(groupsPage, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))
+	page = bytes.ReplaceAll(page, []byte("{{FOLDHINTJS}}"), []byte(assetTag(foldHintJS)))
+	page = bytes.ReplaceAll(page, []byte("{{FOLDHINTCSS}}"), []byte(assetTag(foldHintCSS)))
 	page = bytes.ReplaceAll(page, []byte("{{WORKSPACECSS}}"), []byte(assetTag(workspaceCSS)))
 	return s.renderUserUIChoice(string(page), s.reg.prefs.ResolvedLanguage(acceptLanguage), s.reg.prefs.Language())
 }

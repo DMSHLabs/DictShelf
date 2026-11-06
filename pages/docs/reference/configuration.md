@@ -266,7 +266,7 @@ least recently used is unloaded. A loaded language uses 1 MB (Persian) to 90 MB
 
 ### LEMMA_DIR
 
-The folder of installed lemma data. English is built in.
+The folder of installed lemma data. English and Russian are built in. A file in this folder can replace either built-in pack.
 
 | | |
 | --- | --- |

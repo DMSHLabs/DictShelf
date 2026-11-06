@@ -58,7 +58,11 @@ func TestIntakePathWantsAJSONRequestNotABarePath(t *testing.T) {
 func TestTheIntakeActionsAreTheOnesTheAndroidBridgeNames(t *testing.T) {
 	known := map[string]bool{}
 	s, _ := aboutServer(t, "")
-	for _, action := range []string{"intakeURL", "intakePath", "intakeStatus", "intakeTarget", "intakeConfirm", "intakeCancel"} {
+	actions := []string{
+		"intakeURL", "intakePath", "intakeStatus", "intakeTarget", "intakeConfirm", "intakeCancel",
+		"intakeCancelDictionary", "intakeFileStart", "intakeFileChunk", "intakeFileFinish", "intakeFileCancel",
+	}
+	for _, action := range actions {
 		_, err := s.DesktopJSON("http://127.0.0.1:6888", action, `{}`)
 		if err != nil && strings.Contains(err.Error(), "unknown") {
 			known[action] = false
@@ -67,7 +71,7 @@ func TestTheIntakeActionsAreTheOnesTheAndroidBridgeNames(t *testing.T) {
 		}
 		known[action] = true
 	}
-	if len(known) != 5 {
-		t.Fatalf("expected five intake actions, saw %d", len(known))
+	if len(known) != len(actions) {
+		t.Fatalf("checked %d intake actions, want %d", len(known), len(actions))
 	}
 }

@@ -131,7 +131,7 @@ func TestGreyTextIsOnlyForDisabledStates(t *testing.T) {
 		"details.noindex>summary": "a section the search could not run on",
 		".pd .rmgo.busy":          "a removal that is running and cannot be pressed",
 		".group-control-disabled": "a control the reader cannot act on",
-		"#cands label.row.no":     "a candidate that cannot be installed",
+		".folders-dialog-scroll .row.no": "a candidate that cannot be installed",
 	}
 	// Each sheet with the names ITS greys go by: the app page's own, and the
 	// two shorthands the standalone pages spell them with. The leading
@@ -148,6 +148,7 @@ func TestGreyTextIsOnlyForDisabledStates(t *testing.T) {
 		{"app.css", string(appCSS), appGrey},
 		{"group-editor.css", string(groupEditorCSS), appGrey},
 		{"history.css", string(historyCSS), appGrey},
+		{"folders-dialog.css", string(foldersDialogCSS), appGrey},
 		{"setup.css", string(setupCSS), pageGrey},
 		{"lemmas.html", string(lemmasHTML), pageGrey},
 		{"browse.html", string(browseHTML), pageGrey},

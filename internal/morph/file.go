@@ -7,6 +7,7 @@ package morph
 import (
 	"bytes"
 	"compress/gzip"
+	_ "embed"
 	"fmt"
 	"io"
 	"os"
@@ -19,17 +20,14 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/limits"
 )
 
-// Lemma data from a folder (LEMMA_DIR, D87).
+// Russian lemma data is embedded in compressed form. It is expanded only when
+// the Russian lemmatizer is first used.
 //
-// This is how wudict gets every language but English. Compiling them in is
-// the wrong shape: the six golem packs would be 9 MB of an 11 MB binary,
-// charged to every user and every phone whether or not they read those languages, and
-// the list of languages people keep dictionaries in does not end at six. A
-// folder of files is what hunspell does, and it lets someone who wants Polish
-// have Polish without anyone else carrying it.
-//
-// English stays built in because it is the language assumed when a dictionary
-// declares none, so it has to answer with an empty folder.
+//go:embed data/ru.tsv.gz
+var russianLemmaData []byte
+
+// Lemma data from LEMMA_DIR. Russian is embedded in compressed form because
+// it is a common dictionary language; other languages stay optional files.
 //
 // The format is golem's own, because golem is the parser: one line per lemma,
 // fields separated by tabs, the lemma first and its forms after it, lower
@@ -39,7 +37,7 @@ import (
 // line, repeated) - those load unchanged, they are merely larger than the
 // grouped form.
 //
-// An en file overrides the built-in English rather than merging with it.
+// A file overrides its built-in language rather than merging with it.
 // Merging two lemma sets means deciding which one wins per word, and there is
 // no principled answer; "the file you put there is the one you get" has one.
 
@@ -58,6 +56,32 @@ func MaxPackBytes() int64 { return limits.Get().LemmaSize }
 type filePack struct {
 	code string
 	path string
+}
+
+type embeddedPack struct {
+	code string
+	data []byte
+}
+
+func (p embeddedPack) GetLocale() string { return p.code }
+
+func (p embeddedPack) GetResource() ([]byte, error) {
+	r, err := gzip.NewReader(bytes.NewReader(p.data))
+	if err != nil {
+		return nil, fmt.Errorf("embedded %s lemma data: %w", p.code, err)
+	}
+	b, readErr := io.ReadAll(io.LimitReader(r, MaxPackBytes()+1))
+	closeErr := r.Close()
+	if readErr != nil {
+		return nil, fmt.Errorf("embedded %s lemma data: %w", p.code, readErr)
+	}
+	if closeErr != nil {
+		return nil, fmt.Errorf("embedded %s lemma data: %w", p.code, closeErr)
+	}
+	if int64(len(b)) > MaxPackBytes() {
+		return nil, limits.Exceeded("the unpacked lemma data", "MAX_LEMMA_SIZE", MaxPackBytes())
+	}
+	return normalize(b), nil
 }
 
 func (p filePack) GetLocale() string { return p.code }
@@ -217,7 +241,7 @@ func lemmaStem(name string) (string, bool) {
 }
 
 // pack resolves a language to the data it will be loaded from, disk first -
-// which for everything but English is the only place it can come from. Returns
+// which for non-built-in languages is the only place they can come from. Returns
 // nil for a language with neither, which is the same answer Supports gives and
 // the reason Lemma never reaches here for one.
 func (c *Cache) pack(code string) golem.LanguagePack {

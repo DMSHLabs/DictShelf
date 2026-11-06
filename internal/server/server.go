@@ -109,6 +109,12 @@ var pickJS = webAsset(pickJSSrc, jsAsset) // word-at-point for a double tap, loa
 //go:embed web/app.css
 var appCSS []byte // main page styles
 
+//go:embed web/fold-hint.js
+var foldHintJS []byte // overflow-aware behavior for collapsible hints
+
+//go:embed web/fold-hint.css
+var foldHintCSS []byte // shared layout for collapsible hints
+
 //go:embed web/checkbox.css
 var checkboxCSS []byte // one customizable checkbox control shared by every web surface
 
@@ -558,6 +564,9 @@ func (s *Server) basePage() []byte {
 		page := strings.ReplaceAll(string(indexHTML), "{{VERSION}}", v)
 		page = strings.ReplaceAll(page, "{{FRAMEJS}}", assetTag(frameJS))
 		page = strings.ReplaceAll(page, "{{APPCSS}}", assetTag(appCSS))
+		page = strings.ReplaceAll(page, "{{FOLDHINTJS}}", assetTag(foldHintJS))
+		page = strings.ReplaceAll(page, "{{FOLDHINTCSS}}", assetTag(foldHintCSS))
+		page = strings.ReplaceAll(page, "{{FOLDHINTJS_INLINE}}", string(foldHintJS))
 		page = strings.ReplaceAll(page, "{{CHECKBOXCSS}}", assetTag(checkboxCSS))
 		page = strings.ReplaceAll(page, "{{WORKSPACECSS}}", assetTag(workspaceCSS))
 		page = strings.ReplaceAll(page, "{{HISTORYCSS}}", assetTag(historyCSS))
@@ -568,6 +577,8 @@ func (s *Server) basePage() []byte {
 		filterDialog = strings.ReplaceAll(filterDialog, "{{FILTERSDIALOGJS}}", assetTag(filtersDialogJS))
 		page = strings.ReplaceAll(page, "{{FILTERSDIALOG}}", filterDialog)
 		foldersDialog := strings.ReplaceAll(string(foldersDialogHTML), "{{SETUPJS}}", assetTag(setupJS))
+		foldersDialog = strings.ReplaceAll(foldersDialog, "{{FOLDHINTCSS}}", assetTag(foldHintCSS))
+		foldersDialog = strings.ReplaceAll(foldersDialog, "{{FOLDHINTCSS_INLINE}}", string(foldHintCSS))
 		foldersDialog = strings.ReplaceAll(foldersDialog, "{{CHECKBOXCSS}}", assetTag(checkboxCSS))
 		foldersDialog = strings.ReplaceAll(foldersDialog, "{{FOLDERSDIALOGCSS}}", assetTag(foldersDialogCSS))
 		page = strings.ReplaceAll(page, "{{FOLDERSDIALOG}}", foldersDialog)
@@ -684,6 +695,8 @@ func (s *Server) lemmasPageFor(acceptLanguage string) []byte {
 	// request rather than precomputed: the page carries {{T:…}} keys and is
 	// served in the reader's language.
 	page := bytes.ReplaceAll(lemmasHTML, []byte("{{CSS}}"), []byte(cssTag))
+	page = bytes.ReplaceAll(page, []byte("{{FOLDHINTJS}}"), []byte(assetTag(foldHintJS)))
+	page = bytes.ReplaceAll(page, []byte("{{FOLDHINTCSS}}"), []byte(assetTag(foldHintCSS)))
 	page = bytes.ReplaceAll(page, []byte("{{CHECKBOXCSS}}"), []byte(assetTag(checkboxCSS)))
 	page = bytes.ReplaceAll(page, []byte("{{WORKSPACECSS}}"), []byte(assetTag(workspaceCSS)))
 	page = bytes.ReplaceAll(page, []byte("{{LEMMASJS}}"), []byte(assetTag(lemmasJS)))

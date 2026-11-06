@@ -507,19 +507,19 @@ const configTemplate = `# DictShelf configuration  (~/.dmshlabs/dictshelf/dictsh
 # IMPORT_INSECURE = "0"               # "1" = also allow plain http, and hosts on the local network.
 #                                     # Only meaningful if you trust the address you are pointing at.
 # MORPH_CACHE = "2"                   # how many LEMMA packs stay in memory. When a search finds
-#                                     # nothing at all, wudict tries the word's dictionary form and
-#                                     # searches again. English is built in; other languages come
-#                                     # from LEMMA_DIR. Each loaded language costs 7-65 MB and is
+#                                     # nothing at all, DictShelf tries the word's dictionary form and
+#                                     # searches again. English and Russian are built in; other
+#                                     # languages come from LEMMA_DIR. Each loaded language costs 7-65 MB and is
 #                                     # dropped when another needs the slot.
 #                                     # "0" = never lemmatize, load nothing.
 #                                     # Android defaults to 1.
-# LEMMA_DIR   = "~/.dmshlabs/dictshelf/lemmas"    # folder of installed lemma files. Every language but English
-#                                     # comes from here - one file per language, named after it
+# LEMMA_DIR   = "~/.dmshlabs/dictshelf/lemmas"    # folder of installed lemma files. Optional files
+#                                     # can provide other languages or override built-in ones
 #                                     # ("pl.txt", "polish.tsv.gz"; .txt/.tsv, optionally .gz).
 #                                     # Each line is a lemma and its forms, tab-separated, lower
 #                                     # case - the format of the lists at
 #                                     # github.com/michmech/lemmatization-lists, which load as
-#                                     # downloaded. An "en" file replaces the built-in English.
+#                                     # downloaded. An "en" or "ru" file replaces the built-in pack.
 #                                     # Read once at startup.
 #                                     # "wudict lemmas list" shows what is installed and what is
 #                                     # available; "wudict lemmas download pl" puts a file here.

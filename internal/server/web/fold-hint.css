@@ -1,0 +1,11 @@
+details.fold-hint{display:block;min-width:0}
+details.fold-hint>summary{display:flex;align-items:center;gap:0;min-width:0;cursor:pointer;list-style:none}
+details.fold-hint>summary::-webkit-details-marker{display:none}
+details.fold-hint>summary::before{content:"▸";flex:none}
+details.fold-hint[open]>summary::before{content:"▾"}
+details.fold-hint.fits>summary{cursor:default}
+details.fold-hint.fits>summary::before,details.fold-hint.measuring>summary::before{display:none}
+details.fold-hint:not(.fits):not(.measuring)>summary{gap:.4em}
+details.fold-hint>summary>span{display:block;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap!important}
+details.fold-hint[open]>summary{align-items:flex-start}
+details.fold-hint[open]>summary>span{overflow:visible;text-overflow:clip;white-space:normal!important;overflow-wrap:anywhere}

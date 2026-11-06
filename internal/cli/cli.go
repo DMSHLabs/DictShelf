@@ -264,12 +264,12 @@ SETTINGS
                           default: 2 (Android: 1)
 
   LEMMA_DIR = "~/.wudict/lemmas"
-                          Installed lemma data; English is built in. One file
+                          Installed lemma data; English and Russian are built in. One file
                           per language, named by code or English name: "pl.txt",
                           "pol.tsv", "polish.txt.gz". Each line is a lemma, then
                           its forms, tab-separated, in lower case, as in
-                          github.com/michmech/lemmatization-lists. An "en" file
-                          replaces the built-in English. Read at startup, and
+                          github.com/michmech/lemmatization-lists. An "en" or
+                          "ru" file replaces its built-in pack. Read at startup, and
                           after each install or removal on the Lemmatization
                           page.
                           env: LEMMA_DIR      toml: LEMMA_DIR

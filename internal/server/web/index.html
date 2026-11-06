@@ -141,6 +141,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <link rel="stylesheet" href="/assets/app.css?v={{APPCSS}}">
 <link rel="stylesheet" href="/assets/checkbox.css?v={{CHECKBOXCSS}}">
 <link rel="stylesheet" href="/assets/workspace.css?v={{WORKSPACECSS}}">
+<link rel="stylesheet" href="/assets/fold-hint.css?v={{FOLDHINTCSS}}">
 <link rel="stylesheet" href="/assets/headword-control.css?v={{HEADWORDCSS}}">
 <link rel="stylesheet" href="/assets/history.css?v={{HISTORYCSS}}">
 <script src="/assets/headword-control.js?v={{HEADWORDJS}}"></script>
@@ -1023,6 +1024,7 @@ window.wudictFontScale=(function(){
 </dialog>
 {{FILTERSDIALOG}}
 {{FOLDERSDIALOG}}
+<script>{{FOLDHINTJS_INLINE}}</script>
 {{LEMMADIALOG}}
 <dialog id="portableDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="portableTitle">
 <h2 id="portableTitle">{{T:portable.title}} <button type="button" class="btn" id="portableCloseTitle" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
@@ -7370,8 +7372,12 @@ function clearGlobalStop(){
   if(statusBase)setStatus(statusBase,statusOwner);
 }
 window.addEventListener("wudict-work",event=>{
+  const wasActive=indexWorkTaskActive;
   indexWorkTaskActive=!!event.detail?.running;
   if(indexWorkTaskActive)finishIndexingTask();
+  else if(wasActive&&$("fullTextPicker")?.open){
+    loadDicts().then(ok=>{if(ok)refreshOpenFullTextPicker()});
+  }
 });
 window.addEventListener("wudict-tasks-ready",()=>{if(indexingTaskMessage&&!indexWorkTaskActive)updateIndexingTask()});
 let serverBulkWasRunning=false;
@@ -13454,12 +13460,28 @@ $("styler").addEventListener("keydown",e=>{
     #fullTextPicker .ft-split{flex-basis:100%;opacity:.8}
     #fullTextPicker .ft-warn{color:var(--danger,#b3261e);padding:.25rem}
     #fullTextPicker .ft-body{flex:1 1 auto;min-height:0;overflow:auto}
-    #fullTextPicker table{width:100%;border-collapse:collapse}
+    #fullTextPicker #ftSearch{border-top:1px solid var(--line)}
+    #fullTextPicker #ftSearch :is(.list-search-mode,.list-search-input,.list-search-step){
+      box-sizing:border-box;height:calc(var(--ui-edit_control-height) * 1.5rem);min-height:0}
+    #fullTextPicker #ftSearch .list-search-input{font-size:calc(var(--ui-edit_control-font) * 1rem)}
+    #fullTextPicker table{width:100%;border-collapse:separate;border-spacing:0}
     #fullTextPicker th{position:sticky;top:0;text-align:left;font-weight:600;background:var(--bg-card,var(--bg));
-      padding:.35rem .5rem;border-bottom:1px solid var(--line)}
+      padding:.35rem .5rem;border-bottom:1px solid var(--line);z-index:2}
+    #fullTextPicker th:first-child,#fullTextPicker td:first-child{width:3.25rem;min-width:3.25rem;max-width:3.25rem;box-sizing:border-box;text-align:center}
+    #fullTextPicker .ft-sort{display:flex;align-items:center;gap:.35em;width:100%;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:inherit;cursor:pointer}
+    #fullTextPicker .ft-sort::after{content:"↕";font-size:.8em;opacity:.55}
+    #fullTextPicker th[aria-sort="ascending"] .ft-sort::after{content:"↑";opacity:1}
+    #fullTextPicker th[aria-sort="descending"] .ft-sort::after{content:"↓";opacity:1}
+    #fullTextPicker th:first-child input{display:block;margin:auto}
+    #fullTextPicker td:first-child input{display:block;margin:auto}
     #fullTextPicker td{padding:.3rem .5rem;border-bottom:1px solid color-mix(in srgb,var(--line) 55%,transparent)}
+    #fullTextPicker .ft-format-tag,#fullTextPicker .ft-headword-count{margin-inline-start:.45em;opacity:.72;font-size:.9em;white-space:nowrap}
+    #fullTextPicker .dict-info-name{cursor:context-menu;user-select:none;-webkit-user-select:none}
     #fullTextPicker .ft-size,#fullTextPicker .ft-state{white-space:nowrap;font-variant-numeric:tabular-nums}
-    #fullTextPicker .ft-note{opacity:.8}
+    #fullTextPicker .ft-state[data-state="error"]{color:var(--danger,#b3261e)}
+    #fullTextPicker .ft-state[data-state="indexing"]:not([data-progress="1"])::before{content:"⟳";display:inline-block;margin-inline-end:.35em;animation:ft-index-spin .9s linear infinite}
+    @keyframes ft-index-spin{to{transform:rotate(360deg)}}
+    #fullTextPicker .ft-note{flex:none;margin:.4rem 0;opacity:.8}
     #fullTextPicker .ft-actions{display:flex;gap:.5em;justify-content:flex-end;align-items:center;flex-wrap:wrap}
     #fullTextPicker .ft-actions .btn,.ft-actions .btn{flex:none}
   </style>
@@ -13470,22 +13492,23 @@ $("styler").addEventListener("keydown",e=>{
   <div class="ft-summary">
     <span class="ft-selected" id="ftSelected"></span>
     <span class="ft-free" id="ftFree"></span>
-    <span class="ft-split" id="ftSplit"></span>
+    <details class="fold-hint ft-split" id="ftSplit"><summary><span></span></summary></details>
   </div>
   <div class="ft-warn" id="ftWarn" role="alert" hidden></div>
   <div class="ft-head"><h2>{{T:fullText.list}}</h2><span class="ft-count" id="ftCount"></span></div>
-  <div class="ft-body">
-    <table>
+  <div class="ft-body" id="ftBody">
+    <table id="ftTable">
       <thead><tr>
-        <th><span class="visually-hidden">{{T:fullText.colChoice}}</span></th>
-        <th>{{T:fullText.colDictionary}}</th>
-        <th>{{T:fullText.colSize}}</th>
-        <th>{{T:fullText.colState}}</th>
+        <th scope="col"><input type="checkbox" id="ftSelectAll" aria-label="{{T:fullText.selectAll}}"></th>
+        <th scope="col" aria-sort="ascending"><button type="button" class="ft-sort" data-sort="name">{{T:fullText.colDictionary}}</button></th>
+        <th scope="col"><button type="button" class="ft-sort" data-sort="size">{{T:fullText.colSize}}</button></th>
+        <th scope="col"><button type="button" class="ft-sort" data-sort="state">{{T:fullText.colState}}</button></th>
       </tr></thead>
       <tbody id="ftRows"></tbody>
     </table>
   </div>
-  <p class="ft-note">{{T:fullText.note}}</p>
+  <div id="ftSearch" class="list-search-dock" role="search" aria-label="{{T:dictUI.listSearchLabel}}"></div>
+  <details class="fold-hint ft-note"><summary><span>{{T:fullText.note}}</span></summary></details>
   <div class="ft-actions">
     <button type="button" class="btn" id="ftBuild" disabled>{{T:fullText.build}}</button>
     <button type="button" class="btn" id="ftClose">{{T:panel.close}}</button>
@@ -13500,8 +13523,17 @@ $("styler").addEventListener("keydown",e=>{
    says it is still being measured rather than guessing, and a row that has the
    index already offers no checkbox at all. */
 var libraryFreeBytes=0, libraryVolume="";
+let fullTextSort={key:"name",direction:1};
+let fullTextSearch=null;
+const fullTextRowStates=new Map(),fullTextOwnBuilds=new Set(),fullTextObservedBuilds=new Set();
+const fullTextStateKeys={
+  indexing:"fullText.stateIndexing",
+  waiting:"fullText.stateWaiting",
+  done:"fullText.stateDone",
+  error:"fullText.stateError"
+};
 function fullTextRows(){
-  return (dicts||[]).filter(d=>d&&!d.unavailable&&d.dbPath).map(d=>({
+  return (dicts||[]).filter(d=>d&&!d.unavailable&&d.dbPath&&(!d.ourFullText||["indexing","waiting","done"].includes(fullTextRowStates.get(d.id)?.status))).map(d=>({
     id:d.id,name:d.name||d.id,zim:String(d.format||"").toLowerCase()==="zim",
     /* built is OUR index, and only ours: a ZIM whose archive answers full text
        yet holds no article index of ours has a checkbox here, because a build
@@ -13509,7 +13541,7 @@ function fullTextRows(){
        source answers by itself - which is why the row is optional, not why it
        is done - and convert marks the database this fork no longer builds. */
     built:!!d.ourFullText,archiveIndex:!!d.archiveIndex,convert:!!d.archiveFullText,
-    fullSize:d.fullTextSize||0,dbSize:d.dbSize||0,est:d.estimate||null
+    fullSize:d.fullTextSize||0,dbSize:d.dbSize||0,headwords:Number(d.headwords)||0,est:d.estimate||null
   })).sort((a,b)=>String(a.name).localeCompare(String(b.name),undefined,{sensitivity:"base"}));
 }
 function fullTextBandText(row){
@@ -13518,6 +13550,52 @@ function fullTextBandText(row){
   if(row.built)return "—";
   if(!row.est)return tx("fullText.stateCalculating");
   return "≈ "+mb(row.est.low)+" – "+mb(row.est.high);
+}
+function fullTextFailureFor(id,failures){
+  const d=(dicts||[]).find(item=>item.id===id),name=d?.name||id;
+  return failures.find(failure=>String(failure).startsWith(name+":")||String(failure).startsWith(id+":"))||"";
+}
+function fullTextErrorText(failure,fallback=""){
+  const value=String(failure||fallback||"");
+  return value.includes(": ")?value.slice(value.indexOf(": ")+2):value;
+}
+function applyFullTextWorkStatus(status){
+  const progress=(status?.busyProgress||[]).filter(item=>item.feature==="fullText"&&item.action!=="remove");
+  const progressByID=new Map(progress.map(item=>[item.id,item]));
+  const active=new Map(progress.filter(item=>item.active).map(item=>[item.id,item]));
+  const failures=Array.isArray(status?.failed)?status.failed:[];
+  for(const [id,item] of active){
+    fullTextRowStates.set(id,{status:"indexing",done:item.done,total:item.total});
+    fullTextObservedBuilds.add(id);
+  }
+  for(const id of [...fullTextOwnBuilds,...fullTextObservedBuilds]){
+    if(active.has(id))continue;
+    const failure=fullTextFailureFor(id,failures),item=progressByID.get(id);
+    if(failure){fullTextRowStates.set(id,{status:"error",error:fullTextErrorText(failure)});continue}
+    if(status?.running){
+      if(item&&item.total>0&&item.done>=item.total)fullTextRowStates.set(id,{status:"done"});
+      else if(fullTextObservedBuilds.has(id))fullTextRowStates.set(id,{status:"indexing",done:item?.done||0,total:item?.total||0});
+      else fullTextRowStates.set(id,{status:"waiting"});
+    }
+  }
+  if(status?.running){
+    if($("fullTextPicker")?.open)refreshOpenFullTextPicker();
+    return;
+  }
+  const finished=[...fullTextObservedBuilds].filter(id=>!fullTextOwnBuilds.has(id));
+  for(const id of finished)fullTextObservedBuilds.delete(id);
+  if(!finished.length)return;
+  loadDicts().then(()=>{
+    for(const id of finished){
+      if(!$("fullTextPicker")?.open){fullTextRowStates.delete(id);continue}
+      const failure=fullTextFailureFor(id,failures),row=dicts.find(item=>item.id===id);
+      if(failure)fullTextRowStates.set(id,{status:"error",error:fullTextErrorText(failure)});
+      else if(row?.ourFullText)fullTextRowStates.set(id,{status:"done"});
+      else if(status.canceled)fullTextRowStates.delete(id);
+      else fullTextRowStates.set(id,{status:"error",error:fullTextErrorText("",status.error)});
+    }
+    refreshOpenFullTextPicker();
+  });
 }
 function convertHint(row){
   /* Both numbers are measurements: the article index from SQLite's page
@@ -13551,44 +13629,86 @@ function updateFullTextSummary(){
   const warn=$("ftWarn"), over=free>0&&high>free;
   warn.hidden=!over;
   if(over)warn.textContent=tx("fullText.warn",{high:mb(high),free:mb(free)});
-  $("ftSplit").textContent=(zlow||zhigh)&&sel.length?tx("fullText.split",{low:mb(zlow),high:mb(zhigh)}):"";
+  const splitText=(zlow||zhigh)&&sel.length?tx("fullText.split",{low:mb(zlow),high:mb(zhigh)}):"";
+  $("ftSplit").querySelector("summary span").textContent=splitText;
+  $("ftSplit").hidden=!splitText;
   /* "Built" counts what this page can build. A ZIM whose archive carries its
      own index has full text and nothing to build, so counting it as built
      would claim credit for a file somebody else shipped - it is counted
      separately, and only when there is one. */
-  const rows=fullTextRows(),built=rows.filter(r=>r.built).length,
-    archive=rows.filter(r=>r.archiveIndex).length,stale=rows.filter(r=>r.convert).length;
-  $("ftCount").textContent=tx("fullText.count",{built:window.wudictI18n.number(built),total:window.wudictI18n.number(rows.length)})
-    +(archive?" "+tx("fullText.countArchive",{count:window.wudictI18n.number(archive)}):"")
-    +(stale?" "+tx("fullText.countConvert",{count:window.wudictI18n.number(stale)}):"");
+  const rows=fullTextRows();
+  $("ftCount").textContent=window.wudictI18n.number(rows.length);
+  const visibleRows=fullTextSearch?fullTextSearch.visibleItems():[...$("ftRows").querySelectorAll("tr")];
+  const choices=visibleRows.flatMap(row=>[...row.querySelectorAll('input[type="checkbox"]')]);
+  const selectAll=$("ftSelectAll"),selectedCount=choices.filter(choice=>choice.checked).length;
+  selectAll.checked=choices.length>0&&selectedCount===choices.length;
+  selectAll.indeterminate=selectedCount>0&&selectedCount<choices.length;
+  selectAll.disabled=choices.length===0;
   $("ftBuild").disabled=!sel.length;
 }
-function renderFullTextPicker(){
+function renderFullTextPicker(keepSelected=new Set()){
   const body=$("ftRows");
-  body.replaceChildren(...fullTextRows().map(row=>{
+  const rows=fullTextRows().sort((a,b)=>{
+    if(fullTextSort.key==="name")return fullTextSort.direction*String(a.name).localeCompare(String(b.name),undefined,{sensitivity:"base"});
+    if(fullTextSort.key==="size"){
+      const av=a.est?.high,bv=b.est?.high;
+      if(av==null||bv==null)return av==null?(bv==null?0:1):-1;
+      return fullTextSort.direction*(av-bv);
+    }
+    const rank={indexing:0,waiting:1,error:2,done:3};
+    const av=rank[fullTextRowStates.get(a.id)?.status]??3,bv=rank[fullTextRowStates.get(b.id)?.status]??3;
+    return fullTextSort.direction*(av-bv);
+  });
+  body.replaceChildren(...rows.map(row=>{
     const tr=document.createElement("tr");
     tr.dataset.id=row.id;
     if(row.zim)tr.dataset.zim="1";
     if(row.est){tr.dataset.low=String(row.est.low);tr.dataset.high=String(row.est.high);}
     const choice=document.createElement("td");
-    if(row.built||!row.est){
-      // Nothing to build, or nothing known yet: no checkbox, so a click cannot
-      // promise work that would not happen.
-      choice.textContent=row.built?"✓":"⏳";
-      choice.title=row.built?tx("fullText.stateBuilt"):tx("fullText.stateCalculating");
+    const rowState=fullTextRowStates.get(row.id);
+    if(row.built||["indexing","waiting","done"].includes(rowState?.status)||!row.est){
+      // A built, active, queued, or not-yet-measured row has no selectable action.
+      choice.textContent=row.built||rowState?.status==="done"?"✓":rowState?.status==="waiting"?"…":"⏳";
+      choice.title=row.built?tx("fullText.stateDone"):rowState?.status==="waiting"?tx("fullText.stateWaiting"):rowState?.status==="indexing"?tx("fullText.stateIndexing"):tx("fullText.stateCalculating");
     }else{
       const cb=document.createElement("input");
       cb.type="checkbox";
+      cb.checked=keepSelected.has(row.id);
       cb.setAttribute("aria-label",tx("fullText.colChoice"));
       choice.append(cb);
     }
     const name=document.createElement("td");
-    name.textContent=row.name;
+    const nameButton=document.createElement("span");
+    nameButton.className="dict-info-name";
+    nameButton.dataset.dict=row.id;
+    nameButton.textContent=row.name;
+    name.append(nameButton);
+    if(row.zim){
+      const format=document.createElement("span");
+      format.className="ft-format-tag";
+      format.textContent="(zim)";
+      name.append(format);
+    }
+    if(row.headwords>0){
+      const count=document.createElement("span");
+      count.className="ft-headword-count";
+      count.textContent=window.wudictI18n.number(row.headwords);
+      name.append(count);
+    }
     const size=document.createElement("td");
     size.className="ft-size";
     size.textContent=fullTextBandText(row);
     const state=document.createElement("td");
     state.className="ft-state";
+    if(rowState?.status){
+      state.dataset.state=rowState.status;
+      const label=tx(fullTextStateKeys[rowState.status]||fullTextStateKeys.error);
+      const percent=rowState.status==="indexing"&&rowState.total>0
+        ?Math.max(0,Math.min(100,Math.round(rowState.done*100/rowState.total))):null;
+      if(percent!==null)state.dataset.progress="1";
+      state.textContent=percent===null?label:`${label} ${window.wudictI18n.number(percent)}%`;
+      if(rowState.error)state.title=rowState.error;
+    }
     /* A database this fork no longer builds this way: the archive answers full
        text and the database still holds an index of ours, plus the bodies it was
        copied for. That is not a build to offer in the same list as the others -
@@ -13612,23 +13732,62 @@ function renderFullTextPicker(){
         if(dlg.open)dlg.close();
       });
       state.append(btn);
-    }else{
-      /* Three states, and none of them is a lie about the other source: ours
-         built (with or without the archive's beside it), ours not built while
-         the archive answers (which is why it is a choice), ours not built and
-         nothing else answering (which is when the row is the only way). */
-      state.textContent=row.built
-        ?tx(row.archiveIndex?"fullText.stateArchiveBoth":"fullText.stateBuilt")
-        :row.archiveIndex?tx("fullText.stateArchiveOptional")
-        :row.est?tx("fullText.stateAvailable"):"";
     }
     tr.append(choice,name,size,state);
     return tr;
   }));
+  fullTextSearch?.refresh();
   updateFullTextSummary();
+}
+function refreshOpenFullTextPicker(extraSelected=[]){
+  const dlg=$("fullTextPicker");
+  if(!dlg?.open)return;
+  const keep=new Set(selectedFullText().map(row=>row.id));
+  for(const id of extraSelected)if(id)keep.add(id);
+  renderFullTextPicker(keep);
+}
+async function startFullTextBuild(){
+  const selected=selectedFullText();
+  if(!selected.length)return;
+  const ids=selected.map(row=>row.id),keep=new Set(ids),dlg=$("fullTextPicker");
+  for(const id of ids){fullTextRowStates.set(id,{status:"waiting"});fullTextOwnBuilds.add(id)}
+  renderFullTextPicker(keep);
+  $("ftBuild").disabled=true;
+  try{
+    const result=await window.wudictWork.start(selected.map(row=>({dict:row.id,feature:"fts",action:"create"})));
+    await loadDicts();
+    const failures=Array.isArray(result.failed)?result.failed:[];
+    for(const id of ids){
+      fullTextOwnBuilds.delete(id);fullTextObservedBuilds.delete(id);
+      if(!dlg.open){fullTextRowStates.delete(id);continue}
+      const failure=fullTextFailureFor(id,failures),row=dicts.find(item=>item.id===id);
+      if(failure)fullTextRowStates.set(id,{status:"error",error:fullTextErrorText(failure)});
+      else if(!result.canceled&&!result.error&&row?.ourFullText)fullTextRowStates.set(id,{status:"done"});
+      else if(result.canceled)fullTextRowStates.delete(id);
+      else fullTextRowStates.set(id,{status:"error",error:fullTextErrorText("",result.error)});
+    }
+  }catch(error){
+    for(const id of ids){
+      fullTextOwnBuilds.delete(id);fullTextObservedBuilds.delete(id);
+      if(dlg.open)fullTextRowStates.set(id,{status:"error",error:String(error?.message||error)});
+      else fullTextRowStates.delete(id);
+    }
+  }
+  if(dlg.open)refreshOpenFullTextPicker();
 }
 function openFullTextPicker(preselect){
   renderFullTextPicker();
+  if(!fullTextSearch){
+    fullTextSearch=window.wudictListSearch.create({
+      root:$('ftRows'),itemSelector:'tr',dock:$('ftSearch'),scrollContainer:$('ftBody'),
+      highlightSelector:'.dict-info-name',initiallyFiltering:true,storageKey:'wudict_list_search_mode_fulltext_picker',
+      labels:{placeholder:tx('dictUI.listSearchPlaceholder'),filterPlaceholder:tx('dictUI.listFilterPlaceholder'),
+        search:tx('dictUI.listSearchLabel'),filter:tx('dictUI.listSearchFilter'),
+        previous:tx('dictUI.listSearchPrevious'),next:tx('dictUI.listSearchNext'),
+        count:tx('dictUI.listSearchCount',{current:'{current}',total:'{total}'})},
+      onUpdate:()=>updateFullTextSummary()
+    });
+  }
   if(preselect){
     const tr=$("ftRows").querySelector('tr[data-id="'+CSS.escape(preselect)+'"]');
     const cb=tr&&tr.querySelector("input[type=checkbox]");
@@ -13647,20 +13806,43 @@ function openFullTextPicker(preselect){
   updateFullTextSummary();
   const dlg=$("fullTextPicker");
   if(!dlg.open)dlg.showModal();
+  window.wudictWork.refresh().then(applyFullTextWorkStatus).catch(()=>{});
+  // The ordinary dictionary list can still reflect the state from before an
+  // automatic index queue finished. Settings already reloads it before
+  // opening; do the same here, and keep the user's choices while the fresh
+  // rows arrive.
+  loadDicts().then(ok=>{if(ok&&dlg.open)refreshOpenFullTextPicker(preselect?[preselect]:[])});
 }
 document.addEventListener("DOMContentLoaded",()=>{
+  window.addEventListener("wudict-work",event=>applyFullTextWorkStatus(event.detail));
+  $("fullTextPicker").addEventListener("close",()=>{
+    for(const [id,rowState] of fullTextRowStates){
+      if(!["indexing","waiting"].includes(rowState.status))fullTextRowStates.delete(id);
+    }
+  });
+  $("ftTable").querySelector("thead").addEventListener("click",event=>{
+    const button=event.target.closest("button[data-sort]");if(!button)return;
+    const key=button.dataset.sort;
+    fullTextSort=fullTextSort.key===key?{key,direction:-fullTextSort.direction}:{key,direction:1};
+    for(const th of $("ftTable").querySelectorAll("thead th")){
+      const active=th.querySelector(`button[data-sort="${CSS.escape(key)}"]`);
+      if(active)th.setAttribute("aria-sort",fullTextSort.direction===1?"ascending":"descending");else th.removeAttribute("aria-sort");
+    }
+    const keep=new Set(selectedFullText().map(row=>row.id));
+    renderFullTextPicker(keep);
+  });
   $("ftRows").addEventListener("change",updateFullTextSummary);
+  $("ftSelectAll").addEventListener("change",()=>{
+    const visibleRows=fullTextSearch?fullTextSearch.visibleItems():[...$("ftRows").querySelectorAll("tr")];
+    for(const row of visibleRows){
+      const choice=row.querySelector('input[type="checkbox"]');
+      if(choice)choice.checked=$("ftSelectAll").checked;
+    }
+    updateFullTextSummary();
+  });
   $("ftClose").addEventListener("click",()=>$("fullTextPicker").close());
   $("ftCloseTop").addEventListener("click",()=>$("fullTextPicker").close());
-  $("ftBuild").addEventListener("click",()=>{
-    const sel=selectedFullText();
-    if(!sel.length)return;
-    const button=$("ftBuild");
-    button.disabled=true;
-    window.wudictWork.start(sel.map(r=>({dict:r.id,feature:"fts",action:"create"})))
-      .catch(error=>setIndexStatus("⚠ "+esc(error.message||String(error))))
-      .finally(()=>$("fullTextPicker").close());
-  });
+  $("ftBuild").addEventListener("click",startFullTextBuild);
   $("editFullText").addEventListener("click",()=>openFullTextPicker(""));
 });
 </script>

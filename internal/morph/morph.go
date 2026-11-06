@@ -11,17 +11,13 @@
 //
 // # What is built in, and what is not
 //
-// English, and only English (D87). Every other language is a file the user
-// puts in LEMMA_DIR - see file.go, which is also what may replace the English
-// one. Compiled in, the six golem packs would be 9 MB of an 11 MB binary,
-// charged to every user and every phone for languages most of them do not
-// read; the set of languages people keep dictionaries in has no end, and a
-// folder is the only shape that scales to it.
+// English and Russian are built in. Other languages are files the user puts in
+// LEMMA_DIR. Files there can also replace either built-in pack.
 //
-// English is the exception because it is the language that is assumed when a
-// dictionary declares none (see internal/lang), so it is the one that has to
-// answer with nothing installed - and it is by far the cheapest of the six to
-// carry: 312 KB of binary against ru's 2.7 MB.
+// English is the language assumed when a dictionary declares none
+// (see internal/lang). Russian is also included for Russian dictionaries; its
+// compressed data adds about 1.9 MB to the binary and uses about 63 MB of heap
+// while loaded.
 //
 // # Why lemma data is loaded lazily
 //
@@ -52,6 +48,7 @@ package morph
 
 import (
 	"errors"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -60,11 +57,27 @@ import (
 	"github.com/aaaton/golem/v4/dicts/en"
 )
 
-// packs is the built-in language list: English, and nothing else (D87). Keys
-// are ISO 639-1, as internal/lang returns them. Every other language is a file
-// in LEMMA_DIR (see file.go), which may also replace this one.
+// packs is the built-in language list. Keys are ISO 639-1, as internal/lang
+// returns them. Files in LEMMA_DIR may override these packs.
 var packs = map[string]func() golem.LanguagePack{
 	"en": en.New,
+	"ru": func() golem.LanguagePack { return embeddedPack{code: "ru", data: russianLemmaData} },
+}
+
+// IsBuiltin reports whether the binary carries lemma data for code.
+func IsBuiltin(code string) bool {
+	_, ok := packs[code]
+	return ok
+}
+
+// BuiltinCodes returns the built-in language codes in stable order.
+func BuiltinCodes() []string {
+	codes := make([]string, 0, len(packs))
+	for code := range packs {
+		codes = append(codes, code)
+	}
+	sort.Strings(codes)
+	return codes
 }
 
 // Supports reports whether this cache will lemmatize a language - because it

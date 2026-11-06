@@ -10,21 +10,21 @@
     </div>
     <div class="folders-dialog-scroll">
       <section id="indexDefaults">
-        <details class="setup-copy"><summary><span>{{T:pages.indexDefaultsHint}}</span></summary><p>{{T:pages.indexDefaultsHint}}</p></details>
+        <details class="setup-copy fold-hint"><summary><span>{{T:pages.indexDefaultsHint}}</span></summary></details>
         <div class="dsl-default-row"><div>
           <label><input type="checkbox" id="newIndexContains" checked>{{T:dictUI.contains}}</label>
           <label><input type="checkbox" id="newIndexFullText">{{T:dictUI.fts}}</label>
         </div></div>
-        <details class="setup-copy index-defaults-note"><summary><span>{{T:pages.containsRecommendation}}</span></summary><p>{{T:pages.containsRecommendation}}</p></details>
+        <details class="setup-copy index-defaults-note fold-hint"><summary><span>{{T:pages.containsRecommendation}}</span></summary></details>
         <p id="indexDefaultsError" class="err" role="alert" hidden></p>
       </section>
-      <details class="setup-copy formats"><summary><span>{{T:pages.supported}}</span></summary><p>{{T:pages.supported}}</p></details>
+      <details class="setup-copy formats fold-hint"><summary><span>{{T:pages.supported}}</span></summary></details>
       <div class="setup-tabs" role="tablist" aria-label="{{T:pages.setupTabs}}">
         <button type="button" id="foldersTab" class="setup-tab" role="tab" aria-controls="foldersPanel" aria-selected="true">{{T:pages.point}}</button>
         <button type="button" id="downloadTab" class="setup-tab" role="tab" aria-controls="downloadPanel" aria-selected="false" tabindex="-1" disabled>{{T:pages.downloadDictionary}}</button>
       </div>
       <section id="foldersPanel" class="setup-panel" role="tabpanel" aria-labelledby="foldersTab">
-      <details class="setup-copy"><summary><span>{{T:pages.folderHint}}</span></summary><p>{{T:pages.folderHint}}</p></details>
+      <details class="setup-copy fold-hint"><summary><span>{{T:pages.folderHint}}</span></summary></details>
       <div id="rows"></div>
       <button type="button" id="addRow" class="link">{{T:pages.addFolder}}</button>
       <div id="origin" class="warn hidden"></div>
@@ -44,7 +44,7 @@
       <div id="addSection" class="hidden">
         <hr class="sep">
         <h2>{{T:pages.addDictionaries}}</h2>
-        <details class="setup-copy"><summary><span>{{T:pages.addHint}} {{T:pages.assetsHint}}</span></summary><p>{{T:pages.addHint}} {{T:pages.assetsHint}}</p></details>
+        <details class="setup-copy fold-hint"><summary><span>{{T:pages.addHint}} {{T:pages.assetsHint}}</span></summary></details>
         <div id="drop">
           <input type="file" id="file" accept=".zip,.7z,.mdx,.mdd,.ifo,.idx,.dict,.dz,.syn,.dsl,.slob,.bgl,.zim,.md,.gz" hidden>
           <button type="button" id="choose" class="link">{{T:pages.chooseFile}}</button>
@@ -98,4 +98,5 @@
   </div>
 </dialog>
 <link rel="stylesheet" href="/assets/folders-dialog.css?v={{FOLDERSDIALOGCSS}}">
+<style>{{FOLDHINTCSS_INLINE}}</style>
 <script defer src="/assets/setup.js?v={{SETUPJS}}"></script>

@@ -35,9 +35,9 @@ func morphServer(t *testing.T, files map[string]string) *Server {
 	}
 	waitNewDictionaryIndexing(t, reg)
 	s := New(reg)
-	// Only English is built in (D87), so Russian arrives the way a user's
-	// Russian arrives: as a file in LEMMA_DIR. Keyed on the ё spellings, as
-	// golem's own ru data is, so the е→ё retry is still what resolves "идет".
+	// This test file overrides the built-in Russian pack, keeping the fixture
+	// small and deterministic. It is keyed on ё spellings to exercise the е→ё
+	// retry that resolves "идет".
 	lemmas := t.TempDir()
 	if err := os.WriteFile(filepath.Join(lemmas, "ru.txt"), []byte("идти\tидёт\tидёшь\n"), 0o644); err != nil {
 		t.Fatal(err)

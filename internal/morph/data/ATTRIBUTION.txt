@@ -1,0 +1,11 @@
+Russian lemma data shipped with DictShelf
+=======================================
+
+Source:  https://github.com/michmech/lemmatization-lists
+License: Open Database License (ODbL) v1.0
+         https://opendatacommons.org/licenses/odbl/1-0/
+
+This file is a derived, reformatted copy of the Russian lemmatization list
+published by Michal Boleslav Mechura: lower-cased, and with the forms of one
+lemma grouped onto a single tab-separated line. No entries were added and none
+were translated. The data is available under ODbL v1.0.

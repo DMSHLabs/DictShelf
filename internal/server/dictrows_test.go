@@ -245,23 +245,25 @@ func TestDictsRescanIgnoresTag(t *testing.T) {
 	}
 }
 
-// A rescan that drops a backend the app had open - the source was replaced -
-// invalidates the row derived while it was open, whoever called Rescan.
-func TestDictsRescanInvalidatesChangedEntry(t *testing.T) {
+// Touching a source without changing its content does not invalidate an open
+// backend or its row, including when the registry is rescanned.
+func TestDictsRescanKeepsEntryWhenOnlyMtimeChanges(t *testing.T) {
 	s, row, _ := settled(t)
 	e, _ := s.reg.get(row.ID)
 	if _, err := e.open(); err != nil {
 		t.Fatal(err)
 	}
+	_, _, tag := dictsWith(t, s, "")
 	later := time.Now().Add(3 * time.Second)
 	if err := os.Chtimes(row.Path, later, later); err != nil {
 		t.Fatal(err)
 	}
-	tag := wantFull(t, s, "", "after the edit")
 	if err := s.reg.Rescan(); err != nil { // as an import or a removal does
 		t.Fatal(err)
 	}
-	wantFull(t, s, tag, "after a rescan dropped the open backend")
+	if code, _, _ := dictsWith(t, s, tag); code != 304 {
+		t.Fatalf("after a timestamp-only rescan: %d; want 304 with tag %q", code, tag)
+	}
 }
 
 // While an index is being built the answer is not offered for keeping: its

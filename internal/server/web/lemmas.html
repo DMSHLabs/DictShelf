@@ -81,11 +81,13 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <title>{{T:pages.lemmas}}</title>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="stylesheet" href="/assets/setup.css?v={{CSS}}">
+<link rel="stylesheet" href="/assets/fold-hint.css?v={{FOLDHINTCSS}}">
 <link rel="stylesheet" href="/assets/checkbox.css?v={{CHECKBOXCSS}}">
 <link rel="stylesheet" href="/assets/workspace.css?v={{WORKSPACECSS}}">
 {{UI_SCALE_DEFAULTS}}
 <!-- App preset styles requested for this page are attached after setup.css. -->
 {{PRESETS}}
+<script defer src="/assets/fold-hint.js?v={{FOLDHINTJS}}"></script>
 <script>
 /* Apply the reader's saved Fonts settings before this standalone page paints. */
 (function () {

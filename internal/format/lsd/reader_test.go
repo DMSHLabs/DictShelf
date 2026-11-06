@@ -110,7 +110,7 @@ func TestReaderLingvo10Dictionary(t *testing.T) {
 }
 
 func TestReaderLingvo7Dictionaries(t *testing.T) {
-	base := `D:\Dictionaries\Test3\Елистратов. Словарь русского арго (2002)\`
+	base := `D:\Dictionaries\Test\`
 	for _, tc := range []struct {
 		name  string
 		dsl   string
@@ -199,7 +199,7 @@ func compareLegacyHeadwords(lsdPath, dslPath string) error {
 	return nil
 }
 func TestReaderLingvo9Dictionary(t *testing.T) {
-	path := `D:\Dictionaries\Test3\Грицанов. Энциклопедия история философии (2002)\hist_of_philosophyl_gricanov.lsd`
+	path := `D:\Dictionaries\Test\hist_of_philosophyl_gricanov.lsd`
 	r, err := NewReader(path)
 	if err != nil {
 		t.Fatal(err)
@@ -225,7 +225,7 @@ func TestReaderLingvo9Dictionary(t *testing.T) {
 }
 
 func TestLingvo9AlternateHeadwordVisible(t *testing.T) {
-	path := `D:\Dictionaries\Test3\1\hist_of_philosophyl_gricanov.lsd`
+	path := `D:\Dictionaries\Test\hist_of_philosophyl_gricanov.lsd`
 	r, err := NewReader(path)
 	if err != nil {
 		t.Fatal(err)

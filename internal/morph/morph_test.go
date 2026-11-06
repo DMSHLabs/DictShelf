@@ -11,10 +11,9 @@ import (
 	"testing"
 )
 
-// installed writes lemma files into a temp LEMMA_DIR and returns it. Only
-// English is built in now, so every other language a test needs is one it puts
-// on disk - which is also what a user does, so these fixtures exercise the
-// real path rather than a shortcut around it.
+// installed writes lemma files into a temp LEMMA_DIR and returns it. Languages
+// other than the built-in English and Russian packs use the same file path a
+// user does, so these fixtures exercise the real loading path.
 func installed(t *testing.T, files map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -118,18 +117,22 @@ func TestConcurrent(t *testing.T) {
 	wg.Wait()
 }
 
-// TestOnlyEnglishIsBuiltIn is the shape of D87, asserted rather than assumed:
-// an empty LEMMA_DIR answers for English and for nothing else. If a pack is
-// ever compiled back in, this fails.
-func TestOnlyEnglishIsBuiltIn(t *testing.T) {
-	if len(packs) != 1 || packs["en"] == nil {
-		t.Fatalf("built-in packs = %v; want en only", keys(packs))
+// TestBuiltInEnglishAndRussian ensures an empty LEMMA_DIR has both built-in
+// packs available, while other languages remain opt-in files.
+func TestBuiltInEnglishAndRussian(t *testing.T) {
+	if len(packs) != 2 || packs["en"] == nil || packs["ru"] == nil {
+		t.Fatalf("built-in packs = %v; want en and ru", keys(packs))
 	}
 	c := New(2, "")
-	if !c.Supports("en") {
-		t.Error("English must work with nothing installed")
+	for _, code := range []string{"en", "ru"} {
+		if !c.Supports(code) {
+			t.Errorf("%s must work with nothing installed", code)
+		}
 	}
-	for _, code := range []string{"de", "es", "fr", "it", "ru", "pl"} {
+	if got, ok := c.Lemma("ru", "сказала"); !ok || got != "сказать" {
+		t.Errorf("built-in Russian: %q, %v; want сказать, true", got, ok)
+	}
+	for _, code := range []string{"de", "es", "fr", "it", "pl"} {
 		if c.Supports(code) {
 			t.Errorf("%s must not be built in", code)
 		}

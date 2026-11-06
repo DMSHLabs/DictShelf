@@ -85,7 +85,7 @@ for (const language of ['en', 'ru']) {
   assert.equal(errorText(null),'');
   const setup=fs.readFileSync(path.join(web,'setup.js'),'utf8');
   const importMessages=[];
-  const importContext={window:context.window,tx:t,impSay:(message,kind)=>importMessages.push({message,kind})};
+  const importContext={window:context.window,tx:t,megaFolderMode:false,impSay:(message,kind)=>importMessages.push({message,kind})};
   vm.runInNewContext(setup.match(/function impRender\(j\)\{[\s\S]*?\n}/)[0],importContext);
   importContext.impRender({state:'error',error:'archive is password-protected'});
   assert.equal(importMessages[0].message,'✕ '+errorText('archive is password-protected'));
@@ -313,7 +313,7 @@ for (const language of ['en', 'ru']) {
       `${count} ${language === 'ru' ? word : count === 1 ? 'word' : 'words'}`);
   }
 }
-for (const file of ['index', 'setup', 'browse', 'lemmas']) {
+for (const file of ['index', 'browse', 'lemmas', 'groups']) {
   const html = fs.readFileSync(path.join(web, `${file}.html`), 'utf8');
   for (const [,attrs,body] of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)) {
     // Templates with server-injected JavaScript values are validated after
@@ -321,4 +321,5 @@ for (const file of ['index', 'setup', 'browse', 'lemmas']) {
     if (!attrs.includes('src=') && !body.includes('{{')) new vm.Script(body, {filename: file + '.html'});
   }
 }
+new vm.Script(fs.readFileSync(path.join(web, 'setup.js'), 'utf8'), {filename: 'setup.js'});
 console.log('Interface JS syntax, plural rules, interpolation and fallback passed.');

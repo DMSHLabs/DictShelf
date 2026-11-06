@@ -79,6 +79,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <title>{{T:browse.title}}</title>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="stylesheet" href="/assets/workspace.css?v={{WORKSPACECSS}}">
+<link rel="stylesheet" href="/assets/fold-hint.css?v={{FOLDHINTCSS}}">
 {{UI_SCALE_DEFAULTS}}
 <!--
  Copyright (C) 2026 glowinthedark
@@ -357,6 +358,7 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
 <!-- App preset styles requested for this page are attached after its own sheet. -->
 {{PRESETS}}
 <script src="/assets/list-search.js?v={{LISTSEARCHJS}}"></script>
+<script defer src="/assets/fold-hint.js?v={{FOLDHINTJS}}"></script>
 <script src="/assets/headword-control.js?v={{HEADWORDJS}}"></script>
 <script src="/assets/headword-ribbon.js?v={{RIBBONJS}}"></script>
 <script>window.wudictHeadwordControl.ribbon.setExactCount({{BROWSE_STRIP_EXACT_WIDTHS}})</script>

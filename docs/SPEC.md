@@ -169,16 +169,16 @@ sized by `MORPH_CACHE` (desktop 2, Android 1, `0` disables the feature); a pack 
 65 MB (ru), so nothing is loaded at startup. Russian additionally retries one `е`→`ё`
 substitution, because golem's ru pack is keyed on the `ё` spellings.
 
-**Only English is compiled in** (D87, `internal/morph/file.go`). Every other language is a
-file in `LEMMA_DIR` (default `~/.dictshelf/lemmas`) named after its language — `pl.txt`, `pol.tsv`,
-`polish.txt.gz`, resolved through `lang.Normalize` — loaded through the same LRU; an `en` file
-replaces the built-in English rather than merging with it. golem takes a `LanguagePack` interface,
-so the backing is a file instead of a generated Go const and nothing else changes. English is the
-exception because it is the language assumed when a dictionary declares none, so it must answer
-with an empty folder; dropping the other five took the binary from 29.3 MB to 20.4 MB. The
-on-disk format is golem's own (lemma first, tab-separated forms, lower case), which is also the
-shape of the raw lists at michmech/lemmatization-lists, so those load as downloaded. Two
-things are done to the bytes on the way in,
+English is compiled in through `golem`; Russian is embedded as the compressed
+`internal/morph/data/ru.tsv.gz` resource. Both packs are loaded through the same LRU.
+Other languages are files in `LEMMA_DIR` named after the language — `pl.txt`, `pol.tsv`,
+`polish.txt.gz`, resolved through `lang.Normalize`. A file can override a built-in language
+rather than merging with it. golem takes a `LanguagePack` interface, so the Russian data is
+decompressed only when its pack is first used. The Russian data is a derived list from
+michmech/lemmatization-lists and is distributed under ODbL-1.0; its attribution is in
+`internal/morph/data/ATTRIBUTION.txt`. The on-disk format is golem's own (lemma first,
+tab-separated forms, lower case), which is also the shape of the raw lists at
+michmech/lemmatization-lists, so those load as downloaded. Two things are done to the bytes on the way in,
 because golem is stricter than a hand-edited file can be trusted to be: they are lower-cased (only
 `LemmaLower` is ever called) and lines with fewer than two fields are dropped (**one** such line
 otherwise fails the entire load, costing a language). Decompressed size is capped at 64 MB — five

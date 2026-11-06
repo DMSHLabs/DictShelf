@@ -4,9 +4,8 @@
 
 // Package lemmas installs the lemma data internal/morph reads (D88).
 //
-// wudict compiles in English and nothing else (D87), which leaves every other
-// language as a file in LEMMA_DIR - correct, and useless to anyone who cannot
-// produce one. `make lemma-files` needs a Go toolchain and a populated module
+// English and Russian are built in; other languages are files in LEMMA_DIR.
+// `make lemma-files` needs a Go toolchain and a populated module
 // cache; a user who downloaded a release binary has neither. This package is
 // how those files are obtained instead: `wudict lemmas list` and
 // `wudict lemmas download`.

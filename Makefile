@@ -444,9 +444,10 @@ tidy: ## go mod tidy
 check: tidy vet test ## Pre-commit gate: tidy + vet + test
 
 # ---- lemma data ---------------------------------------------------------
-# Only English is built into the binary (D87); every other language is a file
-# a user installs with `dictshelf lemmas download` (D88). This builds what that
-# command downloads: <code>.tsv.gz per language, plus the manifest.json that
+# English is built in through golem; Russian is embedded from the checked-in
+# ODbL data file. Other languages are files a user installs with
+# `dictshelf lemmas download` (D88). This builds what that command downloads:
+# <code>.tsv.gz per language, plus the manifest.json that
 # LEMMA_URL points at and the ODbL ATTRIBUTION.txt redistribution requires.
 #
 # The source is github.com/michmech/lemmatization-lists, not golem's Go

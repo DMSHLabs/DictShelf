@@ -28,16 +28,49 @@ var indexModeMu sync.Mutex
 
 // runIndexDictionaryGroups runs each dictionary's operations in order while
 // allowing independent dictionaries to use the configured indexing workers.
-func runIndexDictionaryGroups(groups [][]indexOperation, stopped func() bool, run func([]indexOperation)) {
+func (s *Server) runIndexDictionaryGroups(groups [][]indexOperation, stopped func() bool, run func([]indexOperation, indexconst.Mode)) {
 	if len(groups) == 0 {
 		return
 	}
 	refreshIndexParallelism()
+	mode := indexconst.CurrentMode()
+	budget := max(1, currentIndexCPUCount()-1)
+	hybrid := indexconst.IsAutomaticMode(mode) || len(groups) == 1
+	groupByID := make(map[string][]indexOperation, len(groups))
+	items := make([]pendingDictionaryIndex, 0, len(groups))
+	for _, group := range groups {
+		if len(group) == 0 {
+			continue
+		}
+		id := group[0].Dict
+		groupByID[id] = group
+		item := pendingDictionaryIndex{entry: &entry{ID: id}}
+		if e, err := s.reg.get(id); err == nil {
+			item.entry = e
+		}
+		if indexconst.IsAutomaticMode(mode) {
+			items = append(items, item)
+		} else if len(groups) == 1 {
+			classifyAutomaticIndex(&item, budget, indexconst.ModeAdaptive)
+			items = append(items, item)
+		} else {
+			item.mode = mode
+			item.cost = 1
+			items = append(items, item)
+		}
+	}
+	small, pipeline := 0, 0
+	if indexconst.IsAutomaticMode(mode) {
+		small, pipeline = orderAutomaticIndexes(items, budget, mode)
+	}
 	indexModeMu.Lock()
 	indexTaskQueuesActive.Add(1)
 	indexModeMu.Unlock()
 	defer indexTaskQueuesActive.Add(-1)
 	workers := currentIndexLimit().Limit()
+	if hybrid {
+		workers = budget
+	}
 	if workers < 1 {
 		workers = 1
 	}
@@ -45,13 +78,14 @@ func runIndexDictionaryGroups(groups [][]indexOperation, stopped func() bool, ru
 		workers = len(groups)
 	}
 	store.IndexDiagnostic("index dictionary queue started dictionaries=%d workers=%d mode=%s", len(groups), workers, indexconst.ModeName())
-	for i, group := range groups {
-		if len(group) > 0 {
-			store.IndexDiagnostic("index dictionary queued dictionary=%q position=%d/%d", group[0].Dict, i+1, len(groups))
-		}
+	if indexconst.IsAutomaticMode(mode) {
+		store.IndexDiagnostic("automatic index queue started strategy=%s dictionaries=%d small=%d pipeline=%d processor_budget=%d", indexconst.ModeString(mode), len(items), small, pipeline, budget)
+	}
+	for i, item := range items {
+		store.IndexDiagnostic("index dictionary queued dictionary=%q position=%d/%d strategy=%s", item.entry.ID, i+1, len(items), indexconst.ModeString(item.mode))
 	}
 	var active atomic.Int32
-	runIndexTasks(groups, stopped, func(group []indexOperation) {
+	runGroup := func(group []indexOperation, ingestMode indexconst.Mode) {
 		name := ""
 		if len(group) > 0 {
 			name = group[0].Dict
@@ -64,8 +98,16 @@ func runIndexDictionaryGroups(groups [][]indexOperation, stopped func() bool, ru
 			elapsed := time.Since(started)
 			store.IndexDiagnostic("index dictionary worker released dictionary=%q active=%d elapsed=%s elapsed_ms=%d", name, count, elapsed.Round(time.Millisecond), elapsed.Milliseconds())
 		}()
-		run(group)
-	})
+		run(group, ingestMode)
+	}
+	if hybrid {
+		queue := newPriorityDictionaryQueue(items, nil)
+		runHybridPriorityDictionaryQueue(queue, budget, stopped, func(item pendingDictionaryIndex) {
+			runGroup(groupByID[item.entry.ID], item.mode)
+		})
+	} else {
+		runIndexTasks(groups, stopped, func(group []indexOperation) { runGroup(group, mode) })
+	}
 	store.IndexDiagnostic("index dictionary queue finished dictionaries=%d", len(groups))
 }
 
@@ -358,7 +400,7 @@ func (s *Server) startIndexWork(raw []byte, single bool) (indexWorkStatus, error
 	}
 	defer release()
 	if _, started := s.jobs.start(key, 0, jobStatus{Total: int64(len(operations)), DictionaryTotal: int64(len(groups))}, func(j *job) {
-		runIndexDictionaryGroups(groups, j.canceled, func(group []indexOperation) {
+		s.runIndexDictionaryGroups(groups, j.canceled, func(group []indexOperation, ingestMode indexconst.Mode) {
 			if len(group) == 0 {
 				return
 			}
@@ -367,11 +409,7 @@ func (s *Server) startIndexWork(raw []byte, single bool) (indexWorkStatus, error
 			if !ok {
 				return
 			}
-			if len(groups) == 1 {
-				if e, err := s.reg.get(dictID); err == nil {
-					ctx = adaptiveSingleIndexContext(ctx, e)
-				}
-			}
+			ctx = indexconst.WithIngestMode(ctx, ingestMode)
 			trackJobDictionary(j, dictID, true)
 			defer func() {
 				j.finishDictionary(dictID, cancel)
@@ -439,7 +477,7 @@ func (s *Server) startIndexWork(raw []byte, single bool) (indexWorkStatus, error
 						want.FullText = op.Action != "delete"
 					}
 					if e.indexBlocked() && op.Action != "delete" {
-						err = e.restoreIndexContext(ctx, store.Plan{FullText: want.FullText, Contains: want.Contains}, progress, currentIndexLimit())
+						err = e.restoreIndexContext(ctx, store.Plan{FullText: want.FullText, Contains: want.Contains}, progress, indexLaneForContext(ctx))
 						force = false
 					}
 					if err == nil {

@@ -12,6 +12,18 @@ Regenerate with `make notices` after changing dependencies.
 
 ## Code included in this repository
 
+## Data included in this repository
+
+### Russian lemma data (`internal/morph/data/ru.tsv.gz`)
+
+Source: [michmech/lemmatization-lists](https://github.com/michmech/lemmatization-lists).
+The file is a lower-cased, grouped TSV copy distributed under the Open Database
+License (ODbL) v1.0. It is included in the source tree and embedded in release
+binaries; the data remains available under the same licence. The catalogue's
+attribution notice is in `internal/morph/data/ATTRIBUTION.txt`.
+
+ODbL v1.0: <https://opendatacommons.org/licenses/odbl/1-0/>.
+
 ### Speex — `internal/speex/clib`
 
 The reference Speex decoder, vendored so `.spx` pronunciation audio plays

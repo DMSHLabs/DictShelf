@@ -29,7 +29,7 @@ Type `wudict help` in the search box for quick access, and [browse](/browse?dict
 - Dictionaries are automatically grouped by language, language pair, content and publisher; add your own groups in <kbd>☰</kbd> → ![](cog.svg) → [Edit groups](/groups).
 - Double-tap any word in a wudict dictionary article to instantly look up its definition
 - Adjust the font size via the <kbd>☰</kbd> → <kbd>−</kbd> <kbd>+</kbd> widget
-- [Lemmatization](<entry://wudict lemmatization>) for 24 languages: <kbd>☰</kbd> → ![](cog.svg) → <kbd>Lemmatization…</kbd>; English is built in
+- [Lemmatization](<entry://wudict lemmatization>) for 24 languages: <kbd>☰</kbd> → ![](cog.svg) → <kbd>Lemmatization…</kbd>; English and Russian are built in
 - Android: full screen, hiding the system bars while you read and drawing content edge-to-edge, into the camera cutout: long-tap the wudict icon in the launcher → **Settings** → **Screen**
 - Browse **all headwords** in any dictionary via <kbd>☰</kbd> → ![](cog.svg) → <kbd>Browse A–Z…</kbd>
 - Select text in any app and pick → <kbd>**wuDict**</kbd> from the context menu
@@ -54,7 +54,7 @@ Type `wudict help` in the search box for quick access, and [browse](/browse?dict
 1. [Add dictionaries](<entry://wudict add dictionaries>): MDict, StarDict, Slob, DSL, Babylon, ZIM, and [more](<entry://wudict formats>).
 2. Search. Double-click a word in an article (📱 double-tap) to look it up.
 3. In <kbd>☰</kbd>, pin ![](pin.svg) the dictionaries you use most. Pinned dictionaries come first in the results and in the picker.
-4. Install morphology files for your languages: ![](lemmas.svg) [Lemmatization](/lemmas). English is built in.
+4. Install lemma data for your languages: ![](lemmas.svg) [Lemmatization](/lemmas). English and Russian are built in.
 
 ### Options
 
@@ -137,7 +137,7 @@ A pattern without a capital letter ignores case and accents: `cafe` finds *Café
 ## wudict inflected words
 ## wudict lemmas
 
-**Lemmatization is applied when a single word finds nothing in a dictionary**: *knew* finds **know**, *estuviera* finds **estar**. 24 languages: English is built in, the others install in one tap from ![](lemmas.svg) [Lemmatization](/lemmas) (also in <kbd>☰</kbd> → ![](cog.svg)).
+**Lemmatization is applied when a single word finds nothing in a dictionary**: *knew* finds **know**, *estuviera* finds **estar**. 24 languages: English and Russian are built in; install the others in one tap from ![](lemmas.svg) [Lemmatization](/lemmas) (also in <kbd>☰</kbd> → ![](cog.svg)).
 
 Each language is a small download (33 kB to 2.5 MB) and is used only for dictionaries in that language: Spanish *sale* → **salir** is never asked of an English dictionary. Untick a language to delete it.
 
@@ -441,7 +441,7 @@ For every dictionary in the panel <kbd>☰</kbd> the size of the headword and fu
 <details>
 <summary>Why does searching estuviera find nothing?</summary>
 
-Because lemma data for Spanish is not installed. wudict retries a failed search with the word's lemma — *knew* → **know** — but only English is built into the program; every other language is a small file you install.
+Because lemma data for Spanish is not installed. DictShelf retries a failed search with the word's lemma — *knew* → **know** — and includes English and Russian lemma data. Install the Spanish data file to search Spanish word forms.
 
 Click <kbd>☰</kbd> → ![](cog.svg) → <kbd>Lemmatization…</kbd> (or <kbd>🔤 Lemmatization</kbd> on the setup page), tick Spanish, and search again — it works immediately, with no restart. On a desktop, [`wudict lemmas download es`](/lemmas) does the same.
 

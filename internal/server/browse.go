@@ -1649,6 +1649,8 @@ func (s *Server) browsePageHTML() []byte {
 
 func (s *Server) browsePageHTMLFor(acceptLanguage string) []byte {
 	page := bytes.ReplaceAll(browseHTML, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))
+	page = bytes.ReplaceAll(page, []byte("{{FOLDHINTJS}}"), []byte(assetTag(foldHintJS)))
+	page = bytes.ReplaceAll(page, []byte("{{FOLDHINTCSS}}"), []byte(assetTag(foldHintCSS)))
 	page = bytes.ReplaceAll(page, []byte("{{BROWSE_STRIP_EXACT_WIDTHS}}"), []byte(strconv.Itoa(indexconst.BrowseStripExactWidthCount)))
 	page = bytes.ReplaceAll(page, []byte("{{SEARCH_DEBOUNCE_MS}}"), []byte(strconv.Itoa(indexconst.SearchDebounceMS)))
 	page = bytes.ReplaceAll(page, []byte("{{BROWSE_PROGRESS_DELAY_MS}}"), []byte(strconv.Itoa(indexconst.BrowsePageProgressDelayMS)))

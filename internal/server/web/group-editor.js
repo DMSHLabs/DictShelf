@@ -474,18 +474,15 @@ function renderGroupRows(){
   $('groupEmptyHint').hidden=!showEmptyHint;
   $('groupEmptyHintText').textContent=showEmptyHint?tx('dictUI.emptyGroup'):'';
   for(const d of filtering?inside.concat(filteredOutside):inside){
-    const label=document.createElement(selecting||groupPinEditing?"div":(!locked&&showAll.checked?"label":"div"));label.className="group-row";
+    const label=document.createElement(selecting||groupPinEditing||draftMembership?"div":(!locked&&showAll.checked?"label":"div"));label.className="group-row";
     label.dataset.dict=d.id;label.dataset.search=dictLabel(d).toLocaleLowerCase();
     const name=document.createElement("span");name.className='group-dictionary-name';
     name.classList.add('dict-info-name');name.dataset.dict=d.id;
     const title=document.createElement('span');title.className='group-dictionary-title';title.textContent=dictLabel(d);
-    /* dictCounts is the page's (index.html), the same plate the settings window
-       draws - this file is only ever loaded beside it. */
-    const counts=dictCounts(d);
-    if(counts){
+    const headwords=Number(d.headwords);
+    if(Number.isFinite(headwords)&&headwords>0){
       const count=document.createElement('span');count.className='group-dictionary-count';
-      count.textContent=' ('+counts.text+')';
-      count.title=counts.title;
+      count.textContent=' ('+window.wudictI18n.number(headwords)+')';
       title.append(count);
     }
     const icon=document.createElement('img');icon.className='dict-icon';icon.src='/dict-icon/'+encodeURIComponent(d.id);icon.alt='';icon.setAttribute('aria-hidden','true');icon.loading='lazy';icon.decoding='async';

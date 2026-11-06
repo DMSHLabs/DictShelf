@@ -21,6 +21,7 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/lang"
 	"github.com/DMSHLabs/DictShelf/internal/lemmas"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/morph"
 )
 
 // The lemma installer over HTTP (D91). `wudict lemmas` (D88) answers this for
@@ -184,13 +185,15 @@ func (s *Server) lemmaSnapshot(ctx context.Context, refresh bool) lemmaInfo {
 		}
 		info.Languages = append(info.Languages, lemmaRow{
 			Code: code, Name: lang.Name(code), Local: l.Size,
-			Installed: true, Builtin: code == "en",
+			Installed: true, Builtin: morph.IsBuiltin(code),
 		})
 	}
-	if !seen["en"] && local["en"].Path == "" {
-		info.Languages = append(info.Languages, lemmaRow{
-			Code: "en", Name: "English", Installed: true, Builtin: true,
-		})
+	for _, code := range morph.BuiltinCodes() {
+		if !seen[code] && local[code].Path == "" {
+			info.Languages = append(info.Languages, lemmaRow{
+				Code: code, Name: lang.Name(code), Installed: true, Builtin: true,
+			})
+		}
 	}
 	// Sorted by name: the page is a list a human reads, and code order would
 	// put Asturian before English for no reason a reader can see.
@@ -213,11 +216,11 @@ func (s *Server) lemmaRow(e lemmas.Entry, local map[string]lemmas.Local) lemmaRo
 	r := lemmaRow{
 		Code: e.Code, Name: e.Name, Size: e.Size, Lemmas: e.Lemmas,
 		HeapMB: e.HeapMB, Source: e.Source, License: e.License,
-		Catalogued: true, Builtin: e.Code == "en",
+		Catalogued: true, Builtin: morph.IsBuiltin(e.Code),
 	}
 	l, ok := local[e.Code]
 	if !ok {
-		r.Installed = e.Code == "en" // built in, nothing to download
+		r.Installed = r.Builtin // built in, nothing to download
 		return r
 	}
 	r.Installed, r.Local = true, l.Size
@@ -362,7 +365,7 @@ func (s *Server) removeLemma(rawCode string) (map[string]any, int, error) {
 	s.jobs.forget(lemmaKey(code))
 
 	s.Morph.Rescan()
-	return map[string]any{"code": code, "removed": gone, "builtin": code == "en"}, http.StatusOK, nil
+	return map[string]any{"code": code, "removed": gone, "builtin": morph.IsBuiltin(code)}, http.StatusOK, nil
 }
 
 // attributionURL points at the ATTRIBUTION.txt published beside the manifest.

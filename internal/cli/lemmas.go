@@ -22,12 +22,13 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/lemmas"
 	"github.com/DMSHLabs/DictShelf/internal/limits"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/morph"
 )
 
 // `dictshelf lemmas` - obtaining the lemma data LEMMA_DIR holds (D88).
 //
-// wudict compiles in English and nothing else, so every other language is a
-// file the user has to get from somewhere. `make lemma-files` is not that
+// English comes from golem and Russian is embedded in DictShelf, so other
+// languages are files the user can install. `make lemma-files` is not that
 // somewhere: it needs a Go toolchain and a populated module cache, which a
 // user who downloaded a release binary does not have. These three commands are
 // the whole of the answer, and they are shaped for someone who does not
@@ -160,13 +161,21 @@ func cmdLemmasList(args []string) error {
 			size: l.Size, note: "local file, not in the catalogue",
 		})
 	}
-	if !seen["en"] && local["en"].Path == "" {
-		rows = append(rows, row{code: "en", name: "English", mark: "[x]", note: "built in"})
+	for _, code := range morph.BuiltinCodes() {
+		if !seen[code] && local[code].Path == "" {
+			rows = append(rows, row{code: code, name: lang.Name(code), mark: "[x]", note: "built in"})
+		}
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].name < rows[j].name })
 
 	fmt.Printf("Lemma files in %s\n", dir)
-	fmt.Printf("%d installed", len(local))
+	installed := len(local)
+	for _, code := range morph.BuiltinCodes() {
+		if local[code].Path == "" {
+			installed++
+		}
+	}
+	fmt.Printf("%d installed", installed)
 	if cat != nil {
 		fmt.Printf(", %d available", len(cat.Languages))
 	}
@@ -213,7 +222,7 @@ func catalogRow(e lemmas.Entry, local map[string]lemmas.Local) row {
 	r := row{code: e.Code, name: e.Name, mark: "[ ]", size: e.Size, ram: int64(e.HeapMB)}
 	l, ok := local[e.Code]
 	switch {
-	case !ok && e.Code == "en":
+	case !ok && morph.IsBuiltin(e.Code):
 		r.mark, r.note = "[x]", "built in"
 	case !ok:
 		// nothing installed: the catalogue's size is what a download costs
@@ -221,7 +230,7 @@ func catalogRow(e lemmas.Entry, local map[string]lemmas.Local) row {
 		r.mark, r.size = "[x]", l.Size
 		if h, err := lemmas.Hash(l.Path); err != nil || h != e.SHA256 {
 			r.mark, r.note = "[!]", "installed, differs from the catalogue"
-		} else if e.Code == "en" {
+		} else if morph.IsBuiltin(e.Code) {
 			r.note = "built in, replaced by this file"
 		}
 	}
@@ -363,14 +372,18 @@ func cmdLemmasRemove(args []string) error {
 			return err
 		}
 		if len(gone) == 0 {
-			fmt.Printf("%-4s nothing installed\n", code)
+			if morph.IsBuiltin(code) {
+				fmt.Printf("%-4s built-in data remains available\n", code)
+			} else {
+				fmt.Printf("%-4s nothing installed\n", code)
+			}
 			continue
 		}
 		for _, p := range gone {
 			fmt.Printf("%-4s removed %s\n", code, p)
 		}
-		if code == "en" {
-			fmt.Println("     English falls back to the built-in data")
+		if morph.IsBuiltin(code) {
+			fmt.Printf("     %s falls back to the built-in data\n", lang.Name(code))
 		}
 	}
 	return nil
