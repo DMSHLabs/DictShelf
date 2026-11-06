@@ -633,6 +633,7 @@ func buildWithProgress(ctx context.Context, f Fetcher, dest string, lib []string
 			if g, ok := groups[strings.ToLower(rf.name)]; ok {
 				row.Group = g
 				row.Selectable = usable[g]
+				row.Main = strings.EqualFold(rf.name, c.cands[g].Main)
 			} else if g, ok := extraGroups[strings.ToLower(rf.name)]; ok {
 				row.Group = g
 				row.Extra = extraIndex(c.extras, rf.name)

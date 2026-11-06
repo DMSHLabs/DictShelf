@@ -152,11 +152,18 @@ type Job struct {
 
 // FolderFile is one direct child of a MEGA folder and the selection group it belongs to.
 type FolderFile struct {
-	Name       string `json:"name"`
-	Size       int64  `json:"size"`
-	Group      int    `json:"group"`
-	Extra      int    `json:"extra"`
-	Selectable bool   `json:"selectable"`
+	Name             string `json:"name"`
+	Size             int64  `json:"size"`
+	Group            int    `json:"group"`
+	Extra            int    `json:"extra"`
+	Selectable       bool   `json:"selectable"`
+	Main             bool   `json:"main,omitempty"`
+	FileStatus       string `json:"fileStatus,omitempty"`
+	Done             int64  `json:"done,omitempty"`
+	Total            int64  `json:"total,omitempty"`
+	FileError        string `json:"fileError,omitempty"`
+	DictionaryStatus string `json:"dictionaryStatus,omitempty"`
+	DictionaryError  string `json:"dictionaryError,omitempty"`
 }
 
 // Manager owns the single job. The zero value is usable.
@@ -952,6 +959,7 @@ func dispose(src Source, keep bool, err error, consumed []string) {
 type planRow struct {
 	cand  Candidate
 	files []remoteFile
+	group int
 }
 
 // confirmCollectionLocked is Confirm for a collection. Called with m.mu held.
@@ -1002,7 +1010,7 @@ func (m *Manager) confirmCollectionLocked(j *jobState, dest string, pick []int, 
 		for _, rf := range files {
 			total += rf.size
 		}
-		plan = append(plan, planRow{cand: c.cands[i], files: files})
+		plan = append(plan, planRow{cand: c.cands[i], files: files, group: i})
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1029,10 +1037,17 @@ func (m *Manager) runCollection(ctx context.Context, j *jobState, plan []planRow
 		if ctx.Err() != nil {
 			break
 		}
+		m.folderDictionaryStatus(j, p.group, "downloading", "")
 		src, missed, err := m.fetchRow(ctx, j, p, &base)
 		var got []string
 		if err == nil {
+			m.folderDictionaryStatus(j, p.group, "downloaded", "")
 			got, err = m.installRow(ctx, j, src, opts)
+		}
+		if err != nil {
+			m.folderDictionaryStatus(j, p.group, "error", errorText(err))
+		} else {
+			m.folderDictionaryStatus(j, p.group, "installed", "")
 		}
 		installed = append(installed, got...)
 		if ctx.Err() != nil {
@@ -1085,14 +1100,21 @@ func (m *Manager) fetchRow(ctx context.Context, j *jobState, p planRow, base *in
 	planned, saved := dict.Stem(p.files[0].name), ""
 	for k, rf := range p.files {
 		start := *base
+		m.folderFileProgress(j, p.group, rf.name, "downloading", 0, rf.size, "")
 		m.mu.Lock()
 		j.pub.State, j.pub.Source, j.pub.Done, j.pub.Total = StateDownloading, rf.name, start, max(j.total, start)
 		m.mu.Unlock()
 		src, err := j.fetch.Fetch(ctx, j.dest, rf.url, func(name string, done, _ int64) {
+			m.folderFileProgress(j, p.group, rf.name, "downloading", done, rf.size, "")
 			m.mu.Lock()
 			j.pub.Source, j.pub.Done = name, start+done
 			m.mu.Unlock()
 		})
+		if err != nil {
+			m.folderFileProgress(j, p.group, rf.name, "error", 0, rf.size, errorText(err))
+		} else {
+			m.folderFileProgress(j, p.group, rf.name, "downloaded", fileSize(src.Path), rf.size, "")
+		}
 		step := rf.size
 		if err == nil && step <= 0 {
 			step = fileSize(src.Path)
@@ -1117,6 +1139,35 @@ func (m *Manager) fetchRow(ctx context.Context, j *jobState, p planRow, base *in
 		}
 	}
 	return main, missed, nil
+}
+
+func (m *Manager) folderFileProgress(j *jobState, group int, name, status string, done, total int64, detail string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.cur != j || !j.pub.MegaFolder {
+		return
+	}
+	for i := range j.pub.FolderFiles {
+		f := &j.pub.FolderFiles[i]
+		if f.Group != group || !strings.EqualFold(f.Name, name) {
+			continue
+		}
+		f.FileStatus, f.Done, f.Total, f.FileError = status, done, total, detail
+	}
+}
+
+func (m *Manager) folderDictionaryStatus(j *jobState, group int, status, detail string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.cur != j || !j.pub.MegaFolder {
+		return
+	}
+	for i := range j.pub.FolderFiles {
+		f := &j.pub.FolderFiles[i]
+		if f.Group == group {
+			f.DictionaryStatus, f.DictionaryError = status, detail
+		}
+	}
 }
 
 // installRow installs what one downloaded row turned out to hold. A loose

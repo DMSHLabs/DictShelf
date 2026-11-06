@@ -368,8 +368,13 @@ function renderFolderFileRows(){
   for(const f of folderFileOrder()){
     const row=el("label","folder-file"+(f.selectable?"":" disabled")),cb=el("input");
     cb.type="checkbox";cb.disabled=!f.selectable;cb.dataset.group=f.group;cb.dataset.extra=f.extra;
+    row.dataset.group=f.group;row.dataset.fileName=f.name;
     cb.checked=f.selectable&&(f.extra>=0?folderFileExtras.has(f.extra):folderFileGroups.has(f.group));
-    row.appendChild(cb);row.appendChild(el("span","nm",f.name));row.appendChild(el("span","n",f.size?sizeMB(f.size):""));
+    const main=el("span","folder-file-main");main.appendChild(el("span","nm",f.name));
+    main.appendChild(el("span","folder-file-state"));
+    const meter=el("progress","folder-file-progress");meter.max=100;meter.hidden=true;main.appendChild(meter);
+    const dictState=el("span","folder-dictionary-state");if(f.main)main.appendChild(dictState);
+    row.appendChild(cb);row.appendChild(main);row.appendChild(el("span","n",f.size?sizeMB(f.size):""));
     cb.addEventListener("change",()=>{
       if(f.extra>=0){if(cb.checked)folderFileExtras.add(f.extra);else folderFileExtras.delete(f.extra)}
       else if(cb.checked){folderFileGroups.add(f.group);for(const other of folderFileEntries)if(other.group===f.group&&other.selectable&&other.extra>=0)folderFileExtras.add(other.extra)}
@@ -377,7 +382,27 @@ function renderFolderFileRows(){
       renderFolderFileRows();window.__folderExtras=[...folderFileExtras].sort((a,b)=>a-b);updateFolderInstall();
     });rows.appendChild(row);
   }
+  updateFolderFileStates();
   if(folderSearch)folderSearch.refresh();
+}
+function updateFolderFileStates(files=folderFileEntries){
+  const byKey=new Map(files.map(f=>[f.group+"\0"+f.name.toLocaleLowerCase(),f]));
+  for(const row of document.querySelectorAll("#folderFileRows .folder-file")){
+    const f=byKey.get(row.dataset.group+"\0"+row.dataset.fileName.toLocaleLowerCase());if(!f)continue;
+    const state=row.querySelector(".folder-file-state"),meter=row.querySelector(".folder-file-progress");
+    state.textContent="";meter.hidden=true;
+    if(f.fileStatus==="downloading"){
+      const percent=f.total>0?Math.min(99,Math.floor(f.done*100/f.total)):0;
+      state.textContent=tx("pages.folderFileDownloading",{percent});
+      if(f.total>0){meter.hidden=false;meter.value=percent}
+    }else if(f.fileStatus==="downloaded")state.textContent=tx("pages.folderFileDownloaded");
+    else if(f.fileStatus==="error")state.textContent=tx("pages.folderFileFailed",{error:window.wudictI18n.errorText(f.fileError)||f.fileError||tx("pages.importFailed")});
+    const dictState=row.querySelector(".folder-dictionary-state");
+    if(dictState){
+      const messages={downloading:tx("pages.folderDictionaryDownloading"),downloaded:tx("pages.folderDictionaryDownloaded"),installed:tx("pages.folderDictionaryInstalled"),error:tx("pages.folderDictionaryFailed",{error:window.wudictI18n.errorText(f.dictionaryError)||f.dictionaryError||tx("pages.importFailed")})};
+      dictState.textContent=messages[f.dictionaryStatus]||"";
+    }
+  }
 }
 function setFolderFileSort(field){
   if(folderFileSort.field===field)folderFileSort.direction*=-1;else folderFileSort={field,direction:1};
@@ -540,6 +565,7 @@ function impPoll(){
 }
 
 function impRender(j){
+  if(megaFolderMode&&j.megaFolder&&j.folderFiles){folderFileEntries=j.folderFiles;updateFolderFileStates(folderFileEntries)}
   if(j.state==="downloading"){
     if(j.phase==="listing"){
       impSay(tx("pages.readingFolderHost",{host:j.host||tx("pages.site")}));
