@@ -6,13 +6,18 @@ package store
 
 import (
 	"bytes"
+	"compress/flate"
 	"database/sql"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
+
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/sysmem"
 )
 
 // writeRawTextDB writes the smallest database Open accepts, with each body
@@ -99,6 +104,26 @@ func zstdRow(t *testing.T, dict []byte, s string) []byte {
 	return append([]byte{markZstd}, frame[len(zstdMagic):]...)
 }
 
+// deflateRow builds what a schema-1 database - and a schema-2 one a rebuild
+// has not reached - stores for s: the marker and a raw DEFLATE stream. Like
+// zstdRow, it is built with the standard library so the test pins the format.
+func deflateRow(t *testing.T, s string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	buf.WriteByte(markDeflate)
+	w, err := flate.NewWriter(&buf, 6)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.WriteString(w, s); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
 // bodyOf reads one entry straight out of an opened store, through every layer
 // a reader would go through.
 func bodyOf(t *testing.T, path, word string) string {
@@ -126,8 +151,8 @@ func TestSchemaOneDatabaseStillOpens(t *testing.T) {
 	short := "<p>corto</p>" // below the threshold: stored literally
 	path := filepath.Join(t.TempDir(), "old.text.db")
 	writeRawTextDB(t, path, 1, nil, map[string][]byte{
-		"largo": encodeBody(long), // marker 0x00: raw DEFLATE
-		"corto": []byte(short),    // no marker at all
+		"largo": deflateRow(t, long), // marker 0x00: raw DEFLATE
+		"corto": []byte(short),       // no marker at all
 	})
 	if got := bodyOf(t, path, "largo"); got != long {
 		t.Errorf("deflate body from a schema-1 database = %q, want %q", got, long)
@@ -166,7 +191,7 @@ func TestMixedBodiesInOneDatabaseReadTheSame(t *testing.T) {
 	dict := []byte(long[0:min(len(long), 256)])
 	path := filepath.Join(t.TempDir(), "mixed.text.db")
 	writeRawTextDB(t, path, 2, dict, map[string][]byte{
-		"vieja": encodeBody(long),        // a row the rebuild has not reached
+		"vieja": deflateRow(t, long),     // a row the rebuild has not reached
 		"nueva": zstdRow(t, dict, other), // a row the rebuild wrote
 		"corta": []byte(short),           // short enough to stay literal
 	})
@@ -216,6 +241,188 @@ func TestSchemaOutsideTheRangeIsRefused(t *testing.T) {
 		if !strings.Contains(err.Error(), "not a wudict database") ||
 			!strings.Contains(err.Error(), "want 1 to 2") {
 			t.Errorf("schema %d: error %q does not name the accepted range", schema, err)
+		}
+	}
+}
+
+// The dictionary is 2% of the text, inside its floor and its cap; a source
+// that did not end inside the window is estimated from its declared count.
+func TestDictSizeIsTwoPercentWithinItsBounds(t *testing.T) {
+	cases := []struct {
+		text              int64
+		articles, entries int
+		eof               bool
+		want              int
+	}{
+		{16 << 20, 100, 100, true, dictCap},   // 2% is above the cap
+		{1 << 20, 10, 10, true, 1 << 20 / 50}, // 2% between the bounds
+		{1000, 10, 10, true, 8 << 10},         // below the floor
+		// Estimated from the count, and the mean article is integer division:
+		// 1 MiB / 10 is 104857 bytes, so 100 of them are 10 485 700, not
+		// 10 485 760.
+		{1 << 20, 10, 100, false, 104857 * 100 / 50},
+		{1 << 20, 0, 0, false, dictCap},      // nothing declared: the cap
+		{4096, 4, 4, true, 8 << 10},          // a small database still gets the floor
+		{16 << 20, 100, 100, false, dictCap}, // a filled window and the cap agree
+		// …and an estimate far past the cap is still cut down to it.
+		{10 << 20, 100, 1000, false, dictCap},
+	}
+	for _, c := range cases {
+		got := dictSize(c.text, c.articles, c.entries, c.eof)
+		if got != c.want {
+			t.Errorf("dictSize(%d, %d, %d, %v) = %d, want %d", c.text, c.articles, c.entries, c.eof, got, c.want)
+		}
+	}
+}
+
+// The dictionary is n slices of chunk bytes, spread over the bodies, and never
+// longer than the size asked for.
+func TestSampleDictSpreadsEvenSlices(t *testing.T) {
+	bodies := make([]string, 8)
+	for i := range bodies {
+		bodies[i] = strings.Repeat(string(rune('a'+i)), 4096)
+	}
+	dict := sampleDict(bodies, 4096, dictSliceLen)
+	if len(dict) != 4096 {
+		t.Fatalf("dictionary is %d bytes, want 4096", len(dict))
+	}
+	// Four slices, and each comes from a different body: that is what makes a
+	// sample of the corpus rather than of the first article.
+	seen := map[byte]bool{}
+	for i := 0; i < 4; i++ {
+		seen[dict[i*dictSliceLen]] = true
+	}
+	if len(seen) != 4 {
+		t.Errorf("the slices came from %d bodies, want 4", len(seen))
+	}
+	// A short body contributes itself whole, so a dictionary of short articles
+	// is shorter than the size asked for - it is never padded up to it.
+	short := []string{"<p>a</p>", "<p>b</p>"}
+	if got := sampleDict(short, 8192, dictSliceLen); len(got) > 8192 {
+		t.Errorf("a dictionary of short bodies is %d bytes, larger than the size asked for", len(got))
+	}
+	if got := sampleDict(nil, 8192, dictSliceLen); len(got) != 0 {
+		t.Errorf("a dictionary of no bodies is %d bytes, want 0", len(got))
+	}
+}
+
+// A row the encoder writes is the format the decoder reads: zstd, no magic in
+// the row, the dictionary in body_dict - and it is actually smaller.
+func TestZstdRowIsAFrameWithoutItsMagic(t *testing.T) {
+	dict := []byte(strings.Repeat("<p>shared markup</p>", 32))
+	codec := newBodyCodec()
+	if err := codec.start(dict, &sysmem.Account{}); err != nil {
+		t.Fatal(err)
+	}
+	defer codec.close()
+	body := "<p>" + strings.Repeat("artículo de ejemplo ", 40) + "</p>"
+	stored := codec.enc.Load().encode(body)
+	if stored[0] != markZstd {
+		t.Fatalf("stored row starts with 0x%02x, want the zstd marker", stored[0])
+	}
+	if bytes.HasPrefix(stored[1:], zstdMagic) {
+		t.Error("the row carries the zstd magic; it must not")
+	}
+	if len(stored) >= len(body) {
+		t.Errorf("a repetitive body was not compressed: %d → %d", len(body), len(stored))
+	}
+}
+
+// An ingest writes the newest schema, its dictionary, and the meta that says
+// so - and every article still reads back as the source had it.
+func TestIngestWritesSchemaTwoAndItsDictionary(t *testing.T) {
+	t.Setenv("WUDICT_DB_DIR", t.TempDir())
+	body := func(w string) string {
+		return "<p>" + strings.Repeat(w+" definición de ejemplo con texto repetido. ", 12) + "</p>"
+	}
+	var entries []dict.Entry
+	for i := 0; i < 40; i++ {
+		w := fmt.Sprintf("palabra%02d", i)
+		entries = append(entries, h(w, body(w)))
+	}
+	path := filepath.Join(t.TempDir(), TextDBName)
+	r := &fakeReader{meta: dict.Meta{Name: "Zstd", Format: "mdx", Path: "/x.mdx"}, entries: entries}
+	if _, err := IngestPlan(r, path, Plan{FullText: true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	m, schema, err := ReadMetaSchema(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if schema != textSchemaMax {
+		t.Errorf("ingest wrote schema %d, want %d", schema, textSchemaMax)
+	}
+	if m["body_encoding"] != bodyEncodingLabel {
+		t.Errorf("body_encoding = %q, want %q", m["body_encoding"], bodyEncodingLabel)
+	}
+	if m["body_dict_bytes"] == "" || m["body_dict_bytes"] == "0" {
+		t.Errorf("body_dict_bytes = %q, want a dictionary", m["body_dict_bytes"])
+	}
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	var dictLen int
+	if err := s.db.QueryRow("SELECT length(data) FROM body_dict WHERE id = 0").Scan(&dictLen); err != nil {
+		t.Fatalf("no dictionary row: %v", err)
+	}
+	if dictLen == 0 {
+		t.Error("the dictionary row is empty")
+	}
+	for i := 0; i < 40; i++ {
+		w := fmt.Sprintf("palabra%02d", i)
+		res, err := s.Exact(w, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(res) != 1 || res[0].Body != body(w) {
+			t.Errorf("%s: body did not survive the zstd round trip", w)
+		}
+	}
+}
+
+// The window cuts where the text reaches it, not at a batch boundary: with the
+// window forced small, a later entry must still encode against the SAME
+// dictionary - one cut, one body_dict row, and every body readable.
+func TestTheWindowCutsOnceAndEverythingReads(t *testing.T) {
+	old := dictWindow
+	dictWindow = 4096
+	defer func() { dictWindow = old }()
+	t.Setenv("WUDICT_DB_DIR", t.TempDir())
+	body := func(w string) string {
+		return "<p>" + strings.Repeat(w+" texto repetido de ejemplo ", 40) + "</p>"
+	}
+	var entries []dict.Entry
+	for i := 0; i < 200; i++ {
+		w := fmt.Sprintf("w%03d", i)
+		entries = append(entries, h(w, body(w)))
+	}
+	path := filepath.Join(t.TempDir(), TextDBName)
+	r := &fakeReader{meta: dict.Meta{Name: "Window", Format: "mdx", Path: "/w.mdx"}, entries: entries}
+	if _, err := IngestPlan(r, path, Plan{FullText: true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	var rows int
+	if err := s.db.QueryRow("SELECT count(*) FROM body_dict").Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 1 {
+		t.Fatalf("body_dict holds %d rows, want exactly 1", rows)
+	}
+	for i := 0; i < 200; i++ {
+		w := fmt.Sprintf("w%03d", i)
+		res, err := s.Exact(w, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(res) != 1 || res[0].Body != body(w) {
+			t.Fatalf("%s: body did not survive the window cut", w)
 		}
 	}
 }

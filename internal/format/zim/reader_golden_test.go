@@ -23,7 +23,7 @@ import (
 // absent marker only ever described the read-through form, which was previously
 // refused; it is now a form in its own right.
 var readerGolden = goldentest.Golden{
-	Versions: "reader=4 ingest=8 markup=2 fold=1",
+	Versions: "reader=4 ingest=9 markup=2 fold=1",
 	Hash:     "ef4db5e3a4d207fbc4fc1d2384f559bb9c14a184d7efca43e09953450f2ce421",
 }
 

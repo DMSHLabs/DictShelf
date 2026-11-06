@@ -20,6 +20,7 @@ import (
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/sysmem"
 )
 
 // prepare ingests a minimal real dictionary into a library folder for srcPath.
@@ -958,8 +959,15 @@ func TestAdoptLooseKeepsExistingFolder(t *testing.T) {
 }
 
 // Compression is a storage detail: what comes back out must be exactly what
-// went in, and databases written before it existed must keep opening.
+// went in, through the codec and the decoder a reader actually uses.
 func TestBodyCompressionRoundTrip(t *testing.T) {
+	dict := []byte(strings.Repeat("<p>shared markup of the dictionary</p>", 40))
+	codec := newBodyCodec()
+	if err := codec.start(dict, &sysmem.Account{}); err != nil {
+		t.Fatal(err)
+	}
+	defer codec.close()
+	enc := codec.enc.Load()
 	cases := []string{
 		"",
 		"<p>short</p>", // below the threshold: stored literally
@@ -967,17 +975,34 @@ func TestBodyCompressionRoundTrip(t *testing.T) {
 		"<p>" + strings.Repeat("ñ", 500) + "</p>",       // multi-byte
 		"<p>" + string([]byte{0x01, 0x02, 0x7f}) + strings.Repeat("x", 200) + "</p>",
 	}
-	for _, want := range cases {
-		if got := newBodyDecoder(1, nil).decode(encodeBody(want)); got != want {
-			t.Fatalf("round trip changed the body (%d bytes in, %d out)", len(want), len(got))
+	// A body whose first byte is a marker would be read as a frame if it were
+	// stored literally, so the encoder must compress it whatever its length.
+	for b := byte(markDeflate); b <= markReserved; b++ {
+		cases = append(cases, string([]byte{b}), string([]byte{b})+"<p>starts with a marker byte</p>")
+	}
+	bodies := make(map[string][]byte, len(cases))
+	for i, s := range cases {
+		stored := enc.encode(s)
+		bodies[fmt.Sprintf("w%d", i)] = stored
+		// A body beginning with a marker byte must never be stored as itself:
+		// it would be read back as a frame.
+		if len(s) > 0 && s[0] <= markReserved && string(stored) == s {
+			t.Errorf("a body starting with 0x%02x was stored literally", s[0])
+		}
+	}
+	path := filepath.Join(t.TempDir(), "roundtrip.text.db")
+	writeRawTextDB(t, path, codec.schema(), dict, bodies)
+	for i, want := range cases {
+		if got := bodyOf(t, path, fmt.Sprintf("w%d", i)); got != want {
+			t.Errorf("round trip changed the body (%d bytes in, %d out)", len(want), len(got))
 		}
 	}
 	// long, repetitive text must actually shrink - otherwise the whole point
 	big := strings.Repeat("<p>palabra significado ejemplo</p>", 100)
-	if enc := encodeBody(big); len(enc) >= len(big)/2 {
-		t.Errorf("compression barely helped: %d → %d bytes", len(big), len(enc))
+	if got := enc.encode(big); len(got) >= len(big)/2 {
+		t.Errorf("compression barely helped: %d → %d bytes", len(big), len(got))
 	}
-	// a body stored by an older version (no sentinel) is read verbatim
+	// a body stored by an older version (no marker) is read verbatim
 	if got := newBodyDecoder(1, nil).decode([]byte("<p>legacy plain text</p>")); got != "<p>legacy plain text</p>" {
 		t.Errorf("plain body misread: %q", got)
 	}

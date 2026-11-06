@@ -44,7 +44,13 @@ import (
 // 8: headword_count is what the ingest counted (articles + aliases) instead of
 // the count the source declared, so a library built by 7 shows the old number
 // until it is rebuilt.
-const IngestVersion = 8
+//
+// 9: article bodies are stored with zstd against a per-database dictionary
+// (schema 2, compress.go). The text is the same, so nothing a query returns
+// changes - the FILE is what changes: a rebuilt library is a quarter smaller
+// and reads articles faster. Older databases keep working and are offered a
+// rebuild, which is the only way the conversion happens.
+const IngestVersion = 9
 
 // StatsVersion identifies how the size measurements recorded at ingest
 // (body_bytes, headword_bytes) were taken. They are volatile meta - the
