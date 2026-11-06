@@ -55,20 +55,40 @@ function recordCounts(){
     examinedBlocks.get(id).set(Number(det.dataset.searchPageStart)||0,counts.get(det)||0);
   }
 }
+/* The dictionary's own result count, from the same place the plate reads it:
+   dataset.searchTotal is the result cache's running total - the background
+   counting pass raises it - and dataset.searchExact is the flag that closes it,
+   the one that makes the plate's number exact. Until it closes, the stored
+   number is the plate's own lower bound. */
+function dictionaryCount(det){
+  const total=Number(det.dataset.searchTotal)||0;
+  return det.dataset.searchExact==="true"?total:Math.max(total,Number(det.dataset.searchLowerBound)||0);
+}
+/* Two numbers, because the dialog counts matches and the plate counts articles.
+   COUNTED is the matches of the blocks the dialog examined: the rank it walks,
+   and what Go to match can reach. The displayed total is that floored by the
+   dictionary's count - every article the dictionary matched holds at least one
+   match of the query, so the answer cannot hold fewer matches than the
+   dictionary says - and the dialog's own number overtakes the floor as its
+   blocks are examined. The floor belongs only to a dictionary the dialog
+   counted; one it skipped (a lemma it could not get, articles not ready)
+   contributes nothing, or the two sides would count different dictionaries. */
 function countedPosition(){
   const det=matches[index]?.host.closest("details.dict");
   const dictionaries=[...$("out").querySelectorAll("details.dict")];
-  let total=0,current=0;
+  let counted=0,current=0,shown=0;
   for(const section of dictionaries){
-    const start=Number(section.dataset.searchPageStart)||0;
+    const start=Number(section.dataset.searchPageStart)||0,id=section.dataset.searchDict||"";
+    let here=0;
     for(const page of blockPages(section)){
       if(section===det&&page.start===start){
-        current=total+matches.slice(0,index+1).filter(hit=>hit.host.closest("details.dict")===det).length;
+        current=counted+matches.slice(0,index+1).filter(hit=>hit.host.closest("details.dict")===det).length;
       }
-      total+=page.count;
+      counted+=page.count;here+=page.count;
     }
+    shown+=Math.max(here,examinedBlocks.has(id)?dictionaryCount(section):0);
   }
-  return {current,total};
+  return {current,counted,total:shown};
 }
 let settle = null;
 let laidOutList = null;
@@ -205,7 +225,7 @@ function syncControls() {
 function canStep(step){
   if(options.mode==="fts")return !!(step<0?fullTextNavigation?.canPrevious:fullTextNavigation?.canNext);
   if(matches.length>=2)return true;
-  if(!matches.length)return countedPosition().total>0 || options.blocks!==false &&
+  if(!matches.length)return countedPosition().counted>0 || options.blocks!==false &&
     [...$("out").querySelectorAll("details.dict")].some(det=>window.wudictArticleBlockHasMore?.(det,step));
   const hit=matches[index>=0?index:0];
   return !!(options.query&&hit&&options.blocks!==false&&window.wudictArticleBlockHasMore?.(hit.host.closest("details.dict"),step));
@@ -272,10 +292,10 @@ function paint() {
   });
   const total = String(position.total)+(partial?"+":"");
   const block = index >= 0 ? window.wudictArticleFindBlockRange?.(matches[index]?.host.closest("details.dict")) : "";
-  const count = position.total ? t("articleFind.position", {current:position.current, total})+(block?" · "+block:"") : t("articleFind.noMatches");
+  const count = position.counted ? t("articleFind.position", {current:position.current, total})+(block?" · "+block:"") : t("articleFind.noMatches");
   if(blockNavigationPending)return;
   $("articleFindCount").textContent = count;
-  $("articleFindCount").disabled = !position.total;
+  $("articleFindCount").disabled = !position.counted;
   $("articleFindStatus").textContent = options.query ? count : "";
   $("articleFindHiddenHint").hidden = !options.query || !!matches.length || options.examples || !hiddenExamples;
   $("articleFindLabel").textContent = options.query;
@@ -589,8 +609,8 @@ function go(step) {
     const candidates=step>0?sections:sections.reverse();
     const det=options.blocks!==false&&candidates.find(section=>window.wudictArticleBlockHasMore?.(section,step));
     if(det){crossResultBlocks(det,step);return}
-    const {total}=countedPosition();
-    if(total){goto(step>0?1:total);return}
+    const {counted}=countedPosition();
+    if(counted){goto(step>0?1:counted);return}
     paint();return;
   }
   let wrapped = false;
@@ -625,8 +645,12 @@ function go(step) {
 function goto(page) {
   if ($("articleFindMode").value === "fts") { fullTextNavigation?.goto?.(page); return true; }
   if (dialog.open || !active) { clearTimeout(timer); readOptions(); active = !!options.query; rebuild(); }
-  const {total}=countedPosition();
-  if (!Number.isInteger(page) || page < 1 || page > total) return false;
+  /* Go to match reaches the matches the dialog has counted, so it is bounded by
+     that number and not by the floored total: a dictionary's own count can name
+     a match beyond the blocks examined, and a jump nobody can make would read
+     as a dead control. */
+  const {counted}=countedPosition();
+  if (!Number.isInteger(page) || page < 1 || page > counted) return false;
   let offset=0;
   for(const det of $("out").querySelectorAll("details.dict")){
     for(const entry of blockPages(det)){
@@ -667,7 +691,7 @@ function searchFrom(host,node,offset,direction) {
 function gotoOpen() {
   const isFTS = $("articleFindMode").value === "fts" && !!fullTextNavigation;
   const position=countedPosition();
-  const total=isFTS ? Number(fullTextNavigation.total)||0 : (active ? position.total : 0);
+  const total=isFTS ? Number(fullTextNavigation.total)||0 : (active ? position.counted : 0);
   const current=isFTS ? Number(fullTextNavigation.current)||1 : Math.max(1,position.current);
   if (total) window.wudictOpenArticleFindGoto?.(total,current);
 }
