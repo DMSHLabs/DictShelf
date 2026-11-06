@@ -75,6 +75,7 @@ const (
 	NeedRequired = "needed"
 	NeedMedia    = "media"
 	NeedExtra    = "extra"
+	NeedIcon     = "icon"
 )
 
 // probeCompanions looks for the companions of the file just downloaded and

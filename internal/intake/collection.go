@@ -606,7 +606,11 @@ func buildWithProgress(ctx context.Context, f Fetcher, dest string, lib []string
 					continue
 				}
 				known[key] = true
-				c.extras = append(c.extras, Extra{Name: rf.name, Size: rf.size, Need: NeedExtra, url: rf.url, row: i})
+				need := NeedExtra
+				if dictionaryIconName(rf.name) {
+					need = NeedIcon
+				}
+				c.extras = append(c.extras, Extra{Name: rf.name, Size: rf.size, Need: need, url: rf.url, row: i})
 			}
 		}
 	}

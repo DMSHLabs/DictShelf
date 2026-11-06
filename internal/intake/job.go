@@ -1038,11 +1038,14 @@ func (m *Manager) runCollection(ctx context.Context, j *jobState, plan []planRow
 			break
 		}
 		m.folderDictionaryStatus(j, p.group, "downloading", "")
-		src, missed, err := m.fetchRow(ctx, j, p, &base)
+		src, missed, icons, err := m.fetchRow(ctx, j, p, &base)
 		var got []string
 		if err == nil {
 			m.folderDictionaryStatus(j, p.group, "downloaded", "")
 			got, err = m.installRow(ctx, j, src, opts)
+			if err == nil {
+				m.saveCollectionIcons(j.dest, p.cand, got, icons)
+			}
 		}
 		if err != nil {
 			m.folderDictionaryStatus(j, p.group, "error", errorText(err))
@@ -1096,7 +1099,7 @@ func (m *Manager) runCollection(ctx context.Context, j *jobState, plan []planRow
 // companion is renamed to the stem the main file was actually saved under,
 // keeping the suffix the plan gave it - or "oxford.mdd" stays behind while
 // "Oxford_v2.mdx" installs without it.
-func (m *Manager) fetchRow(ctx context.Context, j *jobState, p planRow, base *int64) (main Source, missed []string, err error) {
+func (m *Manager) fetchRow(ctx context.Context, j *jobState, p planRow, base *int64) (main Source, missed []string, icons []Source, err error) {
 	planned, saved := dict.Stem(p.files[0].name), ""
 	for k, rf := range p.files {
 		start := *base
@@ -1104,7 +1107,11 @@ func (m *Manager) fetchRow(ctx context.Context, j *jobState, p planRow, base *in
 		m.mu.Lock()
 		j.pub.State, j.pub.Source, j.pub.Done, j.pub.Total = StateDownloading, rf.name, start, max(j.total, start)
 		m.mu.Unlock()
-		src, err := j.fetch.Fetch(ctx, j.dest, rf.url, func(name string, done, _ int64) {
+		fetch := j.fetch.Fetch
+		if dictionaryIconName(rf.name) {
+			fetch = j.fetch.FetchIcon
+		}
+		src, err := fetch(ctx, j.dest, rf.url, func(name string, done, _ int64) {
 			m.folderFileProgress(j, p.group, rf.name, "downloading", done, rf.size, "")
 			m.mu.Lock()
 			j.pub.Source, j.pub.Done = name, start+done
@@ -1122,7 +1129,7 @@ func (m *Manager) fetchRow(ctx context.Context, j *jobState, p planRow, base *in
 		*base = start + step
 		switch {
 		case k == 0 && err != nil:
-			return Source{}, nil, err
+			return Source{}, nil, icons, err
 		case k == 0:
 			main = src
 			if !SupportedArchive(src.Path) {
@@ -1130,6 +1137,16 @@ func (m *Manager) fetchRow(ctx context.Context, j *jobState, p planRow, base *in
 			}
 		case err != nil:
 			missed = append(missed, rf.name+": "+errorText(err))
+		case dictionaryIconName(rf.name):
+			if saved != "" && !strings.EqualFold(saved, planned) && len(rf.name) > len(planned) && strings.EqualFold(rf.name[:len(planned)], planned) {
+				if renamed, renameErr := renameDownload(j.dest, rf.url, src, saved+rf.name[len(planned):]); renameErr == nil {
+					src = renamed
+				} else {
+					missed = append(missed, rf.name+": "+errorText(renameErr))
+					continue
+				}
+			}
+			icons = append(icons, src)
 		case saved != "" && len(rf.name) > len(planned) && strings.EqualFold(rf.name[:len(planned)], planned):
 			// StarDict's res.zip is named for no dictionary and fails the
 			// prefix test, so it is left as it came.
@@ -1138,7 +1155,45 @@ func (m *Manager) fetchRow(ctx context.Context, j *jobState, p planRow, base *in
 			}
 		}
 	}
-	return main, missed, nil
+	return main, missed, icons, nil
+}
+
+func (m *Manager) saveCollectionIcons(dest string, c Candidate, installed []string, icons []Source) {
+	if len(icons) == 0 {
+		return
+	}
+	dirName, _, _ := existingDict(dest, c)
+	iconDir := ""
+	switch {
+	case dirName != "":
+		iconDir = filepath.Join(dest, dirName)
+	case c.elsewhereMain != "":
+		iconDir = filepath.Dir(c.elsewhereMain)
+	case len(installed) > 0:
+		iconDir = filepath.Join(dest, safeDirName(installed[0]))
+	default:
+		return
+	}
+	for _, icon := range icons {
+		name := filepath.Base(icon.Name)
+		if !dictionaryIconName(name) {
+			continue
+		}
+		info, err := os.Stat(icon.Path)
+		if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > 2<<20 {
+			continue
+		}
+		body, err := os.ReadFile(icon.Path)
+		if err != nil {
+			logx.Download("dictionary icon copy failed name=%q error=%v", name, err)
+			continue
+		}
+		if err := os.WriteFile(filepath.Join(iconDir, name), body, 0o644); err != nil {
+			logx.Download("dictionary icon copy failed name=%q error=%v", name, err)
+			continue
+		}
+		logx.Download("dictionary icon saved name=%q dictionary=%q", name, c.Name)
+	}
 }
 
 func (m *Manager) folderFileProgress(j *jobState, group int, name, status string, done, total int64, detail string) {

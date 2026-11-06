@@ -116,6 +116,15 @@ func DownloadDir(dest string) string { return filepath.Join(dest, DownloadDirNam
 // is not, and keeps the path well inside every platform's length limit.
 const maxLinkDepth = 8
 
+func dictionaryIconName(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".jpg", ".jpeg", ".png", ".bmp":
+		return true
+	default:
+		return false
+	}
+}
+
 // LinkDir is where a download of u is kept: Downloads, then the host, then the
 // folders of the link's path - one folder per place on the web, so
 // "https://a.org/en/oxford.mdx" and "https://b.org/oxford.mdx" never meet.
@@ -270,6 +279,16 @@ type Progress func(name string, done, total int64)
 // A failure or a cancel leaves the .part file in place on purpose: it is the
 // resume point, and the next attempt continues from it.
 func (f Fetcher) Fetch(ctx context.Context, dest, raw string, progress Progress) (Source, error) {
+	return f.fetch(ctx, dest, raw, progress, false)
+}
+
+// FetchIcon downloads a named image companion from a collection. It is kept
+// separate from Fetch so a standalone image link can never become an import.
+func (f Fetcher) FetchIcon(ctx context.Context, dest, raw string, progress Progress) (Source, error) {
+	return f.fetch(ctx, dest, raw, progress, true)
+}
+
+func (f Fetcher) fetch(ctx context.Context, dest, raw string, progress Progress, allowIcon bool) (Source, error) {
 	u, err := f.Check(raw)
 	if err != nil {
 		return Source{}, err
@@ -304,7 +323,7 @@ func (f Fetcher) Fetch(ctx context.Context, dest, raw string, progress Progress)
 	var mf *megaFile
 	if id, key, ok := megaLink(u); ok {
 		folder := u.Query().Get("folder")
-		if mf, err = f.megaResolveContext(ctx, id, key, folder); err != nil {
+		if mf, err = f.megaResolveContextAllowIcon(ctx, id, key, folder, allowIcon); err != nil {
 			return Source{}, err
 		}
 		get = mf.url
@@ -331,7 +350,7 @@ func (f Fetcher) Fetch(ctx context.Context, dest, raw string, progress Progress)
 	var body io.Reader = resp.Body
 	if mf != nil {
 		name, body = mf.name, mf.reader(resp.Body, offset)
-	} else if name, err = archiveName(u, resp); err != nil {
+	} else if name, err = archiveNameFor(u, resp, allowIcon); err != nil {
 		return Source{}, err
 	}
 
@@ -815,8 +834,20 @@ func nameFromURL(u *url.URL) string {
 // login redirect wearing the file's name - so a declared text type is refused
 // even when the name is perfect.
 func archiveName(u *url.URL, resp *http.Response) (string, error) {
+	return archiveNameFor(u, resp, false)
+}
+
+func archiveNameFor(u *url.URL, resp *http.Response, allowIcon bool) (string, error) {
 	ct, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 	name := dispositionName(resp.Header)
+	if allowIcon {
+		if !dictionaryIconName(name) {
+			name = nameFromURL(u)
+		}
+		if dictionaryIconName(name) && strings.HasPrefix(strings.ToLower(ct), "image/") {
+			return safeDirName(name), nil
+		}
+	}
 	if !Installable(name) {
 		name = nameFromURL(u)
 	}

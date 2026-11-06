@@ -103,6 +103,10 @@ func (f Fetcher) megaResolve(ctx context.Context, id string, linkKey []byte) (*m
 }
 
 func (f Fetcher) megaResolveContext(ctx context.Context, id string, linkKey []byte, folder string) (file *megaFile, resultErr error) {
+	return f.megaResolveContextAllowIcon(ctx, id, linkKey, folder, false)
+}
+
+func (f Fetcher) megaResolveContextAllowIcon(ctx context.Context, id string, linkKey []byte, folder string, allowIcon bool) (file *megaFile, resultErr error) {
 	started := time.Now()
 	stage := "policy"
 	logx.Download("mega file resolve start folder=%t key_bytes=%d", folder != "", len(linkKey))
@@ -174,7 +178,7 @@ func (f Fetcher) megaResolveContext(ctx context.Context, id string, linkKey []by
 		m.key[i] = linkKey[i] ^ linkKey[i+16]
 	}
 	m.name = safeDirName(filepath.Base(megaName(out[0].At, m.key)))
-	if !Installable(m.name) {
+	if !Installable(m.name) && !(allowIcon && dictionaryIconName(m.name)) {
 		stage = "name-not-installable"
 		logx.Download("mega file resolved name=%q installable=false", m.name)
 		return nil, ErrNotArchive
