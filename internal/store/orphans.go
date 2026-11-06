@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 )
 
 // Orphaned prepared dictionaries (D156).
@@ -286,7 +287,7 @@ func sameContent(meta map[string]string, st os.FileInfo, p string, hash *string)
 	}
 	if want := meta["source_sha256_1M"]; want != "" {
 		if *hash == "" {
-			*hash = sourceHash(p)
+			*hash = fsx.HashSample(p)
 		}
 		return *hash == want
 	}

@@ -10,6 +10,8 @@ package fsx
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -191,4 +193,25 @@ func SamePath(a, b string) bool {
 	sa, err1 := os.Stat(a)
 	sb, err2 := os.Stat(b)
 	return err1 == nil && err2 == nil && os.SameFile(sa, sb)
+}
+
+// HashSample is a cheap identity for a dictionary-sized file: SHA-256 of its
+// first MiB (the whole file when shorter), hex-encoded, and "" when it cannot
+// be opened. Bounded on purpose - this runs over every dictionary on a rescan,
+// and reading a whole dictionary just to learn whether it changed is the cost
+// the bound avoids (D151). A same-size edit past the first MiB is therefore
+// invisible: the result is evidence of CHANGE, never proof of sameness.
+//
+// A caller that records it decides what an absent record means. The source
+// signature treats "" as nothing to compare; the abbreviation companion keeps
+// its older size-and-time pair until a rebuild writes the hash.
+func HashSample(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	h := sha256.New()
+	_, _ = io.CopyN(h, f, 1<<20)
+	return hex.EncodeToString(h.Sum(nil))
 }

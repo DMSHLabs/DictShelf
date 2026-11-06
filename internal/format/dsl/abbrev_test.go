@@ -209,13 +209,27 @@ func TestIngestAbsorbsAbbrev(t *testing.T) {
 	if store.AbbrevChanged(dbPath, abrvPath) {
 		t.Error("a freshly ingested pair must not read as stale")
 	}
-	// touching the companion is what forces the parent to be re-ingested
+	// A mere touch - which used to force a full re-ingest of the parent - is not a
+	// change any more: the hash says the content is the same.
 	future := time.Now().Add(2 * time.Hour)
 	if err := os.Chtimes(abrvPath, future, future); err != nil {
 		t.Fatal(err)
 	}
+	if store.AbbrevChanged(dbPath, abrvPath) {
+		t.Error("a touched companion with the same content must not read as stale")
+	}
+	// The companion's identity is its content, not its clock. One letter inside
+	// an expansion keeps the size AND the entry count, so only the recorded hash
+	// can see it - and it must.
+	edited := strings.Replace(abbrevDSL, "adjective", "adjectiva", 1)
+	if len(edited) != len(abbrevDSL) {
+		t.Fatal("the edit was meant to keep the size")
+	}
+	if err := os.WriteFile(abrvPath, []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if !store.AbbrevChanged(dbPath, abrvPath) {
-		t.Error("a changed companion must read as stale")
+		t.Error("a same-size edit of the companion must read as stale")
 	}
 
 	s, err := store.Open(dbPath)

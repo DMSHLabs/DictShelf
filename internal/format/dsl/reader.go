@@ -28,6 +28,7 @@ import (
 	"golang.org/x/text/transform"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 	"github.com/DMSHLabs/DictShelf/internal/lang"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
@@ -126,10 +127,11 @@ func (r *Reader) ExtraMeta() map[string]string {
 		return nil
 	}
 	meta := map[string]string{
-		"abbrev_path":  path,
-		"abbrev_size":  strconv.FormatInt(st.Size(), 10),
-		"abbrev_mtime": st.ModTime().UTC().Truncate(time.Second).Format(time.RFC3339),
-		"abbrev_count": "0",
+		"abbrev_path":   path,
+		"abbrev_size":   strconv.FormatInt(st.Size(), 10),
+		"abbrev_mtime":  st.ModTime().UTC().Truncate(time.Second).Format(time.RFC3339),
+		"abbrev_sha256": fsx.HashSample(path),
+		"abbrev_count":  "0",
 	}
 	if a := r.abbrevs(); a != nil {
 		meta["abbrev_count"] = strconv.Itoa(a.count)

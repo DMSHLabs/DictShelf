@@ -84,10 +84,16 @@ wudict follows Lingvo and never lists it.
 - **Bounds** — companion over 8 MiB ignored; 20 000 keys; 200 runes per
   expansion; self-referential and empty entries dropped. A malformed companion
   is a `-v` note, never an ingest failure.
-- **Staleness** — the parent records `abbrev_path`/`_size`/`_mtime`/`_count` in
-  `meta` (via the reader's optional `ExtraMeta`), and `store.AbbrevChanged`
-  compares them, treating present↔absent as changed. The server re-indexes on a
-  mismatch through the background index lane, one dictionary at a time.
+- **Staleness** — the parent records `abbrev_path`/`_size`/`_mtime`/`_count`
+  and `abbrev_sha256` in `meta` (via the reader's optional `ExtraMeta`), and
+  `store.AbbrevChanged` compares them, treating present↔absent as changed. The
+  **content** decides, by the same cheap signature the source itself carries
+  (`fsx.HashSample`: size plus SHA-256 of the first MiB): a rebuild of the whole
+  parent is what a false positive costs, so a companion that was merely touched
+  is not a change, while an edit that keeps the size is one. `_mtime` decides
+  only for a `text.db` built before the hash was recorded, so an old library is
+  never judged more weakly than it was. The server re-indexes on a mismatch
+  through the background index lane, one dictionary at a time.
 
 ### 1.2 The `.ann` annotation `[V]`
 

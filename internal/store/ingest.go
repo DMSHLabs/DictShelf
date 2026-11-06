@@ -7,13 +7,11 @@ package store
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,6 +21,7 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/artmark"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/fsx"
 	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
@@ -342,7 +341,7 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 		"ingest_version":    fmt.Sprint(IngestVersion),    // which IngestPlan wrote this (stale.go)
 		"body_encoding":     bodyEncoding(),
 		"created":           time.Now().UTC().Format(time.RFC3339),
-		"source_sha256_1M":  sourceHash(srcMeta.Path),
+		"source_sha256_1M":  fsx.HashSample(srcMeta.Path),
 	}
 	if revision, err := dict.SourceRevision(srcMeta.Path); err != nil {
 		return rep, err
@@ -759,19 +758,6 @@ func NormalizeBody(e dict.Entry) (string, error) {
 func htmlEscape(s string) string {
 	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
 	return r.Replace(s)
-}
-
-// sourceHash hashes the first 1 MiB of the source file - cheap identity
-// check for stale-DB detection.
-func sourceHash(path string) string {
-	f, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	h := sha256.New()
-	_, _ = io.CopyN(h, f, 1<<20)
-	return hex.EncodeToString(h.Sum(nil))
 }
 
 // Slug converts a dictionary display name into a filesystem-safe base name.

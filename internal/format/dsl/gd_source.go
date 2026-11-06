@@ -16,7 +16,7 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/resource"
 )
 
-const GDReaderVersion = 10
+const GDReaderVersion = 11
 
 type gdFileStamp struct {
 	size  int64
