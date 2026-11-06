@@ -8,6 +8,8 @@ import (
 	"context"
 	"database/sql"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/DMSHLabs/DictShelf/internal/sysmem"
 )
@@ -205,6 +207,7 @@ func (w *ingestRowWriter) cut(eof bool) error {
 		}
 	}
 	w.dictBytes = len(dict)
+	encodeHeld(w.held, w.codec.enc.Load())
 	for _, h := range w.held {
 		if err := w.put(h.id, h.e); err != nil {
 			return err
@@ -214,6 +217,33 @@ func (w *ingestRowWriter) cut(eof bool) error {
 	w.acct.Release(w.heldCharge)
 	w.heldCharge = 0
 	return nil
+}
+
+// encodeHeld encodes the window on the encoder's own goroutine count. The
+// window is the whole corpus whenever the source ended inside it - every small
+// dictionary - and encoding that on the writer's one goroutine left a small
+// ingest slower than the DEFLATE it replaced, on a machine with twenty-four
+// cores and one of them working.
+func encodeHeld(held []heldEntry, enc *bodyEncoder) {
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for range encoders() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				i := int(next.Add(1) - 1)
+				if i >= len(held) {
+					return
+				}
+				if held[i].e.pending {
+					held[i].e.body = enc.encode(held[i].e.raw)
+					held[i].e.raw, held[i].e.pending = "", false
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 // finish is the last call: it cuts the dictionary if the source ended inside
