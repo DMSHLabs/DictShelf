@@ -127,7 +127,8 @@ html[data-shell-image] dialog#folderFilesDialog,html[data-shell-image] .folder-f
   background-size:100% 100%,100% 100%;background-position:center;background-repeat:no-repeat;background-attachment:fixed}
 html:has(link[data-preset="sepia"]) dialog#folderFilesDialog,html:has(link[data-preset="sepia"]) .folder-files-shell{background:var(--bg)}
 .folder-files-top{display:flex;align-items:center;flex:none;min-height:calc(var(--ui-main-control-height) * 1em);border-bottom:1px solid var(--line)}
-.folder-files-top h2{font-size:calc(var(--ui-font-title) * 1rem);margin:0}
+.folder-files-top h2{font-size:calc(var(--ui-font-title) * 1rem);margin:0;flex:1}
+.folder-files-top .btn{flex:none;margin-left:.5em}
 .folder-files-columns{display:grid;grid-template-columns:2em minmax(0,1fr) minmax(5em,auto);gap:.55em;align-items:center;flex:none;padding:.35em .55em;border:1px solid var(--line);border-radius:8px 8px 0 0;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem)}
 .folder-files-columns button{display:flex;align-items:center;gap:.45em;min-width:0;margin:0;padding:.15em .25em;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .folder-files-columns button:last-child{justify-content:flex-end;text-align:right}

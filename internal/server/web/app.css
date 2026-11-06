@@ -1660,6 +1660,9 @@ html[data-dict-icons-off] .dict-icon{display:none}
 .facts .mrow.door::after{content:"›";margin-left:auto;color:var(--label-quiet);
   font-size:1em;line-height:1;flex:none}
 .facts .mrow.door:hover::after{color:var(--label)}
+#panel .facts .dictionary-download-row{display:grid;grid-template-columns:minmax(0,1fr);gap:.35em;height:auto;padding:.45em .65em;line-height:1.25}
+#panel .facts .dictionary-download-row[hidden]{display:none}
+#panel .dictionary-download-row .update-download-bar{display:block;width:min(100%,22rem);height:.45rem;margin:0;accent-color:var(--accent)}
 #panel .facts.update-notifications-row,#panel .facts.update-channel-row,#panel .facts.update-install-row,#panel .facts.update-check-row{width:100%;align-self:stretch}
 #panel .facts.update-notifications-row>.rowlabel{display:flex;align-items:center;white-space:normal;color:var(--label);cursor:pointer}
 #panel .facts.update-channel-row{flex-wrap:nowrap}

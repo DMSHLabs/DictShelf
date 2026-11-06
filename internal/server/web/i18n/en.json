@@ -377,6 +377,7 @@
   "panel.updateSection": "Update",
   "panel.settingsUpdateAvailable": "Settings. Updates are available.",
   "panel.dictionaries": "Dictionaries",
+  "panel.dictionaryDownloading": "Dictionary Downloading",
   "panel.editDicts": "Edit dictionary settings",
   "panel.editGroups": "Edit dictionary groups",
   "panel.editFolders": "Manage dictionary folders",

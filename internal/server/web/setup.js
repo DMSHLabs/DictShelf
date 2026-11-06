@@ -406,7 +406,7 @@ async function restoreMegaFolder(saved){
    four files and a resource folder, and the list must not become the row. The
    same cut as the phone's, so the two surfaces say the same sentence. */
 const FILES_SHOWN=3;
-let folderFileGroups=new Set(),folderInstalledGroups=new Set(),folderFileExtras=new Set(),folderCandidateNames=new Map(),folderCandidates=[],folderSearch=null,megaFolderMode=false,folderFileEntries=[],folderFileSort={field:"name",direction:1},folderResumeMode=false,folderJobBusy=false,folderNeedsReload=false,folderResumeAfterReload=false,folderShowDone=false,folderRegistrationBusy=false,folderRegistrationStarted=false;
+let folderFileGroups=new Set(),folderInstalledGroups=new Set(),folderFileExtras=new Set(),folderCandidateNames=new Map(),folderCandidates=[],folderSearch=null,megaFolderMode=false,folderDialogDismissed=false,folderFileEntries=[],folderFileSort={field:"name",direction:1},folderResumeMode=false,folderJobBusy=false,folderNeedsReload=false,folderResumeAfterReload=false,folderShowDone=false,folderRegistrationBusy=false,folderRegistrationStarted=false;
 function folderFileGroup(f){return f.group>=0?"g:"+f.group:"f:"+f.name}
 function folderFileOrder(){
   const compareName=(a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:"base"});
@@ -496,7 +496,7 @@ function setFolderFileSort(field){
 }
 function showFolderFiles(j){
   if(!j.megaFolder)return;
-  folderShowDone=false;folderRegistrationBusy=false;folderRegistrationStarted=false;
+  folderDialogDismissed=false;folderShowDone=false;folderRegistrationBusy=false;folderRegistrationStarted=false;
   megaFolderMode=true;impJobID=j.id||impJobID;folderFileGroups=new Set();folderInstalledGroups=new Set();folderFileExtras=new Set();folderFileEntries=j.folderFiles||[];folderCandidates=j.candidates||[];folderCandidateNames=new Map(folderCandidates.map((c,i)=>[i,c.name]));folderFileSort={field:"name",direction:1};
   let saved=megaRestoreSelection||megaResume||readMegaResume();
   if(saved&&!Array.isArray(saved.preexisting)){saved={...saved,preexisting:folderCandidates.filter(c=>c.unchanged).map(c=>c.name)};writeMegaResume(saved)}
@@ -681,12 +681,15 @@ function impPoll(){
 
 function impRender(j){
   if(j.id)impJobID=j.id;
+  if(j.megaFolder)window.dispatchEvent(new CustomEvent("wudict-mega-download-status",{detail:{active:j.state==="downloading"||j.state==="installing"}}));
   if(j.megaFolder&&j.folderFiles){
-    if(!megaFolderMode)showFolderFiles(j);
+    const folderDialog=document.getElementById("folderFilesDialog");
+    if(!megaFolderMode||(!folderDialogDismissed&&!folderDialog.open))showFolderFiles(j);
     else folderFileEntries=j.folderFiles;
     for(const f of folderFileEntries)if(f.dictionaryStatus==="installed"&&f.group>=0)folderInstalledGroups.add(f.group);
     folderJobBusy=j.state==="downloading"||j.state==="installing";
-    updateFolderFileStates(folderFileEntries);updateFolderInstall();
+    if(!folderDialogDismissed)updateFolderFileStates(folderFileEntries);
+    updateFolderInstall();
     if(megaResume){
       if(j.state==="done"&&(!megaResume.groups?.length||megaResume.groups.every(name=>{
         const group=[...folderCandidateNames].find(([,candidate])=>candidate===name)?.[0];
@@ -780,6 +783,7 @@ async function impCancel(){
     else if(typeof nativeSetupCall==="function")await nativeSetupCall("intakeCancel");
     else await browserHTTP("/api/intake",{method:"DELETE"})}catch(e){}
   if(megaFolderMode||megaResume)writeMegaResume(null);
+  window.dispatchEvent(new CustomEvent("wudict-mega-download-status",{detail:{active:false}}));
   megaRestoreSelection=null;folderJobBusy=false;folderShowDone=false;folderRegistrationBusy=false;folderRegistrationStarted=false;
   $("found").classList.add("hidden");
   if(megaFolderMode){megaFolderMode=false;document.getElementById("folderFilesDialog").close();const keep=$("srcKeepWrap"),home=document.getElementById("folderFilesKeepHome");if(keep&&home)home.parentElement.insertBefore(keep,home.nextSibling)}
@@ -789,9 +793,24 @@ async function impCancel(){
 function closeFolderFiles(){
   const dlg=document.getElementById("folderFilesDialog");
   if(dlg.open)dlg.close();
-  folderShowDone=false;folderRegistrationBusy=false;folderJobBusy=false;megaFolderMode=false;
+  folderShowDone=false;folderRegistrationBusy=false;folderJobBusy=false;megaFolderMode=false;folderDialogDismissed=false;
+  window.dispatchEvent(new CustomEvent("wudict-mega-download-status",{detail:{active:false}}));
   const keep=$("srcKeepWrap"),home=document.getElementById("folderFilesKeepHome");if(keep&&home)home.parentElement.insertBefore(keep,home.nextSibling);
 }
+
+function dismissFolderFiles(){
+  if(folderShowDone&&!folderRegistrationBusy){closeFolderFiles();return}
+  folderDialogDismissed=true;
+  const dlg=document.getElementById("folderFilesDialog");if(dlg.open)dlg.close();
+  if(foldersDialogEmbedded&&foldersDialogRoot.open)foldersDialogRoot.close();
+}
+window.wudictReopenMegaDownload=()=>{
+  folderDialogDismissed=false;
+  if(!megaFolderMode)return;
+  if(folderFileEntries.length)renderFolderFileRows();
+  updateFolderInstall();
+  const dlg=document.getElementById("folderFilesDialog");if(!dlg.open)dlg.showModal();
+};
 
 /* Copies the guide into the folder above (POST /api/howto); the copy then
    stands in for the built-in guide, and the server has already rescanned. */
@@ -933,7 +952,8 @@ function wireIntake(dir){
   document.getElementById("folderFilesInstall").addEventListener("click",impInstall);
   document.getElementById("folderFilesCancel").addEventListener("click",impCancel);
   document.getElementById("folderFilesDone").addEventListener("click",closeFolderFiles);
-  document.getElementById("folderFilesDialog").addEventListener("cancel",e=>{e.preventDefault();if(folderShowDone&&!folderRegistrationBusy)closeFolderFiles();else impCancel()});
+  document.getElementById("folderFilesClose").addEventListener("click",dismissFolderFiles);
+  document.getElementById("folderFilesDialog").addEventListener("cancel",e=>{e.preventDefault();dismissFolderFiles()});
   for(const [id,on] of [["candAllOn",true],["candAllOff",false]])$(id).addEventListener("click",e=>{
     e.preventDefault();
     for(const cb of foldersDialogRoot.querySelectorAll("#cands input:not(:disabled)"))cb.checked=on;

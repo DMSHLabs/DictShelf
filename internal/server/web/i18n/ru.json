@@ -381,6 +381,7 @@
   "panel.updateSection": "Обновление",
   "panel.settingsUpdateAvailable": "Настройки. Доступно обновление.",
   "panel.dictionaries": "Словари",
+  "panel.dictionaryDownloading": "Загрузка словаря",
   "panel.editDicts": "Настройки словарей",
   "panel.editGroups": "Группы словарей",
   "panel.editFolders": "Управление папками словарей",

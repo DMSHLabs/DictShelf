@@ -448,6 +448,12 @@ window.wudictFontScale=(function(){
        WHERE those folders are is reference material that lives in Info with the
        rest of it. The doors that change the collection follow. -->
   <div class="counts"><span class="fsum" id="folderSummary"></span></div>
+  <div class="facts">
+    <button type="button" class="mrow dictionary-download-row" id="dictionaryDownloadRow" hidden>
+      <span>{{T:panel.dictionaryDownloading}}</span>
+      <progress class="update-download-bar" id="dictionaryDownloadProgress" max="100" aria-label="{{T:panel.dictionaryDownloading}}"></progress>
+    </button>
+  </div>
   <!-- One door per row, and the WHOLE row is the target: a label on the left, a
        chevron on the right. Two open a window of this app (dictionary settings,
        groups — each edits a list far longer than this drawer), two navigate to
@@ -4491,6 +4497,16 @@ function showWorkspaceWindow(link){
 $("lemmaLink").addEventListener("click",event=>{event.preventDefault();window.openLemmaDialog?.(event.currentTarget)});
 $("editFilters").addEventListener("click",event=>{event.preventDefault();window.openFiltersDialog?.(event.currentTarget)});
 $("editFolders").addEventListener("click",event=>{event.preventDefault();window.openFoldersDialog?.(event.currentTarget,cfgInfo)});
+window.addEventListener("wudict-mega-download-status",event=>{
+  const row=$("dictionaryDownloadRow"),progress=$("dictionaryDownloadProgress");
+  if(!row||!progress)return;
+  row.hidden=!event.detail?.active;
+  if(event.detail?.active)progress.removeAttribute("value");
+});
+$("dictionaryDownloadRow").addEventListener("click",()=>{
+  window.openFoldersDialog?.($("editFolders"),cfgInfo);
+  window.wudictReopenMegaDownload?.();
+});
 let restoreMegaFolder=false;
 try{restoreMegaFolder=!!localStorage.getItem("wudict_mega_folder_resume")}catch(_){}
 if(new URLSearchParams(location.search).get("manageFolders")==="1"||restoreMegaFolder){
