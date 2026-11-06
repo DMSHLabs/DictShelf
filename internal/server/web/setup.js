@@ -392,9 +392,10 @@ function updateFolderFileStates(files=folderFileEntries){
     const state=row.querySelector(".folder-file-state"),meter=row.querySelector(".folder-file-progress");
     state.textContent="";meter.hidden=true;
     if(f.fileStatus==="downloading"){
-      const percent=f.total>0?Math.min(99,Math.floor(f.done*100/f.total)):0;
+      const done=Number(f.done)||0,total=Number(f.total)||0;
+      const percent=total>0?Math.max(0,Math.min(99,Math.floor(done*100/total))):0;
       state.textContent=tx("pages.folderFileDownloading",{percent});
-      if(f.total>0){meter.hidden=false;meter.value=percent}
+      if(total>0){meter.hidden=false;meter.value=percent}
     }else if(f.fileStatus==="downloaded")state.textContent=tx("pages.folderFileDownloaded");
     else if(f.fileStatus==="error")state.textContent=tx("pages.folderFileFailed",{error:window.wudictI18n.errorText(f.fileError)||f.fileError||tx("pages.importFailed")});
     const dictState=row.querySelector(".folder-dictionary-state");
