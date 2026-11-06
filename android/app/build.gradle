@@ -79,6 +79,18 @@ android {
     namespace = 'com.dmshlabs.dictshelf'
     compileSdk = 36
 
+    // AGP writes a "Dependency metadata" blob into the APK's signing block
+    // (signature-block id 0x504b4453): an opaque, Google-only-readable record of
+    // the dependency list, which only Play reads. Play gets it from the AAB, so
+    // this fork keeps it there and keeps it out of the APKs it hands to people:
+    // an artifact we publish by hand should not carry a blob only one company can
+    // read. (This is the one ported line of upstream's byte-reproducibility work
+    // whose reason survives outside F-Droid; the other two would cost the fork
+    // more than they pay - see HANDOFF.md -> "Upstream".)
+    dependenciesInfo {
+        includeInApk = false
+    }
+
     // The AAB name only; the APK name is set below in androidComponents.
     // Play ingests a bundle by content, not by file name, so wudict-play-
     // release.aab is fine and needs no abi or flavour token.
