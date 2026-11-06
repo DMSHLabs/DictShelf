@@ -127,6 +127,11 @@ func RebuildArticleIndexContext(ctx context.Context, textDB string, progress Pro
 		return err
 	}
 	defer src.Close()
+	// The bodies are re-read as the ingest wrote them, so the index is built
+	// over the same text an ingest would index. p.Schema is this database's
+	// own schema - the one that says how a stored body is read (compress.go).
+	decoder := newBodyDecoder(p.Schema, src)
+	defer decoder.close()
 	var total int
 	if err = src.QueryRowContext(ctx, "SELECT count(*) FROM entry").Scan(&total); err != nil {
 		return err
@@ -151,7 +156,7 @@ func RebuildArticleIndexContext(ctx context.Context, textDB string, progress Pro
 			rows.Close()
 			return err
 		}
-		text := htmlref.PlainText(decodeBody(body))
+		text := htmlref.PlainText(decoder.decode(body))
 		if text != "" {
 			indexed++
 		}

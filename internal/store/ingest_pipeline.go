@@ -34,7 +34,13 @@ type ingestAlias struct {
 type preparedIngestEntry struct {
 	headword, folded, caseKey, lower string
 	body                             []byte
-	// bodyBytes is the body as it came out of the reader, before deflate: the
+	// raw is the article's HTML while the body is still text: no encoder
+	// existed yet, because the dictionary is cut from the first bodies and has
+	// to see them uncompressed. pending says body is not what is stored; the
+	// writer encodes raw and writes it (ingest_bulk.go).
+	raw     string
+	pending bool
+	// bodyBytes is the body as it came out of the reader, before compression: the
 	// article index is built over that text, not over the compressing copy.
 	bodyBytes  int64
 	text       string
@@ -48,6 +54,7 @@ type ingestWork struct {
 	sequence, weight int64
 	entries          []dict.Entry
 	plan             Plan
+	codec            *bodyCodec
 	// dropBodies is the reader's word on whether what it yields is for the index
 	// and not for the database (see prepareIngestEntry).
 	dropBodies bool
@@ -351,12 +358,12 @@ func (p *ingestPool) workerWake() <-chan struct{} {
 func prepareIngestBatch(item *ingestWork) preparedIngestBatch {
 	result := preparedIngestBatch{sequence: item.sequence, weight: item.weight, entries: make([]preparedIngestEntry, 0, len(item.entries))}
 	for _, entry := range item.entries {
-		result.entries = append(result.entries, prepareIngestEntry(entry, item.plan, item.dropBodies, item.ctx))
+		result.entries = append(result.entries, prepareIngestEntry(entry, item.plan, item.dropBodies, item.codec, item.ctx))
 	}
 	return result
 }
 
-func prepareIngestEntry(e dict.Entry, plan Plan, dropBodies bool, ctx context.Context) (result preparedIngestEntry) {
+func prepareIngestEntry(e dict.Entry, plan Plan, dropBodies bool, codec *bodyCodec, ctx context.Context) (result preparedIngestEntry) {
 	defer func() {
 		if value := recover(); value != nil {
 			result.panicValue = value
@@ -382,8 +389,14 @@ func prepareIngestEntry(e dict.Entry, plan Plan, dropBodies bool, ctx context.Co
 		// one, because the schema asks for a body and an empty one is what "the
 		// database does not carry it" looks like (internal/format/zim, dmsh_index_reader.go).
 		result.body = []byte{}
+	} else if enc := codec.enc.Load(); enc != nil {
+		result.body = enc.encode(body)
 	} else {
-		result.body = encodeBody(body)
+		// The dictionary is cut from the first bodies and has to see them as
+		// text, so until it exists the writer keeps the row and encodes it once
+		// the encoder is published (ingest_bulk.go).
+		result.raw = body
+		result.pending = true
 	}
 	if plan.FullText {
 		result.text = htmlref.PlainText(body)
@@ -430,7 +443,7 @@ type ingestReaderResult struct {
 // body is still exactly what the index needs to see.
 type bodyDropper interface{ DropBodies() bool }
 
-func readIngestEntries(s *ingestSession, r dict.Reader, plan Plan, redirects chan<- ingestRedirect, done chan<- ingestReaderResult) {
+func readIngestEntries(s *ingestSession, r dict.Reader, plan Plan, codec *bodyCodec, redirects chan<- ingestRedirect, done chan<- ingestReaderResult) {
 	dropBodies := false
 	if d, ok := r.(bodyDropper); ok {
 		dropBodies = d.DropBodies()
@@ -450,7 +463,7 @@ func readIngestEntries(s *ingestSession, r dict.Reader, plan Plan, redirects cha
 		if len(entries) == 0 {
 			return nil
 		}
-		item := &ingestWork{sequence: sequence - int64(len(entries)) + 1, weight: weight, entries: entries, plan: plan, ctx: s.ctx, dropBodies: dropBodies}
+		item := &ingestWork{sequence: sequence - int64(len(entries)) + 1, weight: weight, entries: entries, plan: plan, codec: codec, ctx: s.ctx, dropBodies: dropBodies}
 		if err := sharedIngestPool.submit(s, item); err != nil {
 			return err
 		}
@@ -535,7 +548,7 @@ func scanIngestEntries(ctx context.Context, r dict.Reader, plan Plan, total int,
 	logIngestParallelism("start", trace.dictionary, trace.id)
 	redirects := make(chan ingestRedirect, ingestQueueEntries)
 	done := make(chan ingestReaderResult, 1)
-	go readIngestEntries(s, r, plan, redirects, done)
+	go readIngestEntries(s, r, plan, rows.codec, redirects, done)
 	pending := make(map[int64]preparedIngestBatch)
 	readerDone := false
 	defer func() {
@@ -672,7 +685,7 @@ func scanIngestEntriesSequential(ctx context.Context, r dict.Reader, plan Plan, 
 			continue
 		}
 		nextID := id + 1
-		prepared := prepareIngestEntry(e, plan, false, ctx)
+		prepared := prepareIngestEntry(e, plan, false, rows.codec, ctx)
 		if prepared.panicValue != nil {
 			panic(prepared.panicValue)
 		}

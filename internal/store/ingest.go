@@ -24,6 +24,7 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/fsx"
 	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
+	"github.com/DMSHLabs/DictShelf/internal/sysmem"
 )
 
 // Progress is called during ingest with entries processed so far and the
@@ -185,13 +186,31 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 		return rep, err
 	}
 
+	// The codec decides the schema before anything is written: a zstd database
+	// is schema 2 and carries its dictionary (compress.go). The account is the
+	// ingest's draw on the process budget - the window of text held while the
+	// dictionary is cut, and the encoder's own match tables.
+	codec := newBodyCodec()
+	defer codec.close()
+	var acct sysmem.Account
+	defer acct.Close()
+
+	// The schema is not decoration: it says how the first byte of every body
+	// below is read (compress.go), so it must be the schema of the rows the
+	// codec writes.
 	if _, err = db.ExecContext(ctx, fmt.Sprintf(`
 		PRAGMA user_version = %d;
 		CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
 		CREATE TABLE entry(id INTEGER PRIMARY KEY, w TEXT NOT NULL, wf TEXT NOT NULL, wc TEXT NOT NULL, m TEXT NOT NULL);
 		CREATE TABLE browse_anchor(ordinal INTEGER PRIMARY KEY, entry_id INTEGER NOT NULL, w TEXT NOT NULL);
 		CREATE TABLE alias(w TEXT NOT NULL, wf TEXT NOT NULL, wc TEXT NOT NULL, entry_id INTEGER NOT NULL REFERENCES entry(id));
-	`, schemaVersion)); err != nil {
+	`, codec.schema())); err != nil {
+		return rep, err
+	}
+	// The raw dictionary every zstd row leans on: one slice-set cut from this
+	// dictionary's own first bodies, written by the writer once it has them
+	// (ingest_bulk.go, cut).
+	if _, err = db.ExecContext(ctx, `CREATE TABLE body_dict(id INTEGER PRIMARY KEY, data BLOB NOT NULL)`); err != nil {
 		return rep, err
 	}
 	if plan.Contains {
@@ -250,16 +269,18 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	`); err != nil {
 		return rep, err
 	}
-	rows := newIngestRowWriter(ctx, tx, plan)
-	defer rows.close()
+	// total is the source's own EntryCount, which is what dictSize estimates
+	// the whole text from when the window closes before the source ends.
 	total := srcMeta.EntryCount
+	rows := newIngestRowWriter(ctx, tx, plan, codec, &acct, total)
+	defer rows.close()
 
 	trace.phase("scan articles: headwords, fulltext and contains per plan")
 	id, subEntries, linkCount, err := scanIngestEntries(ctx, r, plan, total, progress, rows, trace)
 	if err != nil {
 		return rep, err
 	}
-	if err = rows.flush(); err != nil {
+	if err = rows.finish(); err != nil {
 		return rep, err
 	}
 
@@ -325,13 +346,14 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 		"headword_count": fmt.Sprint(articles + aliases),
 		"sub_entries":    fmt.Sprint(subEntries), // @-prefixed, hidden from browsing
 		// What the indexes of this dictionary would cost, measured while the
-		// only pass that sees the bodies runs. body_bytes is before deflate
+		// only pass that sees the bodies runs. body_bytes is before compression
 		// because that is the text an article index covers, stored_body_bytes
 		// is what those bodies cost the file, and headword_bytes is what the
 		// headword indexes scale with. Volatile: a prediction reads them,
 		// prepared content does not.
 		"body_bytes":        fmt.Sprint(rows.bodyBytes),
 		"stored_body_bytes": fmt.Sprint(rows.storedBodyBytes),
+		"body_dict_bytes":   fmt.Sprint(rows.dictBytes), // the shared zstd dictionary, if any
 		"headword_bytes":    fmt.Sprint(rows.headwordBytes),
 		"stats_version":     fmt.Sprint(StatsVersion),
 		"ingest_level":      ingestLevel(plan),
@@ -339,7 +361,7 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 		"fold_version":      fmt.Sprint(dict.FoldVersion), // which text folding built the trigram index
 		"markup_version":    fmt.Sprint(artmark.Version),  // which role markup the articles were written with
 		"ingest_version":    fmt.Sprint(IngestVersion),    // which IngestPlan wrote this (stale.go)
-		"body_encoding":     bodyEncoding(),
+		"body_encoding":     bodyEncodingLabel,
 		"created":           time.Now().UTC().Format(time.RFC3339),
 		"source_sha256_1M":  fsx.HashSample(srcMeta.Path),
 	}
@@ -706,12 +728,6 @@ func boolMeta(b bool) string {
 		return "1"
 	}
 	return "0"
-}
-
-// bodyEncoding records how bodies were written, for humans reading the meta;
-// the read path detects the form per row and does not consult this.
-func bodyEncoding() string {
-	return "deflate"
 }
 
 // syncFile flushes a finished ingest temp to disk. dsnIngest runs with

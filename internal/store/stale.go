@@ -44,7 +44,13 @@ import (
 // 8: headword_count is what the ingest counted (articles + aliases) instead of
 // the count the source declared, so a library built by 7 shows the old number
 // until it is rebuilt.
-const IngestVersion = 8
+//
+// 9: article bodies are stored with zstd against a per-database dictionary
+// (schema 2, compress.go). The text is the same, so nothing a query returns
+// changes - the FILE is what changes: a rebuilt library is a quarter smaller
+// and reads articles faster. Older databases keep working and are offered a
+// rebuild, which is the only way the conversion happens.
+const IngestVersion = 9
 
 // StatsVersion identifies how the size measurements recorded at ingest
 // (body_bytes, headword_bytes) were taken. They are volatile meta - the
@@ -294,7 +300,7 @@ func sizeOfTable(ctx context.Context, db *sql.DB, table string) int64 {
 }
 
 // Usable reports that this build can open it: readable, and this schema.
-func (p Prepared) Usable() bool { return p.Meta != nil && p.Schema == schemaVersion }
+func (p Prepared) Usable() bool { return p.Meta != nil && textSchemaOK(p.Schema) }
 
 // Current reports that it is usable and was built from srcPath as the file is
 // now. A missing source is not a change: the prepared data stands on its own.
@@ -403,7 +409,7 @@ func ingestLevel(p Plan) string {
 // older IngestMedia.
 func mediaStale(mediaDB, uuid string) bool {
 	m, schema, err := ReadMetaSchema(mediaDB)
-	if err != nil || schema != schemaVersion {
+	if err != nil || schema != sidecarSchema {
 		return true
 	}
 	return uuid == "" || m["dict_uuid"] != uuid || stampOf(m, "media_version", 1) < MediaVersion
@@ -417,7 +423,7 @@ func mediaStale(mediaDB, uuid string) bool {
 // identity, and its media is repacked by whoever rebuilt it.
 func keptUUID(dbPath, srcPath string) string {
 	m, schema, err := ReadMetaSchema(dbPath)
-	if err != nil || schema != schemaVersion || srcPath == "" {
+	if err != nil || !textSchemaOK(schema) || srcPath == "" {
 		return ""
 	}
 	if !fsx.SamePath(m["source_path"], srcPath) || sourceChangedMeta(m, srcPath) {
