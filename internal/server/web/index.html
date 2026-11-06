@@ -13545,9 +13545,8 @@ function fullTextRows(){
   })).sort((a,b)=>String(a.name).localeCompare(String(b.name),undefined,{sensitivity:"base"}));
 }
 function fullTextBandText(row){
-  // Nothing to estimate once the index is there: the state column says so, and
-  // repeating it in the size column reads as a number that failed to load.
-  if(row.built)return "—";
+  // Once the index is built, show its measured size instead of the estimate.
+  if(row.built)return row.fullSize>0?mb(row.fullSize):"—";
   if(!row.est)return tx("fullText.stateCalculating");
   return "≈ "+mb(row.est.low)+" – "+mb(row.est.high);
 }

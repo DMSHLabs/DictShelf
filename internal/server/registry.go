@@ -1755,9 +1755,10 @@ func backingDB(path string) string {
 // needs a new connection, then failing with "unable to open database file".
 //
 // The same holds for the SOURCE: a file replaced in place keeps its path and
-// its library folder, so backing alone cannot see it. Its size and mtime are
-// compared with the ones the backend was opened against (srcSig); a
-// difference drops the handle, and the next open resolves afresh -
+// its library folder, so backing alone cannot see it. Its source signature
+// (size plus the first-MiB hash) is compared with the one the backend was
+// opened against (srcSig); a difference drops the handle, and the next open
+// resolves afresh -
 // store.PreparedFor no longer vouches for an index built from the old
 // edition, so it is served from the new source until it is prepared again.
 func (e *entry) revalidate() {
@@ -1797,10 +1798,15 @@ func (e *entry) revalidate() {
 }
 
 // sourceSig identifies a dictionary source by size and the hash of its first
-// MiB. Modification time is deliberately excluded: rebuilding a prepared
-// index can touch timestamps without changing the dictionary. For a prepared
-// dictionary whose source is gone (a loose text.db) it describes text.db,
-// which is what that entry's backend reads.
+// MiB. Reading and hashing the whole dictionary on every rescan would be slow;
+// size cheaply distinguishes most files, and the first-MiB hash guards against
+// same-size files that differ at the start. Modification time is deliberately
+// excluded: a file can be overwritten and get a new timestamp without being a
+// new dictionary, so time alone is not evidence that its contents changed.
+// This bounded check does not detect an in-place edit beyond the first MiB when
+// the file size stays the same. For a prepared dictionary whose source is gone
+// (a loose text.db), the signature describes text.db, which is what that
+// entry's backend reads.
 func sourceSig(path string) string {
 	st, err := os.Stat(path)
 	if err != nil {
