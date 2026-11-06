@@ -21,11 +21,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/limits"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
 // Fetching an archive over https.
@@ -332,6 +334,11 @@ func (f Fetcher) fetch(ctx context.Context, dest, raw string, progress Progress,
 	if mf != nil {
 		downloadFetcher = f.megaFetcher()
 	}
+	logName := ""
+	if mf != nil {
+		logName = mf.name
+	}
+	logx.Download("file transfer prepared name=%q mega=%t host=%s resume_offset=%d", logName, mf != nil, get.Hostname(), offset)
 	resp, offset, err := downloadFetcher.get(ctx, get, offset, prev, reuse)
 	if errors.Is(err, errNotModified) {
 		// Nothing was transferred and nothing is temporary: this is the file
@@ -342,6 +349,7 @@ func (f Fetcher) fetch(ctx context.Context, dest, raw string, progress Progress,
 		return Source{Path: reusePath, Name: filepath.Base(reusePath)}, nil
 	}
 	if err != nil {
+		logx.Download("file transfer failed before body name=%q host=%s error=%v", logName, get.Hostname(), err)
 		return Source{}, err
 	}
 	defer resp.Body.Close()
@@ -353,6 +361,7 @@ func (f Fetcher) fetch(ctx context.Context, dest, raw string, progress Progress,
 	} else if name, err = archiveNameFor(u, resp, allowIcon); err != nil {
 		return Source{}, err
 	}
+	logx.Download("file body read started name=%q host=%s status=%d resume_offset=%d response_bytes=%d total_bytes=%d content_type=%q", name, responseHost(resp), resp.StatusCode, offset, resp.ContentLength, offset+max64(resp.ContentLength, 0), resp.Header.Get("Content-Type"))
 
 	total := offset + resp.ContentLength // ContentLength is -1 when unknown
 	if resp.ContentLength < 0 {
@@ -382,16 +391,34 @@ func (f Fetcher) fetch(ctx context.Context, dest, raw string, progress Progress,
 	// From here the name is settled, so every tick carries it - including the
 	// first, which copyBody sends before it reads a byte.
 	var report func(done, total int64)
-	if progress != nil {
-		report = func(done, total int64) { progress(name, done, total) }
+	var copied atomic.Int64
+	copied.Store(offset)
+	report = func(done, currentTotal int64) {
+		copied.Store(done)
+		if progress != nil {
+			progress(name, done, currentTotal)
+		}
 	}
+	var stopWatch chan struct{}
+	var watchDone chan struct{}
+	if logx.DownloadEnabled() {
+		stopWatch, watchDone = make(chan struct{}), make(chan struct{})
+		go watchDownloadBody(stopWatch, watchDone, &copied, name, responseHost(resp), total)
+	}
+	started := time.Now()
 	n, err := copyBody(ctx, fh, body, offset, total, report)
+	if stopWatch != nil {
+		close(stopWatch)
+		<-watchDone
+	}
 	if cerr := fh.Close(); err == nil {
 		err = cerr
 	}
 	if err != nil {
+		logx.Download("file body read failed name=%q host=%s received_bytes=%d total_bytes=%d elapsed=%s error=%v", name, responseHost(resp), n, total, time.Since(started).Round(time.Millisecond), err)
 		return Source{}, err
 	}
+	logx.Download("file body read complete name=%q host=%s received_bytes=%d total_bytes=%d elapsed=%s", name, responseHost(resp), n, total, time.Since(started).Round(time.Millisecond))
 
 	// Only now is the file whole, and only now does it get a name that is not
 	// ".part" - which is the whole convention: nothing but a complete download
@@ -531,8 +558,11 @@ func (f Fetcher) get(ctx context.Context, u *url.URL, offset int64, prev partMet
 }
 
 func (f Fetcher) do(ctx context.Context, u *url.URL, offset int64, prev partMeta, reuse *doneMeta) (*http.Response, error) {
+	started := time.Now()
+	logx.Download("HTTP GET started host=%s resume_offset=%d conditional=%t", u.Hostname(), offset, reuse != nil)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
+		logx.Download("HTTP GET request build failed host=%s elapsed=%s error=%v", u.Hostname(), time.Since(started).Round(time.Millisecond), err)
 		return nil, err
 	}
 	// Identify honestly. Several of these sites answer a blank agent with a
@@ -557,7 +587,13 @@ func (f Fetcher) do(ctx context.Context, u *url.URL, offset int64, prev partMeta
 			req.Header.Set("If-Modified-Since", reuse.Modified)
 		}
 	}
-	return f.Client().Do(req)
+	resp, err := f.Client().Do(req)
+	if err != nil {
+		logx.Download("HTTP GET failed host=%s elapsed=%s error=%v", u.Hostname(), time.Since(started).Round(time.Millisecond), err)
+		return nil, err
+	}
+	logx.Download("HTTP GET response host=%s final_host=%s status=%d content_length=%d content_range=%q content_type=%q elapsed=%s", u.Hostname(), responseHost(resp), resp.StatusCode, resp.ContentLength, resp.Header.Get("Content-Range"), resp.Header.Get("Content-Type"), time.Since(started).Round(time.Millisecond))
+	return resp, nil
 }
 
 // clients caches the one http.Client per distinct configuration. A Transport
@@ -704,6 +740,43 @@ func copyBody(ctx context.Context, w io.Writer, r io.Reader, offset, total int64
 		progress(done, total)
 	}
 	return done, nil
+}
+
+func responseHost(resp *http.Response) string {
+	if resp != nil && resp.Request != nil && resp.Request.URL != nil {
+		return resp.Request.URL.Hostname()
+	}
+	return "unknown"
+}
+
+func max64(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func watchDownloadBody(stop <-chan struct{}, done chan<- struct{}, copied *atomic.Int64, name, host string, total int64) {
+	defer close(done)
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	lastBytes := copied.Load()
+	lastProgress := time.Now()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			now := time.Now()
+			bytes := copied.Load()
+			if bytes == lastBytes {
+				logx.Download("file body waiting name=%q host=%s received_bytes=%d total_bytes=%d no_progress_for=%s", name, host, bytes, total, now.Sub(lastProgress).Round(time.Second))
+				continue
+			}
+			logx.Download("file body progress name=%q host=%s received_bytes=%d total_bytes=%d interval=%s", name, host, bytes, total, now.Sub(lastProgress).Round(time.Second))
+			lastBytes, lastProgress = bytes, now
+		}
+	}
 }
 
 // resumePoint is how far a previous attempt got, and the validator it recorded.

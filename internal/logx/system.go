@@ -103,6 +103,15 @@ func Download(format string, args ...any) {
 	writeSystem(false, false, true, "download "+format, args...)
 }
 
+// DownloadEnabled reports whether opt-in download events are currently being
+// retained. Long-running transfer watchers use it to avoid waking when their
+// diagnostics would be discarded anyway.
+func DownloadEnabled() bool {
+	systemMu.Lock()
+	defer systemMu.Unlock()
+	return systemLogEnabled && systemLogDownloadEvents
+}
+
 // SystemDiagnosticIf records an explicitly enabled diagnostic. When it is
 // disabled, error records still pass through the normal error-retention path.
 func SystemDiagnosticIf(enabled bool, format string, args ...any) {
