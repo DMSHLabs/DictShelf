@@ -185,13 +185,16 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 		return rep, err
 	}
 
+	// The schema is not decoration: it says how the first byte of every body
+	// below is read (compress.go), so it is written at the schema OF those
+	// rows - DEFLATE and literals, the oldest in the range.
 	if _, err = db.ExecContext(ctx, fmt.Sprintf(`
 		PRAGMA user_version = %d;
 		CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
 		CREATE TABLE entry(id INTEGER PRIMARY KEY, w TEXT NOT NULL, wf TEXT NOT NULL, wc TEXT NOT NULL, m TEXT NOT NULL);
 		CREATE TABLE browse_anchor(ordinal INTEGER PRIMARY KEY, entry_id INTEGER NOT NULL, w TEXT NOT NULL);
 		CREATE TABLE alias(w TEXT NOT NULL, wf TEXT NOT NULL, wc TEXT NOT NULL, entry_id INTEGER NOT NULL REFERENCES entry(id));
-	`, schemaVersion)); err != nil {
+	`, textSchemaMin)); err != nil {
 		return rep, err
 	}
 	if plan.Contains {

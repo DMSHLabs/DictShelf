@@ -294,7 +294,7 @@ func sizeOfTable(ctx context.Context, db *sql.DB, table string) int64 {
 }
 
 // Usable reports that this build can open it: readable, and this schema.
-func (p Prepared) Usable() bool { return p.Meta != nil && p.Schema == schemaVersion }
+func (p Prepared) Usable() bool { return p.Meta != nil && textSchemaOK(p.Schema) }
 
 // Current reports that it is usable and was built from srcPath as the file is
 // now. A missing source is not a change: the prepared data stands on its own.
@@ -403,7 +403,7 @@ func ingestLevel(p Plan) string {
 // older IngestMedia.
 func mediaStale(mediaDB, uuid string) bool {
 	m, schema, err := ReadMetaSchema(mediaDB)
-	if err != nil || schema != schemaVersion {
+	if err != nil || schema != sidecarSchema {
 		return true
 	}
 	return uuid == "" || m["dict_uuid"] != uuid || stampOf(m, "media_version", 1) < MediaVersion
@@ -417,7 +417,7 @@ func mediaStale(mediaDB, uuid string) bool {
 // identity, and its media is repacked by whoever rebuilt it.
 func keptUUID(dbPath, srcPath string) string {
 	m, schema, err := ReadMetaSchema(dbPath)
-	if err != nil || schema != schemaVersion || srcPath == "" {
+	if err != nil || !textSchemaOK(schema) || srcPath == "" {
 		return ""
 	}
 	if !fsx.SamePath(m["source_path"], srcPath) || sourceChangedMeta(m, srcPath) {

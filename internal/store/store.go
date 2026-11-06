@@ -36,8 +36,8 @@ func init() {
 	// (see library.go); `<name>.text.db` is the same database copied out of
 	// its folder. Registering bare ".db" would make every internal sidecar a
 	// public dictionary type: a `media.db` would open as a phantom dictionary,
-	// because for uuid pairing it carries the same user_version and meta table
-	// as a text.db.
+	// because for uuid pairing it carries a meta table of the same shape as a
+	// text.db's, and the schema of its own kind beside it.
 	open := func(path string) (dict.Dictionary, error) { return Open(path) }
 	dict.RegisterFileName(TextDBName, open)
 	dict.RegisterFormat(".text.db", open)
@@ -46,8 +46,6 @@ func init() {
 // maxLimit bounds a search page and its one extra row, which tells the UI
 // whether another page exists without mistaking a full page for the last one.
 const maxLimit = 501
-
-const schemaVersion = 1
 
 var _ dict.Searcher = (*Store)(nil)
 
@@ -66,6 +64,7 @@ type Store struct {
 	hasCaseKey       bool   // prepared with indexed accent-preserving case keys
 	hasBrowseAnchors bool   // sparse key/ordinal points for bounded Browse jumps
 	uuid             string // dict_uuid: what a sibling media.db must match
+	body             *bodyDecoder
 
 	// The sibling media.db is opened on the first resource that asks for one,
 	// not at open. Most opens never serve a resource at all - a search touches
@@ -173,10 +172,11 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	if ver != schemaVersion {
+	if !textSchemaOK(ver) {
 		db.Close()
-		return nil, fmt.Errorf("%s: not a wudict database (user_version=%d, want %d)", path, ver, schemaVersion)
+		return nil, fmt.Errorf("%s: not a wudict database (user_version=%d, want %d to %d)", path, ver, textSchemaMin, textSchemaMax)
 	}
+	s.body = newBodyDecoder(ver, db)
 	m, err := readMeta(db)
 	if err != nil {
 		db.Close()
@@ -362,6 +362,7 @@ func (s *Store) Close() error {
 	if ad != nil {
 		ad.Close()
 	}
+	s.body.close()
 	return s.db.Close()
 }
 
@@ -390,11 +391,11 @@ func (s *Store) collect(rows *sql.Rows, err error) ([]dict.Result, error) {
 	var out []dict.Result
 	for rows.Next() {
 		var r dict.Result
-		var body []byte // TEXT or a compressed BLOB; decodeBody tells them apart
+		var body []byte // TEXT or a compressed BLOB; s.body tells them apart
 		if err := rows.Scan(&r.Headword, &body); err != nil {
 			return nil, err
 		}
-		r.Body = decodeBody(body)
+		r.Body = s.body.decode(body)
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -703,7 +704,7 @@ func (s *Store) MaskContext(ctx context.Context, pattern string, limit int) ([]d
 		if err := s.db.QueryRowContext(ctx, `SELECT m FROM entry WHERE w=? COLLATE NOCASE LIMIT 1`, word).Scan(&body); err != nil {
 			return nil, err
 		}
-		out = append(out, dict.Result{Headword: word, Body: decodeBody(body)})
+		out = append(out, dict.Result{Headword: word, Body: s.body.decode(body)})
 		if len(out) >= n {
 			break
 		}
@@ -754,7 +755,7 @@ func (s *Store) FullTextMatch(ctx context.Context, match string, limit int) ([]d
 	}
 	out := make([]dict.Result, 0, len(hits))
 	for _, h := range hits {
-		out = append(out, dict.Result{Headword: h.W, Body: decodeBody(h.M)})
+		out = append(out, dict.Result{Headword: h.W, Body: s.body.decode(h.M)})
 	}
 	return out, nil
 }

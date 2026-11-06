@@ -968,7 +968,7 @@ func TestBodyCompressionRoundTrip(t *testing.T) {
 		"<p>" + string([]byte{0x01, 0x02, 0x7f}) + strings.Repeat("x", 200) + "</p>",
 	}
 	for _, want := range cases {
-		if got := decodeBody(encodeBody(want)); got != want {
+		if got := newBodyDecoder(1, nil).decode(encodeBody(want)); got != want {
 			t.Fatalf("round trip changed the body (%d bytes in, %d out)", len(want), len(got))
 		}
 	}
@@ -978,7 +978,7 @@ func TestBodyCompressionRoundTrip(t *testing.T) {
 		t.Errorf("compression barely helped: %d → %d bytes", len(big), len(enc))
 	}
 	// a body stored by an older version (no sentinel) is read verbatim
-	if got := decodeBody([]byte("<p>legacy plain text</p>")); got != "<p>legacy plain text</p>" {
+	if got := newBodyDecoder(1, nil).decode([]byte("<p>legacy plain text</p>")); got != "<p>legacy plain text</p>" {
 		t.Errorf("plain body misread: %q", got)
 	}
 }

@@ -206,7 +206,7 @@ func (s *Store) ArticlesByIDs(ctx context.Context, ids []int64) ([]dict.Result, 
 		if err := rows.Scan(&id, &word, &body); err != nil {
 			return nil, err
 		}
-		found[id] = dict.Result{Headword: word, Body: decodeBody(body)}
+		found[id] = dict.Result{Headword: word, Body: s.body.decode(body)}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

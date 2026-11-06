@@ -35,8 +35,8 @@ func Fingerprint(textDB string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if schema != schemaVersion {
-		return "", fmt.Errorf("%s: schema %d, want %d", textDB, schema, schemaVersion)
+	if !textSchemaOK(schema) {
+		return "", fmt.Errorf("%s: schema %d, want %d to %d", textDB, schema, textSchemaMin, textSchemaMax)
 	}
 	h := sha256.New()
 	field := func(s string) {

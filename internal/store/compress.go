@@ -7,9 +7,13 @@ package store
 import (
 	"bytes"
 	"compress/flate"
+	"database/sql"
+	"errors"
 	"io"
 	"runtime"
 	"sync"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 // Article bodies dominate a prepared dictionary: measured on a 40k-entry
@@ -17,18 +21,44 @@ import (
 // indexes themselves were 2 MB. Stored verbatim, that text makes a text.db
 // several times the size of the file it came from.
 //
-// So bodies are DEFLATE-compressed per row. Per row, rather than in shared
-// blocks like MDX/SLOB do, because a row must stay independently readable
-// without a block cache; the cost is a worse ratio on very short articles,
-// which is why a body is only stored compressed when compression actually
-// wins.
+// So bodies are compressed per row. Per row, rather than in shared blocks like
+// MDX/SLOB do, because a row must stay independently readable without a block
+// cache; the cost is a worse ratio on very short articles, which is why a body
+// is only stored compressed when compression actually wins.
 //
-// Discrimination is by a one-byte sentinel: article HTML never begins with
-// NUL, so a body whose first byte is 0x00 is compressed and anything else is
-// literal text. That keeps mixed rows legal - old databases stay readable with
-// no migration and no schema version bump - and needs no per-database flag on
-// the read path.
-const compressedMark = 0x00
+// The first byte of a stored body says what it is:
+//
+//	0x00           raw DEFLATE (RFC 1951)
+//	0x01           a zstd frame without its 4-byte magic, decoded with the
+//	               database's raw dictionary (table body_dict, id 0) - or with
+//	               none when the table holds no row
+//	0x02-0x08      reserved
+//	anything else  literal text
+//
+// 0x01-0x08 are markers only in a schema-2 database, the one that stores zstd
+// rows; in schema 1 they are literal text. That is what lets a reader
+// understand both without a flag of its own: the SCHEMA (PRAGMA user_version)
+// decides how the first byte is read. And a body whose first byte is a marker
+// byte of its database's schema is never stored literally - it is compressed -
+// so a literal never looks like a marker.
+const (
+	markDeflate  = 0x00
+	markZstd     = 0x01
+	markReserved = 0x08 // the last reserved byte
+)
+
+// The schemas a text.db may have (PRAGMA user_version). 1 is DEFLATE and
+// literal rows; 2 adds zstd rows and body_dict. The sidecar files - media.db,
+// the link cache - carry their own version and stay at 1 whatever the text.db
+// beside them is.
+const (
+	textSchemaMin = 1
+	textSchemaMax = 2
+	sidecarSchema = 1
+)
+
+// textSchemaOK reports whether this build reads a text.db of schema v.
+func textSchemaOK(v int) bool { return v >= textSchemaMin && v <= textSchemaMax }
 
 // compressLevel is where the size/speed balance is struck. Level 6 is the
 // usual answer and the right one on a desktop, where an ingest is a minute of
@@ -62,7 +92,7 @@ func encodeBody(s string) []byte {
 		return []byte(s)
 	}
 	var buf bytes.Buffer
-	buf.WriteByte(compressedMark)
+	buf.WriteByte(markDeflate)
 	w := flateWriters.Get().(*flate.Writer)
 	defer flateWriters.Put(w)
 	w.Reset(&buf)
@@ -78,19 +108,141 @@ func encodeBody(s string) []byte {
 	return buf.Bytes()
 }
 
-// decodeBody reverses encodeBody, passing through anything stored literally
-// (which includes every database written before compression existed).
-func decodeBody(raw []byte) string {
-	if len(raw) == 0 || raw[0] != compressedMark {
-		return string(raw)
+// zstdMagic opens every zstd frame; a stored row carries the frame without it.
+var zstdMagic = []byte{0x28, 0xb5, 0x2f, 0xfd}
+
+// maxBody bounds one decoded zstd body, like the other decompression caps.
+const maxBody = 64 << 20
+
+// bodyDecoder reads the stored bodies of one database. The zstd decoder, and
+// with it the dictionary its frames lean on, is made on the first zstd row:
+// most opened dictionaries are searched for headwords and never read an
+// article, and the dictionary would sit in memory for nothing. Safe for
+// concurrent use - a decode holds the read lock - so a page of articles never
+// builds a second decoder.
+type bodyDecoder struct {
+	schema int
+	db     *sql.DB // where body_dict is read from; nil when there is none
+
+	mu     sync.RWMutex
+	zstd   *zstd.Decoder // nil until the first zstd row
+	closed bool
+}
+
+func newBodyDecoder(schema int, db *sql.DB) *bodyDecoder {
+	return &bodyDecoder{schema: schema, db: db}
+}
+
+// decode returns the article stored as raw. A row that does not decode
+// degrades to what decoded, or to nothing; it never fails the query.
+func (d *bodyDecoder) decode(raw []byte) string {
+	if len(raw) == 0 {
+		return ""
 	}
-	r := flate.NewReader(bytes.NewReader(raw[1:]))
-	defer r.Close()
+	switch b := raw[0]; {
+	case b == markDeflate:
+		return inflate(raw[1:])
+	case d.schema >= 2 && b == markZstd:
+		return d.unzstd(raw[1:])
+	case d.schema >= 2 && b <= markReserved:
+		return ""
+	}
+	return string(raw)
+}
+
+// unzstd decodes one frame. A decoder that could not be made is tried again by
+// the next row: the failure may have been transient (a busy or interrupted
+// read of body_dict).
+func (d *bodyDecoder) unzstd(frame []byte) string {
+	d.mu.RLock()
+	if d.zstd != nil {
+		defer d.mu.RUnlock()
+		return d.decodeFrame(frame)
+	}
+	d.mu.RUnlock()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.zstd == nil && !d.closed {
+		d.init()
+	}
+	if d.zstd == nil {
+		return ""
+	}
+	return d.decodeFrame(frame)
+}
+
+// maxPooledFrame bounds the buffers framePool keeps: one huge article must
+// not stay resident in the pool.
+const maxPooledFrame = 1 << 20
+
+// decodeFrame decodes with d.zstd, which the caller holds a lock on. The magic
+// the row does not carry is put back on a pooled buffer, not on a new one.
+func (d *bodyDecoder) decodeFrame(frame []byte) string {
+	bp := framePool.Get().(*[]byte)
+	buf := append(append((*bp)[:0], zstdMagic...), frame...)
+	out, err := d.zstd.DecodeAll(buf, nil)
+	if cap(buf) <= maxPooledFrame {
+		*bp = buf[:0]
+		framePool.Put(bp)
+	}
+	if err != nil {
+		return ""
+	}
+	return string(out)
+}
+
+// init makes the zstd decoder. Called with mu held for writing.
+func (d *bodyDecoder) init() {
+	var dict []byte
+	if d.db != nil {
+		err := d.db.QueryRow("SELECT data FROM body_dict WHERE id = 0").Scan(&dict)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return
+		}
+	}
+	opts := []zstd.DOption{
+		zstd.WithDecoderConcurrency(1),
+		zstd.WithDecoderMaxMemory(maxBody),
+		zstd.WithDecoderMaxWindow(maxBody),
+	}
+	if len(dict) > 0 {
+		opts = append(opts, zstd.WithDecoderDictRaw(0, dict))
+	}
+	z, err := zstd.NewReader(nil, opts...)
+	if err != nil {
+		return
+	}
+	d.zstd = z
+}
+
+// close releases the decoder for good: no later row makes another.
+func (d *bodyDecoder) close() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.zstd != nil {
+		d.zstd.Close()
+	}
+	d.zstd, d.closed = nil, true
+}
+
+var framePool = sync.Pool{New: func() any { b := make([]byte, 0, 4096); return &b }}
+
+// flateReaders hold DEFLATE readers for reuse: a new reader per row costs
+// about a tenth of the decode time.
+var flateReaders sync.Pool
+
+func inflate(b []byte) string {
+	br := bytes.NewReader(b)
+	r, _ := flateReaders.Get().(io.ReadCloser)
+	if r == nil {
+		r = flate.NewReader(br)
+	} else if err := r.(flate.Resetter).Reset(br, nil); err != nil {
+		r = flate.NewReader(br)
+	}
 	var out bytes.Buffer
-	if _, err := io.Copy(&out, r); err != nil {
-		// a truncated or corrupt body must not take the whole query down;
-		// return what inflated so the article degrades instead of vanishing
-		return out.String()
-	}
+	// a truncated or corrupt body must not take the whole query down; return
+	// what inflated so the article degrades instead of vanishing
+	_, _ = io.Copy(&out, r)
+	flateReaders.Put(r)
 	return out.String()
 }
