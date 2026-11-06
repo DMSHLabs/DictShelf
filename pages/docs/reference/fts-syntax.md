@@ -45,6 +45,9 @@ A `*` after the closing quote makes the last word a prefix:
 | `NEAR("pun" "intended")` | the same, at most 10 words between them |
 | `(pun OR joke) AND intended` | grouping; parentheses nest |
 
+The distance the **Near** mode uses is a setting (Settings → Results). An explicit
+`NEAR(…)` keeps the number written in it, or 10 when none is written.
+
 ## Precedence
 
 Highest first:

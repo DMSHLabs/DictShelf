@@ -68,7 +68,7 @@ three stages. Each dictionary stops at the first stage that returns results.
 | Stage | Matches | `no pun intended` finds |
 | --- | --- | --- |
 | **phrase** | the words adjacent, in the given order | *…and, **no pun intended**, he resigned* |
-| **proximity** | all words, at most 10 words between them, in any order | *…clearly **intended** as a **pun**…* |
+| **proximity** | all words, at most the configured number of words between them (10 by default), in any order | *…clearly **intended** as a **pun**…* |
 | **anywhere** | all words anywhere in the article | *…**pun** … **intended**…* |
 
 The result header of a dictionary answered at the second or third stage shows
