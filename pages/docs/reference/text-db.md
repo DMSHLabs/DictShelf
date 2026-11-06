@@ -133,7 +133,8 @@ treated as empty rather than as an error.
 | `body_encoding` | `deflate` or `plain` — a note for humans; the read path decides per row |
 | `dict_uuid` | 32 hex characters; what pairs this file with its `media.db` |
 | `index_lang`, `contents_lang` | Languages, only when the source declared them |
-| `source_path`, `source_size`, `source_mtime`, `source_sha256_1M` | The dictionary file it was indexed from, for detecting changes |
+| `source_path`, `source_size`, `source_sha256_1M` | The dictionary file it was indexed from; size and the first 1 MiB hash detect changes |
+| `source_mtime` | The file modification time recorded at ingest; it does not detect changes |
 | `created` | RFC 3339, UTC |
 | `fold_version`, `markup_version` | Which text-folding and article-markup rules built this file |
 

@@ -47,14 +47,14 @@ import (
 const IngestVersion = 8
 
 // StatsVersion identifies how the size measurements recorded at ingest
-// (body_bytes, headword_chars) were taken. They are volatile meta - the
+// (body_bytes, headword_bytes) were taken. They are volatile meta - the
 // estimate that reads them is a prediction about a build, not prepared
 // content - so a change here invalidates them without asking anyone to
 // rebuild; a reader that finds a version it does not know treats the
 // measurements as absent rather than misread.
-// StatsVersion is the measurement format. 2 added the FTS5 index sizes, which
-// the listing reads from the cache instead of walking pages itself.
-const StatsVersion = 2
+// StatsVersion is the measurement format. 2 added FTS5 index sizes; 3 counts
+// both headword FTS tables as the Contains size.
+const StatsVersion = 3
 
 // MediaVersion identifies IngestMedia's behaviour, bumped the same way.
 const MediaVersion = 1
@@ -242,6 +242,14 @@ func indexSizesOf(ctx context.Context, db *sql.DB, textDB, articlesDB string, pl
 	}
 	if plan.Contains {
 		contains = sizeOfTable(ctx, db, "entry_trigram")
+		// ingest_version 6 split the previous shared entry_fts table into
+		// headword-token FTS and independent article_fts. Before that, entry_fts
+		// was the article index and must not be charged to Contains.
+		var ingestVersion int
+		_ = db.QueryRowContext(ctx, `SELECT CAST(value AS INTEGER) FROM meta WHERE key='ingest_version'`).Scan(&ingestVersion)
+		if ingestVersion >= 6 {
+			contains += sizeOfTable(ctx, db, "entry_fts")
+		}
 	}
 	if !plan.FullText {
 		return contains, 0

@@ -174,7 +174,7 @@ func TestSourceChanged(t *testing.T) {
 	if SourceChanged(textDB, src) {
 		t.Error("touched (same content) source reported as changed")
 	}
-	writeSrc(t, src, "second, different content")
+	writeSrc(t, src, "other content") // same size, different first-MiB hash
 	_ = os.Chtimes(src, future.Add(time.Second), future.Add(time.Second))
 	if !SourceChanged(textDB, src) {
 		t.Error("edited source not detected")
@@ -1307,6 +1307,17 @@ func TestBuildRecordsIndexSizes(t *testing.T) {
 		t.Errorf("recorded index sizes = %d, %d; want both above zero", s.ContainsIndexBytes, s.FullTextIndexBytes)
 	}
 	contains, fullText := MeasureIndexSizes(path, plan)
+	db, err := openRO(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantContains := sizeOfTable(context.Background(), db, "entry_trigram") + sizeOfTable(context.Background(), db, "entry_fts")
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if contains != wantContains {
+		t.Errorf("Contains size = %d, want trigram + headword FTS = %d", contains, wantContains)
+	}
 	if contains != s.ContainsIndexBytes || fullText != s.FullTextIndexBytes {
 		t.Errorf("recorded (%d, %d) but the published file measures (%d, %d)",
 			s.ContainsIndexBytes, s.FullTextIndexBytes, contains, fullText)

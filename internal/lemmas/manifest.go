@@ -61,12 +61,12 @@ import (
 const Version = 1
 
 // The catalogue is this project's own: the manifest and the language files live
-// in the repository's `lemmas` branch, and a second repository of the same
-// author carries the same tree as the fallback. Both are raw.githubusercontent.com
+// in the `DMSHLabs/lemmas` repository's `main` branch, with a second repository
+// of the same author carrying the same tree as the fallback. Both are raw.githubusercontent.com
 // on purpose - it is the address a downloader can read without a site's own
 // limits - and both are checked after download (scheme/host/path), so a
 // substituted URL cannot install bytes the manifest did not describe.
-const defaultLemmaURL = "https://raw.githubusercontent.com/DMSHLabs/DictShelf/lemmas/manifest.json"
+const defaultLemmaURL = "https://raw.githubusercontent.com/DMSHLabs/lemmas/main/manifest.json"
 
 // MirrorURLs are checked after the primary catalogue. Keep the mirror list
 // explicit: fallback is part of the published data policy, not discovery.
@@ -347,7 +347,7 @@ func (s source) open(ctx context.Context, name string) (io.ReadCloser, error) {
 // mirror. It applies only when the catalogue IS the built-in one: a custom
 // LEMMA_URL is used on its own, with no second host implied for it.
 func (s source) fallbackURLs(name string) []string {
-	if s.manifest == nil || s.manifest.Scheme != "https" || s.manifest.Host != "raw.githubusercontent.com" || s.manifest.Path != "/DMSHLabs/DictShelf/lemmas/manifest.json" || name == "" {
+	if s.manifest == nil || s.manifest.Scheme != "https" || s.manifest.Host != "raw.githubusercontent.com" || s.manifest.Path != "/DMSHLabs/lemmas/main/manifest.json" || name == "" {
 		return nil
 	}
 	urls := make([]string, 0, len(MirrorURLs))

@@ -17,16 +17,17 @@ import (
 
 // A prepared folder holds three files: the dictionary itself, the receipt that
 // describes it, and the icon cache. This is the fourth: the measurements a size
-// estimate reads, kept beside the database the way icon.cache is, and keyed the
-// same way - the database's own uuid plus the source it was built from - so a
-// folder that moved, was renamed or was copied to another machine is still
-// recognised as the one the numbers describe.
+// estimate reads, kept beside the database the way icon.cache is, and keyed by
+// the database's own uuid, so a folder that moved, was renamed or was copied
+// to another machine is still recognised as the one the numbers describe.
 //
 // It is a CACHE, not a source of truth: every number in it can be measured
 // again (a ZIM's from its directory, a dz/mdx one's from its bodies), the file
 // may be missing or unreadable, and the medium may not allow writing at all.
-// Nothing in the program may depend on it existing; what it buys is a dialog
-// that opens with numbers instead of a progress bar.
+// The prepared database's dict_uuid is its identity; source timestamps do not
+// invalidate measurements of indexes that are already in that database.
+// Nothing in the program may depend on the cache existing; what it buys is a
+// dialog that opens with numbers instead of a progress bar.
 const StatsCacheName = "stats.cache"
 
 // Stats are the measurements about a dictionary and its source. Everything here
@@ -69,7 +70,7 @@ type Stats struct {
 func StatsPath(dir string) string { return filepath.Join(dir, StatsCacheName) }
 
 // StatsIdentity fills what any prepared database knows about itself and its
-// source, whatever version wrote it: the identity a cache is keyed by and the
+// source, whatever version wrote it: the database identity, source receipt and
 // entry count. Measurements stay zero - a database prepared before they were
 // recorded answers honestly rather than pretending to a measurement of nothing.
 func StatsIdentity(meta map[string]string) Stats {
@@ -107,24 +108,27 @@ func StatsFromMeta(meta map[string]string) (Stats, bool) {
 	return s, true
 }
 
-// IndexSizesRecorded reports whether the FTS index sizes are among the
-// measurements the build recorded (StatsFromMeta). A build always writes BOTH
-// keys, a zero included, so the KEYS being present is what says "measured at
-// build" - and a database prepared before they were recorded has neither, which
-// is what sends the caller to walk it with dbstat. That walk is the thing to
-// avoid: it costs a page-by-page pass over the whole file, minutes on a large
-// database, and it holds a read lock for as long as it runs - which a listing
-// must not pay and an ingest must not collide with.
+// IndexSizesRecorded reports whether the current measurement format and both
+// FTS-size keys are recorded in meta. Older versions lack the combined Contains
+// size, so they must be measured again. That walk is the thing to avoid: it
+// costs a page-by-page pass over the whole file, minutes on a large database,
+// and it holds a read lock for as long as it runs - which a listing must not
+// pay and an ingest must not collide with.
 func IndexSizesRecorded(meta map[string]string) bool {
+	if statInt(meta["stats_version"]) != StatsVersion {
+		return false
+	}
 	_, contains := meta["contains_index_bytes"]
 	_, fullText := meta["full_text_index_bytes"]
 	return contains && fullText
 }
 
 // ReadStats returns a folder's cached measurements when they describe this
-// database and this source, and false in every other case: no file, unreadable
-// JSON, a measurement version this build does not understand, a different
-// database in the folder, or a source that has changed since it was measured.
+// prepared database, and false in every other case: no file, unreadable JSON,
+// a measurement version this build does not understand, or a different
+// database in the folder. Changes to the source file on disk do not invalidate
+// measurements of indexes already stored in that database; dict_uuid identifies
+// the prepared index they describe.
 //
 // A source that is GONE is not a mismatch. Prepared folders outlive their
 // sources by design (SPEC: sources can be deleted), and the numbers describe the
@@ -146,16 +150,6 @@ func ReadStats(textDB string) (Stats, bool) {
 	}
 	if s.Version != StatsVersion || s.IndexUUID == "" || s.IndexUUID != meta["dict_uuid"] {
 		return Stats{}, false
-	}
-	if s.SourceSize != statInt(meta["source_size"]) || s.SourceMTime != meta["source_mtime"] {
-		return Stats{}, false
-	}
-	if src := meta["source_path"]; src != "" {
-		if fi, err := os.Stat(src); err == nil {
-			if fi.Size() != s.SourceSize || fi.ModTime().UTC().Format(time.RFC3339) != s.SourceMTime {
-				return Stats{}, false
-			}
-		}
 	}
 	// The FORM is a property of the database, not of the source, and a rebuild
 	// into the other form leaves every other check here passing: the uuid is the

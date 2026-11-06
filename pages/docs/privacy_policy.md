@@ -75,8 +75,8 @@ Advertising ID.
 DictShelf makes a network request only in these cases:
 
 - **Lemma data.** The Lemmatization page reads the language catalogue from
-  this project's own `raw.githubusercontent.com/DMSHLabs/DictShelf/lemmas` (a
-  second catalogue at `raw.githubusercontent.com/DmShAl/lemmas` is tried if
+  `raw.githubusercontent.com/DMSHLabs/lemmas/main` (a second catalogue at
+  `raw.githubusercontent.com/DmShAl/lemmas` is tried if
   that one does not answer), and installing a language downloads its file from
   there.
 - **Dictionaries from a link.** A link you paste, drop or share into the app,

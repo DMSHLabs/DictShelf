@@ -1403,7 +1403,7 @@ func (c Config) Addr() string { return net.JoinHostPort(c.IP, c.Port) }
 // published here is DERIVED from those lists (grouped, deduplicated, gzipped)
 // and carries digests and measured memory costs the raw lists do not have;
 // `tools/lemmafiles` is the only thing that ever reads michmech.
-const DefaultLemmaURL = "https://raw.githubusercontent.com/DMSHLabs/DictShelf/lemmas/manifest.json"
+const DefaultLemmaURL = "https://raw.githubusercontent.com/DMSHLabs/lemmas/main/manifest.json"
 
 // isOff reads a boolean written the way a person writes one in a config file.
 // Every boolean key goes through it, so there is exactly one answer to "does

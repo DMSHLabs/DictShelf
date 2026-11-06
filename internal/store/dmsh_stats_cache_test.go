@@ -104,14 +104,14 @@ func TestStatsCacheRejectsWhatItDoesNotDescribe(t *testing.T) {
 			t.Error("a sidecar naming another database was accepted")
 		}
 	})
-	t.Run("another source size", func(t *testing.T) {
+	t.Run("different source receipt with same database UUID", func(t *testing.T) {
 		s := read(t)
 		s.SourceSize++
 		if err := WriteStats(dir, s); err != nil {
 			t.Fatal(err)
 		}
-		if _, ok := ReadStats(textDB); ok {
-			t.Error("a sidecar from another source was accepted")
+		if _, ok := ReadStats(textDB); !ok {
+			t.Error("the database UUID should keep measurements valid across source receipt changes")
 		}
 	})
 	t.Run("another measurement version", func(t *testing.T) {
@@ -133,8 +133,9 @@ func TestStatsCacheRejectsWhatItDoesNotDescribe(t *testing.T) {
 			t.Error("an unreadable sidecar was accepted")
 		}
 	})
-	// Last, because it changes the source the whole fixture shares.
-	t.Run("a source changed on disk", func(t *testing.T) {
+	// Last, because it changes the source the whole fixture shares. The cache
+	// measures the prepared database, which remains the same until it is rebuilt.
+	t.Run("source file changed but prepared database did not", func(t *testing.T) {
 		writeStatsOK(t, dir, fromMeta)
 		src := meta["source_path"]
 		if err := os.WriteFile(src, []byte("#NAME test\n\nword\n\tbody edited\n"), 0o600); err != nil {
@@ -144,8 +145,8 @@ func TestStatsCacheRejectsWhatItDoesNotDescribe(t *testing.T) {
 		if err := os.Chtimes(src, now, now); err != nil {
 			t.Fatal(err)
 		}
-		if _, ok := ReadStats(textDB); ok {
-			t.Error("a sidecar measured before the source changed was accepted")
+		if _, ok := ReadStats(textDB); !ok {
+			t.Error("changing the source file must not invalidate measurements of the prepared database")
 		}
 	})
 }

@@ -28,7 +28,7 @@ type rewriteTransport struct{ target string }
 func (r rewriteTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	copyReq := req.Clone(req.Context())
 	u, _ := url.Parse(r.target)
-	if req.URL.Path == "/DMSHLabs/DictShelf/lemmas/manifest.json" || req.URL.Path == "/DmShAl/lemmas/main/manifest.json" {
+	if req.URL.Path == "/DMSHLabs/lemmas/main/manifest.json" || req.URL.Path == "/DmShAl/lemmas/main/manifest.json" {
 		u.Path = "/lemmas/manifest.json"
 	} else {
 		u.Path = "/lemmas/" + path.Base(req.URL.Path)
@@ -172,7 +172,7 @@ func TestInstallUsesMirrorAsset(t *testing.T) {
 	cat := &Catalog{Version: Version, Languages: []Entry{{Code: "hu", Name: "Hungarian", File: "hu.tsv.gz", Size: int64(len(asset)), SHA256: good}}}
 	u, _ := url.Parse(primary.URL + "/lemmas/manifest.json")
 	u.Host = "raw.githubusercontent.com"
-	u.Path = "/DMSHLabs/DictShelf/lemmas/manifest.json"
+	u.Path = "/DMSHLabs/lemmas/main/manifest.json"
 	cat.src = source{manifest: u}
 	e, _ := cat.Find("hu")
 	dst, err := cat.Install(context.Background(), t.TempDir(), e, nil)

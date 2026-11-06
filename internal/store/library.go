@@ -35,8 +35,8 @@ package store
 // be a genuine second source of truth.
 //
 // Whether a folder still matches its source is the meta's business
-// (source_size/source_mtime/source_sha256_1M via SourceChanged), so a changed
-// source is re-indexed *in place* instead of piling up stale files.
+// (source_size/source_sha256_1M via SourceChanged), so a changed source is
+// re-indexed *in place* instead of piling up stale files.
 
 import (
 	"fmt"
@@ -350,8 +350,9 @@ func writeClaim(dir, srcPath string) error {
 }
 
 // SourceChanged reports whether a source file no longer matches what its
-// prepared text.db was built from. Cheap first (size + mtime), and only when those differ does it
-// re-hash the first 1 MiB, so a mere touch or copy does not force a re-index.
+// prepared text.db was built from. A different size means changed content; at
+// the same size, compare the first 1 MiB hash. Modification time is not part of
+// the source identity, so a touch or copy does not force a re-index.
 // A missing source is NOT "changed": the prepared dictionary stands on its own.
 func SourceChanged(textDB, srcPath string) bool {
 	if _, err := os.Stat(srcPath); err != nil {
@@ -376,12 +377,8 @@ func sourceChangedMeta(meta map[string]string, srcPath string) bool {
 		return false
 	}
 	if size := meta["source_size"]; size != "" {
-		if n, err := strconv.ParseInt(size, 10, 64); err == nil && n == st.Size() {
-			if mt := meta["source_mtime"]; mt != "" {
-				if t, err := time.Parse(time.RFC3339, mt); err == nil && t.Equal(st.ModTime().UTC().Truncate(time.Second)) {
-					return false
-				}
-			}
+		if n, err := strconv.ParseInt(size, 10, 64); err == nil && n != st.Size() {
+			return true
 		}
 	}
 	want := meta["source_sha256_1M"]
@@ -635,7 +632,7 @@ func writeInfo(dir, source string) error {
 		src += "  [no longer on disk - this folder is now the only copy]"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "# wudict2 - prepared dictionary\n")
+	fmt.Fprintf(&b, "# DictShelf - prepared dictionary\n")
 	fmt.Fprintf(&b, "# This folder is one dictionary. Copy, move or zip it as a unit;\n")
 	fmt.Fprintf(&b, "# drop it into your dictionary folder to use it on another machine.\n")
 	fmt.Fprintf(&b, "# Regenerated automatically - edits are overwritten.\n\n")
@@ -699,7 +696,7 @@ func writeInfo(dir, source string) error {
 	if _, err := os.Stat(ArticlesFilePath(TextDBPath(dir))); err == nil {
 		// The article index as a file of its own: it is part of the dictionary's
 		// folder and must travel with it, which is why the receipt names it.
-		fmt.Fprintf(&b, ", %s (article index)", ArticlesDBName)
+		fmt.Fprintf(&b, ", %s (article full-text index)", ArticlesDBName)
 	}
 	fmt.Fprintf(&b, ", %s (this receipt)\n", InfoName)
 	return os.WriteFile(InfoPath(dir), []byte(b.String()), 0o644)

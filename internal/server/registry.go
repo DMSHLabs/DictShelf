@@ -444,7 +444,7 @@ type entry struct {
 	// and resets what disagrees (revalidate). dMu-guarded, like d and err.
 	backing string
 
-	// srcSig is the source file's size and mtime as they were when the backend
+	// srcSig is the source file's size and first-MiB hash as they were when the backend
 	// was opened (sourceSig), dMu-guarded like backing. Rescan compares it
 	// with the file now: a source replaced in place - a newer edition copied
 	// over the old one - leaves backing unchanged, so without this the entry
@@ -1796,16 +1796,27 @@ func (e *entry) revalidate() {
 		filepath.Base(e.Path), now != "")
 }
 
-// sourceSig is a cheap identity for a dictionary's source file: size and
-// modification time, or "" when it cannot be stat'ed. For a prepared
-// dictionary whose source is gone (a loose text.db) it describes the text.db
-// itself, which is what that entry's backend reads.
+// sourceSig identifies a dictionary source by size and the hash of its first
+// MiB. Modification time is deliberately excluded: rebuilding a prepared
+// index can touch timestamps without changing the dictionary. For a prepared
+// dictionary whose source is gone (a loose text.db) it describes text.db,
+// which is what that entry's backend reads.
 func sourceSig(path string) string {
 	st, err := os.Stat(path)
 	if err != nil {
 		return ""
 	}
-	return fmt.Sprintf("%d:%d", st.Size(), st.ModTime().UnixNano())
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	h := sha256.New()
+	_, copyErr := io.Copy(h, io.LimitReader(f, 1<<20))
+	closeErr := f.Close()
+	if copyErr != nil || closeErr != nil {
+		return ""
+	}
+	return fmt.Sprintf("%d:%x", st.Size(), h.Sum(nil))
 }
 
 // SourcePaths lists the path of every dictionary the user has, in every
