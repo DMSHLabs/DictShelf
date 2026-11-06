@@ -588,7 +588,7 @@ func Discover(root string) ([]string, error) {
 			// Hidden subtrees are not part of anyone's library. Skipped by
 			// rule rather than by naming the one that matters, because the
 			// list is open-ended: intake stages a half-extracted archive in
-			// ".wudict-intake" under the dictionary folder itself, and a scan
+			// ".dictShelf-intake" under the dictionary folder itself, and a scan
 			// racing an extraction would otherwise offer a dictionary whose
 			// files are still arriving. ".Trash", ".git" and macOS's
 			// ".Spotlight-V100" cost a full walk each for the same nothing.

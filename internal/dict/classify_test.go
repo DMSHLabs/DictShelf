@@ -143,7 +143,7 @@ func TestDiscoverSkipsHiddenDirectories(t *testing.T) {
 	RegisterFormat(".faketest", func(path string) (Dictionary, error) { return fakeDict{}, nil })
 	dir := t.TempDir()
 	mk(t, dir, "real.faketest")
-	mk(t, dir, ".wudict-intake/job1/half.faketest")
+	mk(t, dir, ".dictShelf-intake/job1/half.faketest")
 	mk(t, dir, ".git/objects/x.faketest")
 
 	got, err := Discover(dir)

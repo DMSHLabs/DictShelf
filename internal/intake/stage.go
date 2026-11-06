@@ -28,7 +28,7 @@ import (
 // It is hidden because dict.Discover skips hidden subtrees by rule: a scan
 // racing an extraction must not offer a dictionary whose files are still
 // arriving.
-const StageDirName = ".wudict-intake"
+const StageDirName = ".dictShelf-intake"
 
 // staleAfter is how old an abandoned staging directory must be before a sweep
 // removes it. A sweep runs at startup, when nothing of ours is extracting, but
