@@ -385,10 +385,15 @@ func sourceChangedMeta(meta map[string]string, srcPath string) bool {
 	if want == "" {
 		return false // nothing recorded to compare against
 	}
-	return sourceHash(srcPath) != want
+	return fsx.HashSample(srcPath) != want
 }
 
 // AbbrevChanged reports whether the abbreviation glossary a text.db was built
+// with differs from the one beside its source now. The identity is the file's
+// content (size plus fsx.HashSample, the same cheap signature the source
+// itself carries), because rebuilding the parent is what a false positive
+// costs; its timestamp decides only for a database built before the hash was
+// recorded, so an old library is never judged more weakly than it was.
 // with differs from the one beside its source now. DSL absorbs that companion
 // at ingest and bakes the expansions into the articles, so the answer decides
 // whether those articles still tell the truth.
@@ -423,6 +428,12 @@ func abbrevChangedMeta(meta map[string]string, companionPath string) bool {
 	}
 	if n, err := strconv.ParseInt(meta["abbrev_size"], 10, 64); err != nil || n != st.Size() {
 		return true
+	}
+	// The hash is the identity; the timestamp only decides for a database built
+	// before the hash was recorded (a rebuild writes it), so an old library is
+	// never judged more weakly than it was.
+	if want := meta["abbrev_sha256"]; want != "" {
+		return fsx.HashSample(companionPath) != want
 	}
 	t, err := time.Parse(time.RFC3339, meta["abbrev_mtime"])
 	return err != nil || !t.Equal(st.ModTime().UTC().Truncate(time.Second))

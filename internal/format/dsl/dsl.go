@@ -18,7 +18,7 @@ import (
 // ReaderVersion is the behaviour version of this format's Reader (see
 // dict.RegisterReaderVersion). Bump it in the same commit as any change to
 // what the Reader yields, and update the golden in reader_golden_test.go.
-const ReaderVersion = 12
+const ReaderVersion = 13
 
 var titleRepairsEnabled atomic.Bool
 
