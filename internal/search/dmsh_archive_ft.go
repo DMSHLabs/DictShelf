@@ -42,7 +42,7 @@ type ArchiveFullText interface {
 //
 // It has no positions - libzim indexed the articles with
 // index_text_without_positions - so "are these words adjacent, in this order"
-// and "are they within ten of each other" cannot be asked of it. They are
+// and "are they within the near window" cannot be asked of it. They are
 // answered instead by verifying them in the article text of the candidates the
 // index returns, bounded by maxCheck: a promise about what was checked, which
 // is why the caller is told the count rather than handed a silent prefix.

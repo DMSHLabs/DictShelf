@@ -30,8 +30,11 @@
 // The ladder resolves it without asking the user to choose a mode:
 //
 //	rung 1  phrase   "w1 w2 … wn"*      the words, adjacent, in order
-//	rung 2  near     NEAR("w1"* … , 10) the words, close together, any order
+//	rung 2  near     NEAR("w1"* … , n)  the words, close together, any order
 //	rung 3  words    "w1"* "w2"* …      the words, anywhere in the article
+//
+// The near window n is the reader's own setting (Settings → Results, ten by
+// default, resolved by ResolveNear); everything else here is fixed.
 //
 // A rung is descended ONLY on zero results, so the precise reading always wins
 // when it can answer, and the user is told which rung answered - a silent
@@ -69,12 +72,26 @@ const (
 	// omitted, and is the rung-2 window: close enough that the words belong to
 	// one thought, wide enough to survive an inserted clause.
 	//
-	// It is exported because a reader can see this number: the "near" mode's
-	// mark in the search control draws it over the arrow between the two words
-	// (web/index.html, NEAR_WORDS), and a mark that quotes a rule has to quote
-	// the rule that runs - TestModeMarksQuoteTheNearRule fails if the two
-	// spellings drift apart.
+	// It is also the default of the reader's own setting (Settings → Results,
+	// the nearWords pref): the number a reader sees in the near hint is the
+	// number the search runs with, resolved by ResolveNear, so the hint, the
+	// archive reader and the search cannot spell three different windows.
 	NearDefault = 10
+
+	// NearMin and NearMax bound that setting, and are the one place the bounds
+	// exist: the settings panel renders them into the page, the server clamps a
+	// stored value to them, and ResolveNear is what both sides call.
+	//
+	// One is the floor because zero words between two words IS the phrase
+	// reading, which the reader can ask for by name - a "near" that matches a
+	// phrase exactly is a second name for the same answer. Fifty is where
+	// proximity stops differing from "anywhere": a sentence runs 15-25 words and
+	// a paragraph 50-100, so past a paragraph the reading has no window left to
+	// promise. The ceiling is semantic, not measured; the cost of a wide window
+	// (FTS5's NEAR, the archive's pairwise check, the dialog's scan) has not
+	// been benchmarked, and a measurement may lower it.
+	NearMin = 1
+	NearMax = 50
 
 	// MaxTokens bounds a hostile query. Every token costs a phrase slot in the
 	// highlighter and a term in the FTS5 expression tree; a thousand-word paste
@@ -136,9 +153,18 @@ func Parse(input string) *Query {
 	return q
 }
 
-// Rungs returns the ladder to run in order. It is nil when there is nothing to
-// search for, and has exactly one entry for an explicit query or a single word.
-func (q *Query) Rungs() []Rung {
+// Rungs returns the ladder as it stands with no reader setting: the near rung
+// counts NearDefault words.
+func (q *Query) Rungs() []Rung { return q.RungsWith(NearDefault) }
+
+// RungsWith is Rungs for the near distance the reader chose. Only the number
+// inside the near expression differs; an explicit query keeps its own reading
+// and its own typed distance, because the reader who wrote NEAR(a b, 5) asked
+// for five. The setting is resolved HERE as well as where it is stored, so that
+// a zero - "nobody chose one" - cannot reach the expression as "no words
+// between", which is the phrase reading wearing the near name.
+func (q *Query) RungsWith(near int) []Rung {
+	near = ResolveNear(near)
 	if q == nil {
 		return nil
 	}
@@ -164,9 +190,21 @@ func (q *Query) Rungs() []Rung {
 	bagMatch, bagMarks := bag(q.words)
 	return []Rung{
 		{Name: "phrase", Match: quote(q.words) + "*", Marks: []hilite.Phrase{ph}},
-		{Name: "near", Match: "NEAR(" + bagMatch + ", " + strconv.Itoa(NearDefault) + ")", Marks: bagMarks},
+		{Name: "near", Match: "NEAR(" + bagMatch + ", " + strconv.Itoa(near) + ")", Marks: bagMarks},
 		{Name: "words", Match: bagMatch, Marks: bagMarks},
 	}
+}
+
+// ResolveNear turns a stored setting into the distance to run with: zero (or
+// anything below the floor) means the reader never chose one, and a value above
+// the ceiling is the ceiling. It is the ONE resolution - the server's clamp, the
+// search's rung, the archive reader and the page's stepper all come through it,
+// so a hand-edited state file cannot make the search and its own hint disagree.
+func ResolveNear(setting int) int {
+	if setting < NearMin {
+		return NearDefault
+	}
+	return min(setting, NearMax)
 }
 
 // bag lowers words into independent prefix terms - FTS5 reads juxtaposition as
