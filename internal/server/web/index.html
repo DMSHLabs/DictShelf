@@ -968,8 +968,14 @@ window.wudictFontScale=(function(){
 <dialog id="articleFindDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="articleFindTitle">
   <h2 id="articleFindTitle">{{T:articleFind.title}}<button type="button" class="btn" id="articleFindClose" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
   <div class="article-find-query-row"><label for="articleFindQuery">{{T:articleFind.query}}</label><div id="articleFindQueryBox" class="article-find-query-box"><input type="text" id="articleFindQuery" autocomplete="off" spellcheck="false" aria-haspopup="listbox" aria-controls="articleFindHistory" aria-expanded="false"><div id="articleFindHistory" class="search-history article-find-history" role="listbox" aria-label="{{T:search.history}}" hidden></div></div></div>
+  <!-- The two word readings stand with the headword modes: they are the
+       dialog's own matching over the rendered article too - [A B] the words
+       adjacent and in order, [A ↔ B] the words within the bound in any order -
+       while the "full text" reading below them is not matching at all but
+       navigation of the marks the server's answer carries, and joins the list
+       only while such an answer is on screen. -->
   <label class="article-find-mode" for="articleFindMode">{{T:articleFind.mode}}<select id="articleFindMode" aria-label="{{T:articleFind.mode}}">
-    <option value="prefix">{{T:search.prefix}}</option><option value="suffix">{{T:search.suffix}}</option><option value="contains" selected>{{T:dictUI.contains}}</option><option value="word">{{T:browse.findModeWord}}</option><option value="wordLemma">{{T:browse.findModeWordLemma}}</option><option value="fts" hidden>{{T:articleFind.fullText}}</option>
+    <option value="prefix">{{T:search.prefix}}</option><option value="suffix">{{T:search.suffix}}</option><option value="contains" selected>{{T:dictUI.contains}}</option><option value="word">{{T:browse.findModeWord}}</option><option value="wordLemma">{{T:browse.findModeWordLemma}}</option><option value="phrase">{{T:search.modePhrase}}</option><option value="near">{{T:search.modeNear}}</option><option value="fts" hidden>{{T:articleFind.fullText}}</option>
   </select></label>
   <label><input type="checkbox" id="articleFindCase">{{T:articleFind.case}}</label>
   <label><input type="checkbox" id="articleFindAll" checked>{{T:articleFind.all}}</label>
@@ -10460,8 +10466,12 @@ function navPos(){
      drawn are short of the truth and the total has to say so. It uses the same
      "+" the dialog's own scan already puts on its count for the same reason. */
   const partial=count>0&&!!window.wudictArticleFindHasMore?.();
+  /* `reading` is the mode this answer ran: the dialog offers the two word
+     readings, and opened from a search that ran one of them it is filled from
+     that search's words - its phrase reading from a phrase search, and not from
+     a search that asked for something else (article-find.js, open). */
   window.wudictArticleFind?.setFullTextNavigation({
-    query:lastQuery,generation:searchSeq,position:count?tx("articleFind.position",{current:navIdx+1,total:count+(partial?"+":"")})+(block?" · "+block:""):tx("articleFind.noMatches"),visible:count>0,canNavigate:canPrevious||canNext,canPrevious,canNext,total:count,current:navIdx+1,
+    query:lastQuery,generation:searchSeq,reading:lastSearchMode,position:count?tx("articleFind.position",{current:navIdx+1,total:count+(partial?"+":"")})+(block?" · "+block:""):tx("articleFind.noMatches"),visible:count>0,canNavigate:canPrevious||canNext,canPrevious,canNext,total:count,current:navIdx+1,
     previous:()=>navGo(-1),next:()=>navGo(1),
     refresh:()=>navPos(),
     goto:page=>navGoto(page),
