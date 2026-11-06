@@ -62,17 +62,20 @@ query is literal text.
 
 ### Unquoted queries
 
-A query of several words, without quotes or operators, is matched in up to
-three stages. Each dictionary stops at the first stage that returns results.
+The **Words** reading admits a query of several words without quotes or
+operators, and matches it in up to three stages; each dictionary stops at the
+first stage that returns results. Choosing **Phrase** or **Near** asks for that
+one reading and answers with it - there is no ladder to descend.
 
 | Stage | Matches | `no pun intended` finds |
 | --- | --- | --- |
 | **phrase** | the words adjacent, in the given order | *…and, **no pun intended**, he resigned* |
-| **proximity** | all words, at most the configured number of words between them (10 by default), in any order | *…clearly **intended** as a **pun**…* |
-| **anywhere** | all words anywhere in the article | *…**pun** … **intended**…* |
+| **near** | all words, at most the configured number of words between them (10 by default), in any order | *…clearly **intended** as a **pun**…* |
+| **words** | all words anywhere in the article | *…**pun** … **intended**…* |
 
-The result header of a dictionary answered at the second or third stage shows
-*phrase not found · words proximity* or *phrase not found · words anywhere*.
+The header of a dictionary shows its count; **the reading that answered is not
+announced** - a full-text mode asks for one reading and has no relaxation to
+explain. What the reading matched is what the article's marks highlight.
 
 ## Inflected words
 

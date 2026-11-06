@@ -10,7 +10,7 @@ description: How a full-text query is read - quotes, AND, OR, NOT, NEAR, prefixe
 A query is read in one of two ways:
 
 -   **Unquoted**: no quotes and no operators. It is matched in stages: phrase,
-    proximity, anywhere ([Unquoted queries](../start/search.md#unquoted-queries)).
+    near, words ([Unquoted queries](../start/search.md#unquoted-queries)).
     Each word also matches as a prefix (`pun` finds *puns*); in the phrase
     stage, only the last word.
 -   **Explicit**: the query contains a quote, or `AND`, `OR`, `NOT` or `NEAR(`

@@ -53,7 +53,7 @@ nothing sent anywhere.
     there is in all, and the whole list is there to page through; nothing is cut
     off at a fixed number.
 -   **Full text** — search the bodies of the articles, not only their headwords,
-    with phrase and proximity readings when the exact wording is not what you
+    with phrase and near readings when the exact wording is not what you
     remember.
 -   **Supported formats** — MDict (`.mdx`), StarDict (`.ifo`), AARD2 (`.slob`),
     Babylon (`.bgl`), ZIM (`.zim`), Lingvo (`.lsd`/`.dsl`/`.dsl.dz`/`.dsl.dz2`),
