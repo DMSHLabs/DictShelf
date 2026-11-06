@@ -5,6 +5,8 @@
 # Windows builds produced by build-windows.cmd. These are local build products;
 # the installer and CI artifacts are handled separately.
 /DictShelf.exe
+# `make build` names the binary `dictshelf` WITHOUT .exe, even on Windows.
+/dictshelf
 # Ignore pre-rename local binaries without deleting an existing build.
 /wuDict2.exe
 /wuDict2-cli.exe
