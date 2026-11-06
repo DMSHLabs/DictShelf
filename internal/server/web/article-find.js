@@ -252,15 +252,21 @@ function lemmaFor(host,query){
 function escapeRE(value){return value.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}
 /* Phrase and near are not one pattern but a rule over the WORDS of the query -
    [A B] the words adjacent and in this order, [A ↔ B] the words within the
-   bound and in any order - so they are matched on the words of the block
-   instead of by a regular expression. The bound is not written here: the near
-   hint is the one place the number lives (the Go side pins that hint to
-   ftsq.NearDefault in both catalogs, TestModeMarksQuoteTheNearRule), and the
-   rule below reads it back from the very words the reader is shown. */
+   window and in any order - so they are matched on the words of the block
+   instead of by a regular expression. */
 const wordRun=/[\p{L}\p{M}\p{N}_]+/gu;
+/* The window near counts with is the reader's setting (Settings → Results, 1…50,
+   ten by default), and the page mirrors the resolved number for anything outside
+   its own scope as window.wudictNearWords. That mirror is what this reads: the
+   hint under the mode states the same number, but it is a plural TEMPLATE whose
+   {number} the page fills in, so reading the sentence back is only the fallback
+   for a page that mirrors nothing (the check stand) - and one word apart is the
+   last resort there, not a promise of anywhere. */
 function nearWords(){
+  const chosen=Number(window.wudictNearWords);
+  if(Number.isFinite(chosen)&&chosen>0)return chosen;
   const quoted=String(t("search.modeHintNear")).match(/\d+/u);
-  return quoted?Number(quoted[0]):1; // unreachable: both catalogs state the number
+  return quoted?Number(quoted[0]):1;
 }
 function wordKey(word){return options.matchCase?word:word.toLowerCase()}
 function wordReading(){return options.mode==="phrase"||options.mode==="near"}

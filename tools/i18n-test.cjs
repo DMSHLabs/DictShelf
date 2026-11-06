@@ -48,6 +48,18 @@ for (const language of ['en', 'ru']) {
   vm.runInNewContext(main.match(/function themedModeHint\(mode\)\{[\s\S]*?\n}/)[0], nearContext);
   assert.equal(nearContext.themedModeHint('near'), t('search.modeHintNear', {count: 25, number: '25'}));
   assert.equal(nearContext.themedModeHint('phrase'), 'ph');
+  // The find dialog reads that window too, and it must read it as a NUMBER: the
+  // sentence is a plural template whose {number} the page fills in, so asking
+  // t(key) without params hands back a literal placeholder. A merge of these two
+  // features shipped exactly that - the dialog fell back to one word apart - and
+  // this is the assertion that fails when the mirror stops being read first.
+  const findJS = fs.readFileSync(path.join(web, 'article-find.js'), 'utf8');
+  const dialogContext = {t: (key, params) => t(key, params ?? {count: 10, number: '10'}),
+    window: {wudictNearWords: 25}};
+  vm.runInNewContext(findJS.match(/function nearWords\(\)\{[\s\S]*?\n}/)[0], dialogContext);
+  assert.equal(dialogContext.nearWords(), 25); // the setting, through the page's mirror
+  delete dialogContext.window.wudictNearWords;
+  assert.equal(dialogContext.nearWords(), 10); // no mirror: the sentence, as the page renders it
   // Changing orphan choices only changes translated labels, never selections.
   const orphanBoxes=[{checked:true,dataset:{size:12}},{checked:false,dataset:{size:8}}];
   const orphanGo={classList:{toggle(){}}},orphanAll={};
