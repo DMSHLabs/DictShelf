@@ -92,7 +92,7 @@ func searchModeForArticleCache(value string) (string, error) {
 }
 
 func articleFullTextMatch(query, rung string) (string, error) {
-	for _, candidate := range ftsq.Parse(query).Rungs() {
+	for _, candidate := range ftsq.Parse(query).RungsWith(search.NearWords()) {
 		if candidate.Name == rung {
 			return candidate.Match, nil
 		}

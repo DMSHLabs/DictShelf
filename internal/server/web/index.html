@@ -576,6 +576,19 @@ window.wudictFontScale=(function(){
   <p class="font-scale-hint">{{T:panel.resultPageSizeHint}}</p>
   <div class="facts">
     <div class="history-setting">
+      <label for="nearWords">{{T:panel.nearWords}}</label>
+      <span class="number-stepper" role="group" aria-label="{{T:panel.nearWords}}">
+        <input id="nearWords" class="number-stepper-input" type="number" min="{{NEAR_WORDS_MIN}}" max="{{NEAR_WORDS_MAX}}" step="1" inputmode="numeric" value="{{NEAR_WORDS_DEFAULT}}" aria-label="{{T:panel.nearWords}}">
+        <span class="number-stepper-buttons">
+          <button type="button" class="number-step-button" data-near-words-step="1" aria-label="{{T:panel.increase}} {{T:panel.nearWords}}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 7.5 6 3l4 4.5z"/></svg></button>
+          <button type="button" class="number-step-button" data-near-words-step="-1" aria-label="{{T:panel.decrease}} {{T:panel.nearWords}}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2 4.5 4 4 4-4z"/></svg></button>
+        </span>
+      </span>
+    </div>
+  </div>
+  <p class="font-scale-hint">{{T:panel.nearWordsHint}}</p>
+  <div class="facts">
+    <div class="history-setting">
       <label for="suggestionPerDictionary">{{T:panel.suggestionPerDictionary}}</label>
       <span class="number-stepper" role="group" aria-label="{{T:panel.suggestionPerDictionary}}">
         <input id="suggestionPerDictionary" class="number-stepper-input" type="number" min="1" max="500" step="1" inputmode="numeric" value="40" aria-label="{{T:panel.suggestionPerDictionary}}">
@@ -1579,6 +1592,31 @@ for(const button of document.querySelectorAll("[data-suggestion-step]"))button.a
   const current=kind==="per-dictionary"?suggestionPerDictionary:suggestionListLimit;
   setSuggestionLimit(kind,current+(Number(step)||0));
 });
+/* The "near" reading's window (Settings → Results). A server pref, not a
+   localStorage choice, because it is an instruction to the search path: the
+   server hands the same resolved number to the FTS5 rung, to the archive reader
+   and - through the hint under the mode - to the reader. The floor, the default
+   and the ceiling are rendered from the Go constants that enforce them
+   (internal/ftsq, {{NEAR_WORDS_*}}), so this panel cannot offer a number the
+   search would refuse. */
+const nearWordsMin={{NEAR_WORDS_MIN}},nearWordsDefault={{NEAR_WORDS_DEFAULT}},nearWordsMax={{NEAR_WORDS_MAX}};
+let nearWords=nearWordsDefault;
+function syncNearWords(){
+  const input=$("nearWords");
+  if(input)input.value=String(nearWords);
+  window.wudictNearWords=nearWords;
+}
+function setNearWords(value){
+  const n=Math.floor(Number(value));
+  if(!Number.isFinite(n))return;
+  nearWords=Math.max(nearWordsMin,Math.min(nearWordsMax,n));
+  syncNearWords();savePrefs(true);
+}
+$("nearWords")?.addEventListener("change",e=>setNearWords(e.target.value));
+for(const button of document.querySelectorAll("[data-near-words-step]"))button.addEventListener("click",()=>{
+  setNearWords(nearWords+(Number(button.dataset.nearWordsStep)||0));
+});
+syncNearWords();
 const searchPortionInput=$("searchPageSize");
 if(searchPortionInput){
   searchPortionInput.value=String(searchPortionSize());
@@ -2013,6 +2051,8 @@ async function loadPrefs(){
       suggestionPerDictionary=Math.max(1,Math.min(500,Number(st.ui.suggestionPerDictionary)||40));
       suggestionListLimit=Math.max(1,Math.min(500,Number(st.ui.suggestionListLimit)||500));
       syncSuggestionLimits();
+      nearWords=Math.max(nearWordsMin,Math.min(nearWordsMax,Number(st.ui.nearWords)||nearWordsDefault));
+      syncNearWords();
       $("countAllResultsInBackground").checked=countAllResultsInBackground;
       combinedDictionaryLimit=Math.max(1,Math.min(Number(st.ui.combinedDictionaryLimit)||defaultCombinedDictionaryLimit,maxCombinedDictionaryLimit));syncCombinedDictionaryLimitUI();
       searchThreads=Math.max(0,Math.min(Number(st.ui.searchThreads)||0,maxSearchThreads));syncSearchThreadsUI()}
@@ -2089,6 +2129,7 @@ function savePrefs(now){
     ui:{fontSize:articleFS,fontWeight:articleFW,fontFamily:articleFont,hlOff:!hlOn,speakOff:!speakOn,dictIconsOff:!dictIconsOn,fastFirst:!orderFirst,hideUnmarkedExamples,exampleBackgroundOff:!dimExampleBackground,fadeExampleText,customOrder:prefCustomOrder,
       countAllResultsInBackground,
       suggestionPerDictionary,suggestionListLimit,
+      nearWords,
       resultCacheLimitGB,resultCacheNoLimit,combinedDictionaryLimit,searchReturnCache:searchReturnCacheStorage,updateChannel,
       searchThreads,
       updateNotificationsOff:!updateNotifications}});
@@ -12379,7 +12420,16 @@ const themedModeDescriptions={prefix:tx("browse.findModePrefix"),suffix:tx("brow
 const themedModeHints={prefix:tx("search.modeHintPrefix"),suffix:tx("search.modeHintSuffix"),contains:tx("search.modeHintContains"),
   word:tx("search.modeHintWord"),wordLemma:tx("search.modeHintWordLemma"),exact:tx("search.modeHintExact"),
   exactLemma:tx("search.modeHintExactLemma"),wildcards:tx("search.modeHintWildcards"),
-  phrase:tx("search.modeHintPhrase"),near:tx("search.modeHintNear"),fts:tx("search.modeHintWords")};
+  phrase:tx("search.modeHintPhrase"),fts:tx("search.modeHintWords")};
+/* The near hint is the one that cannot be a constant: it states the window the
+   search runs with, and that window is the reader's setting. So it is built
+   here, from the same number the settings stepper shows and the server hands to
+   the search - one value, three readers, and the plural forms of the catalogues
+   do the wording. */
+function themedModeHint(mode){
+  if(mode==="near")return tx("search.modeHintNear",{count:nearWords,number:window.wudictI18n.number(nearWords)});
+  return themedModeHints[mode];
+}
 /* ── the prunable search menu ────────────────────────────────────────
    The gear in the mode menu's top-right corner turns its rows into checkboxes:
    a tick keeps a command, an empty box hides it, and the tick applies while
@@ -12426,7 +12476,7 @@ function themedSelect(select,button,menu){
         title.textContent=themedModeDescriptions[option.value]||option.textContent;
         copy.append(title);
         const hintText=select.id==="articleFindMode"&&option.value==="fts"?tx("articleFind.fullTextHint"):
-          select.id==="articleFindMode"&&option.value==="wordLemma"?tx("articleFind.modeHintWordLemma"):themedModeHints[option.value];
+          select.id==="articleFindMode"&&option.value==="wordLemma"?tx("articleFind.modeHintWordLemma"):themedModeHint(option.value);
         if(hintText){const hint=document.createElement("small");hint.className="headword-control-find-option-hint";hint.textContent=hintText;copy.append(hint)}
         item.append(icon,copy);
       }else item.textContent=option.textContent;
@@ -12453,7 +12503,7 @@ function themedSelect(select,button,menu){
     const copy=document.createElement("span");copy.className="headword-control-find-option-copy";
     const title=document.createElement("span");title.className="headword-control-find-option-title";
     title.textContent=themedModeDescriptions[mode]||fallback;copy.append(title);
-    if(themedModeHints[mode]){const hint=document.createElement("small");hint.className="headword-control-find-option-hint";hint.textContent=themedModeHints[mode];copy.append(hint)}
+    if(themedModeHint(mode)){const hint=document.createElement("small");hint.className="headword-control-find-option-hint";hint.textContent=themedModeHint(mode);copy.append(hint)}
     return copy;
   }
   function modeMenuRow(option,ctl){

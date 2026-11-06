@@ -324,7 +324,12 @@
   "search.modeHintWildcards": "(*wo?k* → worked in)",
   "search.modeHintFullText": "(word → matching article)",
   "search.modeHintPhrase": "— слова подряд, в этом порядке",
-  "search.modeHintNear": "— не дальше 10 слов друг от друга",
+  "search.modeHintNear": {
+    "one": "— не дальше {number} слова",
+    "few": "— не дальше {number} слов друг от друга",
+    "many": "— не дальше {number} слов друг от друга",
+    "other": "— не дальше {number} слов друг от друга"
+  },
   "search.modeHintWords": "— все слова, где угодно в статье",
   "search.needsIndex": "По индексу архива найдены все слова. Точная фраза — после постройки нашего индекса:",
   "search.needsIndexBuild": "Построить",
@@ -451,6 +456,8 @@
   "panel.searchAllResultsInBackground": "Искать все совпадения в фоне",
   "panel.resultPageSize": "Результатов в порции:",
   "panel.resultPageSizeHint": "Выберите, сколько статей загружать за один раз после первых результатов.",
+  "panel.nearWords": "«Рядом»: сколько слов может стоять между:",
+  "panel.nearWordsHint": "Расстояние, с которым ищет режим «Рядом»: сколько слов может стоять между словами запроса. По умолчанию 10. Минимум 1: ноль слов между означает чтение «Фраза».",
   "panel.suggestionPerDictionary": "Подсказок с каждого словаря:",
   "panel.suggestionListLimit": "Максимальная длина списка подсказок:",
   "panel.suggestionLimitsHint": "Эти ограничения относятся к подсказкам заголовков при вводе запроса.",

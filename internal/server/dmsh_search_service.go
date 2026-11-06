@@ -90,8 +90,9 @@ type SearchEvent struct {
 	Error   string        `json:"error,omitempty"`
 
 	// Rung says which reading of a full-text query this dictionary answered:
-	// "phrase" (the words adjacent, in order), "near" (within ten tokens, any
-	// order) or "words" (anywhere in the article). Absent in every other mode.
+	// "phrase" (the words adjacent, in order), "near" (within the configured
+	// window, ten tokens by default, any order) or "words" (anywhere in the
+	// article). Absent in every other mode.
 	//
 	// It is reported because the relaxation is silent otherwise, and a search
 	// tool that quietly answers a weaker question than the one asked is lying

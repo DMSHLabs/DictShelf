@@ -32,6 +32,22 @@ for (const language of ['en', 'ru']) {
   }};
   vm.runInNewContext(script, context);
   const {t} = context.window.wudictI18n;
+  // The near mode's hint states the reader's window: the catalogues hold the
+  // sentence and the page fills the number in (the window is a setting), so
+  // every plural form has to render with the number in it and no placeholder
+  // left over - one word, a few, ten, and a value past ten.
+  for (const words of [1, 2, 5, 10, 25]) {
+    const hint = t('search.modeHintNear', {count: words, number: String(words)});
+    assert.ok(hint.includes(String(words)), `near hint for ${words} lost the number: ${hint}`);
+    assert.ok(!hint.includes('{'), `near hint for ${words} kept a placeholder: ${hint}`);
+  }
+  // The page composes that hint from the setting, so the sentence a reader reads
+  // carries the number the search runs with rather than a catalogue constant.
+  const nearContext = {tx: t, nearWords: 25, themedModeHints: {phrase: 'ph'},
+    window: {wudictI18n: context.window.wudictI18n}};
+  vm.runInNewContext(main.match(/function themedModeHint\(mode\)\{[\s\S]*?\n}/)[0], nearContext);
+  assert.equal(nearContext.themedModeHint('near'), t('search.modeHintNear', {count: 25, number: '25'}));
+  assert.equal(nearContext.themedModeHint('phrase'), 'ph');
   // Changing orphan choices only changes translated labels, never selections.
   const orphanBoxes=[{checked:true,dataset:{size:12}},{checked:false,dataset:{size:8}}];
   const orphanGo={classList:{toggle(){}}},orphanAll={};

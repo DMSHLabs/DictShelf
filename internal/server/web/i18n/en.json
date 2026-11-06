@@ -324,7 +324,10 @@
   "search.modeHintWildcards": "(*wo?k* → worked in)",
   "search.modeHintFullText": "(word → matching article)",
   "search.modeHintPhrase": "— the words adjacent, in this order",
-  "search.modeHintNear": "— within 10 words of each other",
+  "search.modeHintNear": {
+    "one": "— within {number} word of each other",
+    "other": "— within {number} words of each other"
+  },
   "search.modeHintWords": "— the words anywhere in the article",
   "search.needsIndex": "The archive's index found all the words. The exact phrase needs our index:",
   "search.needsIndexBuild": "Build",
@@ -447,6 +450,8 @@
   "panel.searchAllResultsInBackground": "Search all matches in the background",
   "panel.resultPageSize": "Results per portion:",
   "panel.resultPageSizeHint": "Choose how many articles to load at a time after the first results.",
+  "panel.nearWords": "Near: how many words may stand between:",
+  "panel.nearWordsHint": "The distance the Near mode searches with: the number of words that may stand between the words of a query. The default is 10. The minimum is 1: zero words between means the Phrase reading.",
   "panel.suggestionPerDictionary": "Suggestions per dictionary:",
   "panel.suggestionListLimit": "Maximum suggestion list length:",
   "panel.suggestionLimitsHint": "These limits apply to headword suggestions while you type.",
