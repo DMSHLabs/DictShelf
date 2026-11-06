@@ -378,6 +378,18 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 			return nil, fmt.Errorf("invalid import selection: %w", err)
 		}
 		return s.desktopIntakeConfirm(request)
+	case "intakeCancelDictionary":
+		if len(argument) > 4096 {
+			return nil, errors.New("invalid dictionary group")
+		}
+		var request struct {
+			ID    string `json:"id"`
+			Group int    `json:"group"`
+		}
+		if json.Unmarshal([]byte(argument), &request) != nil || request.ID == "" || request.Group < 0 {
+			return nil, errors.New("invalid dictionary group")
+		}
+		return s.desktopIntakeCancelDictionary(request.ID, request.Group), nil
 	case "intakeCancel":
 		return s.desktopIntakeCancel(argument), nil
 	case "power":

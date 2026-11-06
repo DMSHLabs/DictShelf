@@ -403,6 +403,8 @@ func WudictGoBridgeIntake(action, argument *C.char) *C.char {
 		method = "intakeConfirm"
 	case "cancel":
 		method = "intakeCancel"
+	case "cancelDictionary":
+		method = "intakeCancelDictionary"
 	case "fileStart":
 		method = "intakeFileStart"
 	case "fileChunk":

@@ -239,6 +239,26 @@ async function save(){
    what is copied where) stays here (D102): the page asks for a file and shows
    dictionaries. */
 let impTimer=null,impBusy=false;
+const megaResumeKey="wudict_mega_folder_resume";
+let megaResume=null,megaRestoreSelection=null,impJobID="";
+function readMegaResume(){
+  try{const value=JSON.parse(localStorage.getItem(megaResumeKey)||"null");
+    return value&&typeof value.url==="string"&&typeof value.dir==="string"?value:null}catch(_){return null}
+}
+function writeMegaResume(value){
+  try{if(value)localStorage.setItem(megaResumeKey,JSON.stringify(value));else localStorage.removeItem(megaResumeKey)}catch(_){}
+  megaResume=value||null;
+}
+function megaFolderLink(raw){
+  try{const u=new URL(raw),host=u.hostname.toLowerCase().replace(/^www\./,"");return (host==="mega.nz"||host==="mega.co.nz")&&/^\/folder\//i.test(u.pathname)}catch(_){return false}
+}
+function persistMegaSelection(phase="selecting"){
+  const saved=megaResume||readMegaResume();if(!saved||!megaFolderMode)return;
+  const groups=[...new Set([...folderFileGroups,...folderInstalledGroups])].map(i=>folderCandidateNames.get(i)).filter(Boolean);
+  const installed=[...folderInstalledGroups].map(i=>folderCandidateNames.get(i)).filter(Boolean);
+  const extras=[...folderFileExtras].map(i=>folderFileEntries.find(f=>f.extra===i)?.name).filter(Boolean);
+  writeMegaResume({...saved,groups,installed,extras,phase,preexisting:saved.preexisting||[]});
+}
 // decimal, the rule of index.html's mb and the server's logx.Size
 const sizeMB=n=>n<1e3?n+" B":n<1e6?Math.round(n/1e3)+" kB":n<1e7?(n/1e6).toFixed(1)+" MB":n<1e9?Math.round(n/1e6)+" MB":(n/1e9).toFixed(1)+" GB";
 
@@ -334,6 +354,11 @@ async function impFetch(){
   if(!u||impBusy)return;
   impBusy=true;
   const dir=await ensureImportDestination();if(!dir){impBusy=false;return}
+  if(megaFolderLink(u)){
+    const saved={url:u,dir,groups:[],installed:[],extras:[],phase:"listing"};
+    writeMegaResume(saved);megaRestoreSelection=null;
+    return requestMegaFolder(u,dir,saved,false);
+  }
   let host="";try{host=new URL(u).hostname}catch(_){}
   impSay(host?tx("pages.connectingTo",{host}):tx("pages.connecting"));
   $("found").classList.add("hidden");
@@ -350,11 +375,38 @@ async function impFetch(){
   impPoll();
 }
 
+async function requestMegaFolder(url,dir,saved,recovery=true){
+  let r,j,host="";try{host=new URL(url).hostname}catch(_){}
+  impBusy=true;
+  if(saved){megaResume=saved;megaRestoreSelection=saved}
+  impSay(host?tx("pages.connectingTo",{host}):tx("pages.connecting"));
+  $("found").classList.add("hidden");
+  try{
+    if(window.wudictAndroidGo)j=androidIntakeCall("url",JSON.stringify({url,dir}));
+    else if(typeof nativeSetupCall==="function")j=await nativeSetupCall("intakeURL",JSON.stringify({url,dir}));
+    else{r=await browserHTTP("/api/intake?url="+encodeURIComponent(url)+"&dir="+encodeURIComponent(dir),{method:"POST"});j=await r.json()}
+  }catch(e){impBusy=false;folderJobBusy=false;if(folderResumeAfterReload){folderResumeAfterReload=false;folderNeedsReload=true}updateFolderInstall();if(!recovery)writeMegaResume(null);impSay("✕ "+(window.wudictI18n.errorText(e.message)||tx("pages.cannotOpenMark")),"err");return}
+  impBusy=false;
+  if(r&&!r.ok||j.error){folderJobBusy=false;if(folderResumeAfterReload){folderResumeAfterReload=false;folderNeedsReload=true}updateFolderInstall();if(!recovery)writeMegaResume(null);impSay("✕ "+(window.wudictI18n.errorText(j&&j.error)||tx("pages.cannotOpen")),"err");return}
+  $("url").value="";impRender(j);impPoll();
+}
+
+async function restoreMegaFolder(saved){
+  if(!saved||impBusy)return;
+  megaResume=saved;megaRestoreSelection=saved;
+  activateSetupTab("downloadTab");
+  $("importTarget").value=saved.dir;
+  if(!await validateImportTarget(saved.dir)||importDestination()!==saved.dir){
+    impSay("✕ "+tx("pages.importFolderRequired"),"err");return;
+  }
+  await requestMegaFolder(saved.url,saved.dir,saved,true);
+}
+
 /* How many file names a row shows before it counts instead: a StarDict set is
    four files and a resource folder, and the list must not become the row. The
    same cut as the phone's, so the two surfaces say the same sentence. */
 const FILES_SHOWN=3;
-let folderFileGroups=new Set(),folderFileExtras=new Set(),folderSearch=null,megaFolderMode=false,folderFileEntries=[],folderFileSort={field:"name",direction:1};
+let folderFileGroups=new Set(),folderInstalledGroups=new Set(),folderFileExtras=new Set(),folderCandidateNames=new Map(),folderCandidates=[],folderSearch=null,megaFolderMode=false,folderFileEntries=[],folderFileSort={field:"name",direction:1},folderResumeMode=false,folderJobBusy=false,folderNeedsReload=false,folderResumeAfterReload=false;
 function folderFileGroup(f){return f.group>=0?"g:"+f.group:"f:"+f.name}
 function folderFileOrder(){
   const compareName=(a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:"base"});
@@ -366,24 +418,53 @@ function folderFileOrder(){
 function renderFolderFileRows(){
   const rows=document.getElementById("folderFileRows");rows.textContent="";
   for(const f of folderFileOrder()){
-    const row=el("label","folder-file"+(f.selectable?"":" disabled")),cb=el("input");
-    cb.type="checkbox";cb.disabled=!f.selectable;cb.dataset.group=f.group;cb.dataset.extra=f.extra;
+    const installed=f.group>=0&&(folderInstalledGroups.has(f.group)||f.dictionaryStatus==="installed");
+    const row=el("label","folder-file"+(f.selectable&&!installed?"":" disabled")),cb=el("input");
+    cb.type="checkbox";cb.disabled=!f.selectable||installed;cb.dataset.group=f.group;cb.dataset.extra=f.extra;
     row.dataset.group=f.group;row.dataset.fileName=f.name;
-    cb.checked=f.selectable&&(f.extra>=0?folderFileExtras.has(f.extra):folderFileGroups.has(f.group));
+    cb.checked=f.selectable&&(installed||(f.extra>=0?folderFileExtras.has(f.extra):folderFileGroups.has(f.group)));
     const main=el("span","folder-file-main");main.appendChild(el("span","nm",f.name));
     main.appendChild(el("span","folder-file-state"));
     const meter=el("progress","folder-file-progress");meter.max=100;meter.hidden=true;main.appendChild(meter);
     const dictState=el("span","folder-dictionary-state");if(f.main)main.appendChild(dictState);
     row.appendChild(cb);row.appendChild(main);row.appendChild(el("span","n",f.size?sizeMB(f.size):""));
-    cb.addEventListener("change",()=>{
-      if(f.extra>=0){if(cb.checked)folderFileExtras.add(f.extra);else folderFileExtras.delete(f.extra)}
-      else if(cb.checked){folderFileGroups.add(f.group);for(const other of folderFileEntries)if(other.group===f.group&&other.selectable&&other.extra>=0)folderFileExtras.add(other.extra)}
-      else{folderFileGroups.delete(f.group);for(const other of folderFileEntries)if(other.group===f.group&&other.extra>=0)folderFileExtras.delete(other.extra)}
-      renderFolderFileRows();window.__folderExtras=[...folderFileExtras].sort((a,b)=>a-b);updateFolderInstall();
-    });rows.appendChild(row);
+    cb.addEventListener("change",()=>changeFolderFile(f,cb));rows.appendChild(row);
   }
   updateFolderFileStates();
   if(folderSearch)folderSearch.refresh();
+}
+function activeFolderGroup(){const f=folderFileEntries.find(item=>item.fileStatus==="downloading");return f&&f.group>=0?f.group:-1}
+async function cancelFolderDictionary(group){
+  const request=JSON.stringify({id:impJobID,group});
+  try{
+    let result;
+    if(window.wudictAndroidGo)result=androidIntakeCall("cancelDictionary",request);
+    else if(typeof nativeSetupCall==="function")result=await nativeSetupCall("intakeCancelDictionary",request);
+    else{const q="/api/intake?id="+encodeURIComponent(impJobID)+"&group="+encodeURIComponent(group),r=await browserHTTP(q,{method:"DELETE"});result=await r.json()}
+    return !!result?.canceled;
+  }catch(_){return false}
+}
+async function changeFolderFile(f,cb){
+  if(!cb.checked&&f.group>=0&&activeFolderGroup()===f.group){
+    const name=folderCandidateNames.get(f.group)||f.name;
+    if(!window.confirm(tx("pages.stopDictionaryDownload",{name}))){renderFolderFileRows();return}
+    if(!await cancelFolderDictionary(f.group)){renderFolderFileRows();return}
+    folderFileGroups.delete(f.group);
+    for(const other of folderFileEntries)if(other.group===f.group&&other.extra>=0)folderFileExtras.delete(other.extra);
+    persistMegaSelection("resume");
+  }else if(f.extra>=0){
+    if(cb.checked)folderFileExtras.add(f.extra);else folderFileExtras.delete(f.extra);
+    persistMegaSelection(folderResumeMode?"resume":"selecting");
+  }else if(cb.checked){
+    folderFileGroups.add(f.group);
+    for(const other of folderFileEntries)if(other.group===f.group&&other.selectable&&other.extra>=0)folderFileExtras.add(other.extra);
+    persistMegaSelection(folderResumeMode?"resume":"selecting");
+  }else{
+    folderFileGroups.delete(f.group);
+    for(const other of folderFileEntries)if(other.group===f.group&&other.extra>=0)folderFileExtras.delete(other.extra);
+    persistMegaSelection(folderResumeMode?"resume":"selecting");
+  }
+  renderFolderFileRows();window.__folderExtras=[...folderFileExtras].sort((a,b)=>a-b);updateFolderInstall();
 }
 function updateFolderFileStates(files=folderFileEntries){
   const byKey=new Map(files.map(f=>[f.group+"\0"+f.name.toLocaleLowerCase(),f]));
@@ -398,9 +479,12 @@ function updateFolderFileStates(files=folderFileEntries){
       if(total>0){meter.hidden=false;meter.value=percent}
     }else if(f.fileStatus==="downloaded")state.textContent=tx("pages.folderFileDownloaded");
     else if(f.fileStatus==="error")state.textContent=tx("pages.folderFileFailed",{error:window.wudictI18n.errorText(f.fileError)||f.fileError||tx("pages.importFailed")});
+    else if(f.fileStatus==="paused")state.textContent=tx("pages.folderFilePaused");
     const dictState=row.querySelector(".folder-dictionary-state");
+    const checkbox=row.querySelector("input[type=checkbox]");
+    if(checkbox){const installed=f.dictionaryStatus==="installed"||folderInstalledGroups.has(f.group);checkbox.disabled=!f.selectable||installed;if(installed)checkbox.checked=true}
     if(dictState){
-      const messages={downloading:tx("pages.folderDictionaryDownloading"),downloaded:tx("pages.folderDictionaryDownloaded"),installed:tx("pages.folderDictionaryInstalled"),error:tx("pages.folderDictionaryFailed",{error:window.wudictI18n.errorText(f.dictionaryError)||f.dictionaryError||tx("pages.importFailed")})};
+      const messages={downloading:tx("pages.folderDictionaryDownloading"),downloaded:tx("pages.folderDictionaryDownloaded"),installed:tx("pages.folderDictionaryInstalled"),paused:tx("pages.folderDictionaryPaused"),error:tx("pages.folderDictionaryFailed",{error:window.wudictI18n.errorText(f.dictionaryError)||f.dictionaryError||tx("pages.importFailed")})};
       dictState.textContent=messages[f.dictionaryStatus]||"";
     }
   }
@@ -412,17 +496,31 @@ function setFolderFileSort(field){
 }
 function showFolderFiles(j){
   if(!j.megaFolder)return;
-  megaFolderMode=true;folderFileGroups=new Set();folderFileExtras=new Set();folderFileEntries=j.folderFiles||[];folderFileSort={field:"name",direction:1};
-  (j.candidates||[]).forEach((c,i)=>{if(!c.missing?.length&&!c.unchanged)folderFileGroups.add(i)});
-  for(const f of folderFileEntries)if(f.selectable&&f.extra>=0&&folderFileGroups.has(f.group))folderFileExtras.add(f.extra);
-  const keep=$("srcKeepWrap"),keepSlot=document.getElementById("folderFilesKeep");if(keep&&keepSlot)keepSlot.appendChild(keep);keep.style.display=j.keep==="ask"?"":"none";
+  megaFolderMode=true;impJobID=j.id||impJobID;folderFileGroups=new Set();folderInstalledGroups=new Set();folderFileExtras=new Set();folderFileEntries=j.folderFiles||[];folderCandidates=j.candidates||[];folderCandidateNames=new Map(folderCandidates.map((c,i)=>[i,c.name]));folderFileSort={field:"name",direction:1};
+  let saved=megaRestoreSelection||megaResume||readMegaResume();
+  if(saved&&!Array.isArray(saved.preexisting)){saved={...saved,preexisting:folderCandidates.filter(c=>c.unchanged).map(c=>c.name)};writeMegaResume(saved)}
+  const selected=new Set(saved?.groups||[]),installed=new Set(saved?.installed||[]),preexisting=new Set(saved?.preexisting||[]);
+  folderCandidates.forEach((c,i)=>{
+    const recovered=selected.has(c.name);
+    if(recovered&&(installed.has(c.name)||(c.unchanged&&!preexisting.has(c.name))))folderInstalledGroups.add(i);
+    else if(recovered)folderFileGroups.add(i);
+    else if((!saved||saved.phase==="listing")&&!c.missing?.length&&!c.unchanged)folderFileGroups.add(i);
+  });
+  if(!saved||saved.phase==="listing")for(const f of folderFileEntries)if(f.selectable&&f.extra>=0&&folderFileGroups.has(f.group))folderFileExtras.add(f.extra);
+  for(const name of saved?.extras||[]){const found=folderFileEntries.find(f=>f.extra>=0&&f.name===name);if(found&&!folderInstalledGroups.has(found.group))folderFileExtras.add(found.extra)}
+  for(const f of folderFileEntries)if(f.dictionaryStatus==="installed"&&f.group>=0)folderInstalledGroups.add(f.group);
+  folderResumeMode=!!saved&&saved.phase==="resume";
+  const keep=$("srcKeepWrap"),keepHome=document.getElementById("folderFilesKeepHome");if(keep&&keepHome&&keep.parentElement!==keepHome)keepHome.appendChild(keep);if(keep)keep.style.display="none";
   if(!folderSearch)folderSearch=window.wudictListSearch.create({root:document.getElementById("folderFileRows"),itemSelector:".folder-file",dock:document.getElementById("folderFileSearch"),highlightSelector:".nm",initiallyFiltering:true});else folderSearch.clear();
   for(const field of ["name","size"])document.getElementById("folderFileSort"+(field==="name"?"Name":"Size")).onclick=()=>setFolderFileSort(field);
   renderFolderFileRows();window.__folderExtras=[...folderFileExtras].sort((a,b)=>a-b);updateFolderInstall();
+  const install=document.getElementById("folderFilesInstall");if(install)install.textContent=folderResumeMode?tx("pages.folderResume"):tx("pages.install");
   document.getElementById("folderFilesStatus").textContent="";
   const dlg=document.getElementById("folderFilesDialog");if(!dlg.open)dlg.showModal();
+  persistMegaSelection(folderResumeMode?"resume":"selecting");
+  megaRestoreSelection=null;
 }
-function updateFolderInstall(){const b=document.getElementById("folderFilesInstall");if(b)b.disabled=folderFileGroups.size===0}
+function updateFolderInstall(){const b=document.getElementById("folderFilesInstall");if(b){b.disabled=folderFileGroups.size===0||folderJobBusy;b.textContent=folderResumeMode?tx("pages.folderResume"):tx("pages.install")}}
 function fileList(files){
   if(!files||!files.length)return "";
   const head=files.slice(0,FILES_SHOWN);
@@ -533,21 +631,28 @@ function showExtras(j){
 async function impInstall(){
   if(!await saveIndexDefaults())return;
   const folderMode=megaFolderMode;
-  const pick=folderMode?[...folderFileGroups].sort((a,b)=>a-b):[...foldersDialogRoot.querySelectorAll("#cands input:checked")].map(i=>+i.value);
-  const extras=folderMode?[...folderFileExtras].sort((a,b)=>a-b):[...foldersDialogRoot.querySelectorAll("#extras input:checked")].map(i=>+i.value);
+  if(folderMode&&folderNeedsReload&&megaResume){
+    folderNeedsReload=false;folderResumeAfterReload=true;folderJobBusy=true;updateFolderInstall();
+    await requestMegaFolder(megaResume.url,megaResume.dir,megaResume,true);return;
+  }
+  const pick=folderMode?[...folderFileGroups].filter(i=>!folderInstalledGroups.has(i)).sort((a,b)=>a-b):[...foldersDialogRoot.querySelectorAll("#cands input:checked")].map(i=>+i.value);
+  const extras=folderMode?[...folderFileExtras].filter(i=>{const f=folderFileEntries.find(row=>row.extra===i);return !f||!folderInstalledGroups.has(f.group)}).sort((a,b)=>a-b):[...foldersDialogRoot.querySelectorAll("#extras input:checked")].map(i=>+i.value);
   const dir=requireImportDestination();if(!dir||!pick.length)return;
+  if(folderMode)persistMegaSelection("resume");
+  folderJobBusy=true;updateFolderInstall();
   (folderMode?document.getElementById("folderFilesInstall"):$("install")).disabled=true;
   let r,j;
   try{
-    const body=JSON.stringify({pick:pick,keep:$("srcKeep").checked,extras:extras,dir});
+    const body=JSON.stringify({pick:pick,keep:folderMode?false:$("srcKeep").checked,extras:extras,dir});
     if(window.wudictAndroidGo)j=androidIntakeCall("confirm",body);
     else if(typeof nativeSetupCall==="function")j=await nativeSetupCall("intakeConfirm",body);
     else {r=await browserHTTP("/api/intake?confirm=1&dir="+encodeURIComponent(dir),{method:"POST",
       headers:{"Content-Type":"application/json"},body});j=await r.json()}
   }catch(e){ impSay("✕ "+(window.wudictI18n.errorText(e.message)||tx("pages.cannotStartMark")),"err");
-    (folderMode?document.getElementById("folderFilesInstall"):$("install")).disabled=false;return }
+    folderJobBusy=false;updateFolderInstall();(folderMode?document.getElementById("folderFilesInstall"):$("install")).disabled=false;return }
   if(r&&!r.ok||j.error){impSay("✕ "+(window.wudictI18n.errorText(j&&j.error)||tx("pages.cannotStart")),"err");
-    (folderMode?document.getElementById("folderFilesInstall"):$("install")).disabled=false;return}
+    folderJobBusy=false;updateFolderInstall();(folderMode?document.getElementById("folderFilesInstall"):$("install")).disabled=false;return}
+  if(j.id)impJobID=j.id;
   $("found").classList.add("hidden");
   impPoll();
 }
@@ -566,7 +671,26 @@ function impPoll(){
 }
 
 function impRender(j){
-  if(megaFolderMode&&j.megaFolder&&j.folderFiles){folderFileEntries=j.folderFiles;updateFolderFileStates(folderFileEntries)}
+  if(j.id)impJobID=j.id;
+  if(j.megaFolder&&j.folderFiles){
+    if(!megaFolderMode)showFolderFiles(j);
+    else folderFileEntries=j.folderFiles;
+    for(const f of folderFileEntries)if(f.dictionaryStatus==="installed"&&f.group>=0)folderInstalledGroups.add(f.group);
+    folderJobBusy=j.state==="downloading"||j.state==="installing";
+    updateFolderFileStates(folderFileEntries);updateFolderInstall();
+    if(megaResume){
+      if(j.state==="done"&&(!megaResume.groups?.length||megaResume.groups.every(name=>{
+        const group=[...folderCandidateNames].find(([,candidate])=>candidate===name)?.[0];
+        return group!==undefined&&folderInstalledGroups.has(group)
+      }))){writeMegaResume(null);folderResumeMode=false;folderNeedsReload=false;updateFolderInstall()}
+      else{
+        persistMegaSelection("resume");
+        if(j.state==="done"||j.state==="error")folderNeedsReload=true;
+      }
+    }
+  }else if(megaFolderMode&&megaResume&&j.state==="downloading"){
+    folderJobBusy=true;updateFolderInstall();
+  }else folderJobBusy=false;
   if(j.state==="downloading"){
     if(j.phase==="listing"){
       impSay(tx("pages.readingFolderHost",{host:j.host||tx("pages.site")}));
@@ -607,7 +731,11 @@ function impRender(j){
     return;
   }
   if(j.state==="error"){impSay("✕ "+(window.wudictI18n.errorText(j.error)||tx("pages.importFailed")),"err");return}
-  if(j.state==="ready"){showCandidates(j);return}
+  if(j.state==="ready"){
+    showCandidates(j);
+    if(folderResumeAfterReload){folderResumeAfterReload=false;setTimeout(()=>impInstall(),0)}
+    return
+  }
 }
 
 async function impCancel(){
@@ -615,6 +743,8 @@ async function impCancel(){
   try{if(window.wudictAndroidGo)androidIntakeCall("cancel");
     else if(typeof nativeSetupCall==="function")await nativeSetupCall("intakeCancel");
     else await browserHTTP("/api/intake",{method:"DELETE"})}catch(e){}
+  if(megaFolderMode||megaResume)writeMegaResume(null);
+  megaRestoreSelection=null;folderJobBusy=false;
   $("found").classList.add("hidden");
   if(megaFolderMode){megaFolderMode=false;document.getElementById("folderFilesDialog").close();const keep=$("srcKeepWrap"),home=document.getElementById("folderFilesKeepHome");if(keep&&home)home.parentElement.insertBefore(keep,home.nextSibling)}
   impSay("");
@@ -874,11 +1004,15 @@ async function start(cachedConfig=null){
   // The importer needs somewhere to install into, and a job may already be
   // running from before this page was loaded.
   wireIntake(dirs[0]||"");
-  restoreImportTarget();
-  impGET().then(st=>{
+  const targetReady=restoreImportTarget();
+  impGET().then(async st=>{
     wireIntake(st&&st.dir||dirs[0]||"");
     if(st&&st.state){impRender(st);
       if(st.state==="installing"||st.state==="downloading")impPoll()}
+    else{
+      const saved=readMegaResume();
+      if(saved){megaResume=saved;await targetReady;await restoreMegaFolder(saved)}
+    }
   });
 }
 

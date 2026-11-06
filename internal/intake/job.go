@@ -219,6 +219,8 @@ type jobState struct {
 	// busyLocked.
 	seen      time.Time
 	confirmed bool
+	rowCancel map[int]context.CancelFunc
+	rowStop   map[int]bool
 }
 
 // Begin reads the archive and reports what is in it, without extracting
@@ -1037,14 +1039,56 @@ func (m *Manager) runCollection(ctx context.Context, j *jobState, plan []planRow
 		if ctx.Err() != nil {
 			break
 		}
+		rowStart := base
+		rowCtx, cancelRow := context.WithCancel(ctx)
+		m.mu.Lock()
+		if j.rowCancel == nil {
+			j.rowCancel = make(map[int]context.CancelFunc)
+		}
+		if j.rowStop == nil {
+			j.rowStop = make(map[int]bool)
+		}
+		j.rowCancel[p.group] = cancelRow
+		delete(j.rowStop, p.group)
+		m.mu.Unlock()
 		m.folderDictionaryStatus(j, p.group, "downloading", "")
-		src, missed, icons, err := m.fetchRow(ctx, j, p, &base)
+		src, missed, icons, err := m.fetchRow(rowCtx, j, p, &base)
+		m.mu.Lock()
+		delete(j.rowCancel, p.group)
+		rowStopped := j.rowStop[p.group]
+		delete(j.rowStop, p.group)
+		m.mu.Unlock()
+		cancelRow()
+		if rowStopped && ctx.Err() == nil {
+			var rowTotal int64
+			for _, file := range p.files {
+				rowTotal += file.size
+			}
+			advanced := base - rowStart
+			if advanced < rowTotal {
+				base += rowTotal - advanced
+			}
+			m.folderFileGroupStatus(j, p.group, "paused")
+			m.folderDictionaryStatus(j, p.group, "paused", "")
+			m.mu.Lock()
+			j.pub.Done = base
+			j.pub.Source = ""
+			m.mu.Unlock()
+			continue
+		}
 		var got []string
 		if err == nil {
 			m.folderDictionaryStatus(j, p.group, "downloaded", "")
-			got, err = m.installRow(ctx, j, src, opts)
+			rowOpts := opts
+			if j.pub.MegaFolder {
+				rowOpts.Keep = false
+			}
+			got, err = m.installRow(ctx, j, src, rowOpts)
 			if err == nil {
 				m.saveCollectionIcons(j.dest, p.cand, got, icons)
+				if j.pub.MegaFolder {
+					cleanupMegaFiles(j.dest, p.files)
+				}
 			}
 		}
 		if err != nil {
@@ -1088,6 +1132,39 @@ func (m *Manager) runCollection(ctx context.Context, j *jobState, plan []planRow
 	}
 }
 
+// CancelDictionary stops the active download for one dictionary in a
+// confirmed MEGA-folder job. The collection continues with its next row.
+func (m *Manager) CancelDictionary(id string, group int) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	j := m.cur
+	if j == nil || j.pub.ID != id || !j.confirmed || !j.pub.MegaFolder ||
+		j.pub.State != StateDownloading || j.rowCancel[group] == nil {
+		return false
+	}
+	j.rowStop[group] = true
+	j.rowCancel[group]()
+	return true
+}
+
+func (m *Manager) folderFileGroupStatus(j *jobState, group int, status string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.cur != j {
+		return
+	}
+	for i := range j.pub.FolderFiles {
+		f := &j.pub.FolderFiles[i]
+		if f.Group != group {
+			continue
+		}
+		if (f.FileStatus == "error" || f.FileStatus == "downloading") && status == "paused" {
+			f.FileStatus = "paused"
+			f.FileError = ""
+		}
+	}
+}
+
 // fetchRow downloads one row's files and returns the main one. A companion
 // that does not arrive is not an error here: the sniff that follows decides
 // whether what did arrive is a dictionary, exactly as for a single link. What
@@ -1102,6 +1179,9 @@ func (m *Manager) runCollection(ctx context.Context, j *jobState, plan []planRow
 func (m *Manager) fetchRow(ctx context.Context, j *jobState, p planRow, base *int64) (main Source, missed []string, icons []Source, err error) {
 	planned, saved := dict.Stem(p.files[0].name), ""
 	for k, rf := range p.files {
+		if err := ctx.Err(); err != nil {
+			return Source{}, missed, icons, err
+		}
 		start := *base
 		m.folderFileProgress(j, p.group, rf.name, "downloading", 0, rf.size, "")
 		m.mu.Lock()
@@ -1117,6 +1197,9 @@ func (m *Manager) fetchRow(ctx context.Context, j *jobState, p planRow, base *in
 			j.pub.Source, j.pub.Done = name, start+done
 			m.mu.Unlock()
 		})
+		if err != nil && ctx.Err() != nil {
+			return Source{}, missed, icons, ctx.Err()
+		}
 		if err != nil {
 			m.folderFileProgress(j, p.group, rf.name, "error", 0, rf.size, errorText(err))
 		} else {
@@ -1156,6 +1239,43 @@ func (m *Manager) fetchRow(ctx context.Context, j *jobState, p planRow, base *in
 		}
 	}
 	return main, missed, icons, nil
+}
+
+// cleanupMegaFiles removes a successfully installed dictionary's downloaded
+// source files, completion markers and resumable partials. Failed rows keep
+// their cache so the next attempt can reuse complete files or continue a part.
+func cleanupMegaFiles(dest string, files []remoteFile) {
+	root := filepath.Clean(DownloadDir(dest))
+	for _, file := range files {
+		u, err := url.Parse(file.url)
+		if err != nil || !strings.EqualFold(u.Hostname(), "mega.nz") && !strings.EqualFold(u.Hostname(), "mega.co.nz") {
+			continue
+		}
+		dir := LinkDir(dest, u)
+		rel, err := filepath.Rel(root, dir)
+		if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+		base := partBase(u)
+		part := filepath.Join(dir, base+".part")
+		meta := part + ".meta"
+		done := filepath.Join(dir, base+".done")
+		if cached, _ := readDone(done, dir, u.String()); cached != nil {
+			_ = os.Remove(filepath.Join(dir, cached.File))
+		}
+		if filepath.Base(file.name) == file.name {
+			_ = os.Remove(filepath.Join(dir, file.name))
+		}
+		_ = os.Remove(part)
+		_ = os.Remove(meta)
+		_ = os.Remove(done)
+		for current := dir; current != root; current = filepath.Dir(current) {
+			if err := os.Remove(current); err != nil {
+				break
+			}
+		}
+		logx.Download("mega installed source cleaned name=%q", file.name)
+	}
 }
 
 func (m *Manager) saveCollectionIcons(dest string, c Candidate, installed []string, icons []Source) {

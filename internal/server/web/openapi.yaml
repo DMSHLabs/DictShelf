@@ -1379,6 +1379,12 @@ paths:
           in: query
           description: The job to cancel (`id` from the job). Omit to cancel whatever is current.
           schema: { type: string }
+        - name: group
+          in: query
+          description: >
+            Cancel only the active dictionary download in this MEGA-folder job.
+            Requires `id`; the remaining selected dictionaries continue.
+          schema: { type: integer, minimum: 0 }
       x-codeSamples:
         - lang: Shell
           label: curl
@@ -1387,11 +1393,18 @@ paths:
       responses:
         '200':
           description: >
-            Without `id`, nothing is running now. With `id`, the job that is
-            current afterwards (empty when that was the one cancelled).
+            Without `group`, the current job afterwards (empty when that was
+            the one cancelled). With `id` and `group`, returns whether the
+            active MEGA-folder dictionary download was stopped.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/IntakeJob' }
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/IntakeJob' }
+                  - type: object
+                    required: [canceled]
+                    properties:
+                      canceled: { type: boolean }
 
   /api/reindex:
     post:

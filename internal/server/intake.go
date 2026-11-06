@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -369,6 +370,10 @@ func (s *Server) desktopIntakeCancel(id string) intakeStatus {
 	return s.intakeStatus(intake.Job{})
 }
 
+func (s *Server) desktopIntakeCancelDictionary(id string, group int) map[string]bool {
+	return map[string]bool{"canceled": s.importer().CancelDictionary(id, group)}
+}
+
 // importDir is where dictionaries are installed: the first configured folder,
 // which is the one the setup page presents as the dictionary folder. Empty
 // when none is configured, which is the state a first-run server is in and the
@@ -631,6 +636,15 @@ func (s *Server) handleIntakeStatus(w http.ResponseWriter, r *http.Request) {
 // cancel one another client started since (intake.Manager.CancelID). The
 // answer is then the job that is current, cancelled or not.
 func (s *Server) handleIntakeCancel(w http.ResponseWriter, r *http.Request) {
+	if raw := r.URL.Query().Get("group"); raw != "" {
+		group, err := strconv.Atoi(raw)
+		if err != nil || group < 0 {
+			httpErr(w, http.StatusBadRequest, "invalid dictionary group")
+			return
+		}
+		writeJSON(w, s.desktopIntakeCancelDictionary(r.URL.Query().Get("id"), group))
+		return
+	}
 	writeJSON(w, s.desktopIntakeCancel(r.URL.Query().Get("id")))
 }
 
