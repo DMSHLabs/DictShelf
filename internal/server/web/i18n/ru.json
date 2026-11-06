@@ -1347,6 +1347,7 @@
   "fullText.stateError": "Ошибка",
   "fullText.selected": "Отмечено: {count} — ≈{low}…{high}",
   "fullText.none": "Ничего не отмечено",
+  "fullText.running": "Строится: {count}",
   "fullText.free": "свободно {free} → останется ≈{after}",
   "fullText.warn": "Может не хватить места: до {high} при {free} свободных.",
   "fullText.split": "Из них ZIM-архивы: ≈{low}…{high} — для них будет создан лёгкий индекс с информацией, нужной для поиска точной фразы и поиска фразы, между словами которой может быть до 10 других слов.",

@@ -1329,6 +1329,7 @@
   "fullText.stateError": "Error",
   "fullText.selected": "Selected: {count} — ≈{low}…{high}",
   "fullText.none": "Nothing selected",
+  "fullText.running": "Building: {count}",
   "fullText.free": "free {free} → ≈{after} left",
   "fullText.warn": "May not fit: up to {high} with {free} free.",
   "fullText.split": "Of those, ZIM archives: ≈{low}…{high} — for them a lightweight index will be created, holding the information needed for exact-phrase search and for searching a phrase with up to 10 other words between its words.",

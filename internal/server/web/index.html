@@ -13500,6 +13500,10 @@ $("styler").addEventListener("keydown",e=>{
        on, not a card floating over the reader. */
     #fullTextPicker{inset:0;width:100vw;height:100vh;max-width:none;max-height:none;margin:0;
       border-radius:0;display:flex;flex-direction:column;box-sizing:border-box}
+    /* Keep the full-screen picker above the shared work dock. The dock is
+       attached inside the newest modal so Stop remains usable; reserve its
+       measured height here instead of letting it cover the last controls. */
+    html.server-work-active #fullTextPicker{bottom:var(--workh,0px);height:auto}
     /* An author `display` on a dialog overrides the browser's own
        dialog:not([open]){display:none}, so a closed window would paint as an
        empty full-screen surface at startup. Stated back explicitly. */
@@ -13677,12 +13681,15 @@ function selectedFullText(){
 }
 function updateFullTextSummary(){
   const sel=selectedFullText();
+  const running=[...fullTextRowStates.values()].filter(state=>["indexing","waiting"].includes(state.status)).length;
   const low=sel.reduce((sum,r)=>sum+r.low,0), high=sel.reduce((sum,r)=>sum+r.high,0);
   const zlow=sel.filter(r=>r.zim).reduce((sum,r)=>sum+r.low,0);
   const zhigh=sel.filter(r=>r.zim).reduce((sum,r)=>sum+r.high,0);
   $("ftSelected").textContent=sel.length
     ? tx("fullText.selected",{count:window.wudictI18n.number(sel.length),low:mb(low),high:mb(high)})
-    : tx("fullText.none");
+    : running
+      ? tx("fullText.running",{count:window.wudictI18n.number(running)})
+      : tx("fullText.none");
   const free=libraryFreeBytes||0;
   $("ftFree").textContent=free?tx("fullText.free",{free:mb(free),after:mb(Math.max(0,free-high))}):"";
   const warn=$("ftWarn"), over=free>0&&high>free;
