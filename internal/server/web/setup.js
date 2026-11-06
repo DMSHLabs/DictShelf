@@ -406,7 +406,7 @@ async function restoreMegaFolder(saved){
    four files and a resource folder, and the list must not become the row. The
    same cut as the phone's, so the two surfaces say the same sentence. */
 const FILES_SHOWN=3;
-let folderFileGroups=new Set(),folderInstalledGroups=new Set(),folderFileExtras=new Set(),folderCandidateNames=new Map(),folderCandidates=[],folderSearch=null,megaFolderMode=false,folderFileEntries=[],folderFileSort={field:"name",direction:1},folderResumeMode=false,folderJobBusy=false,folderNeedsReload=false,folderResumeAfterReload=false;
+let folderFileGroups=new Set(),folderInstalledGroups=new Set(),folderFileExtras=new Set(),folderCandidateNames=new Map(),folderCandidates=[],folderSearch=null,megaFolderMode=false,folderFileEntries=[],folderFileSort={field:"name",direction:1},folderResumeMode=false,folderJobBusy=false,folderNeedsReload=false,folderResumeAfterReload=false,folderShowDone=false,folderRegistrationBusy=false,folderRegistrationStarted=false;
 function folderFileGroup(f){return f.group>=0?"g:"+f.group:"f:"+f.name}
 function folderFileOrder(){
   const compareName=(a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:"base"});
@@ -496,6 +496,7 @@ function setFolderFileSort(field){
 }
 function showFolderFiles(j){
   if(!j.megaFolder)return;
+  folderShowDone=false;folderRegistrationBusy=false;folderRegistrationStarted=false;
   megaFolderMode=true;impJobID=j.id||impJobID;folderFileGroups=new Set();folderInstalledGroups=new Set();folderFileExtras=new Set();folderFileEntries=j.folderFiles||[];folderCandidates=j.candidates||[];folderCandidateNames=new Map(folderCandidates.map((c,i)=>[i,c.name]));folderFileSort={field:"name",direction:1};
   let saved=megaRestoreSelection||megaResume||readMegaResume();
   if(saved&&!Array.isArray(saved.preexisting)){saved={...saved,preexisting:folderCandidates.filter(c=>c.unchanged).map(c=>c.name)};writeMegaResume(saved)}
@@ -518,9 +519,17 @@ function showFolderFiles(j){
   document.getElementById("folderFilesStatus").textContent="";
   const dlg=document.getElementById("folderFilesDialog");if(!dlg.open)dlg.showModal();
   persistMegaSelection(folderResumeMode?"resume":"selecting");
+  const status=document.getElementById("folderFilesStatus");if(status){status.textContent="";status.classList.remove("err","ok")}
   megaRestoreSelection=null;
 }
-function updateFolderInstall(){const b=document.getElementById("folderFilesInstall");if(b){b.disabled=folderFileGroups.size===0||folderJobBusy;b.textContent=folderResumeMode?tx("pages.folderResume"):tx("pages.install")}}
+function updateFolderInstall(){
+  const b=document.getElementById("folderFilesInstall"),cancel=document.getElementById("folderFilesCancel"),done=document.getElementById("folderFilesDone"),actions=document.querySelector(".folder-files-actions");
+  const complete=folderShowDone&&!folderJobBusy;
+  if(actions)actions.dataset.complete=String(complete);
+  if(cancel)cancel.hidden=complete;
+  if(b){b.hidden=complete;b.disabled=folderFileGroups.size===0||folderJobBusy;b.textContent=folderResumeMode?tx("pages.folderResume"):tx("pages.install")}
+  if(done){done.hidden=!complete;done.disabled=folderRegistrationBusy}
+}
 function fileList(files){
   if(!files||!files.length)return "";
   const head=files.slice(0,FILES_SHOWN);
@@ -728,6 +737,7 @@ function impRender(j){
     // The folder now holds more than it did, and the count under it is what
     // the Save button is enabled from.
     validateAll();
+    if(megaFolderMode){folderShowDone=true;folderRegistrationBusy=!!n&&!folderRegistrationStarted;updateFolderInstall();if(n&&!folderRegistrationStarted){folderRegistrationStarted=true;registerInstalledFolderAfterMega()}}
     return;
   }
   if(j.state==="error"){impSay("✕ "+(window.wudictI18n.errorText(j.error)||tx("pages.importFailed")),"err");return}
@@ -738,16 +748,49 @@ function impRender(j){
   }
 }
 
+async function registerInstalledFolderAfterMega(){
+  const status=document.getElementById("folderFilesStatus");if(status)status.textContent=tx("pages.folderRegistering");
+  const destination=importDestination()||$("importTarget").value.trim();
+  if(!destination){folderRegistrationBusy=false;updateFolderInstall();return}
+  const all=[...new Set([...configuredImportDirs,destination].filter(Boolean))];
+  const query=all.map(path=>"path="+encodeURIComponent(path)).join("&")+"&save=1";
+  try{
+    let result;
+    if(window.wudictAndroidGo){androidSetupCall("folderSetup",query);const finished=await window.wudictWork.wait("folder-setup");result=finished.result||{error:finished.error}}
+    else if(typeof nativeSetupCall==="function"){await nativeSetupCall("folderSetup",query);const finished=await window.wudictWork.wait("folder-setup");result=finished.result||{error:finished.error}}
+    else{
+      const response=await browserHTTP("/api/setup?"+query+"&async=1");result=await response.json();
+      if(response.status===202){const finished=await window.wudictWork.wait("folder-setup");result=finished.result||{error:finished.error}}
+      else if(!response.ok)throw new Error(result.error||response.statusText);
+    }
+    if(result.error)throw new Error(result.error);
+    if(!result.saved)throw new Error(tx("pages.folderRegistrationFailed"));
+    configuredImportDirs=all;
+    importDirs=all.map(path=>({path}));
+    window.dispatchEvent(new CustomEvent("wudict-folders-saved"));
+    if(status)status.textContent=tx("pages.folderRegistered");
+  }catch(error){
+    if(status){status.textContent="✕ "+(window.wudictI18n.errorText(error.message)||error.message||tx("pages.folderRegistrationFailed"));status.classList.add("err")}
+  }finally{folderRegistrationBusy=false;updateFolderInstall()}
+}
+
 async function impCancel(){
   clearTimeout(impTimer);
   try{if(window.wudictAndroidGo)androidIntakeCall("cancel");
     else if(typeof nativeSetupCall==="function")await nativeSetupCall("intakeCancel");
     else await browserHTTP("/api/intake",{method:"DELETE"})}catch(e){}
   if(megaFolderMode||megaResume)writeMegaResume(null);
-  megaRestoreSelection=null;folderJobBusy=false;
+  megaRestoreSelection=null;folderJobBusy=false;folderShowDone=false;folderRegistrationBusy=false;folderRegistrationStarted=false;
   $("found").classList.add("hidden");
   if(megaFolderMode){megaFolderMode=false;document.getElementById("folderFilesDialog").close();const keep=$("srcKeepWrap"),home=document.getElementById("folderFilesKeepHome");if(keep&&home)home.parentElement.insertBefore(keep,home.nextSibling)}
   impSay("");
+}
+
+function closeFolderFiles(){
+  const dlg=document.getElementById("folderFilesDialog");
+  if(dlg.open)dlg.close();
+  folderShowDone=false;folderRegistrationBusy=false;folderJobBusy=false;megaFolderMode=false;
+  const keep=$("srcKeepWrap"),home=document.getElementById("folderFilesKeepHome");if(keep&&home)home.parentElement.insertBefore(keep,home.nextSibling);
 }
 
 /* Copies the guide into the folder above (POST /api/howto); the copy then
@@ -778,6 +821,7 @@ async function howtoCopy(e){
 
 let intakeWired=false;
 let importDirs=[];
+let configuredImportDirs=[];
 let importTargetValidated="", importTargetErrorKey="pages.importFolderRequired", importTargetCheck=0, importTargetTimer=null;
 const importTargetNorm=s=>s.replace(/[\\/]+$/g,"").toLocaleLowerCase();
 function importDestination(){
@@ -888,7 +932,8 @@ function wireIntake(dir){
   $("install").addEventListener("click",impInstall);
   document.getElementById("folderFilesInstall").addEventListener("click",impInstall);
   document.getElementById("folderFilesCancel").addEventListener("click",impCancel);
-  document.getElementById("folderFilesDialog").addEventListener("cancel",e=>{e.preventDefault();impCancel()});
+  document.getElementById("folderFilesDone").addEventListener("click",closeFolderFiles);
+  document.getElementById("folderFilesDialog").addEventListener("cancel",e=>{e.preventDefault();if(folderShowDone&&!folderRegistrationBusy)closeFolderFiles();else impCancel()});
   for(const [id,on] of [["candAllOn",true],["candAllOff",false]])$(id).addEventListener("click",e=>{
     e.preventDefault();
     for(const cb of foldersDialogRoot.querySelectorAll("#cands input:not(:disabled)"))cb.checked=on;
@@ -974,6 +1019,7 @@ async function start(cachedConfig=null){
   }
   syncIndexDefaults();
   const dirs=(cfg&&cfg.roots||[]).map(r=>r.path);
+  configuredImportDirs=[...dirs];
   importDirs=(cfg&&cfg.roots||[]);
   importTargetValidated="";importTargetErrorKey="pages.importFolderRequired";
   $("importTarget").value="";

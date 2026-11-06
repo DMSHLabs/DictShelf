@@ -149,6 +149,7 @@ html:has(link[data-preset="sepia"]) dialog#folderFilesDialog,html:has(link[data-
 .folder-files-shell #folderFilesStatus.err{color:var(--danger)}.folder-files-shell #folderFilesStatus.ok{color:var(--safe)}
 .folder-files-actions{display:flex;justify-content:space-between;align-items:center;gap:1em;flex:none;padding-top:.5em;border-top:1px solid var(--line)}
 .folder-files-actions #folderFilesCancel{margin-right:auto}.folder-files-actions #folderFilesInstall{margin-left:auto}
+.folder-files-actions[data-complete="true"]{justify-content:center}
 .folder-files-actions .btn{box-sizing:border-box;min-width:calc(var(--ui-main-control-height) * 2em);min-height:calc(var(--ui-edit_control-height) * 1.5rem);font-size:calc(var(--ui-edit_control-font) * 1rem)}
 .folders-dialog-scroll #impMsg{font-size:calc(var(--ui-hint-font-size) * 1rem);margin-top:.618em}
 .folders-dialog-scroll #impMsg.ok{color:var(--safe)}.folders-dialog-scroll #impMsg.err{color:var(--danger)}
