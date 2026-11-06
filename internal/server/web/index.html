@@ -7850,21 +7850,13 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
   det.dataset.searchInitial=String(perDict);det.dataset.searchPageSize=String(pageSize);
   det.dataset.searchFirstPageSize=String(paging?.firstPageSize||0);det.dataset.searchGroup=String(!!group);
   if(paging){det.dataset.searchPageStart=String(paging.start||0);det.dataset.searchPageCount=String(h.results.length);det.dataset.searchHasNext=String(!!paging.hasNext);det.dataset.searchExact=String(!!paging.exact);det.dataset.searchTotal=String(paging.total||0);det.dataset.searchLowerBound=String(paging.lowerBound||0)}
-  // Only for a multi-word full-text query: a single word has no phrase to fail
-  // at, and every other mode has no ladder at all. And only for a dictionary
-  // that HAS a ladder: one whose full text comes from an archive index matches
-  // words and never tried a phrase, so "phrase not found" would be a claim
-  // about a query nobody ran (h.oneReading, from search.Hit.OneReading).
-  /* No rung is announced: each full-text mode asks for one reading and answers
-     with it, so there is no relaxation to explain. The reading still rides on the
-     hit for the highlight marks - the words of the reading are what gets marked. */
-  /* Each full-text mode asks for ONE reading and answers with it, so there is no
-     relaxation to announce: the header shows the count, and the reading rides on
-     the hit only far enough to mark the words that were searched for. */
-  const rung="";
-  const countLabel=paging?(rung?`<span class="count">${rung}</span>`:``):more
-    ?`<span class="count">${rung}${more} ${esc(tx("search.results",{count:perDict,number:""}).trim())}</span>`
-    :`<span class="count">${rung}${esc(tx("search.results",{count:h.results.length,number:window.wudictI18n.number(h.results.length)}))}</span>`;
+  /* Each full-text mode asks for ONE reading and answers with it, so no rung is
+     announced - there is no relaxation to explain, and the header shows the count.
+     The reading rides on the hit only far enough to mark the words that were
+     searched for. (The wire still carries a rung for the log; the page ignores it.) */
+  const countLabel=paging?``:more
+    ?`<span class="count">${more} ${esc(tx("search.results",{count:perDict,number:""}).trim())}</span>`
+    :`<span class="count">${esc(tx("search.results",{count:h.results.length,number:window.wudictI18n.number(h.results.length)}))}</span>`;
   det.innerHTML=`<summary class="search-result-summary"><span class="search-dict-identity">${dictIconHTML(h.dict)}<span class="search-dict-name dict-info-name" data-dict="${escAttr(h.dict)}">${esc(h.name)}</span></span><span class="search-dict-controls">${pageControls}${countLabel}${browse}</span></summary>`;
   const dl=document.createElement("dl"),roots=[];
   for(const r of h.results){
