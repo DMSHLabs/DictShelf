@@ -246,10 +246,15 @@ android-go: ## Cross-compile the server into the APK's jniLibs (android/arm64, c
 	  echo "  install one: $(ANDROID_SDK)/cmdline-tools/latest/bin/sdkmanager 'ndk;30.0.16248370'"; \
 	  echo "  or set ANDROID_NDK_HOME / ANDROID_NDK"; exit 2; }
 	@mkdir -p $(dir $(ANDROID_LIB))
+	@# -buildvcs=false: the version is stamped by -X; git state (revision,
+	@# "modified") would differ between CI and F-Droid's reproducible build.
+	@# -buildid=: the Go build ID (and the GNU build-id derived from it) hashes
+	@# build inputs beyond the code - v3.7.10 differed between CI and F-Droid
+	@# in exactly those 39 bytes, the rest byte-identical. Nothing reads it.
 	CC="$(NDK_BIN)/aarch64-linux-android$(ANDROID_API)-clang" \
 	CXX="$(NDK_BIN)/aarch64-linux-android$(ANDROID_API)-clang++" \
-	CGO_ENABLED=1 GOOS=android GOARCH=arm64 go build $(GOFLAGS) \
-	  -ldflags "$(LDFLAGS) -extldflags '-Wl,-z,max-page-size=16384'" -o $(ANDROID_LIB) $(CMD)
+	CGO_ENABLED=1 GOOS=android GOARCH=arm64 go build $(GOFLAGS) -buildvcs=false \
+	  -ldflags "$(LDFLAGS) -buildid= -extldflags '-Wl,-z,max-page-size=16384'" -o $(ANDROID_LIB) $(CMD)
 
 .PHONY: android-go-purego
 android-go-purego: ## NDK-less fallback lib (pure-Go sqlite; .spx audio unavailable on-device)
