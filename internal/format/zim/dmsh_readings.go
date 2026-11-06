@@ -7,7 +7,7 @@
 // A Kiwix index has no positions: libzim indexed the articles with
 // index_text_without_positions, and the position table in the archive is empty.
 // Positions are what a phrase and a distance are made of, so "are these words
-// adjacent, in this order" and "are they within ten of each other" cannot be
+// adjacent, in this order" and "are they within the near window" cannot be
 // ASKED of that index. They can still be ANSWERED - by verifying them in the
 // article text of the candidates the index does return, which is what this file
 // does.

@@ -41,6 +41,11 @@ func (p phraseNode) marks() []hilite.Phrase { return []hilite.Phrase{hilite.Phra
 // nearNode is NEAR(a b c, n): the phrases within n tokens of one another, in
 // any order. Each is marked on its own - proximity is a condition on the hit,
 // not a span in it.
+//
+// n is what the reader TYPED, or NearDefault (FTS5's own default) when the
+// distance is omitted. The near READING's window is a separate thing: it is the
+// reader's setting, resolved by ResolveNear, and a typed operator deliberately
+// keeps what it says.
 type nearNode struct {
 	ps []phraseNode
 	n  int

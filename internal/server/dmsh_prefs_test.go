@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
+
+	"github.com/DMSHLabs/DictShelf/internal/ftsq"
 )
 
 func TestPrefsFailedMutationKeepsActiveRecord(t *testing.T) {
@@ -82,5 +84,30 @@ func TestPrefsFailedHealKeepsGroupOrder(t *testing.T) {
 	f, _ := p.data()
 	if f.Dicts[0].ID != "old" || f.Groups[0].Order[0].ID != "old" {
 		t.Fatalf("failed heal changed active state: %+v", f)
+	}
+}
+
+// The near window is bounded where the constants that define the bounds live
+// (internal/ftsq), and the stored value is what the settings panel reads back.
+// Two things are pinned here: a hand-edited number past the ceiling comes back
+// as the ceiling, and a zero STAYS zero - "nobody chose one" is a state the file
+// may keep, and freezing the default into it would stop a later change of that
+// default from ever reaching that reader.
+func TestNearWordsSettingIsBounded(t *testing.T) {
+	cases := []struct{ stored, want int }{
+		{0, 0},
+		{-4, 0},
+		{ftsq.NearMin, ftsq.NearMin},
+		{7, 7},
+		{ftsq.NearMax, ftsq.NearMax},
+		{ftsq.NearMax + 1, ftsq.NearMax},
+		{9999, ftsq.NearMax},
+	}
+	for _, tc := range cases {
+		u := &UIPrefs{NearWords: tc.stored}
+		u.normalize()
+		if u.NearWords != tc.want {
+			t.Errorf("normalize() left nearWords=%d from %d, want %d", u.NearWords, tc.stored, tc.want)
+		}
 	}
 }

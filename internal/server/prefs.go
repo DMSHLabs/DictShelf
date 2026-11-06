@@ -15,6 +15,7 @@ import (
 
 	"github.com/DMSHLabs/DictShelf/internal/facet"
 	"github.com/DMSHLabs/DictShelf/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/ftsq"
 	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
@@ -83,6 +84,13 @@ type UIPrefs struct {
 	// automatic - the fan-out the app chose for the platform - and a positive
 	// value is the reader overriding it to measure.
 	SearchThreads int `json:"searchThreads,omitempty"`
+	// NearWords is the "near" reading's window: how many words may stand between
+	// the words of a query, for both a prepared dictionary and an archive. 0
+	// means the reader never chose one, and ftsq.NearDefault applies. It is an
+	// instruction to the search path (unlike HL off, which is UI state): the
+	// server resolves it with ftsq.ResolveNear and hands it to internal/search,
+	// and the page shows the same resolved number in the mode's hint.
+	NearWords int `json:"nearWords,omitempty"`
 	// Suggestion limits apply to headword suggestions in the main search field.
 	SuggestionPerDictionary int  `json:"suggestionPerDictionary,omitempty"`
 	SuggestionListLimit     int  `json:"suggestionListLimit,omitempty"`
@@ -224,6 +232,14 @@ func (u *UIPrefs) normalize() {
 		u.SearchThreads = 0
 	} else {
 		u.SearchThreads = min(u.SearchThreads, SearchThreadsMax)
+	}
+	// The near window is bounded by the constants that define the bounds
+	// (internal/ftsq): a zero states no intent and is left alone - ResolveNear
+	// turns it into the default - and a value past the ceiling becomes it.
+	if u.NearWords < 0 {
+		u.NearWords = 0
+	} else {
+		u.NearWords = min(u.NearWords, ftsq.NearMax)
 	}
 	switch u.SearchReturnCache {
 	case "memory", "disk":
@@ -891,6 +907,7 @@ func (s *Server) SavePrefs(body io.Reader) (map[string]any, error) {
 	if mentioned(req.UI) {
 		s.applyResultCachePrefs()
 		s.applySearchParallelismPrefs()
+		s.applyNearWordsPref()
 	}
 	dicts, _ := s.reg.prefs.Snapshot()
 	if dicts == nil {

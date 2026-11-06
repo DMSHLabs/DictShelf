@@ -598,6 +598,12 @@ func (s *Server) basePage() []byte {
 		page = strings.ReplaceAll(page, "{{COMBINED_DICTIONARY_LIMIT_DEFAULT}}", strconv.Itoa(indexconst.CombinedDictionaryLimitDefault))
 		page = strings.ReplaceAll(page, "{{COMBINED_DICTIONARY_LIMIT_MAX}}", strconv.Itoa(indexconst.CombinedDictionaryLimitMax))
 		page = strings.ReplaceAll(page, "{{SEARCH_THREADS_MAX}}", strconv.Itoa(SearchThreadsMax))
+		// The near window's floor, default and ceiling: the settings stepper
+		// shows the numbers the search enforces rather than copies of them
+		// (internal/ftsq owns all three).
+		page = strings.ReplaceAll(page, "{{NEAR_WORDS_MIN}}", strconv.Itoa(ftsq.NearMin))
+		page = strings.ReplaceAll(page, "{{NEAR_WORDS_DEFAULT}}", strconv.Itoa(ftsq.NearDefault))
+		page = strings.ReplaceAll(page, "{{NEAR_WORDS_MAX}}", strconv.Itoa(ftsq.NearMax))
 		page = strings.ReplaceAll(page, "{{HEADWORDCSS}}", assetTag(headwordControlCSS))
 		// The role stylesheet for articles wudict writes itself
 		// (internal/artmark). It is a floor under BOTH article surfaces, so
@@ -1451,8 +1457,9 @@ type streamMsg struct {
 	Error   string        `json:"error,omitempty"`
 
 	// Rung says which reading of a full-text query this dictionary answered:
-	// "phrase" (the words adjacent, in order), "near" (within ten tokens, any
-	// order) or "words" (anywhere in the article). Absent in every other mode.
+	// "phrase" (the words adjacent, in order), "near" (within the configured
+	// window, ten tokens by default, any order) or "words" (anywhere in the
+	// article). Absent in every other mode.
 	//
 	// It is reported because the relaxation is silent otherwise, and a search
 	// tool that quietly answers a weaker question than the one asked is lying

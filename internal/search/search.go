@@ -247,6 +247,22 @@ var diagnostics atomic.Bool
 // SetDiagnostics turns the per-dictionary fan-out log on or off.
 func SetDiagnostics(enabled bool) { diagnostics.Store(enabled) }
 
+// nearWords is the near READING's window: how many words may stand between the
+// query's words for both kinds of dictionary. Zero means the reader never chose
+// one, and ftsq.ResolveNear turns that into the default - so the search, the
+// archive reader and the hint a reader sees all run the same number, which is
+// what the old archiveNearDistance constant used to guarantee by being copied.
+var nearWords atomic.Int32
+
+// SetNearWords records the reader's window from Settings → Results. The value is
+// resolved here rather than trusted: the setting arrives from a JSON file, and a
+// zero or an out-of-range number must not become a window of its own.
+func SetNearWords(n int) { nearWords.Store(int32(ftsq.ResolveNear(n))) }
+
+// NearWords is the window to run with, for the places that build an expression
+// of their own (the server's paged answer asks ftsq directly).
+func NearWords() int { return ftsq.ResolveNear(int(nearWords.Load())) }
+
 // Workers reports the current fan-out width, so the other place that touches
 // every dictionary at once (the dictionary list) can use the same number.
 func Workers() int {
@@ -470,7 +486,7 @@ func rungFor(mode Mode, term string) (ftsq.Rung, bool) {
 		// than saying so.
 		return ftsq.Rung{}, false
 	}
-	rungs := parsed.Rungs()
+	rungs := parsed.RungsWith(NearWords())
 	for _, r := range rungs {
 		if r.Name == want {
 			return r, true
@@ -626,7 +642,7 @@ func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, rung 
 				h.Results, h.Err = af.ArchivePhrase(ctx, term, perDict, archiveCheckCandidates(perDict))
 				h.Rung = "phrase"
 			case Near:
-				h.Results, h.Err = af.ArchiveNear(ctx, archiveNearDistance, term, perDict, archiveCheckCandidates(perDict))
+				h.Results, h.Err = af.ArchiveNear(ctx, NearWords(), term, perDict, archiveCheckCandidates(perDict))
 				h.Rung = "near"
 			default:
 				h.Results, h.Err = s.FullTextContext(ctx, term, perDict)
@@ -679,9 +695,3 @@ func archiveCheckCandidates(perDict int) int {
 	}
 	return n
 }
-
-// archiveNearDistance is how many other words may sit between the query's words
-// in the "near" reading, for both kinds of dictionary: it is the FTS5 default
-// (NEAR(...) with no distance is 10) and the number the mode's own label
-// states, so the two answers agree by construction rather than by luck.
-const archiveNearDistance = ftsq.NearDefault
