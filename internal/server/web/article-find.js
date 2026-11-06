@@ -55,20 +55,40 @@ function recordCounts(){
     examinedBlocks.get(id).set(Number(det.dataset.searchPageStart)||0,counts.get(det)||0);
   }
 }
+/* The dictionary's own result count, from the same place the plate reads it:
+   dataset.searchTotal is the result cache's running total - the background
+   counting pass raises it - and dataset.searchExact is the flag that closes it,
+   the one that makes the plate's number exact. Until it closes, the stored
+   number is the plate's own lower bound. */
+function dictionaryCount(det){
+  const total=Number(det.dataset.searchTotal)||0;
+  return det.dataset.searchExact==="true"?total:Math.max(total,Number(det.dataset.searchLowerBound)||0);
+}
+/* Two numbers, because the dialog counts matches and the plate counts articles.
+   COUNTED is the matches of the blocks the dialog examined: the rank it walks,
+   and what Go to match can reach. The displayed total is that floored by the
+   dictionary's count - every article the dictionary matched holds at least one
+   match of the query, so the answer cannot hold fewer matches than the
+   dictionary says - and the dialog's own number overtakes the floor as its
+   blocks are examined. The floor belongs only to a dictionary the dialog
+   counted; one it skipped (a lemma it could not get, articles not ready)
+   contributes nothing, or the two sides would count different dictionaries. */
 function countedPosition(){
   const det=matches[index]?.host.closest("details.dict");
   const dictionaries=[...$("out").querySelectorAll("details.dict")];
-  let total=0,current=0;
+  let counted=0,current=0,shown=0;
   for(const section of dictionaries){
-    const start=Number(section.dataset.searchPageStart)||0;
+    const start=Number(section.dataset.searchPageStart)||0,id=section.dataset.searchDict||"";
+    let here=0;
     for(const page of blockPages(section)){
       if(section===det&&page.start===start){
-        current=total+matches.slice(0,index+1).filter(hit=>hit.host.closest("details.dict")===det).length;
+        current=counted+matches.slice(0,index+1).filter(hit=>hit.host.closest("details.dict")===det).length;
       }
-      total+=page.count;
+      counted+=page.count;here+=page.count;
     }
+    shown+=Math.max(here,examinedBlocks.has(id)?dictionaryCount(section):0);
   }
-  return {current,total};
+  return {current,counted,total:shown};
 }
 let settle = null;
 let laidOutList = null;
@@ -147,7 +167,7 @@ function readOptions() {
 function fillOptions() {
   $("articleFindQuery").value = options.query;
   if(options.mode==="exact")options.mode="word"; // saved by the earlier article-search picker
-  options.mode = ["prefix","suffix","contains","word","wordLemma"].includes(options.mode) || options.mode === "fts" && fullTextNavigation ? options.mode : "contains";
+  options.mode = ["prefix","suffix","contains","word","wordLemma","phrase","near"].includes(options.mode) || options.mode === "fts" && fullTextNavigation ? options.mode : "contains";
   $("articleFindMode").value = options.mode;
   $("articleFindCase").checked = options.matchCase;
   $("articleFindAll").checked = options.all;
@@ -157,7 +177,12 @@ function fillOptions() {
 }
 function open(preserveAnchor=false) {
   if (!preserveAnchor) searchAnchor = null;
-  if (fullTextNavigation && options.mode === "fts") options = {...options, query:fullTextNavigation.query};
+  /* The words reading navigates the live full-text answer, so it is filled from
+     that answer whenever the dialog opens; the two word readings do it when the
+     search that ran IS that reading - the dialog opened from the mode, the way
+     [A … B] has always been filled. */
+  if (fullTextNavigation && (options.mode === "fts" || options.mode === fullTextNavigation.reading))
+    options = {...options, query:fullTextNavigation.query};
   fillOptions();
   active = options.mode !== "fts" && !!options.query;
   if (active) rebuild();
@@ -200,7 +225,7 @@ function syncControls() {
 function canStep(step){
   if(options.mode==="fts")return !!(step<0?fullTextNavigation?.canPrevious:fullTextNavigation?.canNext);
   if(matches.length>=2)return true;
-  if(!matches.length)return countedPosition().total>0 || options.blocks!==false &&
+  if(!matches.length)return countedPosition().counted>0 || options.blocks!==false &&
     [...$("out").querySelectorAll("details.dict")].some(det=>window.wudictArticleBlockHasMore?.(det,step));
   const hit=matches[index>=0?index:0];
   return !!(options.query&&hit&&options.blocks!==false&&window.wudictArticleBlockHasMore?.(hit.host.closest("details.dict"),step));
@@ -225,11 +250,26 @@ function lemmaFor(host,query){
   return record.value||query;
 }
 function escapeRE(value){return value.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}
+/* Phrase and near are not one pattern but a rule over the WORDS of the query -
+   [A B] the words adjacent and in this order, [A ↔ B] the words within the
+   bound and in any order - so they are matched on the words of the block
+   instead of by a regular expression. The bound is not written here: the near
+   hint is the one place the number lives (the Go side pins that hint to
+   ftsq.NearDefault in both catalogs, TestModeMarksQuoteTheNearRule), and the
+   rule below reads it back from the very words the reader is shown. */
+const wordRun=/[\p{L}\p{M}\p{N}_]+/gu;
+function nearWords(){
+  const quoted=String(t("search.modeHintNear")).match(/\d+/u);
+  return quoted?Number(quoted[0]):1; // unreachable: both catalogs state the number
+}
+function wordKey(word){return options.matchCase?word:word.toLowerCase()}
+function wordReading(){return options.mode==="phrase"||options.mode==="near"}
 function matcherFor(host,query){
+  if(wordReading())return {words:(query.match(wordRun)||[]).map(wordKey),bound:options.mode==="near"?nearWords():0};
   const alternatives=[query];
   if(options.mode==="wordLemma"&&/^\S+$/u.test(query))alternatives.push(lemmaFor(host,query));
   const unique=[...new Set(alternatives)].sort((a,b)=>b.length-a.length);
-  return new RegExp(unique.map(escapeRE).join("|"),options.matchCase?"gu":"giu");
+  return {regex:new RegExp(unique.map(escapeRE).join("|"),options.matchCase?"gu":"giu")};
 }
 function paint() {
   clearPaint();
@@ -252,10 +292,10 @@ function paint() {
   });
   const total = String(position.total)+(partial?"+":"");
   const block = index >= 0 ? window.wudictArticleFindBlockRange?.(matches[index]?.host.closest("details.dict")) : "";
-  const count = position.total ? t("articleFind.position", {current:position.current, total})+(block?" · "+block:"") : t("articleFind.noMatches");
+  const count = position.counted ? t("articleFind.position", {current:position.current, total})+(block?" · "+block:"") : t("articleFind.noMatches");
   if(blockNavigationPending)return;
   $("articleFindCount").textContent = count;
-  $("articleFindCount").disabled = !position.total;
+  $("articleFindCount").disabled = !position.counted;
   $("articleFindStatus").textContent = options.query ? count : "";
   $("articleFindHiddenHint").hidden = !options.query || !!matches.length || options.examples || !hiddenExamples;
   $("articleFindLabel").textContent = options.query;
@@ -269,9 +309,10 @@ function paint() {
 let hiddenExamples = false;
 // Build a text stream per paragraph, retaining offsets across inline formatting.
 // Whitespace is folded so phrases also match line breaks and nonbreaking spaces.
-function scan(host, root, regex) {
+function scan(host, root, finder) {
   const doc = root.ownerDocument, win = doc.defaultView;
   if (!win) return;
+  const regex = finder.regex, words = finder.words, bound = finder.bound;
   docs.add(doc);
   if (!root.querySelector("style[data-wudict-find]")) {
     const style = doc.createElement("style"); style.dataset.wudictFind = "";
@@ -284,19 +325,64 @@ function scan(host, root, regex) {
   }
   const walker = doc.createTreeWalker(root, win.NodeFilter.SHOW_TEXT | win.NodeFilter.SHOW_ELEMENT);
   let text = "", points = [], group = null;
+  function addMatch(start,end) {
+    const a = points[start], b = points[end-1];
+    if (!a || !b) return;
+    const range = doc.createRange(); range.setStart(a.node,a.start); range.setEnd(b.endNode,b.end);
+    matches.push({host,range,example:a.node.parentElement?.closest(".wu-xonly,.wu-sec,.dsl_opt,.wu-exonly,.wu-ex,.dsl_ex") || null});
+  }
   function flush() {
+    if (words) flushWords(); else flushPattern();
+    text = ""; points = [];
+  }
+  function flushPattern() {
     regex.lastIndex = 0;
     for (let found; (found = regex.exec(text)); ) {
       const start = found.index, end = start+found[0].length;
       const before = Array.from(text.slice(0,start)).pop() || "", after = Array.from(text.slice(end))[0] || "";
       if (["prefix","word","wordLemma"].includes(options.mode) && wordChar.test(before)) continue;
       if (["suffix","word","wordLemma"].includes(options.mode) && wordChar.test(after)) continue;
-      const a = points[start], b = points[end-1];
-      if (!a || !b) continue;
-      const range = doc.createRange(); range.setStart(a.node,a.start); range.setEnd(b.endNode,b.end);
-      matches.push({host,range,example:a.node.parentElement?.closest(".wu-xonly,.wu-sec,.dsl_opt,.wu-exonly,.wu-ex,.dsl_ex") || null});
+      addMatch(start,end);
     }
-    text = ""; points = [];
+  }
+  /* The two word readings, over the words of this block. A word is a run of word
+     characters, so whatever stands between two of them - a space, a line break,
+     a comma - separates them without joining them, and a mark covers the span
+     from the first word of the match to the last: the phrase as it was typed,
+     or the window `near` counts. */
+  function flushWords() {
+    if (!words.length) return;
+    const tokens = [];
+    wordRun.lastIndex = 0;
+    for (let found; (found = wordRun.exec(text)); ) tokens.push({start:found.index,end:found.index+found[0].length,key:wordKey(found[0])});
+    if (options.mode === "phrase") {
+      for (let i = 0; i + words.length <= tokens.length; i++) {
+        let joined = true;
+        for (let j = 0; joined && j < words.length; j++) joined = tokens[i+j].key === words[j];
+        if (!joined) continue;
+        addMatch(tokens[i].start,tokens[i+words.length-1].end);
+        i += words.length-1;
+      }
+      return;
+    }
+    /* near: every word of the query, with the multiplicity it was typed with,
+       inside one window no wider than the bound - measured from the first word
+       of the window to the word that completes it, the way the hint counts. */
+    const need = new Map();
+    for (const word of words) need.set(word,(need.get(word)||0)+1);
+    for (let i = 0; i < tokens.length; i++) {
+      if (!need.has(tokens[i].key)) continue;
+      const held = new Map([[tokens[i].key,1]]);
+      let left = words.length-1, last = i;
+      for (let j = i+1; left && j < tokens.length && j-i <= bound+1; j++) {
+        const key = tokens[j].key, have = held.get(key)||0;
+        if (have >= (need.get(key)||0)) continue;
+        held.set(key,have+1); left--; last = j;
+      }
+      if (left) continue;
+      addMatch(tokens[i].start,tokens[last].end);
+      i = last;
+    }
   }
   for (let node; (node = walker.nextNode()); ) {
     if (node.nodeType === 1) {
@@ -523,8 +609,8 @@ function go(step) {
     const candidates=step>0?sections:sections.reverse();
     const det=options.blocks!==false&&candidates.find(section=>window.wudictArticleBlockHasMore?.(section,step));
     if(det){crossResultBlocks(det,step);return}
-    const {total}=countedPosition();
-    if(total){goto(step>0?1:total);return}
+    const {counted}=countedPosition();
+    if(counted){goto(step>0?1:counted);return}
     paint();return;
   }
   let wrapped = false;
@@ -559,8 +645,12 @@ function go(step) {
 function goto(page) {
   if ($("articleFindMode").value === "fts") { fullTextNavigation?.goto?.(page); return true; }
   if (dialog.open || !active) { clearTimeout(timer); readOptions(); active = !!options.query; rebuild(); }
-  const {total}=countedPosition();
-  if (!Number.isInteger(page) || page < 1 || page > total) return false;
+  /* Go to match reaches the matches the dialog has counted, so it is bounded by
+     that number and not by the floored total: a dictionary's own count can name
+     a match beyond the blocks examined, and a jump nobody can make would read
+     as a dead control. */
+  const {counted}=countedPosition();
+  if (!Number.isInteger(page) || page < 1 || page > counted) return false;
   let offset=0;
   for(const det of $("out").querySelectorAll("details.dict")){
     for(const entry of blockPages(det)){
@@ -601,7 +691,7 @@ function searchFrom(host,node,offset,direction) {
 function gotoOpen() {
   const isFTS = $("articleFindMode").value === "fts" && !!fullTextNavigation;
   const position=countedPosition();
-  const total=isFTS ? Number(fullTextNavigation.total)||0 : (active ? position.total : 0);
+  const total=isFTS ? Number(fullTextNavigation.total)||0 : (active ? position.counted : 0);
   const current=isFTS ? Number(fullTextNavigation.current)||1 : Math.max(1,position.current);
   if (total) window.wudictOpenArticleFindGoto?.(total,current);
 }
