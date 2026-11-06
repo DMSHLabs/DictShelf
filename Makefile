@@ -421,8 +421,8 @@ vet: ## go vet (unsafeptr is off for internal/cli - see above)
 	CGO_ENABLED=1 go vet -unsafeptr=false $(GOFLAGS) ./$(VET_SKIP_ANALYSIS)/
 
 .PHONY: fmt
-fmt: ## gofmt all sources in place
-	gofmt -w $$(find . -name '*.go' -not -path './dist/*')
+fmt: ## gofmt all sources in place (third_party/ is kept verbatim and skipped)
+	gofmt -w $$(git ls-files '*.go' | grep -v '^third_party/')
 
 .PHONY: notices
 notices: ## Regenerate THIRD-PARTY-NOTICES.md from the module licences (run after changing deps)
@@ -440,8 +440,19 @@ lint: vet ## golangci-lint if installed, else vet only
 tidy: ## go mod tidy
 	go mod tidy
 
+# The check half of `fmt`: a file gofmt would rewrite is a file that will
+# drift. Vendored third-party sources are kept verbatim (licence rules,
+# CLAUDE.md), so third_party/ is skipped here and in `fmt` above, on purpose.
+.PHONY: gofmt-check
+gofmt-check: ## Assert the Go sources are gofmt-clean (third_party/ is skipped)
+	@out="$$(git ls-files '*.go' | grep -v '^third_party/' | xargs -r gofmt -l)"; \
+	if [ -n "$$out" ]; then \
+		echo "gofmt wants to rewrite:"; echo "$$out"; \
+		echo "run: gofmt -w <the files above>, or make fmt"; exit 1; \
+	fi
+
 .PHONY: check
-check: tidy vet test ## Pre-commit gate: tidy + vet + test
+check: gofmt-check tidy vet test ## Pre-commit gate: gofmt-check + tidy + vet + test
 
 # ---- lemma data ---------------------------------------------------------
 # English is built in through golem; Russian is embedded from the checked-in

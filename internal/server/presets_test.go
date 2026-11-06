@@ -127,10 +127,10 @@ func TestPresetPaperMatchesItsOwnHalf(t *testing.T) {
 // wants var(--label); a disabled thing wants an entry here, with its reason.
 func TestGreyTextIsOnlyForDisabledStates(t *testing.T) {
 	allowed := map[string]string{
-		".qled":                   "the search field's mark: not a label, and its lightness is argued where it lives",
-		"details.noindex>summary": "a section the search could not run on",
-		".pd .rmgo.busy":          "a removal that is running and cannot be pressed",
-		".group-control-disabled": "a control the reader cannot act on",
+		".qled":                          "the search field's mark: not a label, and its lightness is argued where it lives",
+		"details.noindex>summary":        "a section the search could not run on",
+		".pd .rmgo.busy":                 "a removal that is running and cannot be pressed",
+		".group-control-disabled":        "a control the reader cannot act on",
 		".folders-dialog-scroll .row.no": "a candidate that cannot be installed",
 	}
 	// Each sheet with the names ITS greys go by: the app page's own, and the
