@@ -371,7 +371,7 @@ apk-verify: ## Assert the Play APK declares no storage permission and still extr
 # ---- quality ------------------------------------------------------------
 
 .PHONY: test
-test: ## Unit tests (integration tests skip unless WUDICT_TEST_MDX exists)
+test: ## Unit tests (an integration test skips unless its WUDICT_TEST_* variable is set)
 	CGO_ENABLED=1 $(TEST_ENV) go test $(GOFLAGS) ./...
 
 .PHONY: test-v
