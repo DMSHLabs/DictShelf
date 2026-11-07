@@ -31,16 +31,13 @@ func (r contextReader) Read(p []byte) (int, error) {
 	return r.ReadCloser.Read(p)
 }
 
-// ExportMDX saves the pinned collection as an MDX and, when needed, a companion
-// MDD. Existing files are never replaced. Both unfinished files are removed on
-// failure or cancellation.
+// ExportMDX writes the saved articles and resources from the collection's
+// prepared SQLite databases. Existing files are never replaced.
 func (s *Store) ExportMDX(ctx context.Context, folder string) (mdxPath, mddPath string, err error) {
-	snap, err := s.OpenSnapshot()
+	articles, err := s.Manifest()
 	if err != nil {
 		return "", "", err
 	}
-	defer snap.Close()
-	articles := snap.Articles()
 	if len(articles) == 0 {
 		return "", "", errors.New("the favourites collection is empty")
 	}
@@ -51,7 +48,10 @@ func (s *Store) ExportMDX(ctx context.Context, folder string) (mdxPath, mddPath 
 	if !info.IsDir() {
 		return "", "", errors.New("export path is not a folder")
 	}
-	name := snap.Name()
+	name, err := s.Name()
+	if err != nil {
+		return "", "", err
+	}
 	about, err := s.About()
 	if err != nil {
 		return "", "", err
@@ -63,58 +63,51 @@ func (s *Store) ExportMDX(ctx context.Context, folder string) (mdxPath, mddPath 
 			return "", "", err
 		}
 		article := article
-		assets := map[string]string{}
+		assetPaths := map[string]string{}
 		for _, asset := range article.Assets {
 			asset := asset
-			if !validObjectHash(asset.Hash) {
-				return "", "", fmt.Errorf("invalid resource in %q", article.Headword)
-			}
 			base := path.Base(strings.ReplaceAll(asset.Name, "\\", "/"))
 			if base == "" || base == "." || base == "/" {
 				base = "resource"
 			}
-			base = strings.ReplaceAll(base, "\\", "_")
 			rel := "_favourites/" + article.ID + "/" + path.Base(asset.Token) + path.Ext(base)
-			assets[asset.URL] = rel
-			object := filepath.Join(s.Objects(), asset.Hash)
-			st, statErr := os.Stat(object)
-			if statErr != nil {
-				return "", "", statErr
+			assetPaths[asset.URL] = rel
+			size, err := s.AssetSize(asset.Token)
+			if err != nil {
+				return "", "", err
 			}
-			mddEntries = append(mddEntries, mdictwrite.Entry{Key: "\\" + strings.ReplaceAll(rel, "/", "\\"), Size: st.Size(), Open: func() (io.ReadCloser, error) {
-				f, openErr := os.Open(object)
-				if openErr != nil {
-					return nil, openErr
+			token := asset.Token
+			mddEntries = append(mddEntries, mdictwrite.Entry{Key: "\\" + strings.ReplaceAll(rel, "/", "\\"), Size: size, Open: func() (io.ReadCloser, error) {
+				if err := ctx.Err(); err != nil {
+					return nil, err
 				}
-				return contextReader{ctx, f}, nil
+				reader, _, err := s.OpenAsset(token)
+				if err != nil {
+					return nil, err
+				}
+				return contextReader{Context: ctx, ReadCloser: reader}, nil
 			}})
 		}
-		body, bodyErr := snap.Body(article)
-		if bodyErr != nil {
-			return "", "", bodyErr
+		body, err := s.Body(article)
+		if err != nil {
+			return "", "", err
 		}
 		rewrite := func(body string) string {
 			return (htmlref.Rewriter{URL: func(ref htmlref.Ref) string {
-				if rel, ok := assets[ref.URL]; ok {
+				if rel, ok := assetPaths[ref.URL]; ok {
 					return rel
 				}
 				return ref.URL
 			}}).Rewrite(body)
 		}
-		size := len(rewrite(body)) + 1
-		mdxEntries = append(mdxEntries, mdictwrite.Entry{Key: article.Headword, Size: int64(size), Open: func() (io.ReadCloser, error) {
+		value := append([]byte(rewrite(body)), 0)
+		mdxEntries = append(mdxEntries, mdictwrite.Entry{Key: article.Headword, Size: int64(len(value)), Open: func() (io.ReadCloser, error) {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			body, err := snap.Body(article)
-			if err != nil {
-				return nil, err
-			}
-			return contextReader{ctx, io.NopCloser(bytes.NewReader(append([]byte(rewrite(body)), 0)))}, nil
+			return contextReader{Context: ctx, ReadCloser: io.NopCloser(bytes.NewReader(value))}, nil
 		}})
 	}
-	// Reserve a pair under the same base name. The exclusive create protects
-	// older exports even when another export starts in the same folder.
 	var mdxFile, mddFile *os.File
 	for n := 1; n <= 10000; n++ {
 		base := safeExportName(name)
@@ -139,13 +132,13 @@ func (s *Store) ExportMDX(ctx context.Context, folder string) (mdxPath, mddPath 
 			mddFile, err = os.OpenFile(mddPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 			if errors.Is(err, os.ErrExist) {
 				mdxFile.Close()
-				os.Remove(mdxPath)
+				_ = os.Remove(mdxPath)
 				mdxFile = nil
 				continue
 			}
 			if err != nil {
 				mdxFile.Close()
-				os.Remove(mdxPath)
+				_ = os.Remove(mdxPath)
 				return "", "", err
 			}
 		}
@@ -155,14 +148,14 @@ func (s *Store) ExportMDX(ctx context.Context, folder string) (mdxPath, mddPath 
 		return "", "", errors.New("no available export filename")
 	}
 	defer func() {
-		mdxFile.Close()
+		_ = mdxFile.Close()
 		if mddFile != nil {
-			mddFile.Close()
+			_ = mddFile.Close()
 		}
 		if err != nil {
-			os.Remove(mdxPath)
+			_ = os.Remove(mdxPath)
 			if mddFile != nil {
-				os.Remove(mddPath)
+				_ = os.Remove(mddPath)
 			}
 			mdxPath, mddPath = "", ""
 		}
@@ -191,7 +184,7 @@ func (s *Store) ExportMDX(ctx context.Context, folder string) (mdxPath, mddPath 
 
 func safeExportName(name string) string {
 	name = strings.Map(func(r rune) rune {
-		if r < 32 || strings.ContainsRune(`<>:"/\|?*`, r) {
+		if r < 32 || strings.ContainsRune(`<>:"/\\|?*`, r) {
 			return '_'
 		}
 		return r

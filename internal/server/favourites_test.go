@@ -53,11 +53,7 @@ func TestFavouriteSnapshotsRoundTripThroughServerAndPreparedMedia(t *testing.T) 
 	if !ok {
 		t.Fatalf("saved assets = %+v; source body refs = %+v", article.Assets, (htmlref.Rewriter{}).Refs(articleBody(t, s, sources[0].ID)))
 	}
-	dir, ok := store.LookupDir(s.favourites.Path())
-	if !ok {
-		t.Fatal("favourites was not prepared")
-	}
-	prepared, err := store.Open(store.TextDBPath(dir))
+	prepared, err := store.Open(s.favourites.Path())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +93,7 @@ func TestFavouriteSnapshotsRoundTripThroughServerAndPreparedMedia(t *testing.T) 
 	if err != nil || len(articles) != 0 {
 		t.Fatalf("snapshots after removal = %d, %v", len(articles), err)
 	}
-	if _, err := os.Stat(store.TextDBPath(dir)); err != nil {
+	if _, err := os.Stat(s.favourites.Path()); err != nil {
 		t.Fatalf("prepared empty dictionary missing: %v", err)
 	}
 }
@@ -186,7 +182,19 @@ func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
 	if aboutSaved.Code != http.StatusOK || !strings.Contains(aboutSaved.Body.String(), "German notes") {
 		t.Fatalf("description update status %d: %s", aboutSaved.Code, aboutSaved.Body.String())
 	}
+	collectionStore, _ := sets.Store(collection.ID)
+	for _, registered := range s.reg.all() {
+		t.Logf("registry id=%q path=%q", registered.ID, registered.Path)
+	}
+	t.Logf("created collection id=%q path=%q", collection.ID, collectionStore.Path())
+	meta, err := store.ReadMeta(collectionStore.Path())
+	if err != nil || meta["description"] != "German notes" {
+		t.Fatalf("saved dictionary description = %q, %v", meta["description"], err)
+	}
 	aboutShown := httptestNew(s, http.MethodGet, "/api/about?dict="+collection.ID, nil)
+	if e, err := s.reg.get(collection.ID); err == nil {
+		t.Logf("about path=%q meta=%+v", e.Path, store.Inspect(e.Path).Meta)
+	}
 	if aboutShown.Code != http.StatusOK || !strings.Contains(aboutShown.Body.String(), "German notes") {
 		t.Fatalf("dictionary description status %d: %s", aboutShown.Code, aboutShown.Body.String())
 	}

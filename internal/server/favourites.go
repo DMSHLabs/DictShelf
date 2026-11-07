@@ -10,15 +10,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
-	"path/filepath"
 	"strings"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/favorites"
 	"github.com/DMSHLabs/DictShelf/internal/htmlref"
-	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 type favouriteRequest struct {
@@ -150,21 +147,12 @@ func (s *Server) deleteFavouriteCollection(id string) error {
 	if err != nil {
 		return fmt.Errorf("%w: collection not found", favorites.ErrInvalidCollection)
 	}
-	preparedDir, hasPrepared := store.LookupDir(e.Path)
 	e.ingestMu.Lock()
 	e.rebuilding.Store(true)
 	e.openMu.Lock()
 	e.closeNow()
 	e.openMu.Unlock()
-	var deleteErr error
-	if hasPrepared {
-		release := e.walk.own()
-		_, deleteErr = store.RemovePrepared(preparedDir)
-		release()
-	}
-	if deleteErr == nil {
-		deleteErr = s.favSets.Delete(id)
-	}
+	deleteErr := s.favSets.Delete(id)
 	e.rebuilding.Store(false)
 	e.ingestMu.Unlock()
 	if deleteErr != nil {
@@ -189,17 +177,6 @@ func (s *Server) listFavouriteCollections() ([]favorites.CollectionInfo, error) 
 	collections, err := s.favSets.List()
 	if err != nil {
 		return nil, err
-	}
-	for i := range collections {
-		files := []string{collections[i].Path}
-		if dir, ok := store.LookupDir(collections[i].Path); ok {
-			for _, file := range []string{store.TextDBPath(dir), store.ArticlesFilePath(store.TextDBPath(dir)), store.MediaDBPath(dir)} {
-				if info, err := os.Stat(file); err == nil && !info.IsDir() {
-					files = append(files, filepath.Clean(file))
-				}
-			}
-		}
-		collections[i].Files = files
 	}
 	if s.reg != nil && s.reg.prefs != nil {
 		for i := range collections {
@@ -230,10 +207,6 @@ func (s *Server) createFavouriteCollection(name string) (favorites.CollectionInf
 		return favorites.CollectionInfo{}, err
 	}
 	collectionStore, _ := s.favSets.Store(collection.ID)
-	contains, fullText := true, true
-	if _, err := store.Reconcile(collectionStore.Path(), store.Target{Contains: &contains, FullText: &fullText, Media: store.MediaOn}, store.Hooks{}); err != nil {
-		return favorites.CollectionInfo{}, fmt.Errorf("could not prepare favourites: %w", err)
-	}
 	s.reg.AddBuiltin(Builtin{ID: collection.ID, Path: collectionStore.Path()})
 	if err := s.reg.rescan(false); err != nil {
 		return favorites.CollectionInfo{}, fmt.Errorf("could not register favourites: %w", err)
@@ -505,10 +478,6 @@ func (s *Server) rebuildFavourites(collectionID string, update func(*favorites.S
 	e.closeNow()
 	e.openMu.Unlock()
 	if err := update(collectionStore); err != nil {
-		return err
-	}
-	contains, fullText := true, true
-	if _, err := e.reconcileLocked("Favourites", store.Target{Contains: &contains, FullText: &fullText, Media: store.MediaOn}, nil); err != nil {
 		return err
 	}
 	collectionStore.Collect()

@@ -51,6 +51,15 @@ func OpenMedia(path string) (*Media, error) {
 
 func (m *Media) Close() error { return m.db.Close() }
 
+// ResourceSize returns the packed byte count without reading the BLOB.
+func (m *Media) ResourceSize(name string) (int64, error) {
+	var size int64
+	if err := m.db.QueryRow("SELECT length(data) FROM resource WHERE name=?", name).Scan(&size); err != nil {
+		return 0, err
+	}
+	return size, nil
+}
+
 // blobStreamMin is the size at which a packed resource stops being read
 // whole. Below it - stylesheets, icons, audio clips - one row read is the
 // cheapest possible answer. Above it - the videos and multi-megabyte PDFs

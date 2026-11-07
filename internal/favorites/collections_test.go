@@ -19,7 +19,7 @@ func TestCollectionsCreateDefaultAndPersistSiblingCollection(t *testing.T) {
 		t.Fatal(err)
 	}
 	defaultStore, ok := collections.Store(ID)
-	if !ok || defaultStore.Path() != filepath.Join(root, "fav", "favourites.favs") {
+	if !ok || defaultStore.Path() != filepath.Join(root, "fav", "text.db") {
 		t.Fatalf("default store = %#v, want a store below fav", defaultStore)
 	}
 	if _, err := os.Stat(defaultStore.Path()); err != nil {
@@ -32,7 +32,7 @@ func TestCollectionsCreateDefaultAndPersistSiblingCollection(t *testing.T) {
 	if created.ID == ID || !strings.HasPrefix(created.ID, ID+"-") {
 		t.Fatalf("new collection id = %q", created.ID)
 	}
-	if got := created.Path; got != filepath.Join(root, created.ID, created.ID+".favs") {
+	if got := created.Path; got != filepath.Join(root, created.ID, "text.db") {
 		t.Fatalf("new collection path = %q", got)
 	}
 
@@ -64,7 +64,7 @@ func TestCollectionsCreateDefaultForMissingAndEmptyRoots(t *testing.T) {
 				}
 			}
 			if rootKind == "empty-catalogue" {
-				if err := os.WriteFile(filepath.Join(root, "collections.json"), []byte(`{"version":2,"ids":[]}`), 0o600); err != nil {
+				if err := os.WriteFile(filepath.Join(root, "collections.json"), []byte(`{"version":3,"ids":[]}`), 0o600); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -112,7 +112,7 @@ func TestCollectionsRejectUnsafeCatalogueIDs(t *testing.T) {
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "collections.json"), []byte(`{"version":1,"ids":["favourites-../../outside"]}`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "collections.json"), []byte(`{"version":3,"ids":["favourites-../../outside"]}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := OpenCollections(root, "Favourites"); err == nil {
@@ -136,7 +136,7 @@ func TestCollectionsCanDeleteAnyButLastCollection(t *testing.T) {
 	if _, ok := collections.Store(ID); ok {
 		t.Fatal("deleted default collection remains available")
 	}
-	if _, err := os.Stat(filepath.Join(root, "fav", "favourites.favs")); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(filepath.Join(root, "fav", "text.db")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("deleted default file status = %v", err)
 	}
 	if err := collections.Delete(created.ID); err == nil {
