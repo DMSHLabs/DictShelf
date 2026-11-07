@@ -4676,7 +4676,7 @@ async function favouriteExportCall(action,extra={}){
   const body=JSON.stringify({action,...extra});
   if(window.wudictAndroidGo){const result=JSON.parse(window.wudictAndroidGo.favourites("POST",JSON.stringify({export:true,body})));if(result.status!==200)throw new Error(result.body?.error||tx("favourites.exportFailed"));return result.body}
   if(typeof window.wudictNativeCall==="function")return window.wudictNativeCall("favourites",JSON.stringify({method:"POST",export:true,body}));
-  const response=await fetch("/api/favourites/export",{method:"POST",headers:{"Content-Type":"application/json"},body});
+  const response=await apiFetch("/api/favourites/export",{method:"POST",headers:{"Content-Type":"application/json"},body});
   const value=await response.json();if(!response.ok)throw new Error(value.error||tx("favourites.exportFailed"));return value;
 }
 function favouriteExportStatus(st){
