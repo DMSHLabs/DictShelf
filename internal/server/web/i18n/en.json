@@ -374,6 +374,7 @@
   "browse.chooseHint": "Reading it word by word, A to Z.",
   "browse.empty": "Nothing to browse yet",
   "browse.emptyBody": "No dictionaries are loaded. Open the app to add some.",
+  "browse.noArticles": "This dictionary has no articles yet.",
   "browse.openApp": "Open the app",
   "browse.loadFailed": "Could not load the dictionary list. Reload this page to try again.",
   "panel.settings": "Settings",

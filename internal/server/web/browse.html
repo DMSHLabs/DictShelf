@@ -2027,10 +2027,24 @@ function promoteBrowseDictionaryRequest(){
   return fetch("/api/demand",{method:"POST",headers:{"Content-Type":"application/json"},body})
     .then(r=>{if(!r.ok)throw new Error("dictionary promotion failed");return r.json()}).then(value=>!!value.indexing);
 }
+/* Inside the app's shells there is no "the app" to open: this page IS the app's
+   page, so the wording and the link that were written for a browser's reader
+   read as nonsense in the window that reader is already looking at. A page that
+   really is a browser's keeps both; the shells get the plain sentence. */
+function browseInsideShell(){
+  return !!window.wudictAndroidGo||typeof window.wudictNativeCall==="function";
+}
 function drawBrowseIndexRequired(){
   browseIndexCardShown=true;
-  card("<b>"+tx("browse.indexRequired")+"</b><p><a href=\"/\">"+
-    tx("browse.openApp")+"</a></p><p><a href=\"/browse\">"+
+  card("<b>"+tx(browseInsideShell()?"errors.noIndex":"browse.indexRequired")+"</b>"+
+    (browseInsideShell()?"":'<p><a href="/">'+tx("browse.openApp")+"</a></p>")+
+    '<p><a href="/browse">'+tx("browse.chooseAnother")+"</a></p>");
+}
+/* A prepared dictionary with nothing in it is not an unprepared one: there is
+   no index to build because there is nothing to index. */
+function drawBrowseNoArticles(){
+  browseIndexCardShown=true;
+  card("<b>"+tx("browse.noArticles")+"</b><p><a href=\"/browse\">"+
     tx("browse.chooseAnother")+"</a></p>");
 }
 function drawBrowseIndexCard(watch){
@@ -2124,7 +2138,22 @@ async function pollBrowseIndex(watch){
      us here, which then falls back to the plain card rather than another round. */
   show(last,"none");
 }
+/* One place asks the server about a dictionary's own numbers, in the same three
+   transports the rest of this page uses. */
+async function browseAboutRequest(id){
+  if(window.wudictAndroidGo)return JSON.parse(window.wudictAndroidGo.about(location.origin,id));
+  if(typeof window.wudictNativeCall==="function")return window.wudictNativeCall("about",id);
+  const response=await fetch("/api/about?dict="+encodeURIComponent(id));
+  if(!response.ok)throw new Error(response.status);
+  return response.json();
+}
 async function unprepared(j={}){
+  /* A prepared pair with nothing in it answers 409 like an unbuilt one, and the
+     remedy below - raise it in the index queue - is a promise nothing can keep
+     for it: the index would be of nothing. The numbers say which case this is:
+     a prepared pair costs bytes, a dictionary that needs building has none. */
+  const info=await browseAboutRequest(dictId).catch(()=>null);
+  if(info&&Number(info.entries||0)===0&&Number(info.indexSize||0)>0)return drawBrowseNoArticles();
   startBrowseIndexWatch((j&&j.name)||dictId,true);
 }
 
@@ -2180,10 +2209,7 @@ async function showBrowseDictionaryInfo(id){
   about.textContent="…";
   if(!dialog.open)dialog.showModal();
   try{
-    let info;
-    if(window.wudictAndroidGo){info=JSON.parse(window.wudictAndroidGo.about(location.origin,id))}
-    else if(typeof window.wudictNativeCall==="function"){info=await window.wudictNativeCall("about",id)}
-    else{const response=await fetch("/api/about?dict="+encodeURIComponent(id));if(!response.ok)throw new Error(response.status);info=await response.json()}
+    const info=await browseAboutRequest(id);
     if(request!==browseDictInfoRequest||!dialog.open)return;
     paintCounts(d.headwords||info.headwords,d.entries||info.entries,info.fileSize||0,info.indexSize||0);
     paintPaths([...files,...(info.sourceFiles||[])]);
