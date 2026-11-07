@@ -217,11 +217,15 @@ func WudictGoBridgeRemoveLibrary(query *C.char) *C.char {
 
 //export WudictGoBridgeFavourites
 func WudictGoBridgeFavourites(method, body *C.char) *C.char {
-	if method == nil || body == nil { return nil }
+	if method == nil || body == nil {
+		return nil
+	}
 	nativeRuntime.Lock()
 	app := nativeRuntime.app
 	nativeRuntime.Unlock()
-	if app == nil { return C.CString(`{"status":503,"body":{"error":"Go runtime is unavailable"}}`) }
+	if app == nil {
+		return C.CString(`{"status":503,"body":{"error":"Go runtime is unavailable"}}`)
+	}
 	argument, _ := json.Marshal(map[string]string{"method": C.GoString(method), "body": C.GoString(body)})
 	value, err := app.Server.DesktopJSON("", "favourites", string(argument))
 	if err != nil {
@@ -229,7 +233,9 @@ func WudictGoBridgeFavourites(method, body *C.char) *C.char {
 		return C.CString(string(data))
 	}
 	data, err := json.Marshal(map[string]any{"status": 200, "body": value})
-	if err != nil { return nil }
+	if err != nil {
+		return nil
+	}
 	return C.CString(string(data))
 }
 
