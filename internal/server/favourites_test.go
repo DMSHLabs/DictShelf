@@ -185,6 +185,11 @@ func TestFavouriteSnapshotFindsEncodedImageInRealZIM(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer func() {
+			if entry, err := reg.get(favorites.ID); err == nil {
+				entry.closeNow()
+			}
+		}()
 		served := httptest.NewRecorder()
 		New(reg).ServeHTTP(served, newRequest(http.MethodGet, "/res/favourites/"+token, nil))
 		if served.Code != http.StatusOK || !bytes.Equal(served.Body.Bytes(), data) {
