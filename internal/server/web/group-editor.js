@@ -297,15 +297,16 @@ function updateGroupSplit(){
   const memberRows=$('groupRows'),availableRows=$('groupOtherRows');
   const gap=parseFloat(getComputedStyle(lists).rowGap)||0;
   const listsHeight=lists.clientHeight;
-  const halfHeight=Math.max(0,(listsHeight-gap)/2);
+  const panelSpace=Math.max(0,listsHeight-gap);
+  const inactiveTarget=panelSpace/3;
   const memberRow=groupRowHeight('groupRows'),availableRow=groupRowHeight('groupOtherRows');
   if(groupActivePanel==='available')editor.classList.add('compact-controls');
 
-  // Keep the inactive panel's search dock out of the way when its half cannot
-  // show two dictionary rows; the row list itself stays visible and scrollable.
-  if(groupActivePanel==='members'&&halfHeight<groupPanelChromeHeight(available,availableRows)+2*availableRow)
+  // The active list gets most of the room. Hide the inactive search dock only
+  // when its smaller share cannot hold the panel chrome and two dictionary rows.
+  if(groupActivePanel==='members'&&inactiveTarget<groupPanelChromeHeight(available,availableRows)+2*availableRow)
     available.classList.add('search-collapsed');
-  if(groupActivePanel==='available'&&halfHeight<groupPanelChromeHeight(members,memberRows)+2*memberRow)
+  if(groupActivePanel==='available'&&inactiveTarget<groupPanelChromeHeight(members,memberRows)+2*memberRow)
     members.classList.add('search-collapsed');
 
   const memberChrome=groupPanelChromeHeight(members,memberRows);
@@ -314,17 +315,13 @@ function updateGroupSplit(){
   const availableTen=availableChrome+groupRowsCapacityHeight(availableRows,10);
   const memberTwo=memberChrome+groupRowsCapacityHeight(memberRows,2);
   const availableTwo=availableChrome+groupRowsCapacityHeight(availableRows,2);
-  const bothFitTen=halfHeight>=memberTen&&halfHeight>=availableTen;
 
   if(groupActivePanel==='members'||groupActivePanel==='available'){
-    let memberHeight=halfHeight;
-    if(!bothFitTen){
-      const activeTen=groupActivePanel==='members'?memberTen:availableTen;
-      const inactiveTwo=groupActivePanel==='members'?availableTwo:memberTwo;
-      const activeHeight=Math.min(activeTen,Math.max(0,listsHeight-gap-inactiveTwo));
-      memberHeight=groupActivePanel==='members'?activeHeight:listsHeight-gap-activeHeight;
-      memberHeight=Math.max(0,Math.min(memberHeight,listsHeight-gap));
-    }
+    const activeTen=groupActivePanel==='members'?memberTen:availableTen;
+    const inactiveTwo=groupActivePanel==='members'?availableTwo:memberTwo;
+    const activeFloor=Math.ceil(panelSpace*2/3);
+    const activeHeight=Math.min(Math.max(0,panelSpace-inactiveTwo),Math.max(activeTen,activeFloor));
+    const memberHeight=groupActivePanel==='members'?activeHeight:panelSpace-activeHeight;
     lists.style.setProperty('--group-members-height',Math.ceil(memberHeight)+'px');
     lists.classList.add('members-sized');
   }
