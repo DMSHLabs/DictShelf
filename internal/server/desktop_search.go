@@ -686,9 +686,13 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 			Method      string `json:"method"`
 			Body        string `json:"body"`
 			Collections bool   `json:"collections"`
+			Export      bool   `json:"export"`
 		}
 		if len(argument) > 1<<20 || json.Unmarshal([]byte(argument), &request) != nil {
 			return nil, errors.New("invalid favourites operation")
+		}
+		if request.Export {
+			return s.favouriteExport(request.Body)
 		}
 		if request.Collections {
 			if s.favSets == nil {

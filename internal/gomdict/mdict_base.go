@@ -752,38 +752,48 @@ func (mdict *MdictBase) recordBlockAt(offset int64) *MdictRecordBlockInfoListIte
 }
 
 func (mdict *MdictBase) locateByKeywordEntry(item *MDictKeywordEntry) ([]byte, error) {
-	recordBlockInfo := mdict.recordBlockAt(item.RecordStartOffset)
-	if recordBlockInfo == nil {
-		return nil, fmt.Errorf("key-item record info not found (recordStartOffset=%d)", item.RecordStartOffset)
+	list := mdict.recordBlockInfo.recordInfoList
+	if len(list) == 0 {
+		return nil, errors.New("mdict: no record blocks")
 	}
-
-	recordBlockStartOffset := recordBlockInfo.compressAccumulatorOffset + mdict.recordBlockInfo.recordBlockDataStartOffset
-	recordBlockLen := recordBlockInfo.compressSize
-
-	recordBlock, err := mdict.decompressedRecordBlock(recordBlockStartOffset, recordBlockLen, recordBlockInfo)
-	if err != nil {
-		return nil, err
-	}
-
-	if int64(len(recordBlock)) != recordBlockInfo.deCompressSize {
-		return nil, errors.New("recordBlock length not equals decompress Size")
-	}
-
-	start := item.RecordStartOffset - recordBlockInfo.deCompressAccumulatorOffset
-	// End offsets are chained from the NEXT entry, which may be filed in a
-	// later record block, and a corrupt file can name anything at all: clamp
-	// to this block instead of slicing past it. 0 still means "to the end".
-	end := int64(len(recordBlock))
-	if item.RecordEndOffset != 0 {
-		if e := item.RecordEndOffset - recordBlockInfo.deCompressAccumulatorOffset; e < end {
-			end = e
+	last := list[len(list)-1]
+	totalEnd := last.deCompressAccumulatorOffset + last.deCompressSize
+	end := item.RecordEndOffset
+	if end == 0 {
+		block := mdict.recordBlockAt(item.RecordStartOffset)
+		if block == nil {
+			return nil, fmt.Errorf("key-item record info not found (recordStartOffset=%d)", item.RecordStartOffset)
 		}
+		end = block.deCompressAccumulatorOffset + block.deCompressSize
 	}
-	if start < 0 || start > end {
-		return nil, fmt.Errorf("record offsets out of range (start=%d end=%d block=%d)", start, end, len(recordBlock))
+	if item.RecordStartOffset < 0 || item.RecordStartOffset >= totalEnd || end < item.RecordStartOffset || end > totalEnd || end-item.RecordStartOffset > 512<<20 {
+		return nil, fmt.Errorf("record offsets out of range (start=%d end=%d total=%d)", item.RecordStartOffset, end, totalEnd)
 	}
-
-	data := recordBlock[start:end]
+	var data []byte
+	for pos := item.RecordStartOffset; pos < end; {
+		block := mdict.recordBlockAt(pos)
+		if block == nil {
+			return nil, fmt.Errorf("key-item record info not found (recordStartOffset=%d)", pos)
+		}
+		blockBytes, err := mdict.decompressedRecordBlock(block.compressAccumulatorOffset+mdict.recordBlockInfo.recordBlockDataStartOffset, block.compressSize, block)
+		if err != nil {
+			return nil, err
+		}
+		if int64(len(blockBytes)) != block.deCompressSize {
+			return nil, errors.New("recordBlock length not equals decompress Size")
+		}
+		start := pos - block.deCompressAccumulatorOffset
+		stop := min(end-block.deCompressAccumulatorOffset, block.deCompressSize)
+		if start < 0 || stop <= start {
+			return nil, errors.New("invalid record block span")
+		}
+		if data == nil && block.deCompressAccumulatorOffset+block.deCompressSize >= end {
+			data = blockBytes[start:stop]
+		} else {
+			data = append(data, blockBytes[start:stop]...)
+		}
+		pos = block.deCompressAccumulatorOffset + stop
+	}
 
 	if mdict.fileType == MdictTypeMdd {
 		return data, nil

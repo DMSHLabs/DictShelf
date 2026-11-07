@@ -808,6 +808,28 @@ paths:
         '400': { description: Invalid collection or deletion would remove the last collection }
         '500': { $ref: '#/components/responses/ServerError' }
 
+  /api/favourites/export:
+    post:
+      tags: [internal]
+      operationId: exportFavouriteCollection
+      x-internal: true
+      summary: Export a saved article collection as MDX and MDD
+      description: Start, inspect, or stop a collection export job. Starting requires a collection ID and an existing output folder.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [start, status, stop] }
+                id: { type: string }
+                path: { type: string }
+      responses:
+        '200': { description: Export job status }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
   /api/ingest:
     get:
       tags: [internal]
