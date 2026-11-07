@@ -2005,7 +2005,7 @@ async function apiFetch(url,options){
         nativeMethod="favourites";argument=JSON.stringify({method,body:options.body||"{}"});
       }
       else if(requestURL.pathname==="/api/favourites/collections"&&(method==="GET"||method==="POST"||method==="PUT"||method==="DELETE")){
-        nativeMethod="favourites";argument=JSON.stringify({method,collections:true,body:options.body||""});
+        nativeMethod="favourites";argument=JSON.stringify({method,collections:true,body:options?.body||""});
       }
       else if(requestURL.pathname==="/api/system-log"&&method==="DELETE")nativeMethod="clearSystemLog";
       else if(requestURL.pathname==="/api/orphans"&&method==="GET")nativeMethod="orphans";
