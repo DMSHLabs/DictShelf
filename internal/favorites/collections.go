@@ -158,6 +158,39 @@ func (c *Collections) Delete(id string) error {
 	return os.RemoveAll(trash)
 }
 
+func (c *Collections) Rename(id, name string) (CollectionInfo, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || !utf8.ValidString(name) || utf8.RuneCountInString(name) > 100 {
+		return CollectionInfo{}, fmt.Errorf("%w: name must contain 1 to 100 characters", ErrInvalidCollection)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if (id != ID && !validCollectionID(id)) || c.stores[id] == nil {
+		return CollectionInfo{}, fmt.Errorf("%w: collection not found", ErrInvalidCollection)
+	}
+	for _, currentID := range c.ids {
+		if currentID == id {
+			continue
+		}
+		currentName, err := c.stores[currentID].Name()
+		if err != nil {
+			return CollectionInfo{}, err
+		}
+		if strings.EqualFold(currentName, name) {
+			return CollectionInfo{}, fmt.Errorf("%w: a collection with that name already exists", ErrInvalidCollection)
+		}
+	}
+	set := c.stores[id]
+	if err := set.SetName(name); err != nil {
+		return CollectionInfo{}, err
+	}
+	m, err := set.currentManifest()
+	if err != nil {
+		return CollectionInfo{}, err
+	}
+	return CollectionInfo{ID: id, Name: name, Path: set.Path(), Articles: len(m.Articles), Size: m.TotalSize}, nil
+}
+
 func (c *Collections) Store(id string) (*Store, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

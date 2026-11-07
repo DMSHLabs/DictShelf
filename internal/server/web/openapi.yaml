@@ -762,6 +762,25 @@ paths:
         '201': { description: Collection created }
         '400': { description: Invalid or duplicate collection name }
         '500': { $ref: '#/components/responses/ServerError' }
+    put:
+      tags: [internal]
+      operationId: renameFavouriteCollection
+      x-internal: true
+      summary: Rename a saved article collection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, name]
+              properties:
+                id: { type: string }
+                name: { type: string, minLength: 1, maxLength: 100 }
+      responses:
+        '200': { description: Collection renamed }
+        '400': { description: Invalid or duplicate collection name }
+        '500': { $ref: '#/components/responses/ServerError' }
     delete:
       tags: [internal]
       operationId: deleteFavouriteCollection

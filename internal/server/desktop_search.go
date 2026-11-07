@@ -710,6 +710,16 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 				}
 				return map[string]bool{"deleted": true}, nil
 			}
+			if request.Method == http.MethodPut {
+				var rename struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				}
+				if json.Unmarshal([]byte(request.Body), &rename) != nil {
+					return nil, errors.New("invalid favourites collection request")
+				}
+				return s.renameFavouriteCollection(rename.ID, rename.Name)
+			}
 			if request.Method != http.MethodPost {
 				return nil, errors.New("invalid favourites collection operation")
 			}

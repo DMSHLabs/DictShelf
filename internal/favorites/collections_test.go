@@ -132,3 +132,27 @@ func TestCollectionsDeleteKeepsDefaultAndRemovesCustom(t *testing.T) {
 		t.Fatalf("reloaded collections = %v", ids)
 	}
 }
+
+func TestCollectionsRenameUpdatesNamesAndRejectsDuplicates(t *testing.T) {
+	collections, err := OpenCollections(filepath.Join(t.TempDir(), "favourites"), "Favourites")
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := collections.Create("Deutsch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := collections.Rename(created.ID, "German"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := collections.Rename(ID, "german"); err == nil {
+		t.Fatal("duplicate collection name was accepted")
+	}
+	list, err := collections.List()
+	if err != nil || len(list) != 2 || list[0].Name != "Favourites" || list[1].Name != "German" {
+		t.Fatalf("renamed collection list = %+v, %v", list, err)
+	}
+	if _, err := collections.Rename(created.ID, " "); err == nil {
+		t.Fatal("empty collection name was accepted")
+	}
+}

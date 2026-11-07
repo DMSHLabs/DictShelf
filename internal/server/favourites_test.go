@@ -154,6 +154,14 @@ func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
 	if duplicate.Code != http.StatusBadRequest {
 		t.Fatalf("duplicate collection status %d: %s", duplicate.Code, duplicate.Body.String())
 	}
+	renameBody, _ := json.Marshal(map[string]string{"id": collection.ID, "name": "Deutsch - English"})
+	renamed := httptestNew(s, http.MethodPut, "/api/favourites/collections", renameBody)
+	if renamed.Code != http.StatusOK {
+		t.Fatalf("rename collection status %d: %s", renamed.Code, renamed.Body.String())
+	}
+	if err := json.Unmarshal(renamed.Body.Bytes(), &collection); err != nil || collection.Name != "Deutsch - English" {
+		t.Fatalf("renamed collection = %+v, %v", collection, err)
+	}
 
 	requestBody, _ := json.Marshal(favouriteRequest{Dictionary: sources[0].ID, Headword: "corazón", Collection: collection.ID})
 	added := httptestNew(s, http.MethodPost, "/api/favourites", requestBody)

@@ -58,6 +58,26 @@ func (s *Server) handleFavouriteCollections(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, map[string]bool{"deleted": true})
 		return
 	}
+	if r.Method == http.MethodPut {
+		var request struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		}
+		if !decodeJSON(w, r, &request, 4096) {
+			return
+		}
+		collection, err := s.renameFavouriteCollection(request.ID, request.Name)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, favorites.ErrInvalidCollection) {
+				status = http.StatusBadRequest
+			}
+			httpErr(w, status, "%v", err)
+			return
+		}
+		writeJSON(w, collection)
+		return
+	}
 	if r.Method != http.MethodPost {
 		httpErr(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -79,6 +99,28 @@ func (s *Server) handleFavouriteCollections(w http.ResponseWriter, r *http.Reque
 	}
 	w.WriteHeader(http.StatusCreated)
 	writeJSON(w, collection)
+}
+
+func (s *Server) renameFavouriteCollection(id, name string) (favorites.CollectionInfo, error) {
+	if s.favSets == nil {
+		return favorites.CollectionInfo{}, errors.New("favourites are unavailable")
+	}
+	name = strings.TrimSpace(name)
+	collections, err := s.listFavouriteCollections()
+	if err != nil {
+		return favorites.CollectionInfo{}, err
+	}
+	for _, current := range collections {
+		if current.ID != id && strings.EqualFold(current.Name, name) {
+			return favorites.CollectionInfo{}, fmt.Errorf("%w: a collection with that name already exists", favorites.ErrInvalidCollection)
+		}
+	}
+	collection, err := s.favSets.Rename(id, name)
+	if err != nil {
+		return favorites.CollectionInfo{}, err
+	}
+	s.dictRows.flush()
+	return collection, nil
 }
 
 func (s *Server) deleteFavouriteCollection(id string) error {
