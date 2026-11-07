@@ -33,7 +33,7 @@ type Dict struct {
 }
 
 func Open(path string) (*Dict, error) {
-	s := favorites.New(filepath.Dir(path))
+	s := favorites.NewAt(filepath.Dir(path), filepath.Base(path))
 	snapshot, err := s.OpenSnapshot()
 	if err != nil {
 		return nil, err
@@ -43,7 +43,7 @@ func Open(path string) (*Dict, error) {
 }
 
 func Probe(path string) (dict.Meta, error) {
-	s := favorites.New(filepath.Dir(path))
+	s := favorites.NewAt(filepath.Dir(path), filepath.Base(path))
 	snapshot, err := s.OpenSnapshot()
 	if err != nil {
 		return dict.Meta{}, err
@@ -170,7 +170,7 @@ type Reader struct {
 }
 
 func NewReader(path string) (*Reader, error) {
-	s := favorites.New(filepath.Dir(path))
+	s := favorites.NewAt(filepath.Dir(path), filepath.Base(path))
 	snapshot, err := s.OpenSnapshot()
 	if err != nil {
 		return nil, err

@@ -115,6 +115,84 @@ func TestFavouriteResourceNameUnescapesURLPathOnlyOnce(t *testing.T) {
 	}
 }
 
+func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
+	s := newTestServer(t)
+	sources := getDicts(t, s, "/api/dicts")
+	if len(sources) != 1 {
+		t.Fatalf("source dictionaries = %d", len(sources))
+	}
+	sets, err := favorites.OpenCollections(filepath.Join(t.TempDir(), "favourites"), "Favourites")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.favSets = sets
+	s.favourites, _ = sets.Store(favorites.ID)
+	for _, collection := range mustCollectionList(t, sets) {
+		store, _ := sets.Store(collection.ID)
+		s.reg.AddBuiltin(Builtin{ID: collection.ID, Path: store.Path()})
+	}
+	if err := s.reg.rescan(false); err != nil {
+		t.Fatal(err)
+	}
+
+	created := httptestNew(s, http.MethodPost, "/api/favourites/collections", []byte(`{"name":"Deutsch"}`))
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create collection status %d: %s", created.Code, created.Body.String())
+	}
+	var collection favorites.CollectionInfo
+	if err := json.Unmarshal(created.Body.Bytes(), &collection); err != nil || collection.ID == "" || collection.Name != "Deutsch" {
+		t.Fatalf("created collection = %+v, %v", collection, err)
+	}
+	listed := httptestNew(s, http.MethodGet, "/api/favourites/collections", nil)
+	var list struct {
+		Collections []favorites.CollectionInfo `json:"collections"`
+	}
+	if listed.Code != http.StatusOK || json.Unmarshal(listed.Body.Bytes(), &list) != nil || len(list.Collections) != 2 || list.Collections[1].ID != collection.ID {
+		t.Fatalf("collection list status %d: %s", listed.Code, listed.Body.String())
+	}
+	duplicate := httptestNew(s, http.MethodPost, "/api/favourites/collections", []byte(`{"name":"deutsch"}`))
+	if duplicate.Code != http.StatusBadRequest {
+		t.Fatalf("duplicate collection status %d: %s", duplicate.Code, duplicate.Body.String())
+	}
+
+	requestBody, _ := json.Marshal(favouriteRequest{Dictionary: sources[0].ID, Headword: "corazón", Collection: collection.ID})
+	added := httptestNew(s, http.MethodPost, "/api/favourites", requestBody)
+	if added.Code != http.StatusOK {
+		t.Fatalf("add collection article status %d: %s", added.Code, added.Body.String())
+	}
+	copySearch := collectLookup(t, s, SearchRequest{Query: "corazón", Mode: "exact", Dictionary: collection.ID})
+	if len(copySearch) < 2 || len(copySearch[1].Results) != 1 || copySearch[1].Results[0].FavoriteID == "" {
+		t.Fatalf("saved article in custom collection = %+v", copySearch)
+	}
+	sourceSearch := collectLookup(t, s, SearchRequest{Query: "corazón", Mode: "exact", Dictionary: sources[0].ID})
+	if len(sourceSearch) < 2 || len(sourceSearch[1].Results) != 1 || len(sourceSearch[1].Results[0].FavoriteIn) != 1 || sourceSearch[1].Results[0].FavoriteIn[0] != collection.ID {
+		t.Fatalf("source collection membership = %+v", sourceSearch)
+	}
+
+	removeBody, _ := json.Marshal(favouriteRequest{FavoriteID: copySearch[1].Results[0].FavoriteID, Collection: collection.ID})
+	removed := httptestNew(s, http.MethodDelete, "/api/favourites", removeBody)
+	if removed.Code != http.StatusOK {
+		t.Fatalf("remove collection article status %d: %s", removed.Code, removed.Body.String())
+	}
+	store, ok := sets.Store(collection.ID)
+	if !ok {
+		t.Fatal("custom collection disappeared")
+	}
+	articles, err := store.Manifest()
+	if err != nil || len(articles) != 0 {
+		t.Fatalf("custom collection after removal = %d, %v", len(articles), err)
+	}
+}
+
+func mustCollectionList(t *testing.T, sets *favorites.Collections) []favorites.CollectionInfo {
+	t.Helper()
+	collections, err := sets.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return collections
+}
+
 func TestFavouriteSnapshotFindsEncodedImageInRealZIM(t *testing.T) {
 	p := os.Getenv("WUDICT_TEST_ZIM")
 	if p == "" {

@@ -88,27 +88,40 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 		dslRepairs = saved
 	}
 	dslformat.SetTitleRepairs(dslRepairs)
-	favourites := favorites.New(user.Favorites())
 	name := "Favourites"
 	if prefs.ResolvedLanguage("") == "ru" {
 		name = "Избранное"
 	}
-	if err := favourites.EnsureNamed(name); err != nil {
-		return nil, fmt.Errorf("provision favourites dictionary: %w", err)
+	favSets, err := favorites.OpenCollections(user.Favorites(), name)
+	if err != nil {
+		return nil, fmt.Errorf("provision favourites collections: %w", err)
 	}
-	fullText := true
-	if _, err := store.Reconcile(favourites.Path(), store.Target{FullText: &fullText, Media: store.MediaOn}, store.Hooks{}); err != nil {
-		return nil, fmt.Errorf("prepare favourites dictionary: %w", err)
+	collections, err := favSets.List()
+	if err != nil {
+		return nil, fmt.Errorf("list favourites collections: %w", err)
 	}
-	favourites.Collect()
+	var builtins []Builtin
+	for _, collection := range collections {
+		set, ok := favSets.Store(collection.ID)
+		if !ok {
+			return nil, fmt.Errorf("favourites collection %q is unavailable", collection.ID)
+		}
+		fullText := true
+		if _, err := store.Reconcile(set.Path(), store.Target{FullText: &fullText, Media: store.MediaOn}, store.Hooks{}); err != nil {
+			return nil, fmt.Errorf("prepare favourites collection %q: %w", collection.ID, err)
+		}
+		set.Collect()
+		builtins = append(builtins, Builtin{ID: collection.ID, Path: set.Path()})
+	}
 	reg, err := NewRegistry(cfg.DictDirs, cfg.UseCached,
-		WithPrefs(prefs), WithBuiltin(Builtin{ID: favorites.ID, Path: favourites.Path()}))
+		WithPrefs(prefs), WithBuiltin(builtins...))
 	if err != nil {
 		return nil, err
 	}
 	reg.SetPreviewBudget(cfg.PreviewMemory)
 	s := New(reg)
-	s.favourites = favourites
+	s.favSets = favSets
+	s.favourites, _ = favSets.Store(favorites.ID)
 	s.UseUserGroups()
 	s.ConfigPath = configPath
 	s.User = user

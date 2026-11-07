@@ -723,6 +723,44 @@ paths:
         '404': { description: Snapshot not found }
         '500': { $ref: '#/components/responses/ServerError' }
 
+  /api/favourites/collections:
+    get:
+      tags: [internal]
+      operationId: listFavouriteCollections
+      x-internal: true
+      summary: List saved article collections
+      responses:
+        '200':
+          description: Available collections
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [collections]
+                properties:
+                  collections:
+                    type: array
+                    items: { $ref: '#/components/schemas/FavouriteCollection' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    post:
+      tags: [internal]
+      operationId: createFavouriteCollection
+      x-internal: true
+      summary: Create a saved article collection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+      responses:
+        '201': { description: Collection created }
+        '400': { description: Invalid or duplicate collection name }
+        '500': { $ref: '#/components/responses/ServerError' }
+
   /api/ingest:
     get:
       tags: [internal]
@@ -3321,6 +3359,14 @@ components:
         Contains: { type: boolean }
         FTS: { type: boolean }
 
+    FavouriteCollection:
+      type: object
+      required: [id, name, path]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        path: { type: string }
+
     Result:
       type: object
       description: One article. Field names are capitalised on the wire.
@@ -3331,6 +3377,10 @@ components:
           description: Article HTML, in the requested format.
         entryId: { type: integer, description: Prepared article ID used for resource resolution. }
         favorite: { type: boolean, description: This source article already has a saved snapshot. }
+        favoriteIn:
+          type: array
+          items: { type: string }
+          description: Collection IDs that contain this source article.
         favoriteId: { type: string, description: Snapshot ID, present for articles in the favourites dictionary. }
         favoriteSource:
           type: object

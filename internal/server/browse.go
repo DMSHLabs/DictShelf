@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
-	"github.com/DMSHLabs/DictShelf/internal/favorites"
 	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 	"github.com/DMSHLabs/DictShelf/internal/lang"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
@@ -843,7 +842,7 @@ func (s *Server) headwordLemmaQuery(e *entry, d dict.Dictionary, query, mode str
 }
 
 func (s *Server) headwordLemmaFor(e *entry, d dict.Dictionary, query string) string {
-	if e.ID == favorites.ID {
+	if s.isFavouriteDictionaryID(e.ID) {
 		return query
 	}
 	meta := d.Meta()

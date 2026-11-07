@@ -683,10 +683,33 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 		return result, err
 	case "favourites":
 		var request struct {
-			Method string `json:"method"`
-			Body   string `json:"body"`
+			Method      string `json:"method"`
+			Body        string `json:"body"`
+			Collections bool   `json:"collections"`
 		}
-		if len(argument) > 8192 || json.Unmarshal([]byte(argument), &request) != nil || (request.Method != http.MethodPost && request.Method != http.MethodDelete) {
+		if len(argument) > 8192 || json.Unmarshal([]byte(argument), &request) != nil {
+			return nil, errors.New("invalid favourites operation")
+		}
+		if request.Collections {
+			if s.favSets == nil {
+				return nil, errors.New("favourites are unavailable")
+			}
+			if request.Method == http.MethodGet {
+				collections, err := s.listFavouriteCollections()
+				return map[string]any{"collections": collections}, err
+			}
+			if request.Method != http.MethodPost {
+				return nil, errors.New("invalid favourites collection operation")
+			}
+			var create struct {
+				Name string `json:"name"`
+			}
+			if json.Unmarshal([]byte(request.Body), &create) != nil {
+				return nil, errors.New("invalid favourites collection request")
+			}
+			return s.createFavouriteCollection(create.Name)
+		}
+		if request.Method != http.MethodPost && request.Method != http.MethodDelete {
 			return nil, errors.New("invalid favourites operation")
 		}
 		var action favouriteRequest

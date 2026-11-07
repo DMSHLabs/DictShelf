@@ -23,6 +23,93 @@ type favouriteRequest struct {
 	Dictionary string `json:"dict"`
 	Headword   string `json:"headword"`
 	FavoriteID string `json:"favoriteId"`
+	Collection string `json:"collectionId"`
+}
+
+func (s *Server) handleFavouriteCollections(w http.ResponseWriter, r *http.Request) {
+	if s.favSets == nil {
+		httpErr(w, http.StatusServiceUnavailable, "favourites are unavailable")
+		return
+	}
+	if r.Method == http.MethodGet {
+		collections, err := s.listFavouriteCollections()
+		if err != nil {
+			httpErr(w, http.StatusInternalServerError, "could not list favourites: %v", err)
+			return
+		}
+		writeJSON(w, map[string]any{"collections": collections})
+		return
+	}
+	if r.Method != http.MethodPost {
+		httpErr(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var request struct {
+		Name string `json:"name"`
+	}
+	if !decodeJSON(w, r, &request, 4096) {
+		return
+	}
+	collection, err := s.createFavouriteCollection(request.Name)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, favorites.ErrInvalidCollection) {
+			status = http.StatusBadRequest
+		}
+		httpErr(w, status, "%v", err)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	writeJSON(w, collection)
+}
+
+func (s *Server) listFavouriteCollections() ([]favorites.CollectionInfo, error) {
+	if s.favSets == nil {
+		return nil, errors.New("favourites are unavailable")
+	}
+	collections, err := s.favSets.List()
+	if err != nil {
+		return nil, err
+	}
+	if s.reg != nil && s.reg.prefs != nil {
+		for i := range collections {
+			if title := s.reg.prefs.DisplayTitle(collections[i].ID); title != "" {
+				collections[i].Name = title
+			}
+		}
+	}
+	return collections, nil
+}
+
+func (s *Server) createFavouriteCollection(name string) (favorites.CollectionInfo, error) {
+	if s.favSets == nil {
+		return favorites.CollectionInfo{}, errors.New("favourites are unavailable")
+	}
+	name = strings.TrimSpace(name)
+	current, err := s.listFavouriteCollections()
+	if err != nil {
+		return favorites.CollectionInfo{}, err
+	}
+	for _, collection := range current {
+		if strings.EqualFold(collection.Name, name) {
+			return favorites.CollectionInfo{}, fmt.Errorf("%w: a collection with that name already exists", favorites.ErrInvalidCollection)
+		}
+	}
+	collection, err := s.favSets.Create(name)
+	if err != nil {
+		return favorites.CollectionInfo{}, err
+	}
+	collectionStore, _ := s.favSets.Store(collection.ID)
+	fullText := true
+	if _, err := store.Reconcile(collectionStore.Path(), store.Target{FullText: &fullText, Media: store.MediaOn}, store.Hooks{}); err != nil {
+		return favorites.CollectionInfo{}, fmt.Errorf("could not prepare favourites: %w", err)
+	}
+	s.reg.AddBuiltin(Builtin{ID: collection.ID, Path: collectionStore.Path()})
+	if err := s.reg.rescan(false); err != nil {
+		return favorites.CollectionInfo{}, fmt.Errorf("could not register favourites: %w", err)
+	}
+	s.dictRows.flush()
+	return collection, nil
 }
 
 func (s *Server) handleFavourites(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +139,7 @@ func (s *Server) handleFavourites(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, dict.ErrNotFound) || errors.Is(err, io.EOF) {
 			status = http.StatusNotFound
 		}
-		if strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "unknown dictionary") {
+		if strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "unknown dictionary") || strings.Contains(err.Error(), "unknown favourites collection") {
 			status = http.StatusBadRequest
 		}
 		httpErr(w, status, "%v", err)
@@ -66,8 +153,16 @@ func (s *Server) addFavourite(req favouriteRequest) error {
 	if id == "" || word == "" {
 		return fmt.Errorf("dictionary and headword are required")
 	}
-	if id == favorites.ID {
+	if s.isFavouriteDictionaryID(id) {
 		return fmt.Errorf("an article in favourites cannot be saved again")
+	}
+	collectionID := strings.TrimSpace(req.Collection)
+	if collectionID == "" {
+		collectionID = favorites.ID
+	}
+	_, ok := s.favouriteStore(collectionID)
+	if !ok {
+		return fmt.Errorf("unknown favourites collection")
 	}
 	e, err := s.reg.get(id)
 	if err != nil {
@@ -119,10 +214,10 @@ func (s *Server) addFavourite(req favouriteRequest) error {
 	counts := s.aboutSourceFor(e)
 	provenance := favorites.Provenance{DictionaryID: id, DictionaryName: name, SourcePath: e.Path,
 		Headword: row.Headword, Headwords: counts.headwords, Articles: counts.entries, EntryID: fmt.Sprint(row.EntryID)}
-	if _, err := s.favourites.Add(provenance, row.Body, assets); err != nil {
+	return s.rebuildFavourites(collectionID, func(target *favorites.Store) error {
+		_, err := target.Add(provenance, row.Body, assets)
 		return err
-	}
-	return s.rebuildFavourites()
+	})
 }
 
 func (s *Server) removeFavourite(req favouriteRequest) error {
@@ -130,10 +225,42 @@ func (s *Server) removeFavourite(req favouriteRequest) error {
 	if id == "" {
 		return fmt.Errorf("favoriteId is required")
 	}
-	if err := s.favourites.Remove(id); err != nil {
-		return err
+	collectionID := strings.TrimSpace(req.Collection)
+	if collectionID == "" {
+		collectionID = favorites.ID
 	}
-	return s.rebuildFavourites()
+	_, ok := s.favouriteStore(collectionID)
+	if !ok {
+		return fmt.Errorf("unknown favourites collection")
+	}
+	return s.rebuildFavourites(collectionID, func(target *favorites.Store) error {
+		return target.Remove(id)
+	})
+}
+
+func (s *Server) favouriteStore(id string) (*favorites.Store, bool) {
+	if s.favSets != nil {
+		return s.favSets.Store(id)
+	}
+	if id == favorites.ID && s.favourites != nil {
+		return s.favourites, true
+	}
+	return nil, false
+}
+
+func (s *Server) favouriteIDs() []string {
+	if s.favSets != nil {
+		return s.favSets.IDs()
+	}
+	if s.favourites != nil {
+		return []string{favorites.ID}
+	}
+	return nil
+}
+
+func (s *Server) isFavouriteDictionaryID(id string) bool {
+	_, ok := s.favouriteStore(id)
+	return ok
 }
 
 func favouriteResourceName(ref htmlref.Ref) (string, bool) {
@@ -173,8 +300,12 @@ func favouriteResourceName(ref htmlref.Ref) (string, bool) {
 	return name, true
 }
 
-func (s *Server) rebuildFavourites() error {
-	e, err := s.reg.get(favorites.ID)
+func (s *Server) rebuildFavourites(collectionID string, update func(*favorites.Store) error) error {
+	collectionStore, ok := s.favouriteStore(collectionID)
+	if !ok {
+		return fmt.Errorf("unknown favourites collection")
+	}
+	e, err := s.reg.get(collectionID)
 	if err != nil {
 		return err
 	}
@@ -185,11 +316,14 @@ func (s *Server) rebuildFavourites() error {
 	e.openMu.Lock()
 	e.closeNow()
 	e.openMu.Unlock()
+	if err := update(collectionStore); err != nil {
+		return err
+	}
 	yes := true
 	if _, err := e.reconcileLocked("Favourites", store.Target{FullText: &yes, Media: store.MediaOn}, nil); err != nil {
 		return err
 	}
-	s.favourites.Collect()
+	collectionStore.Collect()
 	if err := s.reg.rescan(false); err != nil {
 		return err
 	}
@@ -200,7 +334,7 @@ func (s *Server) decorateFavourite(dictionaryID string, result *dict.Result) {
 	if s.favourites == nil || result == nil {
 		return
 	}
-	if dictionaryID == favorites.ID {
+	if s.isFavouriteDictionaryID(dictionaryID) {
 		if result.FavoriteID == "" || result.FavoriteSource == nil {
 			if e, err := s.reg.get(dictionaryID); err == nil {
 				if d, err := e.open(); err == nil {
@@ -222,7 +356,13 @@ func (s *Server) decorateFavourite(dictionaryID string, result *dict.Result) {
 		s.decorateFavouriteSource(result.FavoriteSource)
 		return
 	}
-	result.Favorite = s.favourites.Has(dictionaryID, result.Headword)
+	for _, collectionID := range s.favouriteIDs() {
+		collectionStore, ok := s.favouriteStore(collectionID)
+		if ok && collectionStore.Has(dictionaryID, result.Headword) {
+			result.FavoriteIn = append(result.FavoriteIn, collectionID)
+		}
+	}
+	result.Favorite = len(result.FavoriteIn) > 0
 }
 
 func (s *Server) decorateFavouriteSource(source *dict.FavoriteSource) {

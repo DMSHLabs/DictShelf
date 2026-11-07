@@ -20,7 +20,6 @@ import (
 	"sync"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
-	"github.com/DMSHLabs/DictShelf/internal/favorites"
 	lsdformat "github.com/DMSHLabs/DictShelf/internal/format/lsd"
 	"github.com/DMSHLabs/DictShelf/internal/fsx"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
@@ -62,7 +61,7 @@ func (s *Server) handleDictionaryIcon(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if id == favorites.ID {
+	if s.isFavouriteDictionaryID(id) {
 		w.Header().Set("Content-Type", "image/svg+xml")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "public, max-age=604800, immutable")

@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
-	"github.com/DMSHLabs/DictShelf/internal/favorites"
 	"github.com/DMSHLabs/DictShelf/internal/fsx"
 	"github.com/DMSHLabs/DictShelf/internal/howto"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
@@ -340,7 +339,7 @@ func (s *Server) removeLibrary(q url.Values) (removal, int, error) {
 	if id == "" {
 		return removal{}, http.StatusBadRequest, fmt.Errorf("missing dict parameter")
 	}
-	if id == favorites.ID {
+	if s.isFavouriteDictionaryID(id) {
 		return removal{}, http.StatusConflict, fmt.Errorf("remove articles from the favourites dictionary instead")
 	}
 	// both default on: Remove… deletes the whole dictionary unless told to keep a half
