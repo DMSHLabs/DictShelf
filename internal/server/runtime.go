@@ -17,6 +17,7 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/logx"
 	"github.com/DMSHLabs/DictShelf/internal/morph"
 	"github.com/DMSHLabs/DictShelf/internal/search"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // Runtime is the application state shared by the HTTP adapter and native
@@ -95,6 +96,11 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 	if err := favourites.EnsureNamed(name); err != nil {
 		return nil, fmt.Errorf("provision favourites dictionary: %w", err)
 	}
+	fullText := true
+	if _, err := store.Reconcile(favourites.Path(), store.Target{FullText: &fullText, Media: store.MediaOn}, store.Hooks{}); err != nil {
+		return nil, fmt.Errorf("prepare favourites dictionary: %w", err)
+	}
+	favourites.Collect()
 	reg, err := NewRegistry(cfg.DictDirs, cfg.UseCached,
 		WithPrefs(prefs), WithBuiltin(Builtin{ID: favorites.ID, Path: favourites.Path()}))
 	if err != nil {

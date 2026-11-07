@@ -25,6 +25,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/favorites"
 	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 	"github.com/DMSHLabs/DictShelf/internal/lang"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
@@ -757,6 +758,9 @@ func (s *Server) mergedHeadwordLemmaQuery(q url.Values, within, withinMode strin
 		}
 		e, err := s.reg.get(id)
 		if err != nil {
+			continue
+		}
+		if e.ID == favorites.ID {
 			continue
 		}
 		d, err := e.open()

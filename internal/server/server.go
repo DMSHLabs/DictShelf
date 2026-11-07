@@ -1322,12 +1322,13 @@ func needsFoldedReindex(meta map[string]string) bool {
 // cost here is paid a hundred times at startup.
 func (s *Server) langFacts(info *dictInfo, name, declared, contents string) {
 	in := facet.Input{
-		Name:     name,
-		Path:     langPath(info.Path),
-		Roots:    s.reg.Dirs(),
-		Declared: declared,
-		Contents: contents,
-		File:     filepath.Base(langPath(info.Path)),
+		Name:               name,
+		Path:               langPath(info.Path),
+		Roots:              s.reg.Dirs(),
+		Declared:           declared,
+		Contents:           contents,
+		File:               filepath.Base(langPath(info.Path)),
+		SkipLanguageFacets: info.ID == favorites.ID,
 	}
 	info.Groups = s.pickerGroups(in)
 	if s.userGroupsOnly {

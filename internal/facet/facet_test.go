@@ -70,6 +70,16 @@ func TestDeriveLanguage(t *testing.T) {
 	}
 }
 
+func TestMixedLanguageCollectionSkipsLanguageFacets(t *testing.T) {
+	in := Input{Name: "Избранное", Path: "/data/favourites.favs", SkipLanguageFacets: true}
+	if got := Derive(in); len(got) != 0 {
+		t.Fatalf("mixed-language collection groups = %+v", got)
+	}
+	if got := ArticleLang(in); got != "" {
+		t.Fatalf("mixed-language collection article language = %q", got)
+	}
+}
+
 // One label per pair whichever way round the dictionary is written, so the two
 // directions count as one group in the picker.
 func TestPairLabel(t *testing.T) {

@@ -420,6 +420,9 @@ func (s *Server) searchTermFor(entries []*entry, mode search.Mode, q string) fun
 		return nil
 	}
 	return func(i int, meta dict.Meta, typed string) string {
+		if entries[i].ID == favorites.ID {
+			return typed
+		}
 		code := lang.Resolve(meta.IndexLang, langPath(entries[i].Path), s.reg.Dirs(), meta.Name)
 		if code == "" {
 			code = "en"

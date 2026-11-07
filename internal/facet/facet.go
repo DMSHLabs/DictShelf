@@ -62,13 +62,14 @@ type Group struct {
 // prepared dictionary that is the library FOLDER, not the text.db inside it
 // (the server's langPath does that reduction).
 type Input struct {
-	Name     string   // the dictionary's own title
-	Path     string   // source path, or library folder
-	Roots    []string // configured dictionary directories, to bound the folder walk
-	Declared string   // what the format declares for the HEADWORD language
-	Contents string   // what it declares for the ARTICLE language (DSL, BGL)
-	Rules    *Rules   // the groups.ini in effect; nil is the embedded default
-	File     string   // the file (or library folder) name as on disk; "" takes Path's base
+	Name               string   // the dictionary's own title
+	Path               string   // source path, or library folder
+	Roots              []string // configured dictionary directories, to bound the folder walk
+	Declared           string   // what the format declares for the HEADWORD language
+	Contents           string   // what it declares for the ARTICLE language (DSL, BGL)
+	Rules              *Rules   // the groups.ini in effect; nil is the embedded default
+	File               string   // the file (or library folder) name as on disk; "" takes Path's base
+	SkipLanguageFacets bool     // for collections that can contain many languages
 }
 
 const (
@@ -85,11 +86,13 @@ const (
 // nothing could be established, which is a normal answer.
 func Derive(in Input) []Group {
 	var out []Group
-	if code := lang.Resolve(in.Declared, in.Path, in.Roots, in.Name); code != "" {
-		out = append(out, Group{F: "lang", FL: "Language", FO: foLang, V: code, VL: lang.Name(code)})
-	}
-	if v, l := languagePair(in); v != "" {
-		out = append(out, Group{F: "pair", FL: "Language pair", FO: foPair, V: v, VL: l})
+	if !in.SkipLanguageFacets {
+		if code := lang.Resolve(in.Declared, in.Path, in.Roots, in.Name); code != "" {
+			out = append(out, Group{F: "lang", FL: "Language", FO: foLang, V: code, VL: lang.Name(code)})
+		}
+		if v, l := languagePair(in); v != "" {
+			out = append(out, Group{F: "pair", FL: "Language pair", FO: foPair, V: v, VL: l})
+		}
 	}
 	rules := in.Rules
 	if rules == nil {
@@ -164,6 +167,9 @@ func languagePair(in Input) (string, string) {
 // it picks a voice, and the reader overrides a wrong one with a tap - which is
 // why the monolingual assumption is acceptable here and not in Derive.
 func ArticleLang(in Input) string {
+	if in.SkipLanguageFacets {
+		return ""
+	}
 	if c := lang.FromDeclared(in.Contents); c != "" {
 		return c
 	}
