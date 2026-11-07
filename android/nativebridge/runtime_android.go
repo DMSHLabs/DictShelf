@@ -226,7 +226,19 @@ func WudictGoBridgeFavourites(method, body *C.char) *C.char {
 	if app == nil {
 		return C.CString(`{"status":503,"body":{"error":"Go runtime is unavailable"}}`)
 	}
-	argument, _ := json.Marshal(map[string]string{"method": C.GoString(method), "body": C.GoString(body)})
+	bodyText := C.GoString(body)
+	var collectionsRequest struct {
+		Collections bool   `json:"collections"`
+		Body        string `json:"body"`
+	}
+	var argument []byte
+	if json.Unmarshal([]byte(bodyText), &collectionsRequest) == nil && collectionsRequest.Collections {
+		argument, _ = json.Marshal(map[string]any{
+			"method": C.GoString(method), "collections": true, "body": collectionsRequest.Body,
+		})
+	} else {
+		argument, _ = json.Marshal(map[string]string{"method": C.GoString(method), "body": bodyText})
+	}
 	value, err := app.Server.DesktopJSON("", "favourites", string(argument))
 	if err != nil {
 		data, _ := json.Marshal(map[string]any{"status": 400, "body": map[string]string{"error": err.Error()}})

@@ -1880,9 +1880,9 @@ async function apiFetch(url,options){
     }
     if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/favourites/collections"&&
        (method==="GET"||method==="POST"||method==="PUT"||method==="DELETE")){
-      const result=JSON.parse(window.wudictAndroidGo.favourites(method,JSON.stringify({collections:true,body:options?.body||""})));
-      const value=result.body||{error:"could not update favourites"};
-      return {ok:result.status>=200&&result.status<300,status:result.status,
+      const result=JSON.parse(window.wudictAndroidGo.favourites(method,JSON.stringify({collections:true,body:options?.body||""})))||{};
+      const status=result.status||500,value=result.body||{error:"could not update favourites"};
+      return {ok:status>=200&&status<300,status,
         json:async()=>value,text:async()=>JSON.stringify(value)};
     }
     if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/system-log"&&method==="DELETE"){
