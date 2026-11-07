@@ -2385,6 +2385,11 @@ html:is([data-shell-sepia],[data-shell-image]) .list-search-input{background-col
 #favouritesExportDialog .export-path>label{flex:none;white-space:nowrap}
 #favouritesExportDialog .export-path>input{flex:1 1 0;width:0;min-width:0}
 #favouritesExportDialog .export-footer{margin-top:auto;padding-top:.6em}
+/* The status line is a paragraph with the usual margins, and while it is empty
+   it must not hold the footer away from the rows above it: it appears with the
+   export's own status and takes its space only then. */
+#favouritesExportDialog p{margin:0}
+#favouritesExportDialog #favouritesExportStatus:empty{display:none}
 #favouritesExportDialog #favouritesExportClose{margin-inline-start:auto}
 @font-face{font-family:"wudict-Charis";font-weight:400;font-style:normal;src:url("/assets/fonts/Charis-Regular.woff2?v=7.000") format("woff2")}
 @font-face{font-family:"wudict-Charis";font-weight:400;font-style:italic;src:url("/assets/fonts/Charis-Italic.woff2?v=7.000") format("woff2")}
