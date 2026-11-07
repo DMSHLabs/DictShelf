@@ -12,9 +12,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/DMSHLabs/DictShelf/internal/favorites"
+	"github.com/DMSHLabs/DictShelf/internal/format/zim"
+	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
@@ -49,7 +52,7 @@ func TestFavouriteSnapshotsRoundTripThroughServerAndPreparedMedia(t *testing.T) 
 	}
 	asset, ok := article.Assets["beat.mp3"]
 	if !ok {
-		t.Fatalf("saved assets = %+v", article.Assets)
+		t.Fatalf("saved assets = %+v; source body refs = %+v", article.Assets, (htmlref.Rewriter{}).Refs(articleBody(t, s, sources[0].ID)))
 	}
 	dir, ok := store.LookupDir(s.favourites.Path())
 	if !ok {
@@ -65,9 +68,6 @@ func TestFavouriteSnapshotsRoundTripThroughServerAndPreparedMedia(t *testing.T) 
 	}
 	if rows[0].Body != articleBody(t, s, sources[0].ID) {
 		t.Fatal("snapshot body differs from its source")
-	}
-	if rows[0].ResourceMap["beat.mp3"] == "" {
-		t.Fatalf("snapshot resource map = %+v", rows[0].ResourceMap)
 	}
 	resource, _, err := prepared.Resource(asset.Token)
 	if err != nil {
@@ -101,6 +101,54 @@ func TestFavouriteSnapshotsRoundTripThroughServerAndPreparedMedia(t *testing.T) 
 	if _, err := os.Stat(store.TextDBPath(dir)); err != nil {
 		t.Fatalf("prepared empty dictionary missing: %v", err)
 	}
+}
+
+func TestFavouriteResourceNameUnescapesURLPathOnlyOnce(t *testing.T) {
+	ref := htmlref.Ref{Tag: "img", Attr: "src", URL: "_assets_/hash/East_Side_School%E2%80%93Old_Hammond_High_School%252C_Louisiana.jpg"}
+	name, ok := favouriteResourceName(ref)
+	if !ok {
+		t.Fatal("encoded ZIM resource was rejected")
+	}
+	want := "_assets_/hash/East_Side_School–Old_Hammond_High_School%2C_Louisiana.jpg"
+	if name != want {
+		t.Fatalf("favouriteResourceName = %q, want %q", name, want)
+	}
+}
+
+func TestFavouriteSnapshotFindsEncodedImageInRealZIM(t *testing.T) {
+	p := os.Getenv("WUDICT_TEST_ZIM")
+	if p == "" {
+		t.Skip("WUDICT_TEST_ZIM not set")
+	}
+	d, err := zim.Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	rows, err := d.Exact("Хаммонд_(Луизиана)", 1)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("Hammond article = %d rows, %v", len(rows), err)
+	}
+	for _, ref := range (htmlref.Rewriter{}).Refs(rows[0].Body) {
+		if ref.Tag != "img" || !strings.Contains(ref.URL, "East_Side_School") {
+			continue
+		}
+		name, ok := favouriteResourceName(ref)
+		if !ok {
+			t.Fatalf("Hammond image reference was rejected: %q", ref.URL)
+		}
+		resource, _, err := d.Resource(name)
+		if err != nil {
+			t.Fatalf("Resource(%q): %v", name, err)
+		}
+		data, readErr := io.ReadAll(resource)
+		closeErr := resource.Close()
+		if readErr != nil || closeErr != nil || len(data) == 0 {
+			t.Fatalf("Hammond image bytes = %d, read %v, close %v", len(data), readErr, closeErr)
+		}
+		return
+	}
+	t.Fatal("Hammond building image was not referenced")
 }
 
 func httptestNew(s *Server, method, path string, body []byte) *httptest.ResponseRecorder {

@@ -154,10 +154,11 @@ func favouriteResourceName(ref htmlref.Ref) (string, bool) {
 	if strings.HasPrefix(u.Path, "/assets/") || strings.HasPrefix(u.Path, "/res/") || strings.HasPrefix(u.Path, userFileURL) {
 		return "", false
 	}
-	name, err := url.PathUnescape(u.Path)
-	if err != nil {
-		return "", false
-	}
+	// url.Parse has already unescaped Path once. Keep any remaining escape
+	// sequences literal: a ZIM can store a filename containing "%2C", whose
+	// article URL spells that percent sign as "%25". Unescaping Path again
+	// turns the stored "%2C" into a comma and makes Resource miss the asset.
+	name := u.Path
 	// MDict resource names are read without the URL pseudo-scheme. The
 	// rewriter applies the same sound:// and file:// normalization when it
 	// serves the source article, so snapshots must use that normalized name
