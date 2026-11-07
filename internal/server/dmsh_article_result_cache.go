@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/favorites"
 	"github.com/DMSHLabs/DictShelf/internal/ftsq"
 	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 	"github.com/DMSHLabs/DictShelf/internal/indexconst"
@@ -275,7 +276,11 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 		}
 		for i := range results {
 			s.decorateFavourite(e.ID, &results[i])
-			results[i].Body = rewriteEntryHTMLFor(results[i].Body, e.ID, results[i].EntryID, marks, assetTokens)
+			if e.ID == favorites.ID && len(results[i].ResourceMap) > 0 {
+				results[i].Body = RewriteFavouriteHTML(results[i].Body, e.ID, results[i].ResourceMap)
+			} else {
+				results[i].Body = rewriteEntryHTMLFor(results[i].Body, e.ID, results[i].EntryID, marks, assetTokens)
+			}
 		}
 		var styles htmlref.Styles
 		if format != formatRaw && len(results) > 0 {

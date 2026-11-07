@@ -115,11 +115,12 @@ func DisplayText(s string) string {
 
 // Result is one matched entry, rendered to HTML.
 type Result struct {
-	Headword   string
-	Body       string // article HTML (native markup already converted)
-	EntryID    int64  `json:"entryId,omitempty"` // prepared article ID, for source-specific resource resolution
-	Favorite   bool   `json:"favorite,omitempty"`
-	FavoriteID string `json:"favoriteId,omitempty"`
+	Headword    string
+	Body        string            // article HTML (native markup already converted)
+	EntryID     int64             `json:"entryId,omitempty"` // prepared article ID, for source-specific resource resolution
+	Favorite    bool              `json:"favorite,omitempty"`
+	FavoriteID  string            `json:"favoriteId,omitempty"`
+	ResourceMap map[string]string `json:"-"` // source resource name to snapshot token, for saved articles
 }
 
 // Dictionary is the unified runtime view over one dictionary, regardless

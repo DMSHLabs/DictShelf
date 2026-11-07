@@ -23,7 +23,7 @@ func TestAddPublishesImmutableSnapshotAndResource(t *testing.T) {
 		t.Fatalf("body = %q, %v", body, err)
 	}
 	assets, err := s.ResourceTokens()
-	if err != nil || len(assets) != 1 || assets[0] != a.Assets["img/p.png"].Token {
+	if err != nil || len(assets) != 1 || assets[0] != a.Assets["p.png"].Token {
 		t.Fatalf("tokens = %v, %v", assets, err)
 	}
 	rc, mime, err := s.OpenAsset(assets[0])

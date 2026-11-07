@@ -140,6 +140,30 @@ func RewriteEntryHTML(html, dictID string) string {
 	return entryRewriter(dictID, nil).Rewrite(html)
 }
 
+// RewriteFavouriteHTML maps the original relative resource names in a saved
+// article to the tokens recorded for that snapshot. The stored article bytes
+// remain unchanged; references without copied bytes stay as their source
+// spelling, matching the snapshot's provenance-only cross references.
+func RewriteFavouriteHTML(html, dictID string, assets map[string]string) string {
+	if html == "" || dictID == "" || len(assets) == 0 {
+		return RewriteEntryHTML(html, dictID)
+	}
+	rewriter := htmlref.Rewriter{
+		URL: func(ref htmlref.Ref) string {
+			name, ok := favouriteResourceName(ref)
+			if !ok {
+				return ref.URL
+			}
+			token, ok := assets[strings.ToLower(name)]
+			if !ok {
+				return ref.URL
+			}
+			return "/res/" + dictID + "/" + token
+		},
+	}
+	return rewriter.Rewrite(html)
+}
+
 // RewriteEntryHTMLMarked is RewriteEntryHTML with full-text matches wrapped in
 // <mark class="wu-hl"> (internal/hilite). hl may be nil, which is plain
 // RewriteEntryHTML.

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/favorites"
 	"github.com/DMSHLabs/DictShelf/internal/ftsq"
 	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 	"github.com/DMSHLabs/DictShelf/internal/lang"
@@ -346,7 +347,11 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 		}
 		for j := range h.Results {
 			s.decorateFavourite(id, &h.Results[j])
-			h.Results[j].Body = rewriteEntryHTMLFor(h.Results[j].Body, id, h.Results[j].EntryID, hl, assetTokens)
+			if id == favorites.ID && len(h.Results[j].ResourceMap) > 0 {
+				h.Results[j].Body = RewriteFavouriteHTML(h.Results[j].Body, id, h.Results[j].ResourceMap)
+			} else {
+				h.Results[j].Body = rewriteEntryHTMLFor(h.Results[j].Body, id, h.Results[j].EntryID, hl, assetTokens)
+			}
 		}
 		// `clean` and `text` need this dictionary's own CSS to know which of
 		// its classes are blocks and which are hidden (D68); derived once per

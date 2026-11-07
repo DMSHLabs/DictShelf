@@ -93,12 +93,14 @@ func (s *Server) addFavourite(req favouriteRequest) error {
 			continue
 		}
 		seen[ref.URL] = true
-		rc, mime, openErr := d.Resource(name)
-		if openErr != nil {
-			return fmt.Errorf("copy article resource %q: %w", ref.URL, openErr)
+		probe, mediaType, err := d.Resource(name)
+		if err != nil {
+			// Keep the snapshot even when a source article contains a stale
+			// reference. There are no bytes to preserve for a missing resource.
+			continue
 		}
-		data, readErr := io.ReadAll(io.LimitReader(rc, favorites.MaxAsset+1))
-		closeErr := rc.Close()
+		data, readErr := io.ReadAll(io.LimitReader(probe, favorites.MaxAsset+1))
+		closeErr := probe.Close()
 		if readErr != nil {
 			return readErr
 		}
@@ -108,7 +110,7 @@ func (s *Server) addFavourite(req favouriteRequest) error {
 		if len(data) > favorites.MaxAsset {
 			return fmt.Errorf("resource %q exceeds the snapshot limit", ref.URL)
 		}
-		assets = append(assets, favorites.AssetInput{URL: ref.URL, Name: name, MIME: mime, Data: data})
+		assets = append(assets, favorites.AssetInput{URL: ref.URL, Name: name, MIME: mediaType, Data: data})
 	}
 	name := d.Meta().Name
 	if display := s.reg.prefs.DisplayTitle(id); display != "" {
@@ -156,6 +158,11 @@ func favouriteResourceName(ref htmlref.Ref) (string, bool) {
 	if err != nil {
 		return "", false
 	}
+	// MDict resource names are read without the URL pseudo-scheme. The
+	// rewriter applies the same sound:// and file:// normalization when it
+	// serves the source article, so snapshots must use that normalized name
+	// when asking the source backend for the bytes.
+	name = soundOrFile.ReplaceAllString(name, "")
 	name = path.Clean("/" + name)
 	name = strings.TrimPrefix(name, "/")
 	if name == "" || name == "." || strings.HasPrefix(name, "../") {

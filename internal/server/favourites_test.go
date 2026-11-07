@@ -66,6 +66,9 @@ func TestFavouriteSnapshotsRoundTripThroughServerAndPreparedMedia(t *testing.T) 
 	if rows[0].Body != articleBody(t, s, sources[0].ID) {
 		t.Fatal("snapshot body differs from its source")
 	}
+	if rows[0].ResourceMap["beat.mp3"] == "" {
+		t.Fatalf("snapshot resource map = %+v", rows[0].ResourceMap)
+	}
 	resource, _, err := prepared.Resource(asset.Token)
 	if err != nil {
 		t.Fatal(err)

@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -241,7 +242,24 @@ func (s *Store) AssetToken(entryID int64, url string) (string, bool) {
 	}
 	a := articles[entryID-1]
 	asset, ok := a.Assets[url]
-	return asset.Token, ok
+	if ok {
+		return asset.Token, true
+	}
+	name := url
+	for _, prefix := range []string{"sound://", "file://"} {
+		if strings.HasPrefix(strings.ToLower(name), prefix) {
+			name = name[len(prefix):]
+			break
+		}
+	}
+	name = strings.TrimPrefix(strings.TrimPrefix(name, "./"), "/")
+	name = path.Clean(name)
+	for key, asset := range a.Assets {
+		if strings.EqualFold(key, name) || strings.EqualFold(asset.Name, name) {
+			return asset.Token, true
+		}
+	}
+	return "", false
 }
 
 func (s *Store) OpenAsset(token string) (io.ReadCloser, string, error) {
@@ -329,7 +347,11 @@ func (s *Store) Add(p Provenance, body string, assets []AssetInput) (Article, er
 			return Article{}, err
 		}
 		token := articleID + "/" + fmt.Sprintf("%04x-%x", i, sha256.Sum256([]byte(input.URL)))
-		article.Assets[input.URL] = Asset{URL: input.URL, Name: input.Name, MIME: input.MIME, Hash: hash, Token: token}
+		assetKey := input.Name
+		if assetKey == "" {
+			assetKey = input.URL
+		}
+		article.Assets[assetKey] = Asset{URL: input.URL, Name: input.Name, MIME: input.MIME, Hash: hash, Token: token}
 	}
 	if old.TotalSize+total > MaxTotal {
 		return Article{}, fmt.Errorf("favourites exceed %d bytes", MaxTotal)

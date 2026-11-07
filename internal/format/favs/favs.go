@@ -73,7 +73,7 @@ func (d *Dict) Exact(word string, limit int) ([]dict.Result, error) {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, dict.Result{Headword: a.Headword, Body: body, EntryID: int64(i + 1), FavoriteID: a.ID})
+		out = append(out, dict.Result{Headword: a.Headword, Body: body, EntryID: int64(i + 1), FavoriteID: a.ID, ResourceMap: assetMap(body, a)})
 		if len(out) == limit {
 			break
 		}
@@ -93,12 +93,41 @@ func (d *Dict) Prefix(word string, limit int) ([]dict.Result, error) {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, dict.Result{Headword: a.Headword, Body: body, EntryID: int64(i + 1), FavoriteID: a.ID})
+		out = append(out, dict.Result{Headword: a.Headword, Body: body, EntryID: int64(i + 1), FavoriteID: a.ID, ResourceMap: assetMap(body, a)})
 		if len(out) == limit {
 			break
 		}
 	}
 	return out, nil
+}
+
+func assetMap(_ string, a favorites.Article) map[string]string {
+	out := make(map[string]string, len(a.Assets))
+	for key, asset := range a.Assets {
+		name, ok := savedResourceName(key)
+		if !ok {
+			name, ok = savedResourceName(asset.Name)
+		}
+		if ok {
+			out[strings.ToLower(name)] = asset.Token
+		}
+	}
+	return out
+}
+
+func savedResourceName(raw string) (string, bool) {
+	for _, prefix := range []string{"sound://", "file://"} {
+		if strings.HasPrefix(strings.ToLower(raw), prefix) {
+			raw = raw[len(prefix):]
+			break
+		}
+	}
+	raw = strings.TrimPrefix(raw, "./")
+	raw = strings.TrimPrefix(raw, "/")
+	if raw == "" || strings.HasPrefix(raw, "../") {
+		return "", false
+	}
+	return filepath.ToSlash(filepath.Clean(raw)), true
 }
 func (d *Dict) Keywords(offset, n int) []string {
 	words := make([]string, 0, len(d.articles))
