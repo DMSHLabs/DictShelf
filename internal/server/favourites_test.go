@@ -53,11 +53,7 @@ func TestFavouriteSnapshotsRoundTripThroughServerAndPreparedMedia(t *testing.T) 
 	if !ok {
 		t.Fatalf("saved assets = %+v; source body refs = %+v", article.Assets, (htmlref.Rewriter{}).Refs(articleBody(t, s, sources[0].ID)))
 	}
-	dir, ok := store.LookupDir(s.favourites.Path())
-	if !ok {
-		t.Fatal("favourites was not prepared")
-	}
-	prepared, err := store.Open(store.TextDBPath(dir))
+	prepared, err := store.Open(s.favourites.Path())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +93,7 @@ func TestFavouriteSnapshotsRoundTripThroughServerAndPreparedMedia(t *testing.T) 
 	if err != nil || len(articles) != 0 {
 		t.Fatalf("snapshots after removal = %d, %v", len(articles), err)
 	}
-	if _, err := os.Stat(store.TextDBPath(dir)); err != nil {
+	if _, err := os.Stat(s.favourites.Path()); err != nil {
 		t.Fatalf("prepared empty dictionary missing: %v", err)
 	}
 }
@@ -186,6 +182,11 @@ func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
 	if aboutSaved.Code != http.StatusOK || !strings.Contains(aboutSaved.Body.String(), "German notes") {
 		t.Fatalf("description update status %d: %s", aboutSaved.Code, aboutSaved.Body.String())
 	}
+	collectionStore, _ := sets.Store(collection.ID)
+	meta, err := store.ReadMeta(collectionStore.Path())
+	if err != nil || meta["description"] != "German notes" {
+		t.Fatalf("saved dictionary description = %q, %v", meta["description"], err)
+	}
 	aboutShown := httptestNew(s, http.MethodGet, "/api/about?dict="+collection.ID, nil)
 	if aboutShown.Code != http.StatusOK || !strings.Contains(aboutShown.Body.String(), "German notes") {
 		t.Fatalf("dictionary description status %d: %s", aboutShown.Code, aboutShown.Body.String())
@@ -231,14 +232,11 @@ func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
 	if defaultDelete.Code != http.StatusOK {
 		t.Fatalf("default collection delete status %d: %s", defaultDelete.Code, defaultDelete.Body.String())
 	}
-	if _, err := os.Stat(filepath.Join(favRoot, "favourites.favs")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(favRoot, "fav")); !os.IsNotExist(err) {
 		t.Fatalf("deleted default file status = %v", err)
 	}
 	collectionPath := collectionStore.Path()
-	preparedDir, hadPrepared := store.LookupDir(collectionPath)
-	if !hadPrepared {
-		t.Fatal("custom collection has no prepared store")
-	}
+	collectionDir := filepath.Dir(collectionPath)
 	deleted := httptestNew(s, http.MethodDelete, "/api/favourites/collections", []byte(`{"id":"`+collection.ID+`"}`))
 	if deleted.Code != http.StatusOK {
 		t.Fatalf("custom collection delete status %d: %s", deleted.Code, deleted.Body.String())
@@ -246,8 +244,8 @@ func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
 	if _, err := os.Stat(collectionPath); !os.IsNotExist(err) {
 		t.Fatalf("deleted collection path status = %v", err)
 	}
-	if _, err := os.Stat(preparedDir); !os.IsNotExist(err) {
-		t.Fatalf("deleted collection prepared path status = %v", err)
+	if _, err := os.Stat(collectionDir); !os.IsNotExist(err) {
+		t.Fatalf("deleted collection directory status = %v", err)
 	}
 	if _, err := s.reg.get(collection.ID); err == nil {
 		t.Fatal("deleted collection remains registered")

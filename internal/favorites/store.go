@@ -2,13 +2,14 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Package favorites stores immutable article snapshots independently from
-// their source dictionaries. A small atomic pointer publishes complete
-// manifests; article and resource bytes live in a content-addressed object
-// directory and are never rewritten when the index changes.
+// Package favorites stores saved articles in the same SQLite databases used
+// to search and serve them. Article HTML belongs to text.db; binary resources
+// belong to media.db; provenance and collection metadata are SQLite rows.
 package favorites
 
 import (
+	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -16,17 +17,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 
-	"github.com/DMSHLabs/DictShelf/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 const (
@@ -40,8 +39,6 @@ const (
 
 var ErrDuplicate = errors.New("article is already in favourites")
 
-// Provenance describes where the saved article came from; none of these
-// values is consulted when serving the saved copy.
 type Provenance struct {
 	DictionaryID   string    `json:"dictionary_id"`
 	DictionaryName string    `json:"dictionary_name"`
@@ -58,187 +55,113 @@ type Asset struct {
 	URL   string `json:"url"`
 	Name  string `json:"name"`
 	MIME  string `json:"mime,omitempty"`
-	Hash  string `json:"hash"`
 	Token string `json:"token"`
+	Size  int64  `json:"size,omitempty"`
 }
 
 type Article struct {
 	ID         string           `json:"id"`
+	EntryID    int64            `json:"entry_id"`
 	Headword   string           `json:"headword"`
-	BodyHash   string           `json:"body_hash"`
+	BodyHash   string           `json:"-"`
 	BodySize   int64            `json:"body_size"`
 	Provenance Provenance       `json:"provenance"`
 	Assets     map[string]Asset `json:"assets,omitempty"`
 }
 
-type manifest struct {
-	Version   int       `json:"version"`
-	Revision  string    `json:"revision"`
-	Name      string    `json:"name,omitempty"`
-	About     string    `json:"about,omitempty"`
-	TotalSize int64     `json:"total_size"`
-	Articles  []Article `json:"articles"`
-}
-
 type Store struct {
-	root          string
-	fileName      string
-	mu            sync.Mutex
-	cacheMu       sync.Mutex
-	cacheRev      string
-	cacheManifest manifest
-	cacheHas      map[string]struct{}
+	root string
 }
 
-func New(root string) *Store { return NewAt(root, "favourites.favs") }
+func New(root string) *Store { return &Store{root: root} }
 
-// NewAt opens a collection whose manifest uses fileName within root.
-// fileName is reduced to a basename so a dictionary path cannot escape root.
-func NewAt(root, fileName string) *Store {
-	fileName = filepath.Base(fileName)
-	if !strings.HasSuffix(strings.ToLower(fileName), ".favs") {
-		fileName = "favourites.favs"
+// NewAt keeps the collection directory as its identity; the main dictionary
+// file is always text.db inside that directory.
+func NewAt(root, _ string) *Store { return New(root) }
+
+func (s *Store) Path() string    { return store.TextDBPath(s.root) }
+func (s *Store) Objects() string { return "" }
+
+func (s *Store) Ensure() error { return s.EnsureNamed("Favourites") }
+
+func (s *Store) EnsureNamed(name string) error {
+	if strings.TrimSpace(name) == "" {
+		name = "Favourites"
 	}
-	return &Store{root: root, fileName: fileName}
+	if err := os.MkdirAll(s.root, 0o700); err != nil {
+		return err
+	}
+	if _, err := os.Stat(s.Path()); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	reader := &emptyReader{name: name, path: s.Path()}
+	contains, fullText := true, true
+	_, err := store.Reconcile("", store.Target{Out: s.Path(), Contains: &contains, FullText: &fullText}, store.Hooks{
+		Reader: func() (dict.Reader, error) { return reader, nil },
+		FinalizeText: func(textDB string) error {
+			return store.WriteFavouriteRecords(textDB, name, "", nil)
+		},
+	})
+	return err
 }
-
-func (s *Store) Path() string    { return filepath.Join(s.root, s.fileName) }
-func (s *Store) Objects() string { return filepath.Join(s.root, "objects") }
 
 func (s *Store) Name() (string, error) {
-	m, err := s.currentManifest()
+	meta, err := store.ReadMeta(s.Path())
 	if err != nil {
 		return "", err
 	}
-	if m.Name == "" {
+	if meta["name"] == "" {
 		return "Favourites", nil
 	}
-	return m.Name, nil
+	return meta["name"], nil
 }
 
 func (s *Store) About() (string, error) {
-	m, err := s.currentManifest()
+	meta, err := store.ReadMeta(s.Path())
 	if err != nil {
 		return "", err
 	}
-	return m.About, nil
+	return meta["favourites_about"], nil
 }
 
 func (s *Store) SetName(name string) error {
 	name = strings.TrimSpace(name)
-	if name == "" {
-		return fmt.Errorf("favourites name is required")
+	if name == "" || !utf8.ValidString(name) || utf8.RuneCountInString(name) > 100 {
+		return fmt.Errorf("favourites name must contain 1 to 100 characters")
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	writer, err := s.lockWriter()
-	if err != nil {
-		return err
-	}
-	defer writer.Close()
-	m, err := s.readManifestLocked()
-	if err != nil {
-		return err
-	}
-	if m.Name == name {
-		return nil
-	}
-	m.Name = name
-	return s.publishLocked(m, false)
+	return store.SetFavouriteName(s.Path(), name)
 }
 
 func (s *Store) SetAbout(about string) error {
 	if !utf8.ValidString(about) || len(about) > 65536 {
 		return fmt.Errorf("favourites description is too long or invalid")
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	writer, err := s.lockWriter()
-	if err != nil {
-		return err
-	}
-	defer writer.Close()
-	m, err := s.readManifestLocked()
-	if err != nil {
-		return err
-	}
-	if m.About == about {
-		return nil
-	}
-	m.About = about
-	return s.publishLocked(m, false)
-}
-
-// Ensure provisions the empty source pointer and its first manifest. Repeated
-// calls are idempotent and never replace snapshots that already exist.
-func (s *Store) Ensure() error {
-	return s.EnsureNamed("Favourites")
-}
-
-func (s *Store) EnsureNamed(name string) error {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		name = "Favourites"
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	writer, err := s.lockWriter()
-	if err != nil {
-		return err
-	}
-	defer writer.Close()
-	if _, err := os.Stat(s.Path()); errors.Is(err, os.ErrNotExist) {
-		return s.publishLocked(manifest{Version: Version, Name: name}, false)
-	} else if err != nil {
-		return err
-	}
-	if _, err := s.readManifestLocked(); err == nil {
-		return nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	return s.publishLocked(manifest{Version: Version, Name: name}, false)
-}
-
-func (s *Store) Has(dictionaryID, headword string) bool {
-	m, err := s.currentManifest()
-	if err != nil {
-		return false
-	}
-	s.cacheMu.Lock()
-	index := s.cacheHas
-	if s.cacheRev != m.Revision {
-		index = nil
-	}
-	s.cacheMu.Unlock()
-	if index == nil {
-		index = buildHasIndex(m.Articles)
-	}
-	_, ok := index[starKey(dictionaryID, headword)]
-	return ok
-}
-
-func (s *Store) Current() (string, error) {
-	b, err := fsx.ReadBounded(s.Path(), 128)
-	if err != nil {
-		return "", err
-	}
-	rev := strings.TrimSpace(string(b))
-	if len(rev) != 32 {
-		return "", fmt.Errorf("invalid favourites revision")
-	}
-	if _, err := hex.DecodeString(rev); err != nil {
-		return "", fmt.Errorf("invalid favourites revision: %w", err)
-	}
-	return rev, nil
+	return store.SetFavouriteAbout(s.Path(), about)
 }
 
 func (s *Store) Manifest() ([]Article, error) {
-	m, err := s.currentManifest()
+	if _, err := os.Stat(s.Path()); errors.Is(err, os.ErrNotExist) {
+		if err := s.Ensure(); err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
+	}
+	records, err := store.ReadFavouriteRecords(s.Path())
 	if err != nil {
 		return nil, err
 	}
-	return cloneArticles(m.Articles), nil
+	out := make([]Article, 0, len(records))
+	for _, record := range records {
+		article, err := articleFromRecord(record)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, article)
+	}
+	return out, nil
 }
 
 func (s *Store) Article(id string) (Article, error) {
@@ -246,107 +169,79 @@ func (s *Store) Article(id string) (Article, error) {
 	if err != nil {
 		return Article{}, err
 	}
-	for _, a := range articles {
-		if a.ID == id {
-			return a, nil
+	for _, article := range articles {
+		if article.ID == id {
+			return article, nil
 		}
 	}
 	return Article{}, os.ErrNotExist
 }
 
-func (s *Store) Body(a Article) (string, error) {
-	snap, err := s.OpenSnapshot()
+func (s *Store) Body(article Article) (string, error) {
+	d, err := store.Open(s.Path())
 	if err != nil {
 		return "", err
 	}
-	defer snap.Close()
-	for _, current := range snap.data.Articles {
-		if current.ID == a.ID && current.BodyHash == a.BodyHash {
-			return snap.Body(a)
-		}
-	}
-	return "", os.ErrNotExist
-}
-
-func (s *Store) Asset(token string) (Asset, error) {
-	m, err := s.currentManifest()
+	defer d.Close()
+	rows, err := d.ArticlesByIDs(context.Background(), []int64{article.EntryID})
 	if err != nil {
-		return Asset{}, err
+		return "", err
 	}
-	for _, a := range m.Articles {
-		for _, asset := range a.Assets {
-			if asset.Token == token {
-				return asset, nil
-			}
-		}
+	if len(rows) != 1 {
+		return "", os.ErrNotExist
 	}
-	return Asset{}, os.ErrNotExist
+	return rows[0].Body, nil
 }
 
-// AssetToken resolves a source URL in one prepared entry. The favourite Reader
-// yields records in manifest order, and the prepared writer assigns the same
-// stable, one-based article ID because snapshots contain no redirects.
-func (s *Store) AssetToken(entryID int64, url string) (string, bool) {
-	m, err := s.currentManifest()
-	if err != nil || entryID <= 0 || entryID > int64(len(m.Articles)) {
+func (s *Store) Has(dictionaryID, headword string) bool {
+	d, err := store.Open(s.Path())
+	if err != nil {
+		return false
+	}
+	defer d.Close()
+	return d.HasFavourite(dictionaryID, headword)
+}
+
+func (s *Store) AssetToken(entryID int64, rawURL string) (string, bool) {
+	d, err := store.Open(s.Path())
+	if err != nil {
 		return "", false
 	}
-	return assetToken(m.Articles[entryID-1], url)
+	defer d.Close()
+	return d.AssetToken(entryID, rawURL)
 }
 
-// snapshotAssetName resolves a URL to the same once-decoded resource path the
-// snapshot writer records. ZIM paths can contain a literal percent escape, so
-// URL-decoding the path exactly once is essential: %252C names a file whose
-// stored path contains the literal text %2C.
-func snapshotAssetName(raw string) string {
-	for _, prefix := range []string{"sound://", "file://"} {
-		if strings.HasPrefix(strings.ToLower(raw), prefix) {
-			raw = raw[len(prefix):]
-			break
-		}
+func (s *Store) ResourceTokens() []string {
+	d, err := store.Open(s.Path())
+	if err != nil {
+		return nil
 	}
-	u, err := url.Parse(raw)
-	if err != nil || u.IsAbs() || u.Host != "" {
-		return ""
-	}
-	name := strings.TrimPrefix(strings.TrimPrefix(u.Path, "./"), "/")
-	if name == "" || strings.HasPrefix(name, "../") {
-		return ""
-	}
-	return path.Clean(name)
+	defer d.Close()
+	return d.Resources()
 }
 
 func (s *Store) OpenAsset(token string) (io.ReadCloser, string, error) {
-	snap, err := s.OpenSnapshot()
+	d, err := store.Open(s.Path())
 	if err != nil {
 		return nil, "", err
 	}
-	defer snap.Close()
-	return snap.OpenAsset(token)
-}
-
-func (s *Store) ResourceTokens() ([]string, error) {
-	m, err := s.currentManifest()
+	r, mime, err := d.Resource(token)
 	if err != nil {
-		return nil, err
+		d.Close()
+		return nil, "", err
 	}
-	seen := map[string]bool{}
-	var out []string
-	for _, a := range m.Articles {
-		for _, asset := range a.Assets {
-			if !seen[asset.Token] {
-				seen[asset.Token] = true
-				out = append(out, asset.Token)
-			}
-		}
-	}
-	sort.Strings(out)
-	return out, nil
+	return &assetCloser{ReadCloser: r, close: d.Close}, mime, nil
 }
 
-// Add publishes one snapshot. Callers supply the already-rendered article
-// bytes and each relative resource's bytes. Publication changes one pointer
-// only after every immutable object and the complete new manifest exist.
+func (s *Store) AssetSize(token string) (int64, error) {
+	d, err := store.Open(s.Path())
+	if err != nil {
+		return 0, err
+	}
+	defer d.Close()
+	return d.ResourceSize(token)
+}
+
 func (s *Store) Add(p Provenance, body string, assets []AssetInput) (Article, error) {
 	if len(body) > MaxArticle {
 		return Article{}, fmt.Errorf("article exceeds %d bytes", MaxArticle)
@@ -354,18 +249,11 @@ func (s *Store) Add(p Provenance, body string, assets []AssetInput) (Article, er
 	if strings.TrimSpace(p.DictionaryID) == "" || strings.TrimSpace(p.Headword) == "" {
 		return Article{}, fmt.Errorf("source dictionary and headword are required")
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	writer, err := s.lockWriter()
+	articles, err := s.Manifest()
 	if err != nil {
 		return Article{}, err
 	}
-	defer writer.Close()
-	old, err := s.readManifestLocked()
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return Article{}, err
-	}
-	for _, have := range old.Articles {
+	for _, have := range articles {
 		if have.Provenance.DictionaryID == p.DictionaryID && have.Headword == p.Headword {
 			return Article{}, ErrDuplicate
 		}
@@ -373,49 +261,47 @@ func (s *Store) Add(p Provenance, body string, assets []AssetInput) (Article, er
 	if p.SavedAt.IsZero() {
 		p.SavedAt = time.Now().UTC()
 	}
-	articleID, err := randomID()
+	id, err := randomID()
 	if err != nil {
 		return Article{}, err
 	}
-	objDir := s.Objects()
-	if err := os.MkdirAll(objDir, 0o700); err != nil {
-		return Article{}, err
-	}
-	bodyHash, err := putObject(objDir, []byte(body))
-	if err != nil {
-		return Article{}, err
-	}
-	article := Article{ID: articleID, Headword: p.Headword, BodyHash: bodyHash, BodySize: int64(len(body)), Provenance: p, Assets: map[string]Asset{}}
-	var total int64 = int64(len(body))
+	article := Article{ID: id, Headword: p.Headword, BodySize: int64(len(body)), Provenance: p, Assets: make(map[string]Asset)}
+	var size int64 = int64(len(body))
 	for i, input := range assets {
 		if len(input.Data) > MaxAsset {
 			return Article{}, fmt.Errorf("resource %q exceeds %d bytes", input.URL, MaxAsset)
 		}
-		total += int64(len(input.Data))
-		if total > MaxTotal {
-			return Article{}, fmt.Errorf("snapshot exceeds %d bytes", MaxTotal)
+		size += int64(len(input.Data))
+		if size > MaxTotal {
+			return Article{}, fmt.Errorf("favourites exceed %d bytes", MaxTotal)
 		}
 		if input.URL == "" {
 			continue
 		}
-		hash, err := putObject(objDir, input.Data)
-		if err != nil {
-			return Article{}, err
+		token := id + "/" + fmt.Sprintf("%04x-%x", i, sha256.Sum256([]byte(input.URL)))
+		key := input.Name
+		if key == "" {
+			key = input.URL
 		}
-		token := articleID + "/" + fmt.Sprintf("%04x-%x", i, sha256.Sum256([]byte(input.URL)))
-		assetKey := input.Name
-		if assetKey == "" {
-			assetKey = input.URL
-		}
-		article.Assets[assetKey] = Asset{URL: input.URL, Name: input.Name, MIME: input.MIME, Hash: hash, Token: token}
+		article.Assets[key] = Asset{URL: input.URL, Name: input.Name, MIME: input.MIME, Token: token, Size: int64(len(input.Data))}
+		input.Token = token
+		assets[i] = input
 	}
-	if old.TotalSize+total > MaxTotal {
+	for _, have := range articles {
+		size += have.BodySize
+		for _, asset := range have.Assets {
+			size += asset.Size
+		}
+	}
+	if size > MaxTotal {
 		return Article{}, fmt.Errorf("favourites exceed %d bytes", MaxTotal)
 	}
-	old.TotalSize += total
-	old.Articles = append(old.Articles, article)
-	if err := s.publishLocked(old, false); err != nil {
+	if err := s.rebuild(rebuildChange{add: &article, body: body, assets: assets}); err != nil {
 		return Article{}, err
+	}
+	updated, err := s.Article(article.ID)
+	if err == nil {
+		return updated, nil
 	}
 	return article, nil
 }
@@ -423,129 +309,281 @@ func (s *Store) Add(p Provenance, body string, assets []AssetInput) (Article, er
 type AssetInput struct {
 	URL, Name, MIME string
 	Data            []byte
+	Token           string
 }
 
 func (s *Store) Remove(id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	writer, err := s.lockWriter()
+	articles, err := s.Manifest()
 	if err != nil {
 		return err
 	}
-	defer writer.Close()
-	m, err := s.readManifestLocked()
-	if err != nil {
-		return err
-	}
-	out := m.Articles[:0]
 	found := false
-	for _, a := range m.Articles {
-		if a.ID == id {
-			found = true
-			continue
-		}
-		out = append(out, a)
+	for _, article := range articles {
+		found = found || article.ID == id
 	}
 	if !found {
 		return os.ErrNotExist
 	}
-	m.Articles = out
-	m.TotalSize = 0
-	for _, a := range out {
-		m.TotalSize += a.BodySize
-		for _, asset := range a.Assets {
-			fi, err := os.Stat(filepath.Join(s.Objects(), asset.Hash))
-			if err != nil {
-				return err
+	return s.rebuild(rebuildChange{removeID: id})
+}
+
+func (s *Store) Collect() {}
+
+func articleFromRecord(record store.FavouriteRecord) (Article, error) {
+	var source Provenance
+	if err := json.Unmarshal([]byte(record.SourceJSON), &source); err != nil {
+		return Article{}, fmt.Errorf("read saved article source: %w", err)
+	}
+	var assets map[string]Asset
+	if err := json.Unmarshal([]byte(record.AssetsJSON), &assets); err != nil {
+		return Article{}, fmt.Errorf("read saved article resources: %w", err)
+	}
+	if assets == nil {
+		assets = map[string]Asset{}
+	}
+	return Article{ID: record.ID, EntryID: record.EntryID, Headword: source.Headword, BodySize: record.BodySize, Provenance: source, Assets: assets}, nil
+}
+
+type assetCloser struct {
+	io.ReadCloser
+	close func() error
+}
+
+func (c *assetCloser) Close() error {
+	err := c.ReadCloser.Close()
+	if closeErr := c.close(); err == nil {
+		err = closeErr
+	}
+	return err
+}
+
+type rebuildChange struct {
+	add      *Article
+	body     string
+	assets   []AssetInput
+	removeID string
+}
+
+type rebuildReader struct {
+	stream   *store.ArticleStream
+	byEntry  map[int64]store.FavouriteRecord
+	change   rebuildChange
+	name     string
+	about    string
+	path     string
+	newRows  []store.FavouriteRecord
+	finished bool
+}
+
+func (r *rebuildReader) Meta() dict.Meta {
+	return dict.Meta{Name: r.name, Format: Format, Path: r.path, EntryCount: len(r.byEntry) + boolInt(r.change.add != nil) - boolInt(r.change.removeID != "")}
+}
+
+func (r *rebuildReader) ExtraMeta() map[string]string {
+	return map[string]string{"description": r.about, "favourites_version": "1", "favourites_about": r.about}
+}
+
+func (r *rebuildReader) Next() (dict.Entry, error) {
+	if r.finished {
+		return dict.Entry{}, io.EOF
+	}
+	for {
+		entryID, entry, err := r.stream.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return dict.Entry{}, err
+		}
+		record, ok := r.byEntry[entryID]
+		if !ok {
+			return dict.Entry{}, fmt.Errorf("saved article metadata missing for entry %d", entryID)
+		}
+		if record.ID == r.change.removeID {
+			continue
+		}
+		record.EntryID = int64(len(r.newRows) + 1)
+		record.BodySize = int64(len(entry.Body))
+		r.newRows = append(r.newRows, record)
+		return entry, nil
+	}
+	r.finished = true
+	if r.change.add == nil {
+		return dict.Entry{}, io.EOF
+	}
+	article := *r.change.add
+	article.EntryID = int64(len(r.newRows) + 1)
+	sourceJSON, err := json.Marshal(article.Provenance)
+	if err != nil {
+		return dict.Entry{}, err
+	}
+	assetsJSON, err := json.Marshal(article.Assets)
+	if err != nil {
+		return dict.Entry{}, err
+	}
+	r.newRows = append(r.newRows, store.FavouriteRecord{EntryID: article.EntryID, BodySize: article.BodySize, ID: article.ID,
+		SourceID: article.Provenance.DictionaryID, SourceHeadword: article.Headword,
+		SourceJSON: string(sourceJSON), AssetsJSON: string(assetsJSON)})
+	return dict.Entry{Headwords: []string{article.Headword}, Body: r.change.body, Kind: dict.BodyHTML}, nil
+}
+
+func (r *rebuildReader) Close() error {
+	if r.stream == nil {
+		return nil
+	}
+	return r.stream.Close()
+}
+
+func (s *Store) rebuild(change rebuildChange) (resultErr error) {
+	name, err := s.Name()
+	if err != nil {
+		return err
+	}
+	about, err := s.About()
+	if err != nil {
+		return err
+	}
+	records, err := store.ReadFavouriteRecords(s.Path())
+	if err != nil {
+		return err
+	}
+	source, err := store.Open(s.Path())
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := source.Close(); resultErr == nil && err != nil {
+			resultErr = err
+		}
+	}()
+	stream, err := source.OpenArticleStream(context.Background())
+	if err != nil {
+		return err
+	}
+	byEntry := make(map[int64]store.FavouriteRecord, len(records))
+	for _, record := range records {
+		byEntry[record.EntryID] = record
+	}
+	reader := &rebuildReader{stream: stream, byEntry: byEntry, change: change, name: name, about: about, path: s.Path()}
+	tmpDir, err := os.MkdirTemp(filepath.Dir(s.root), ".favourites-build-")
+	if err != nil {
+		stream.Close()
+		return err
+	}
+	defer func() {
+		if resultErr != nil {
+			_ = os.RemoveAll(tmpDir)
+		}
+	}()
+	textDB := store.TextDBPath(tmpDir)
+	contains, fullText := true, true
+	_, err = store.Reconcile("", store.Target{Out: textDB, Contains: &contains, FullText: &fullText, Media: store.MediaOn}, store.Hooks{
+		Reader: func() (dict.Reader, error) { return reader, nil },
+		FinalizeText: func(path string) error {
+			return store.WriteFavouriteRecords(path, name, about, reader.newRows)
+		},
+		Backend: func() (dict.Dictionary, func(), error) {
+			assets := map[string]AssetInput{}
+			for _, record := range reader.newRows {
+				article, err := articleFromRecord(record)
+				if err != nil {
+					return nil, nil, err
+				}
+				for _, asset := range article.Assets {
+					assets[asset.Token] = AssetInput{URL: asset.URL, Name: asset.Name, MIME: asset.MIME, Token: asset.Token}
+				}
 			}
-			m.TotalSize += fi.Size()
-		}
-	}
-	return s.publishLocked(m, true)
-}
-
-func (s *Store) readManifestLocked() (manifest, error) {
-	rev, err := s.Current()
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return manifest{Version: Version}, nil
-		}
-		return manifest{}, err
-	}
-	b, err := readManifestBytes(filepath.Join(s.root, "versions", rev, "manifest.json"))
-	if err != nil {
-		return manifest{}, err
-	}
-	var m manifest
-	if err := json.Unmarshal(b, &m); err != nil {
-		return manifest{}, err
-	}
-	if m.Version != Version || m.Revision != rev {
-		return manifest{}, fmt.Errorf("unsupported or mismatched favourites manifest")
-	}
-	return m, nil
-}
-
-func (s *Store) publishLocked(m manifest, sweepObjects bool) error {
-	rev, err := randomID()
+			for _, input := range change.assets {
+				assets[input.Token] = input
+			}
+			overlay := &mediaOverlay{Store: source, name: name, path: s.Path(), assets: assets}
+			return overlay, func() {}, nil
+		},
+	})
 	if err != nil {
 		return err
 	}
-	m.Version, m.Revision = Version, rev
-	for i := range m.Articles {
-		if m.Articles[i].Assets == nil {
-			m.Articles[i].Assets = map[string]Asset{}
-		}
-	}
-	b, err := json.Marshal(m)
-	if err != nil {
+	if err := source.Close(); err != nil {
 		return err
 	}
-	versionDir := filepath.Join(s.root, "versions", rev)
-	if err := os.MkdirAll(versionDir, 0o700); err != nil {
+	if err := replaceDirectory(s.root, tmpDir); err != nil {
 		return err
 	}
-	if err := fsx.WriteAtomic(filepath.Join(versionDir, "manifest.json"), b, 0o600); err != nil {
-		return err
-	}
-	leasesDir := filepath.Join(s.root, "leases")
-	if err := os.MkdirAll(leasesDir, 0o700); err != nil {
-		return err
-	}
-	lease, err := os.OpenFile(filepath.Join(leasesDir, rev+".lock"), os.O_CREATE|os.O_RDWR, 0o600)
-	if err != nil {
-		return err
-	}
-	_ = lease.Close()
-	if err := fsx.WriteAtomic(s.Path(), []byte(rev+"\n"), 0o600); err != nil {
-		return err
-	}
-	s.cacheMu.Lock()
-	s.cacheRev, s.cacheManifest, s.cacheHas = "", manifest{}, nil
-	s.cacheMu.Unlock()
-	s.reclaimLocked(rev, sweepObjects)
+	tmpDir = ""
 	return nil
 }
 
-func putObject(dir string, data []byte) (string, error) {
-	h := sha256.Sum256(data)
-	name := hex.EncodeToString(h[:])
-	p := filepath.Join(dir, name)
-	if _, err := os.Stat(p); err == nil {
-		return name, nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", err
+func replaceDirectory(target, prepared string) error {
+	backup := target + ".previous-" + time.Now().UTC().Format("20060102T150405.000000000")
+	if err := os.Rename(target, backup); err != nil {
+		return err
 	}
-	if err := fsx.WriteAtomic(p, data, 0o600); err != nil {
-		return "", err
+	if err := os.Rename(prepared, target); err != nil {
+		_ = os.Rename(backup, target)
+		return err
 	}
-	return name, nil
+	return os.RemoveAll(backup)
+}
+
+type mediaOverlay struct {
+	*store.Store
+	name, path string
+	assets     map[string]AssetInput
+}
+
+func (d *mediaOverlay) Meta() dict.Meta { return dict.Meta{Name: d.name, Format: Format, Path: d.path} }
+func (d *mediaOverlay) Resources() []string {
+	out := make([]string, 0, len(d.assets))
+	for token := range d.assets {
+		out = append(out, token)
+	}
+	sort.Strings(out)
+	return out
+}
+func (d *mediaOverlay) Resource(name string) (io.ReadCloser, string, error) {
+	if asset, ok := d.assets[name]; ok && asset.Data != nil {
+		return io.NopCloser(bytes.NewReader(asset.Data)), asset.MIME, nil
+	}
+	return d.Store.Resource(name)
+}
+
+func (s *Store) Size() (int64, error) {
+	var total int64
+	for _, name := range []string{store.TextDBName, filepath.Base(store.ArticlesFilePath(s.Path())), store.MediaDBName} {
+		info, err := os.Stat(filepath.Join(s.root, name))
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return 0, err
+		}
+		if !info.IsDir() {
+			total += info.Size()
+		}
+	}
+	return total, nil
+}
+
+type emptyReader struct{ name, path string }
+
+func (r *emptyReader) Meta() dict.Meta           { return dict.Meta{Name: r.name, Format: Format, Path: r.path} }
+func (r *emptyReader) Next() (dict.Entry, error) { return dict.Entry{}, io.EOF }
+func (r *emptyReader) Close() error              { return nil }
+func (r *emptyReader) ExtraMeta() map[string]string {
+	return map[string]string{"description": "", "favourites_version": "1", "favourites_about": ""}
+}
+
+func boolInt(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
 }
 
 func randomID() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
 		return "", err
 	}
-	return hex.EncodeToString(b), nil
+	return hex.EncodeToString(raw[:]), nil
 }

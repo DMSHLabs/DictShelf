@@ -12,12 +12,10 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/config"
 	"github.com/DMSHLabs/DictShelf/internal/favorites"
 	dslformat "github.com/DMSHLabs/DictShelf/internal/format/dsl"
-	_ "github.com/DMSHLabs/DictShelf/internal/format/favs"
 	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
 	"github.com/DMSHLabs/DictShelf/internal/morph"
 	"github.com/DMSHLabs/DictShelf/internal/search"
-	"github.com/DMSHLabs/DictShelf/internal/store"
 )
 
 // Runtime is the application state shared by the HTTP adapter and native
@@ -106,11 +104,6 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 		if !ok {
 			return nil, fmt.Errorf("favourites collection %q is unavailable", collection.ID)
 		}
-		contains, fullText := true, true
-		if _, err := store.Reconcile(set.Path(), store.Target{Contains: &contains, FullText: &fullText, Media: store.MediaOn}, store.Hooks{}); err != nil {
-			return nil, fmt.Errorf("prepare favourites collection %q: %w", collection.ID, err)
-		}
-		set.Collect()
 		builtins = append(builtins, Builtin{ID: collection.ID, Path: set.Path()})
 	}
 	reg, err := NewRegistry(cfg.DictDirs, cfg.UseCached,

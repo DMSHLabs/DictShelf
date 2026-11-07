@@ -219,6 +219,11 @@ func (s *Store) ArticlesByIDs(ctx context.Context, ids []int64) ([]dict.Result, 
 		}
 		out = append(out, result)
 	}
+	if s.favouriteData {
+		if err := s.decorateFavouriteResults(out); err != nil {
+			return nil, err
+		}
+	}
 	return out, nil
 }
 

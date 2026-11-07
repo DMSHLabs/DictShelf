@@ -63,6 +63,7 @@ type Store struct {
 	hasFolded        bool   // prepared with indexed folded headwords and aliases
 	hasCaseKey       bool   // prepared with indexed accent-preserving case keys
 	hasBrowseAnchors bool   // sparse key/ordinal points for bounded Browse jumps
+	favouriteData    bool   // per-entry saved-article metadata lives in this text.db
 	uuid             string // dict_uuid: what a sibling media.db must match
 	body             *bodyDecoder
 
@@ -236,6 +237,7 @@ func Open(path string) (*Store, error) {
 	}
 	s.hasBrowseAnchors = anchors > 0
 	s.srcPath = m["source_path"]
+	s.favouriteData = m["format"] == "favs" && m["favourites_version"] == "1"
 	// feature-detect the trigram "contains" index rather than gating on
 	// schema version, so older .text.db (and standalone native dicts whose
 	// source is gone) keep opening - they simply lack the contains mode.
@@ -376,6 +378,13 @@ func (s *Store) Resource(name string) (io.ReadCloser, string, error) {
 	return nil, "", dict.ErrNotFound
 }
 
+func (s *Store) ResourceSize(name string) (int64, error) {
+	if md := s.mediaDB(); md != nil {
+		return md.ResourceSize(name)
+	}
+	return 0, dict.ErrNotFound
+}
+
 func clamp(n int) int {
 	if n <= 0 || n > maxLimit {
 		return maxLimit
@@ -398,7 +407,15 @@ func (s *Store) collect(rows *sql.Rows, err error) ([]dict.Result, error) {
 		r.Body = s.body.decode(body)
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if s.favouriteData {
+		if err := s.decorateFavouriteResults(out); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // Exact and Prefix are the dict.Dictionary forms, for callers with no context

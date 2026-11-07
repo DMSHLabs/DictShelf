@@ -95,6 +95,10 @@ type Hooks struct {
 	// needed. Reconcile closes the returned reader after ingestion. Nil opens
 	// dict.OpenReader with the same lifetime.
 	Reader func() (dict.Reader, error)
+	// FinalizeText writes format-specific tables and metadata after the core
+	// article indexes have been built and before the prepared database is
+	// published. It is part of the same Reconcile operation.
+	FinalizeText func(textDB string) error
 
 	// Backend is the dictionary media is packed from; done is called when
 	// the pack is over. Nil opens the source with dict.Open and closes it.
@@ -301,6 +305,11 @@ func ingest(src, textDB string, plan Plan, h Hooks, out *Outcome) (resultErr err
 	rep, err := IngestPlanContext(ctx, r, textDB, plan, h.Progress)
 	if err != nil {
 		return err
+	}
+	if h.FinalizeText != nil {
+		if err := h.FinalizeText(textDB); err != nil {
+			return err
+		}
 	}
 	out.Rebuilt, out.Report, out.TextTime = true, rep, time.Since(start)
 	return nil
