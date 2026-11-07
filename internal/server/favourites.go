@@ -199,16 +199,52 @@ func (s *Server) decorateFavourite(dictionaryID string, result *dict.Result) {
 		return
 	}
 	if dictionaryID == favorites.ID {
-		if result.FavoriteID == "" {
+		if result.FavoriteID == "" || result.FavoriteSource == nil {
 			if e, err := s.reg.get(dictionaryID); err == nil {
 				if d, err := e.open(); err == nil {
-					if resolver, ok := d.(interface{ FavoriteID(int64) string }); ok {
-						result.FavoriteID = resolver.FavoriteID(result.EntryID)
+					if result.FavoriteID == "" {
+						if resolver, ok := d.(interface{ FavoriteID(int64) string }); ok {
+							result.FavoriteID = resolver.FavoriteID(result.EntryID)
+						}
+					}
+					if result.FavoriteSource == nil {
+						if resolver, ok := d.(interface {
+							FavoriteSource(int64) *dict.FavoriteSource
+						}); ok {
+							result.FavoriteSource = resolver.FavoriteSource(result.EntryID)
+						}
 					}
 				}
 			}
 		}
+		s.decorateFavouriteSource(result.FavoriteSource)
 		return
 	}
 	result.Favorite = s.favourites.Has(dictionaryID, result.Headword)
+}
+
+func (s *Server) decorateFavouriteSource(source *dict.FavoriteSource) {
+	if source == nil {
+		return
+	}
+	if source.SourcePath != "" {
+		if dir, ok := store.LookupDir(source.SourcePath); ok {
+			textDB := store.TextDBPath(dir)
+			source.HeadwordsPath = textDB
+			if articles, ok := store.ArticlesSibling(textDB); ok {
+				source.ArticlesPath = articles
+			}
+		}
+	}
+	if source.SourcePath == "" {
+		return
+	}
+	for _, e := range s.reg.all() {
+		if dict.CanonPath(e.Path) == dict.CanonPath(source.SourcePath) {
+			source.DictionaryID = e.ID
+			source.SourcePath = e.Path
+			source.Available = true
+			return
+		}
+	}
 }

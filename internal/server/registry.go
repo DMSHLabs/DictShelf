@@ -275,6 +275,20 @@ func (u *upgraded) FavoriteID(entryID int64) string {
 	return resolver.FavoriteID(entryID)
 }
 
+func (u *upgraded) FavoriteSource(entryID int64) *dict.FavoriteSource {
+	d, err := u.source()
+	if err != nil {
+		return nil
+	}
+	resolver, ok := d.(interface {
+		FavoriteSource(int64) *dict.FavoriteSource
+	})
+	if !ok {
+		return nil
+	}
+	return resolver.FavoriteSource(entryID)
+}
+
 // Resource resolves in three rungs, cheapest first (D2, extended by O8):
 //
 //  1. the packed media.db the Store attaches - portable, and always right when

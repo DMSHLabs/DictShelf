@@ -151,6 +151,16 @@ func (d *Dict) FavoriteID(entryID int64) string {
 	}
 	return d.articles[entryID-1].ID
 }
+func (d *Dict) FavoriteSource(entryID int64) *dict.FavoriteSource {
+	if entryID <= 0 || entryID > int64(len(d.articles)) {
+		return nil
+	}
+	a := d.articles[entryID-1]
+	return &dict.FavoriteSource{
+		DictionaryID: a.Provenance.DictionaryID, DictionaryName: a.Provenance.DictionaryName,
+		Headword: a.Provenance.Headword, SourcePath: a.Provenance.SourcePath,
+	}
+}
 func (d *Dict) Resources() []string { names, _ := d.store.ResourceTokens(); return names }
 func (d *Dict) Close() error        { return nil }
 

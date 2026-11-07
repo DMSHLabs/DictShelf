@@ -3332,6 +3332,17 @@ components:
         entryId: { type: integer, description: Prepared article ID used for resource resolution. }
         favorite: { type: boolean, description: This source article already has a saved snapshot. }
         favoriteId: { type: string, description: Snapshot ID, present for articles in the favourites dictionary. }
+        favoriteSource:
+          type: object
+          description: Saved source details for an article in the favourites dictionary.
+          properties:
+            dictionaryId: { type: string, description: Current source dictionary ID when it is available. }
+            dictionaryName: { type: string, description: Name saved with the source snapshot. }
+            headword: { type: string, description: Original source headword. }
+            sourcePath: { type: string, description: Original dictionary file path. }
+            headwordsPath: { type: string, description: Prepared headword database path, when present. }
+            articlesPath: { type: string, description: Prepared full-text article database path, when present. }
+            available: { type: boolean, description: Whether the source dictionary is currently available. }
 
     StreamEnd:
       type: object

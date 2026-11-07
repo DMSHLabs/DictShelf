@@ -2363,3 +2363,10 @@ html:is([data-shell-sepia],[data-shell-image]) .list-search-input{background-col
    the accent colour, and it wraps rather than fighting the count for space. */
 .search-needs-index{margin:.15em 0 .35em;color:var(--accent);font-size:calc(var(--ui-font-addition) * 1rem);line-height:1.35}
 .search-needs-index .btn{margin-left:.4em;vertical-align:baseline}
+
+.favourite-source{margin:0 0 .65em;padding:.35em .55em;border:1px solid var(--line-soft);border-radius:6px;color:var(--label);font-size:calc(var(--ui-font-addition) * 1rem)}
+.favourite-source>summary{cursor:pointer;font-weight:600}
+.favourite-source-row{display:grid;grid-template-columns:minmax(7em,auto) minmax(0,1fr);gap:.3em .7em;margin:.35em 0;line-height:1.35}
+.favourite-source-value{overflow-wrap:anywhere;color:var(--fg)}
+.favourite-source-open{margin-top:.35em}
+.favourite-source-unavailable{margin-top:.35em;color:var(--label-quiet)}
