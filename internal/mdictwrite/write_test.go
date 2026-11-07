@@ -25,7 +25,7 @@ func (repeatReader) Read(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func TestLargeResourceAcrossBlocks(t *testing.T) {
+func TestLargeResource(t *testing.T) {
 	const size = 65 << 20
 	path := filepath.Join(t.TempDir(), "large.mdd")
 	f, err := os.Create(path)

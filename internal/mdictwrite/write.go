@@ -206,7 +206,7 @@ func Write(w io.Writer, title, about string, media bool, entries []Entry) error 
 			return err
 		}
 		for remaining, first := e.Size, true; remaining > 0 || first; first = false {
-			chunk := min(remaining, int64(64<<20))
+			chunk := min(remaining, int64(256<<20))
 			start, err := tmp.Seek(0, io.SeekCurrent)
 			if err != nil {
 				r.Close()
