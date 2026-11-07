@@ -4783,7 +4783,7 @@ function favouriteEditorTile(collection,isNew=false){
     if(indexes.childElementCount)card.append(indexes);
     const actions=document.createElement("div");actions.className="acts favourite-editor-acts";
     const browse=document.createElement("a");browse.className="browse btn";browse.href="/browse?dict="+encodeURIComponent(collection.id)+"&"+browseOriginQuery(collection.id);browse.textContent=tx("dictUI.browse");actions.append(browse);card.append(actions);
-    const exportButton=document.createElement("button");exportButton.type="button";exportButton.className="btn favourite-editor-export";exportButton.textContent=tx("favourites.export");exportButton.disabled=favouriteEditorSaving||!Number(collection.articles||0);exportButton.onclick=()=>openFavouriteExport(collection);actions.append(exportButton);
+    const exportButton=document.createElement("button");exportButton.type="button";exportButton.className="browse btn favourite-editor-export";exportButton.textContent=tx("favourites.export");exportButton.disabled=favouriteEditorSaving||!Number(collection.articles||0);exportButton.onclick=()=>openFavouriteExport(collection);actions.append(exportButton);
     const counts=document.createElement("div");counts.className="dict-info-counts";counts.textContent=tx("dictUI.numberOfEntries",{number:window.wudictI18n.number(Number(collection.articles||0))});card.append(counts);
     const info=document.createElement("details");info.className="prov";const summary=document.createElement("summary");summary.textContent=tx("favourites.info");info.append(summary);
     const body=document.createElement("div");body.className="provbody";

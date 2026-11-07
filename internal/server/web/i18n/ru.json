@@ -1089,7 +1089,7 @@
   "favourites.renameTitle": "Переименовать словарь избранного",
   "favourites.collectionStats": "Статей: {count} · {size}",
   "favourites.info": "Информация",
-  "favourites.export": "Экспортировать словарь…",
+  "favourites.export": "Экспортировать словарь",
   "favourites.exportTitle": "Экспорт избранного в MDX",
   "favourites.chooseExportFolder": "Выбрать папку для экспорта",
   "favourites.exportFolderSelected": "Папка для экспорта выбрана",

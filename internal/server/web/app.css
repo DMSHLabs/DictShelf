@@ -754,11 +754,10 @@ dd{margin:var(--sp-1) 0 0 0}
 .favourites-editor-card .hd{min-height:44px}
 #dictSettings .pd .hd>.dict-name-line>b,#favouritesEditor .pd .hd>.dict-name-line>b{font-size:calc(var(--ui-font-section) * 1rem)}
 .favourites-editor-card .meta{margin-top:.45em}
-.favourites-editor-indexes{display:flex;align-items:center;flex-wrap:wrap;gap:calc(var(--ui-control-gap) * 1em);margin:.3em 0 .5em}
+.favourites-editor-indexes{display:flex;align-items:center;flex-wrap:wrap;gap:calc(var(--ui-control-gap) * 1em);margin:.7em 0}
 .favourites-editor-indexes .feat{margin:0}
-.favourites-editor-acts{display:flex;flex-direction:column;gap:calc(var(--ui-row-gap) * 1em);margin:.5em 0}
-.favourites-editor-acts .favourite-editor-export{box-sizing:border-box;width:100%;min-height:calc(var(--ui-control-height) * 1em);text-align:left}
-.favourites-editor-card .dict-info-counts{margin:.5em 0 .7em;line-height:1.5}
+.favourites-editor-acts{display:flex;flex-direction:column;gap:calc(var(--ui-row-gap) * 1em);margin:.7em 0}
+.favourites-editor-card .dict-info-counts{margin:.7em 0;line-height:1.5}
 .favourites-editor-card .favourite-about{position:relative}
 .favourites-editor-card .favourite-about>summary{padding-right:3em}
 .favourites-editor-card .favourite-about-edit{position:absolute;right:.3em;top:0}
@@ -1623,13 +1622,13 @@ html[data-dict-icons-off] .dict-icon{display:none}
 .pd .err{color:var(--danger)}
 /* Not a .feat: those chips are switches that spend disk, and this one only
    opens a page. Same muted register as the provenance rows under it. */
-.pd .acts a.browse{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);width:100%;box-sizing:border-box;min-height:calc(var(--ui-control-height) * 1em);
+.pd .acts .browse{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);width:100%;box-sizing:border-box;min-height:calc(var(--ui-control-height) * 1em);
   padding:0 .65em;margin:0;font:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1.2;color:var(--label-quiet);text-decoration:none}
-.pd .acts a.browse::after,.dsl-index-row .browse::after{content:"›";margin-left:auto;color:var(--label-quiet);
+.pd .acts .browse::after,.dsl-index-row .browse::after{content:"›";margin-left:auto;color:var(--label-quiet);
   font-size:1em;line-height:1;flex:none}
-.pd .acts a.browse:hover{color:var(--accent)}
-.pd .acts a.browse:hover::after,.dsl-index-row .browse:hover::after{color:var(--label)}
-.pd .acts a.browse svg{width:13px;height:13px;flex:none}
+.pd .acts .browse:hover{color:var(--accent)}
+.pd .acts .browse:hover::after,.dsl-index-row .browse:hover::after{color:var(--label)}
+.pd .acts .browse svg{width:13px;height:13px;flex:none}
 .facts .act[hidden]{display:none}
 .facts .seg.multi{flex-wrap:wrap}
 .facts .seg.multi .act{border-radius:8px;margin-left:0}

@@ -1075,7 +1075,7 @@
   "favourites.renameTitle": "Rename favourites dictionary",
   "favourites.collectionStats": "{count} articles · {size}",
   "favourites.info": "Info",
-  "favourites.export": "Export dictionary…",
+  "favourites.export": "Export dictionary",
   "favourites.exportTitle": "Export favourites as MDX",
   "favourites.chooseExportFolder": "Choose export folder",
   "favourites.exportFolderSelected": "Export folder selected",
