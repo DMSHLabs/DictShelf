@@ -159,6 +159,7 @@ func (d *Dict) FavoriteSource(entryID int64) *dict.FavoriteSource {
 	return &dict.FavoriteSource{
 		DictionaryID: a.Provenance.DictionaryID, DictionaryName: a.Provenance.DictionaryName,
 		Headword: a.Provenance.Headword, SourcePath: a.Provenance.SourcePath,
+		Headwords: a.Provenance.Headwords, Articles: a.Provenance.Articles,
 	}
 }
 func (d *Dict) Resources() []string { names, _ := d.store.ResourceTokens(); return names }

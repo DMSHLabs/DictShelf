@@ -130,8 +130,8 @@ type FavoriteSource struct {
 	DictionaryName string `json:"dictionaryName,omitempty"`
 	Headword       string `json:"headword,omitempty"`
 	SourcePath     string `json:"sourcePath,omitempty"`
-	HeadwordsPath  string `json:"headwordsPath,omitempty"`
-	ArticlesPath   string `json:"articlesPath,omitempty"`
+	Headwords      int    `json:"headwords,omitempty"`
+	Articles       int    `json:"articles,omitempty"`
 	Available      bool   `json:"available"`
 }
 

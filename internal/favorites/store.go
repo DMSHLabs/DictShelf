@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -46,6 +47,8 @@ type Provenance struct {
 	DictionaryUUID string    `json:"dictionary_uuid,omitempty"`
 	SourcePath     string    `json:"source_path,omitempty"`
 	Headword       string    `json:"headword"`
+	Headwords      int       `json:"headwords,omitempty"`
+	Articles       int       `json:"articles,omitempty"`
 	EntryID        string    `json:"entry_id,omitempty"`
 	SavedAt        time.Time `json:"saved_at"`
 }
@@ -245,21 +248,38 @@ func (s *Store) AssetToken(entryID int64, url string) (string, bool) {
 	if ok {
 		return asset.Token, true
 	}
-	name := url
-	for _, prefix := range []string{"sound://", "file://"} {
-		if strings.HasPrefix(strings.ToLower(name), prefix) {
-			name = name[len(prefix):]
-			break
-		}
+	name := snapshotAssetName(url)
+	if name == "" {
+		return "", false
 	}
-	name = strings.TrimPrefix(strings.TrimPrefix(name, "./"), "/")
-	name = path.Clean(name)
 	for key, asset := range a.Assets {
-		if strings.EqualFold(key, name) || strings.EqualFold(asset.Name, name) {
+		if strings.EqualFold(key, name) || strings.EqualFold(asset.Name, name) || strings.EqualFold(snapshotAssetName(asset.URL), name) {
 			return asset.Token, true
 		}
 	}
 	return "", false
+}
+
+// snapshotAssetName resolves a URL to the same once-decoded resource path the
+// snapshot writer records. ZIM paths can contain a literal percent escape, so
+// URL-decoding the path exactly once is essential: %252C names a file whose
+// stored path contains the literal text %2C.
+func snapshotAssetName(raw string) string {
+	for _, prefix := range []string{"sound://", "file://"} {
+		if strings.HasPrefix(strings.ToLower(raw), prefix) {
+			raw = raw[len(prefix):]
+			break
+		}
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.IsAbs() || u.Host != "" {
+		return ""
+	}
+	name := strings.TrimPrefix(strings.TrimPrefix(u.Path, "./"), "/")
+	if name == "" || strings.HasPrefix(name, "../") {
+		return ""
+	}
+	return path.Clean(name)
 }
 
 func (s *Store) OpenAsset(token string) (io.ReadCloser, string, error) {

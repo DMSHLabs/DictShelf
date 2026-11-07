@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -92,5 +93,24 @@ func TestAssetTokensAreScopedToSnapshot(t *testing.T) {
 		if err != nil || string(got) != want {
 			t.Fatalf("token %q = %q, %v, want %q", token, got, err, want)
 		}
+	}
+}
+
+func TestAssetTokenUnescapesURLPathExactlyOnce(t *testing.T) {
+	s := New(t.TempDir())
+	url := "_assets_/hash/East_Side_School%E2%80%93Old_Hammond_High_School%252C_Louisiana.jpg"
+	name := "_assets_/hash/East_Side_School–Old_Hammond_High_School%2C_Louisiana.jpg"
+	a, err := s.Add(Provenance{DictionaryID: "source", Headword: "Hammond"}, "<img>", []AssetInput{{
+		URL: url, Name: name, Data: []byte("image"),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := s.AssetToken(1, url); !ok || got != a.Assets[name].Token {
+		t.Fatalf("AssetToken(%q) = %q, %t; want %q", url, got, ok, a.Assets[name].Token)
+	}
+	tooEncoded := strings.Replace(url, "%252C", "%25252C", 1)
+	if got, ok := s.AssetToken(1, tooEncoded); ok {
+		t.Fatalf("AssetToken double-encoded URL = %q, %t; want no match", got, ok)
 	}
 }
