@@ -5,6 +5,7 @@ Read only the section you are working on.
 The reference projects cited below (`pyglossary/…`, `mdict-go-web/…`, `draego/…`) are **no longer on disk** — they were removed once the formats were implemented. Their file and function names are kept as provenance: they say where a parsing rule came from and what to search for upstream if a format ever misbehaves, not paths to open.
 
 ## MDX / MDD (Octopus MDict)
+- Saved-article collections export as unencrypted MDict 2.0 UTF-8 `.mdx` files with companion `.mdd` resources. The export keeps article HTML and rewrites saved resource references to unique paths in the MDD; it writes large resources in bounded blocks. Existing files are never overwritten. An empty collection has no export.
 - Binary, block-compressed (zlib/LZO), optionally encrypted (Salsa20/8 variant), v1.2–v3.0. Has built-in **headword index** (key blocks) — no full-text index. MDD = same container holding resources keyed by `\path\name`.
 - Go reader EXISTS and works: `mdict-go-web/internal/gomdict/` — entry points `mdict.go` (`New`, `BuildIndex`, `Lookup`, `Keys`), v3 support in `v3reader.go/v3block.go/v3crypto.go`.
 - Plan: inline `gomdict` into the new module. Importer = iterate `Keys()` + locate/decode each record. Resource resolver = existing MDD lookup path. `@@@LINK=` entries become `alias` rows. Embedded `Description`/`StyleSheet` header fields → `meta`.

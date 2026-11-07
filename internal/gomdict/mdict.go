@@ -251,11 +251,10 @@ func (mdict *Mdict) LocateByKeywordEntry(entry *MDictKeywordEntry) ([]byte, erro
 // entry). Pair it with BuildRecordIndex to serve a resource out of an .mdd that
 // was never fully opened.
 //
-// size < 0 means "to the end of the container", which is how the LAST
-// entry of a container is stored - readKeyEntries only ever fills in the end
-// offset of an entry's predecessor, so the final one has none. The sentinel for
-// that differs between layouts (0 for v1/v2, negative for v3), so it is
-// translated here rather than by every caller.
+// size < 0 means "to the end of the containing block". An entry before an
+// unreadable key block has no reliable successor and uses this sentinel.
+// The sentinel differs between layouts (0 for v1/v2, negative for v3), so
+// it is translated here rather than by every caller.
 func (mdict *Mdict) LocateAt(off, size int64) ([]byte, error) {
 	if off < 0 {
 		return nil, errors.New("mdict: negative record offset")

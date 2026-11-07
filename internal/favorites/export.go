@@ -140,6 +140,7 @@ func (s *Store) ExportMDX(ctx context.Context, folder string) (mdxPath, mddPath 
 			if errors.Is(err, os.ErrExist) {
 				mdxFile.Close()
 				os.Remove(mdxPath)
+				mdxFile = nil
 				continue
 			}
 			if err != nil {
