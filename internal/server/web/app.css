@@ -741,10 +741,21 @@ dd{margin:var(--sp-1) 0 0 0}
 .favourite-control.is-saved svg{fill:currentColor}
 .favourite-control:disabled{opacity:.55;cursor:progress}
 .favourite-control:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-.favourites-create-row{padding:var(--sp-2) var(--sp-2) 0}
-.favourites-create-label{display:block;margin:var(--sp-2) 0 var(--sp-1);font-weight:600}
-.favourites-create-actions{display:flex;justify-content:flex-end;gap:var(--sp-1);margin-top:var(--sp-2)}
-.favourites-create-error{margin-top:var(--sp-1);color:var(--accent)}
+.favourites-dialog-actions{display:flex;justify-content:flex-end;gap:var(--sp-1);margin-top:var(--sp-2)}
+.favourites-dialog-error{margin-top:var(--sp-1);color:var(--accent)}
+.favourites-editor-error{margin:.35em 0 0;color:var(--accent);font-size:calc(var(--ui-hint-font-size) * 1rem)}
+#favouritesEditor.group-dialog[open]{gap:0}
+#favouritesEditor>h2{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);flex:none;margin:0;padding:.8em 1em;border-bottom:1px solid var(--line);font-size:calc(var(--ui-font-title) * 1rem)}
+#favouritesEditor>h2 .btn{box-sizing:border-box;display:grid;place-items:center;width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);margin-left:auto;padding:0;font-size:calc(var(--ui-main-control-font) * 1rem)}
+#favouritesEditor>h2 .icon-close{width:1.4em;height:1.4em}
+.favourites-editor-toolbar{flex:none;padding:var(--sp-2);border-bottom:1px solid var(--line)}
+.favourites-editor-toolbar .btn{width:100%;min-height:calc(var(--ui-main-control-height) * 1em)}
+.favourites-editor-rows{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:var(--sp-2);-webkit-overflow-scrolling:touch}
+.favourites-editor-card .hd{min-height:44px}
+.favourites-editor-card .dict-name-line>b{font-size:calc(var(--ui-font-section) * 1rem)}
+.favourites-editor-card .meta{margin-top:.45em}
+.favourites-editor-card.is-editing{border-color:var(--accent)}
+.favourites-editor-card .dict-rename-save,.favourites-editor-card .dict-rename-reset,.favourites-editor-card .dict-rename,.favourites-editor-card .favourite-editor-delete{width:calc(var(--ui-control-height) * 1em);height:calc(var(--ui-control-height) * 1em);min-width:calc(var(--ui-control-height) * 1em);min-height:calc(var(--ui-control-height) * 1em)}
 
 /* article sandbox host: dictionary CSS lives inside the shadow root and
    cannot touch the chrome; in dark mode the whole article is inverted
@@ -1461,10 +1472,10 @@ dialog.panel-card:not([open]){display:none}
 html[data-dict-icons-off] .dict-icon{display:none}
 .dict-name-line>b{min-width:0}
 .dict-rename,.dict-rename-reset,.dict-rename-save{display:grid;place-items:center;flex:none;width:44px;height:44px;padding:.65em;border:0;border-radius:50%;background:transparent;color:var(--label-quiet);cursor:pointer}
-.favourite-collection-delete{display:grid;place-items:center;flex:none;width:44px;height:44px;padding:.65em;border:0;border-radius:50%;background:transparent;color:var(--label-quiet);cursor:pointer}
-.favourite-collection-delete:hover{background:var(--line-soft);color:var(--fg)}
-.favourite-collection-delete svg{width:1.25em;height:1.25em}
-.favourite-collection-delete:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.favourite-editor-delete{display:grid;place-items:center;flex:none;width:44px;height:44px;padding:.65em;border:0;border-radius:50%;background:transparent;color:var(--label-quiet);cursor:pointer}
+.favourite-editor-delete:hover{background:var(--line-soft);color:var(--danger)}
+.favourite-editor-delete svg{width:1.25em;height:1.25em}
+.favourite-editor-delete:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .dict-rename:hover,.dict-rename-reset:hover,.dict-rename-save:hover{background:var(--line-soft);color:var(--fg)}
 .dict-rename svg,.dict-rename-reset svg,.dict-rename-save svg{width:1.25em;height:1.25em}
 .dict-rename:focus-visible,.dict-rename-reset:focus-visible,.dict-rename-save:focus-visible{outline:2px solid var(--focus);outline-offset:2px}

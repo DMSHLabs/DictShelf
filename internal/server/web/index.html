@@ -456,8 +456,7 @@ window.wudictFontScale=(function(){
     </button>
   </div>
   <!-- One door per row, and the WHOLE row is the target: a label on the left, a
-       chevron on the right. Two open a window of this app (dictionary settings,
-       groups — each edits a list far longer than this drawer), two navigate to
+       chevron on the right. Several open an editor window in this app; two lead to
        a page of their own (folders, word-form data) and one acts in place
        (Rescan). That is why Rescan is the only row without a chevron and the
        only one with a glyph: a chevron promises a place, this promises work.
@@ -472,6 +471,7 @@ window.wudictFontScale=(function(){
        above, not in another window behind another door. -->
   <div class="facts">
     <button type="button" class="mrow door" id="editDictSettings">{{T:panel.editDicts}}</button>
+    <button type="button" class="mrow door" id="editFavourites">{{T:panel.editFavourites}}</button>
     <button type="button" class="mrow door" id="editGroups">{{T:panel.editGroups}}</button>
     <button type="button" class="mrow door" id="editFullText">{{T:panel.fullText}}</button>
     <a class="mrow door" id="editFilters" href="/groups">{{T:panel.editFilters}}</a>
@@ -1023,7 +1023,6 @@ window.wudictFontScale=(function(){
        rather than to a card, and moved to the panel's Dictionaries section,
        where a reader who has just added a folder can see what arrived. -->
   <div id="reindexLine" class="bulkbox" hidden aria-live="polite"></div>
-  <div class="favourites-create-row"><button type="button" class="btn" id="createFavourites">{{T:favourites.createDictionary}}</button></div>
   <div class="panel-scroll" id="dictSettingsScroll">
     <div id="bulkIndexes"></div>
     <div id="bulkIndexStatus" hidden class="bulkbox">
@@ -1034,21 +1033,16 @@ window.wudictFontScale=(function(){
   </div>
   <div id="dictSettingsSearch" class="list-search-dock" role="search" aria-label="{{T:dictUI.listSearchLabel}}"></div>
 </dialog>
-<dialog id="favouritesCreateDialog" class="group-dialog panel-card" aria-labelledby="favouritesCreateTitle">
-  <h2 id="favouritesCreateTitle">{{T:favourites.createTitle}}</h2>
-  <label class="favourites-create-label" for="favouritesCreateName">{{T:favourites.name}}</label>
-  <input id="favouritesCreateName" class="text-input" type="text" maxlength="100" autocomplete="off">
-  <div id="favouritesCreateError" class="favourites-create-error" role="status" aria-live="polite" hidden></div>
-  <div class="favourites-create-actions">
-    <button type="button" class="btn" id="favouritesCreateSave">{{T:favourites.create}}</button>
-    <button type="button" class="btn" id="favouritesCreateCancel">{{T:panel.cancel}}</button>
-  </div>
+<dialog id="favouritesEditor" lang="{{T:locale}}" class="group-dialog panel-card workspace-dialog favourites-editor" aria-labelledby="favouritesEditorTitle">
+  <h2 id="favouritesEditorTitle">{{T:panel.editFavourites}} <button type="button" class="btn" id="closeFavouritesEditor" aria-label="{{T:dictUI.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
+  <div class="favourites-editor-toolbar"><button type="button" class="btn" id="addFavouriteCollection">{{T:favourites.addCollection}}</button></div>
+  <div id="favouritesEditorRows" class="favourites-editor-rows"></div>
 </dialog>
 <dialog id="favouritesDeleteDialog" class="group-dialog panel-card" aria-labelledby="favouritesDeleteTitle">
   <h2 id="favouritesDeleteTitle">{{T:favourites.deleteTitle}}</h2>
   <p id="favouritesDeleteMessage"></p>
-  <div id="favouritesDeleteError" class="favourites-create-error" role="status" aria-live="polite" hidden></div>
-  <div class="favourites-create-actions">
+  <div id="favouritesDeleteError" class="favourites-dialog-error" role="status" aria-live="polite" hidden></div>
+  <div class="favourites-dialog-actions">
     <button type="button" class="btn" id="favouritesDeleteConfirm">{{T:favourites.delete}}</button>
     <button type="button" class="btn" id="favouritesDeleteCancel">{{T:panel.cancel}}</button>
   </div>
@@ -1885,7 +1879,7 @@ async function apiFetch(url,options){
         json:async()=>value,text:async()=>JSON.stringify(value)};
     }
     if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/favourites/collections"&&
-       (method==="GET"||method==="POST"||method==="DELETE")){
+       (method==="GET"||method==="POST"||method==="PUT"||method==="DELETE")){
       const result=JSON.parse(window.wudictAndroidGo.favourites(method,JSON.stringify({collections:true,body:options?.body||""})));
       const value=result.body||{error:"could not update favourites"};
       return {ok:result.status>=200&&result.status<300,status:result.status,
@@ -2010,7 +2004,7 @@ async function apiFetch(url,options){
       else if(requestURL.pathname==="/api/favourites"&&(method==="POST"||method==="DELETE")){
         nativeMethod="favourites";argument=JSON.stringify({method,body:options.body||"{}"});
       }
-      else if(requestURL.pathname==="/api/favourites/collections"&&(method==="GET"||method==="POST"||method==="DELETE")){
+      else if(requestURL.pathname==="/api/favourites/collections"&&(method==="GET"||method==="POST"||method==="PUT"||method==="DELETE")){
         nativeMethod="favourites";argument=JSON.stringify({method,collections:true,body:options.body||""});
       }
       else if(requestURL.pathname==="/api/system-log"&&method==="DELETE")nativeMethod="clearSystemLog";
@@ -4104,7 +4098,7 @@ function provenance(d){
      ALLOW_REMOTE_DELETE is on. Never a platform test done here: the page does
      not know what it is running on, and must not guess. */
   const canDel=!!(cfgInfo&&cfgInfo.canDelete);
-  if(canDel)rows.push(`<div class="rmwrap">${rmTrigger(d)}</div>`);
+  if(canDel&&!favouriteCollections.some(collection=>collection.id===d.id))rows.push(`<div class="rmwrap">${rmTrigger(d)}</div>`);
   // The flat one-line form has nowhere to put a control, so a card that can be
   // deleted always gets the disclosure - even when the body holds nothing else.
   if(!rows.length)return `<div class="prov1" title="${escAttr(full)}">${head}</div>`;
@@ -4351,10 +4345,9 @@ function renderPanel(){
     if(d.headwords)counts.push(esc(tx("dictUI.numberOfHeadwords",{number:window.wudictI18n.number(Number(d.headwords))})));
     if(d.entries)counts.push(esc(tx("dictUI.numberOfEntries",{number:window.wudictI18n.number(Number(d.entries))})));
     const countLines=counts.length?`<div class="dict-info-counts">${counts.join("<br>")}</div>`:"";
-    const deleteFavourite=favouriteCollections.some(c=>c.id===d.id&&d.id!=="favourites")
-      ?`<button type="button" class="favourite-collection-delete" aria-label="${escAttr(tx("favourites.deleteTitle"))}" title="${escAttr(tx("favourites.deleteTitle"))}" data-delete-favourite="${escAttr(d.id)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6m4-6v6M5 7l1 14h12l1-14M9 7V4h6v3"/></svg></button>`:"";
+    const renameControl=favouriteCollections.some(collection=>collection.id===d.id)?"":`<button type="button" class="dict-rename" aria-label="${escAttr(tx("dictUI.renameDictionary"))}" title="${escAttr(tx("dictUI.renameDictionary"))}" data-rename="${escAttr(d.id)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button>`;
     div.innerHTML=`<div class="hd">
-        <span class="dict-name-line">${dictIconHTML(d.id)}<b class="dict-info-name" data-dict="${escAttr(d.id)}" tabindex="${d.unavailable?-1:0}" role="button" aria-disabled="${!!d.unavailable}" title="${escAttr(tx(d.unavailable?"dictUI.dslUnavailable":"dictUI.searchOnly"))}">${esc(dictLabel(d))}</b>${deleteFavourite}<button type="button" class="dict-rename" aria-label="${escAttr(tx("dictUI.renameDictionary"))}" title="${escAttr(tx("dictUI.renameDictionary"))}" data-rename="${escAttr(d.id)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button></span>
+        <span class="dict-name-line">${dictIconHTML(d.id)}<b class="dict-info-name" data-dict="${escAttr(d.id)}" tabindex="${d.unavailable?-1:0}" role="button" aria-disabled="${!!d.unavailable}" title="${escAttr(tx(d.unavailable?"dictUI.dslUnavailable":"dictUI.searchOnly"))}">${esc(dictLabel(d))}</b>${renameControl}</span>
       </div>
       <div class="meta">${esc(d.format||"?")}${d.dbSize||selfIndexed?tx("dictUI.indexed"):""}</div>
       ${dslIndexControls(d)}
@@ -4669,32 +4662,107 @@ $("editDictSettings").onclick=async()=>{
   showDictSettings();
 };
 $("closeDictSettings").onclick=()=>$("dictSettings").close();
-function openFavouriteCreate(){
-  $("favouritesCreateName").value="";$("favouritesCreateError").hidden=true;$("favouritesCreateError").textContent="";
-  $("favouritesCreateDialog").showModal();$("favouritesCreateName").focus();
-}
-async function createFavouriteCollection(){
-  const name=$("favouritesCreateName").value.trim(),save=$("favouritesCreateSave"),error=$("favouritesCreateError");
-  if(!name){error.textContent=tx("favourites.nameRequired");error.hidden=false;return}
-  save.disabled=true;error.hidden=true;
-  try{
-    const response=await apiFetch("/api/favourites/collections",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});
-    const value=await response.json();
-    if(!response.ok)throw new Error(value.error||tx("favourites.failed"));
-    $("favouritesCreateDialog").close();
-    await loadFavouriteCollections();selectFavouriteCollection(value.id);await loadDicts();
-    if(lastQuery)doSearch();
-  }catch(failure){error.textContent=window.wudictI18n.errorText(failure.message);error.hidden=false}
-  finally{save.disabled=false}
-}
-$("createFavourites").addEventListener("click",openFavouriteCreate);
-$("favouritesCreateSave").addEventListener("click",createFavouriteCollection);
-$("favouritesCreateCancel").addEventListener("click",()=>$("favouritesCreateDialog").close());
-$("favouritesCreateName").addEventListener("keydown",event=>{
-  if(event.key==="Enter"){event.preventDefault();createFavouriteCollection()}
-  else if(event.key==="Escape"){event.preventDefault();$("favouritesCreateDialog").close()}
-});
 let favouriteDeleteID="";
+let favouriteEditorEdit=null,favouriteEditorSaving=false;
+function favouriteEditorIcon(name){
+  const icons={save:'<path d="m5 12 4 4L19 6"/>',cancel:'<path d="m6 6 12 12M18 6 6 18"/>',delete:'<path d="M4 7h16M10 11v6m4-6v6M5 7l1 14h12l1-14M9 7V4h6v3"/>',rename:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/>'};
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`;
+}
+function favouriteEditorButton(className,key,icon,action){
+  const button=document.createElement("button");button.type="button";button.className=className;
+  button.title=tx(key);button.setAttribute("aria-label",button.title);button.innerHTML=favouriteEditorIcon(icon);button.disabled=favouriteEditorSaving;button.addEventListener("click",action);return button;
+}
+function favouriteEditorTile(collection,isNew=false){
+  const editing=!!favouriteEditorEdit&&(isNew?favouriteEditorEdit.isNew:favouriteEditorEdit.id===collection.id);
+  const card=document.createElement("div");card.className="pd favourite-editor-card"+(editing?" is-editing":"");
+  const head=document.createElement("div");head.className="hd";
+  const nameLine=document.createElement("span");nameLine.className="dict-name-line";nameLine.innerHTML=dictIconHTML(collection.id||"favourites");
+  if(editing){
+    const input=document.createElement("input");input.type="text";input.maxLength=100;input.className="dict-rename-input";input.disabled=favouriteEditorSaving;
+    input.value=favouriteEditorEdit.value??(isNew?"":collection.name);input.placeholder=tx("favourites.name");input.setAttribute("aria-label",tx("favourites.name"));
+    input.addEventListener("input",()=>{
+      if(favouriteEditorEdit){favouriteEditorEdit.value=input.value;favouriteEditorEdit.error=""}
+      const error=card.querySelector(".favourites-editor-error");if(error){error.textContent="";error.hidden=true}
+    });
+    nameLine.append(input);
+    nameLine.append(favouriteEditorButton("dict-rename-save","panel.save","save",()=>saveFavouriteCollection(collection.id,isNew,input.value)));
+    nameLine.append(favouriteEditorButton("dict-rename-reset","panel.cancel","cancel",cancelFavouriteCollectionEdit));
+    input.addEventListener("keydown",event=>{
+      if(event.key==="Enter"){event.preventDefault();saveFavouriteCollection(collection.id,isNew,input.value)}
+      else if(event.key==="Escape"){event.preventDefault();cancelFavouriteCollectionEdit()}
+    });
+    if(isNew)requestAnimationFrame(()=>input.focus());
+  }else{
+    const label=document.createElement("b");label.className="favourite-editor-name";label.textContent=favouriteCollectionLabel(collection.id)||collection.name;
+    nameLine.append(label,favouriteEditorButton("dict-rename","favourites.renameTitle","rename",()=>beginFavouriteCollectionEdit(collection.id)));
+    if(collection.id!=="favourites")nameLine.append(favouriteEditorButton("favourite-editor-delete","favourites.deleteTitle","delete",()=>openFavouriteDelete(collection.id)));
+  }
+  head.append(nameLine);card.append(head);
+  if(!isNew){
+    const meta=document.createElement("div");meta.className="meta";
+    meta.textContent=tx("favourites.collectionStats",{count:window.wudictI18n.number(Number(collection.articles||0)),size:mb(Number(collection.size||0))});
+    card.append(meta);
+  }
+  if(editing){
+    const error=document.createElement("p");error.className="favourites-editor-error";error.setAttribute("role","alert");
+    error.textContent=favouriteEditorEdit.error||"";error.hidden=!favouriteEditorEdit.error;card.append(error);
+  }
+  return card;
+}
+function renderFavouritesEditor(){
+  const rows=$("favouritesEditorRows");rows.replaceChildren();
+  favouriteCollections.forEach(collection=>rows.append(favouriteEditorTile(collection)));
+  if(favouriteEditorEdit?.isNew)rows.append(favouriteEditorTile({id:"",name:""},true));
+  $("addFavouriteCollection").disabled=favouriteEditorSaving||!!favouriteEditorEdit;
+  $("closeFavouritesEditor").disabled=favouriteEditorSaving;
+}
+function favouriteEditorErrorText(message){
+  if(message.includes("a collection with that name already exists"))return tx("favourites.duplicateName");
+  return window.wudictI18n.errorText(message);
+}
+async function openFavouritesEditor(){
+  const button=$("editFavourites");button.disabled=true;
+  try{
+    await loadFavouriteCollections();favouriteEditorEdit=null;renderFavouritesEditor();
+    $("favouritesEditor").showModal();
+  }catch(failure){setStatus(esc(favouriteEditorErrorText(failure.message)))}
+  finally{button.disabled=false}
+}
+function beginFavouriteCollectionEdit(id){
+  const collection=favouriteCollections.find(item=>item.id===id);if(!collection)return;
+  favouriteEditorEdit={id,isNew:false,value:favouriteCollectionLabel(id)||collection.name,error:""};renderFavouritesEditor();
+  requestAnimationFrame(()=>{ $("favouritesEditorRows").querySelector("input")?.focus() });
+}
+function beginFavouriteCollectionCreate(){
+  if(favouriteEditorEdit)return;
+  favouriteEditorEdit={id:"",isNew:true,value:"",error:""};renderFavouritesEditor();
+}
+function cancelFavouriteCollectionEdit(){favouriteEditorEdit=null;renderFavouritesEditor();}
+async function saveFavouriteCollection(id,isNew,value){
+  if(favouriteEditorSaving)return;
+  const name=value.trim();
+  if(!name){favouriteEditorEdit.error=tx("favourites.nameRequired");favouriteEditorEdit.value=value;renderFavouritesEditor();return}
+  favouriteEditorEdit.value=name;favouriteEditorSaving=true;favouriteEditorEdit.error="";renderFavouritesEditor();
+  try{
+    const method=isNew?"POST":"PUT",body=isNew?{name}:{id,name};
+    const response=await apiFetch("/api/favourites/collections",{method,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const result=await response.json();if(!response.ok)throw new Error(result.error||tx("favourites.failed"));
+    favouriteEditorEdit=null;
+    if(!isNew){dictTitles.set(id,name);savePrefs(true)}
+    await loadFavouriteCollections();
+    if(isNew)selectFavouriteCollection(result.id);
+    await loadDicts();renderFavouritesEditor();
+    if(lastQuery)doSearch();
+  }catch(failure){
+    if(favouriteEditorEdit)favouriteEditorEdit.error=favouriteEditorErrorText(failure.message);
+    renderFavouritesEditor();
+  }finally{favouriteEditorSaving=false;renderFavouritesEditor()}
+}
+$("editFavourites").addEventListener("click",openFavouritesEditor);
+$("closeFavouritesEditor").addEventListener("click",()=>$("favouritesEditor").close());
+$("addFavouriteCollection").addEventListener("click",beginFavouriteCollectionCreate);
+$("favouritesEditor").addEventListener("close",()=>{favouriteEditorEdit=null;$("editFavourites").focus()});
+$("favouritesEditor").addEventListener("cancel",event=>{if(favouriteEditorSaving)event.preventDefault()});
 function openFavouriteDelete(id){
   const collection=favouriteCollections.find(c=>c.id===id);
   if(!collection||id==="favourites")return;
@@ -4717,8 +4785,8 @@ async function deleteFavouriteCollection(){
     $("favouritesDeleteDialog").close();favouriteDeleteID="";
     await loadFavouriteCollections();
     if(selectedFavourite===id)selectFavouriteCollection("favourites");
-    await loadDicts();if(lastQuery)doSearch();
-  }catch(failure){error.textContent=window.wudictI18n.errorText(failure.message);error.hidden=false}
+    await loadDicts();renderFavouritesEditor();if(lastQuery)doSearch();
+  }catch(failure){error.textContent=favouriteEditorErrorText(failure.message);error.hidden=false}
   finally{button.disabled=false}
 }
 $("favouritesDeleteConfirm").addEventListener("click",deleteFavouriteCollection);
@@ -6703,8 +6771,6 @@ $("panelList").addEventListener("click",e=>{
   // The absolute path the row was built from — not the ~-shortened text on
   // screen, and not a display string with its annotations cut back off.
   if(path){navigator.clipboard?.writeText(path.dataset.full||path.textContent);path.style.color="var(--accent)";return}
-  const deleteFavourite=e.target.closest("[data-delete-favourite]");
-  if(deleteFavourite){e.preventDefault();e.stopPropagation();openFavouriteDelete(deleteFavourite.dataset.deleteFavourite);return}
   const rename=e.target.closest("[data-rename]");
   if(rename){
     e.preventDefault();e.stopPropagation();
