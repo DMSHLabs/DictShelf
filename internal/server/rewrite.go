@@ -165,6 +165,19 @@ func RewriteEntryHTMLMarked(html, dictID string, hl *hilite.Terms) string {
 	return entryRewriter(dictID, hl.Mark).Rewrite(html)
 }
 
+func rewriteEntryHTMLFor(html, dictID string, entryID int64, hl *hilite.Terms, assets func(int64, string) (string, bool)) string {
+	if dictID == "" || html == "" {
+		return html
+	}
+	text := func(s string) string {
+		if hl == nil {
+			return s
+		}
+		return hl.Mark(s)
+	}
+	return entryRewriterFor(dictID, text, entryID, assets).Rewrite(html)
+}
+
 // hasRewritableRef reports whether the article can contain a reference at all.
 func hasRewritableRef(html string) bool {
 	return strings.Contains(html, "src") || strings.Contains(html, "href") ||
@@ -181,6 +194,10 @@ func hasRewritableRef(html string) bool {
 // treats as "emit the original bytes" - so a caller that only wants marking
 // gets marking and nothing else.
 func entryRewriter(dictID string, text func(string) string) htmlref.Rewriter {
+	return entryRewriterFor(dictID, text, 0, nil)
+}
+
+func entryRewriterFor(dictID string, text func(string) string, entryID int64, assetToken func(int64, string) (string, bool)) htmlref.Rewriter {
 	rw := htmlref.Rewriter{Text: text}
 	if dictID == "" {
 		return rw
@@ -222,6 +239,16 @@ func entryRewriter(dictID string, text func(string) string) htmlref.Rewriter {
 		}
 		if !isResourceRef(r) {
 			return ref
+		}
+		if assetToken != nil && entryID > 0 {
+			if token, ok := assetToken(entryID, ref); ok {
+				return resURL(dictID, token)
+			}
+			clean := soundOrFile.ReplaceAllString(ref, "")
+			clean = strings.TrimPrefix(strings.TrimPrefix(clean, "./"), "/")
+			if token, ok := assetToken(entryID, clean); ok {
+				return resURL(dictID, token)
+			}
 		}
 		return resURL(dictID, ref)
 	}

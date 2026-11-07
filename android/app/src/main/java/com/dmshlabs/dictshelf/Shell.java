@@ -470,6 +470,10 @@ final class Shell {
             return GoBridge.removeLibrary(query);
         }
 
+        @JavascriptInterface public String favourites(String method, String body) {
+            return GoBridge.favourites(method, body);
+        }
+
         @JavascriptInterface public String looks(String argument) {
             return GoBridge.looks(argument);
         }

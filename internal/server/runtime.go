@@ -10,7 +10,9 @@ import (
 	"runtime"
 
 	"github.com/DMSHLabs/DictShelf/internal/config"
+	"github.com/DMSHLabs/DictShelf/internal/favorites"
 	dslformat "github.com/DMSHLabs/DictShelf/internal/format/dsl"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/favs"
 	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
 	"github.com/DMSHLabs/DictShelf/internal/morph"
@@ -85,13 +87,22 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 		dslRepairs = saved
 	}
 	dslformat.SetTitleRepairs(dslRepairs)
+	favourites := favorites.New(user.Favorites())
+	name := "Favourites"
+	if prefs.ResolvedLanguage("") == "ru" {
+		name = "Избранное"
+	}
+	if err := favourites.EnsureNamed(name); err != nil {
+		return nil, fmt.Errorf("provision favourites dictionary: %w", err)
+	}
 	reg, err := NewRegistry(cfg.DictDirs, cfg.UseCached,
-		WithPrefs(prefs))
+		WithPrefs(prefs), WithBuiltin(Builtin{ID: favorites.ID, Path: favourites.Path()}))
 	if err != nil {
 		return nil, err
 	}
 	reg.SetPreviewBudget(cfg.PreviewMemory)
 	s := New(reg)
+	s.favourites = favourites
 	s.UseUserGroups()
 	s.ConfigPath = configPath
 	s.User = user

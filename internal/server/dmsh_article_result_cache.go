@@ -263,8 +263,19 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 			return err
 		}
 		marks := marker(request.Highlight && fullTextReadingMode(request.Mode))(query, request.Rung)
+		var assetTokens func(int64, string) (string, bool)
+		if len(results) > 0 {
+			if d, openErr := e.open(); openErr == nil {
+				if resolver, ok := d.(interface {
+					AssetToken(int64, string) (string, bool)
+				}); ok {
+					assetTokens = resolver.AssetToken
+				}
+			}
+		}
 		for i := range results {
-			results[i].Body = RewriteEntryHTMLMarked(results[i].Body, e.ID, marks)
+			s.decorateFavourite(e.ID, &results[i])
+			results[i].Body = rewriteEntryHTMLFor(results[i].Body, e.ID, results[i].EntryID, marks, assetTokens)
 		}
 		var styles htmlref.Styles
 		if format != formatRaw && len(results) > 0 {

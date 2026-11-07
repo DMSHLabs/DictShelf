@@ -334,8 +334,19 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 			reading = "words"
 		}
 		hl := marks(h.Term, reading)
+		var assetTokens func(int64, string) (string, bool)
+		if len(h.Results) > 0 {
+			if d, err := entries[i].open(); err == nil {
+				if resolver, ok := d.(interface {
+					AssetToken(int64, string) (string, bool)
+				}); ok {
+					assetTokens = resolver.AssetToken
+				}
+			}
+		}
 		for j := range h.Results {
-			h.Results[j].Body = RewriteEntryHTMLMarked(h.Results[j].Body, id, hl)
+			s.decorateFavourite(id, &h.Results[j])
+			h.Results[j].Body = rewriteEntryHTMLFor(h.Results[j].Body, id, h.Results[j].EntryID, hl, assetTokens)
 		}
 		// `clean` and `text` need this dictionary's own CSS to know which of
 		// its classes are blocks and which are hidden (D68); derived once per

@@ -683,6 +683,46 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
 
+  /api/favourites:
+    post:
+      tags: [internal]
+      operationId: addFavourite
+      x-internal: true
+      summary: Save a self-contained article snapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dict, headword]
+              properties:
+                dict: { type: string }
+                headword: { type: string }
+      responses:
+        '200': { description: Article saved with its referenced media }
+        '404': { description: Dictionary or article not found }
+        '409': { description: Article is already saved }
+        '500': { $ref: '#/components/responses/ServerError' }
+    delete:
+      tags: [internal]
+      operationId: removeFavourite
+      x-internal: true
+      summary: Remove a saved article snapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [favoriteId]
+              properties:
+                favoriteId: { type: string }
+      responses:
+        '200': { description: Article removed }
+        '404': { description: Snapshot not found }
+        '500': { $ref: '#/components/responses/ServerError' }
+
   /api/ingest:
     get:
       tags: [internal]
@@ -3289,6 +3329,9 @@ components:
         Body:
           type: string
           description: Article HTML, in the requested format.
+        entryId: { type: integer, description: Prepared article ID used for resource resolution. }
+        favorite: { type: boolean, description: This source article already has a saved snapshot. }
+        favoriteId: { type: string, description: Snapshot ID, present for articles in the favourites dictionary. }
 
     StreamEnd:
       type: object

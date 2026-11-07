@@ -19,6 +19,7 @@ extern char *WudictGoBridgeBrowseDiagnostic(char *payload);
 extern char *WudictGoBridgeAbout(char *origin, char *dictionary);
 extern char *WudictGoBridgeOrphans(char *action, char *body);
 extern char *WudictGoBridgeRemoveLibrary(char *query);
+extern char *WudictGoBridgeFavourites(char *method, char *body);
 extern char *WudictGoBridgeLooks(char *argument);
 extern char *WudictGoBridgeGroups(char *action, char *argument);
 extern char *WudictGoBridgeLemmas(char *action, char *code);
@@ -244,6 +245,26 @@ Java_com_dmshlabs_dictshelf_GoBridge_nativeRemoveLibrary(JNIEnv *env, jclass own
     if (text == NULL) return NULL;
     char *result = WudictGoBridgeRemoveLibrary((char *)text);
     (*env)->ReleaseStringUTFChars(env, query, text);
+    if (result == NULL) return NULL;
+    jstring answer = (*env)->NewStringUTF(env, result);
+    free(result);
+    return answer;
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_dmshlabs_dictshelf_GoBridge_nativeFavourites(JNIEnv *env, jclass owner, jstring method, jstring body) {
+    (void)owner;
+    if (method == NULL || body == NULL) return NULL;
+    const char *methodText = (*env)->GetStringUTFChars(env, method, NULL);
+    const char *bodyText = (*env)->GetStringUTFChars(env, body, NULL);
+    if (methodText == NULL || bodyText == NULL) {
+        if (methodText != NULL) (*env)->ReleaseStringUTFChars(env, method, methodText);
+        if (bodyText != NULL) (*env)->ReleaseStringUTFChars(env, body, bodyText);
+        return NULL;
+    }
+    char *result = WudictGoBridgeFavourites((char *)methodText, (char *)bodyText);
+    (*env)->ReleaseStringUTFChars(env, method, methodText);
+    (*env)->ReleaseStringUTFChars(env, body, bodyText);
     if (result == NULL) return NULL;
     jstring answer = (*env)->NewStringUTF(env, result);
     free(result);

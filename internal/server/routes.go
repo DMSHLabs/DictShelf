@@ -104,6 +104,8 @@ func (s *Server) routes() []route {
 		{"DELETE", "/api/rescan", s.handleStopRescanIndexes, "/api/rescan", false},
 		{"POST", "/api/clear-database", s.handleClearDatabase, "/api/clear-database", false},
 		{"POST", "/api/howto", s.handleHowtoCopy, "/api/howto", false},
+		{"POST", "/api/favourites", s.handleFavourites, "/api/favourites", false},
+		{"DELETE", "/api/favourites", s.handleFavourites, "/api/favourites", false},
 		{"GET", "/api/ingest", s.handleIngest, "/api/ingest", false},
 		{"DELETE", "/api/ingest", s.handleIngest, "/api/ingest", false},
 		{"GET", "/api/system-log", s.handleIndexLog, "/api/system-log", false},

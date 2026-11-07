@@ -249,6 +249,32 @@ func (u *upgraded) ArticlesByIDs(ctx context.Context, ids []int64) ([]dict.Resul
 	return u.titleResults(ctx, rows, err)
 }
 
+func (u *upgraded) AssetToken(entryID int64, url string) (string, bool) {
+	d, err := u.source()
+	if err != nil {
+		return "", false
+	}
+	resolver, ok := d.(interface {
+		AssetToken(int64, string) (string, bool)
+	})
+	if !ok {
+		return "", false
+	}
+	return resolver.AssetToken(entryID, url)
+}
+
+func (u *upgraded) FavoriteID(entryID int64) string {
+	d, err := u.source()
+	if err != nil {
+		return ""
+	}
+	resolver, ok := d.(interface{ FavoriteID(int64) string })
+	if !ok {
+		return ""
+	}
+	return resolver.FavoriteID(entryID)
+}
+
 // Resource resolves in three rungs, cheapest first (D2, extended by O8):
 //
 //  1. the packed media.db the Store attaches - portable, and always right when

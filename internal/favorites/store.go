@@ -28,6 +28,7 @@ import (
 
 const (
 	Format     = "favs"
+	ID         = "favourites"
 	Version    = 1
 	MaxArticle = 64 << 20
 	MaxAsset   = 512 << 20
@@ -68,6 +69,7 @@ type Article struct {
 type manifest struct {
 	Version   int       `json:"version"`
 	Revision  string    `json:"revision"`
+	Name      string    `json:"name,omitempty"`
 	TotalSize int64     `json:"total_size"`
 	Articles  []Article `json:"articles"`
 }
@@ -82,13 +84,58 @@ func New(root string) *Store { return &Store{root: root} }
 func (s *Store) Path() string    { return filepath.Join(s.root, "favourites.favs") }
 func (s *Store) Objects() string { return filepath.Join(s.root, "objects") }
 
+func (s *Store) Name() (string, error) {
+	rev, err := s.Current()
+	if err != nil {
+		return "", err
+	}
+	b, err := fsx.ReadBounded(filepath.Join(s.root, "versions", rev, "manifest.json"), 64<<20)
+	if err != nil {
+		return "", err
+	}
+	var m manifest
+	if err := json.Unmarshal(b, &m); err != nil {
+		return "", err
+	}
+	if m.Name == "" {
+		return "Favourites", nil
+	}
+	return m.Name, nil
+}
+
+func (s *Store) SetName(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("favourites name is required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, err := s.readManifestLocked()
+	if err != nil {
+		return err
+	}
+	if m.Name == name {
+		return nil
+	}
+	m.Name = name
+	return s.publishLocked(m)
+}
+
 // Ensure provisions the empty source pointer and its first manifest. Repeated
 // calls are idempotent and never replace snapshots that already exist.
 func (s *Store) Ensure() error {
+	return s.EnsureNamed("Favourites")
+}
+
+func (s *Store) EnsureNamed(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "Favourites"
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, err := os.Stat(s.Path()); errors.Is(err, os.ErrNotExist) {
-		return s.publishLocked(manifest{Version: Version})
+		return s.publishLocked(manifest{Version: Version, Name: name})
 	} else if err != nil {
 		return err
 	}
@@ -97,7 +144,20 @@ func (s *Store) Ensure() error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	return s.publishLocked(manifest{Version: Version})
+	return s.publishLocked(manifest{Version: Version, Name: name})
+}
+
+func (s *Store) Has(dictionaryID, headword string) bool {
+	articles, err := s.Manifest()
+	if err != nil {
+		return false
+	}
+	for _, a := range articles {
+		if a.Provenance.DictionaryID == dictionaryID && a.Headword == headword {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Store) Current() (string, error) {

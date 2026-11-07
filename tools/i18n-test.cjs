@@ -203,7 +203,7 @@ for (const language of ['en', 'ru']) {
   // Exercise actual result rendering: translating the surrounding UI must not
   // alter headwords, article HTML, dictionary IDs or the index action values.
   const articles = [];
-  const node = () => ({dataset:{}, children:[], appendChild(n){this.children.push(n)}, addEventListener(){},querySelector(){return null}});
+  const node = () => ({dataset:{}, children:[], appendChild(n){this.children.push(n)}, append(...n){this.children.push(...n)}, addEventListener(){},setAttribute(){},querySelector(){return null}});
   const resultContext = {tx:t, window:context.window, document:{createElement:node},URL,location:{href:'http://localhost/?q=word',origin:'http://localhost'},
     esc:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),
     escAttr:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'),
@@ -211,6 +211,7 @@ for (const language of ['en', 'ru']) {
     renderArticle:(dd,body,id)=>{articles.push({body,id});return null}};
   vm.runInNewContext(main.match(/^const FEAT_NAME=.*;$/m)[0] + '\n' +
     main.match(/^const fullTextReading=.*;$/m)[0] + '\n' +
+    main.match(/function favouriteControl\(result,dictID,dt,dd\)\{[\s\S]*?\n}/)[0] + '\n' +
     main.match(/function renderSlot\(box,h,mode,q,perDict,group,paging=null\)\{[\s\S]*?\n}/)[0], resultContext);
   const box=node(), body='<p lang="en">word {query}</p>', headword='<word> {number}';
   resultContext.renderSlot(box,{dict:'original-id',name:'<Dictionary>',results:[{Headword:headword,Body:body}]},'prefix','word',1,false);

@@ -681,6 +681,28 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 		}
 		result, _, err := s.removeLibrary(values)
 		return result, err
+	case "favourites":
+		var request struct {
+			Method string `json:"method"`
+			Body   string `json:"body"`
+		}
+		if len(argument) > 8192 || json.Unmarshal([]byte(argument), &request) != nil || (request.Method != http.MethodPost && request.Method != http.MethodDelete) {
+			return nil, errors.New("invalid favourites operation")
+		}
+		var action favouriteRequest
+		if json.Unmarshal([]byte(request.Body), &action) != nil {
+			return nil, errors.New("invalid favourites request")
+		}
+		var err error
+		if request.Method == http.MethodPost {
+			err = s.addFavourite(action)
+		} else {
+			err = s.removeFavourite(action)
+		}
+		if err != nil {
+			return nil, err
+		}
+		return map[string]bool{"favorite": request.Method == http.MethodPost}, nil
 	case "reindex":
 		return s.reindexStatus(), nil
 	case "indexWork":

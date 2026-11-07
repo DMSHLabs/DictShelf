@@ -1835,6 +1835,13 @@ async function apiFetch(url,options){
       return {ok:result.status>=200&&result.status<300,status:result.status,
         json:async()=>value,text:async()=>JSON.stringify(value)};
     }
+    if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/favourites"&&
+       (method==="POST"||method==="DELETE")){
+      const result=JSON.parse(window.wudictAndroidGo.favourites(method,options?.body||"{}"));
+      const value=result.body||{error:"could not update favourites"};
+      return {ok:result.status>=200&&result.status<300,status:result.status,
+        json:async()=>value,text:async()=>JSON.stringify(value)};
+    }
     if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/system-log"&&method==="DELETE"){
       const result=JSON.parse(window.wudictAndroidGo.userFileOperation("clearSystemLog",""));
       const value=result.ok?result.value:{error:result.error||"could not clear system log"};
@@ -1950,6 +1957,9 @@ async function apiFetch(url,options){
       else if(requestURL.pathname==="/api/library"&&method==="GET")nativeMethod="library";
       else if(requestURL.pathname==="/api/library"&&method==="DELETE"){
         nativeMethod="removeLibrary";argument=requestURL.searchParams.toString();
+      }
+      else if(requestURL.pathname==="/api/favourites"&&(method==="POST"||method==="DELETE")){
+        nativeMethod="favourites";argument=JSON.stringify({method,body:options.body||"{}"});
       }
       else if(requestURL.pathname==="/api/system-log"&&method==="DELETE")nativeMethod="clearSystemLog";
       else if(requestURL.pathname==="/api/orphans"&&method==="GET")nativeMethod="orphans";
@@ -7793,6 +7803,33 @@ function promote(boxes,i){
     ref.after(b);ref=b;       // in order, so preference survives among them
   }
 }
+function favouriteControl(result,dictID,dt,dd){
+  const inFavourites=dictID==="favourites",saved=!!result.favorite;
+  if(inFavourites&&!result.favoriteId)return null;
+  const button=document.createElement("button");
+  button.type="button";button.className="favourite-control"+(saved?" is-saved":"");
+  button.setAttribute("aria-label",tx(inFavourites?"favourites.remove":"favourites.add"));
+  button.title=tx(inFavourites?"favourites.remove":saved?"favourites.saved":"favourites.add");
+  button.innerHTML=inFavourites
+    ?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 3v6m4-6v6"/></svg>'
+    :'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.75 5.57 6.15.9-4.45 4.33 1.05 6.12L12 17.03l-5.5 2.89 1.05-6.12L3.1 9.47l6.15-.9z"/></svg>';
+  button.addEventListener("click",async event=>{
+    event.preventDefault();event.stopPropagation();button.disabled=true;
+    const method=inFavourites?"DELETE":"POST";
+    const payload=inFavourites?{favoriteId:result.favoriteId}:{dict:dictID,headword:result.Headword};
+    try{
+      const response=await apiFetch("/api/favourites",{method,headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      const value=await response.json();
+      if(!response.ok)throw new Error(value.error||tx("favourites.failed"));
+      if(inFavourites){dt.remove();dd.remove();return}
+      result.favorite=true;button.classList.add("is-saved");
+      button.setAttribute("aria-label",tx("favourites.remove"));button.title=tx("favourites.saved");
+    }catch(error){alert(window.wudictI18n.errorText(error.message))}
+    finally{if(button.isConnected)button.disabled=false}
+  });
+  return button;
+}
+
 function renderSlot(box,h,mode,q,perDict,group,paging=null){
   box.innerHTML="";
   if(h.error){
@@ -7863,6 +7900,7 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
     const dt=document.createElement("dt");
     dt.innerHTML=mode==="wildcards"?highlightMaskHeadword(r.Headword,q):esc(r.Headword);
     const dd=document.createElement("dd");dd.dataset.dict=h.dict;
+    const favourite=favouriteControl(r,h.dict,dt,dd);if(favourite)dt.append(favourite);
     roots.push(renderArticle(dd,r.Body,h.dict,
       anchorOnce&&anchorOnce.dict===h.dict&&r===h.results[0]?anchorOnce.frag:""));
     dl.appendChild(dt);dl.appendChild(dd);

@@ -50,7 +50,7 @@ func (s *Store) SearchHeadwordsMode(ctx context.Context, query, mode string, lim
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		results, err := s.collect(s.db.QueryContext(ctx, `SELECT w,m FROM entry WHERE w=? COLLATE NOCASE AND w=? ORDER BY id LIMIT ?`, word, word, limit-len(out)))
+		results, err := s.collect(s.db.QueryContext(ctx, `SELECT id,w,m FROM entry WHERE w=? COLLATE NOCASE AND w=? ORDER BY id LIMIT ?`, word, word, limit-len(out)))
 		if err != nil {
 			return nil, err
 		}

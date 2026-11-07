@@ -38,7 +38,11 @@ func Open(path string) (*Dict, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Dict{store: s, articles: articles, meta: dict.Meta{Name: "Favourites", Format: favorites.Format, Path: path, EntryCount: len(articles)}}, nil
+	name, err := s.Name()
+	if err != nil {
+		return nil, err
+	}
+	return &Dict{store: s, articles: articles, meta: dict.Meta{Name: name, Format: favorites.Format, Path: path, EntryCount: len(articles)}}, nil
 }
 
 func Probe(path string) (dict.Meta, error) {
@@ -47,7 +51,11 @@ func Probe(path string) (dict.Meta, error) {
 	if err != nil {
 		return dict.Meta{}, err
 	}
-	return dict.Meta{Name: "Favourites", Format: favorites.Format, Path: path, EntryCount: len(articles)}, nil
+	name, err := s.Name()
+	if err != nil {
+		return dict.Meta{}, err
+	}
+	return dict.Meta{Name: name, Format: favorites.Format, Path: path, EntryCount: len(articles)}, nil
 }
 
 func (d *Dict) Meta() dict.Meta { return d.meta }
@@ -57,7 +65,7 @@ func (d *Dict) Exact(word string, limit int) ([]dict.Result, error) {
 		limit = 100
 	}
 	var out []dict.Result
-	for _, a := range d.articles {
+	for i, a := range d.articles {
 		if a.Headword != word {
 			continue
 		}
@@ -65,7 +73,7 @@ func (d *Dict) Exact(word string, limit int) ([]dict.Result, error) {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, dict.Result{Headword: a.Headword, Body: body})
+		out = append(out, dict.Result{Headword: a.Headword, Body: body, EntryID: int64(i + 1), FavoriteID: a.ID})
 		if len(out) == limit {
 			break
 		}
@@ -77,7 +85,7 @@ func (d *Dict) Prefix(word string, limit int) ([]dict.Result, error) {
 		limit = 100
 	}
 	var out []dict.Result
-	for _, a := range d.articles {
+	for i, a := range d.articles {
 		if !strings.HasPrefix(strings.ToLower(a.Headword), strings.ToLower(word)) {
 			continue
 		}
@@ -85,7 +93,7 @@ func (d *Dict) Prefix(word string, limit int) ([]dict.Result, error) {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, dict.Result{Headword: a.Headword, Body: body})
+		out = append(out, dict.Result{Headword: a.Headword, Body: body, EntryID: int64(i + 1), FavoriteID: a.ID})
 		if len(out) == limit {
 			break
 		}
@@ -108,6 +116,12 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) { return d.s
 func (d *Dict) AssetToken(entryID int64, url string) (string, bool) {
 	return d.store.AssetToken(entryID, url)
 }
+func (d *Dict) FavoriteID(entryID int64) string {
+	if entryID <= 0 || entryID > int64(len(d.articles)) {
+		return ""
+	}
+	return d.articles[entryID-1].ID
+}
 func (d *Dict) Resources() []string { names, _ := d.store.ResourceTokens(); return names }
 func (d *Dict) Close() error        { return nil }
 
@@ -125,7 +139,11 @@ func NewReader(path string) (*Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Reader{path: path, store: s, articles: articles, meta: dict.Meta{Name: "Favourites", Format: favorites.Format, Path: path, EntryCount: len(articles)}}, nil
+	name, err := s.Name()
+	if err != nil {
+		return nil, err
+	}
+	return &Reader{path: path, store: s, articles: articles, meta: dict.Meta{Name: name, Format: favorites.Format, Path: path, EntryCount: len(articles)}}, nil
 }
 func (r *Reader) Meta() dict.Meta { return r.meta }
 func (r *Reader) Close() error    { return nil }

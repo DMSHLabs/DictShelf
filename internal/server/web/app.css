@@ -725,8 +725,17 @@ details.noindex>summary .noindex-add-all:disabled{opacity:.55;cursor:progress}
 dl{margin:0;padding:var(--sp-1) var(--sp-2) var(--sp-2)}
 dt{font-size:1.272em;font-weight:700;color:var(--accent);word-break:break-word;
   margin-top:var(--sp-2)}
+details.dict>dl>dt{display:flex;align-items:center;gap:var(--sp-1)}
 dt:first-child{margin-top:var(--sp-1)}
 dd{margin:var(--sp-1) 0 0 0}
+.favourite-control{display:inline-flex;align-items:center;justify-content:center;flex:none;
+  width:1.8em;height:1.8em;margin-inline-start:auto;padding:.18em;border:1px solid var(--line-soft);
+  border-radius:7px;background:transparent;color:var(--label-quiet);cursor:pointer;line-height:1}
+.favourite-control svg{width:1.2em;height:1.2em;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.favourite-control.is-saved{color:var(--accent)}
+.favourite-control.is-saved svg{fill:currentColor}
+.favourite-control:disabled{opacity:.55;cursor:progress}
+.favourite-control:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 
 /* article sandbox host: dictionary CSS lives inside the shadow root and
    cannot touch the chrome; in dark mode the whole article is inverted

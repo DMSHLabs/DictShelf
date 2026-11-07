@@ -66,6 +66,7 @@ final class GoBridge {
     private static native String nativeAbout(String origin, String dictionary);
     private static native String nativeOrphans(String action, String body);
     private static native String nativeRemoveLibrary(String query);
+    private static native String nativeFavourites(String method, String body);
     private static native String nativeLooks(String argument);
     private static native String nativeGroups(String action, String argument);
     private static native String nativeLemmas(String action, String code);
@@ -196,6 +197,13 @@ final class GoBridge {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         String result = nativeRemoveLibrary(or(query));
         if (result == null) throw new IllegalStateException("Could not remove dictionary");
+        return result;
+    }
+
+    static String favourites(String method, String body) {
+        if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
+        String result = nativeFavourites(or(method), or(body));
+        if (result == null) throw new IllegalStateException("Could not update favourites");
         return result;
     }
 

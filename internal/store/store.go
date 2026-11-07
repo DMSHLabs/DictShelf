@@ -392,7 +392,7 @@ func (s *Store) collect(rows *sql.Rows, err error) ([]dict.Result, error) {
 	for rows.Next() {
 		var r dict.Result
 		var body []byte // TEXT or a compressed BLOB; s.body tells them apart
-		if err := rows.Scan(&r.Headword, &body); err != nil {
+		if err := rows.Scan(&r.EntryID, &r.Headword, &body); err != nil {
 			return nil, err
 		}
 		r.Body = s.body.decode(body)
@@ -430,7 +430,7 @@ func (s *Store) ExactContext(ctx context.Context, word string, limit int) ([]dic
 	if s.hasFolded {
 		column, key := s.headwordSearchKey(ctx, word)
 		query := strings.ReplaceAll(`
-			SELECT e.w, e.m FROM entry e JOIN (
+			SELECT e.id, e.w, e.m FROM entry e JOIN (
 				SELECT id, min(priority) AS priority FROM (
 					SELECT id, CASE WHEN w = ?2 THEN 0 WHEN w = ?2 COLLATE NOCASE THEN 1 ELSE 2 END AS priority
 						FROM entry WHERE @KEY@ = ?1 COLLATE NOCASE
@@ -448,9 +448,9 @@ func (s *Store) ExactContext(ctx context.Context, word string, limit int) ([]dic
 	// exactness from the second, uncollated comparison, applied to the handful
 	// of rows the index already narrowed to.
 	const q = `
-		SELECT e.w, e.m FROM entry e WHERE e.w = ?1 COLLATE NOCASE %[1]s
+		SELECT e.id, e.w, e.m FROM entry e WHERE e.w = ?1 COLLATE NOCASE %[1]s
 		UNION ALL
-		SELECT e.w, e.m FROM alias a JOIN entry e ON e.id = a.entry_id WHERE a.w = ?1 COLLATE NOCASE %[2]s
+		SELECT e.id, e.w, e.m FROM alias a JOIN entry e ON e.id = a.entry_id WHERE a.w = ?1 COLLATE NOCASE %[2]s
 		LIMIT ?2`
 	res, err := s.collect(s.db.QueryContext(ctx, fmt.Sprintf(q, "AND e.w = ?1", "AND a.w = ?1"), word, n))
 	if err != nil || len(res) > 0 {
@@ -483,7 +483,7 @@ func (s *Store) ExactContext(ctx context.Context, word string, limit int) ([]dic
 		return nil, nil
 	}
 	res, err = s.collect(s.db.QueryContext(ctx, `
-		SELECT e.w, e.m FROM entry_fts f JOIN entry e ON e.id = f.rowid
+		SELECT e.id, e.w, e.m FROM entry_fts f JOIN entry e ON e.id = f.rowid
 		WHERE entry_fts MATCH ?1 ORDER BY e.w LIMIT ?2`, match, n))
 	if err != nil {
 		return nil, err
@@ -569,7 +569,7 @@ func (s *Store) PrefixContext(ctx context.Context, word string, limit int) ([]di
 	// GROUP BY id, not UNION: an entry its own headword AND an alias match is
 	// one article, filed under the earlier of the two keys.
 	res, err := s.collect(s.db.QueryContext(ctx, `
-		SELECT e.w, e.m FROM entry e JOIN (
+		SELECT e.id, e.w, e.m FROM entry e JOIN (
 			SELECT id, min(k) AS k FROM (
 				SELECT e2.id AS id, e2.w AS k FROM entry e2
 					WHERE e2.w LIKE ?1 ESCAPE '\'`+subEntryFilter("e2.w")+`
@@ -596,7 +596,7 @@ func (s *Store) indexedPrefix(ctx context.Context, word string, n int) ([]dict.R
 	column, key := s.headwordSearchKey(ctx, word)
 	pat := escapeLike(key) + "%"
 	query := strings.ReplaceAll(`
-		SELECT e.w, e.m FROM entry e JOIN (
+		SELECT e.id, e.w, e.m FROM entry e JOIN (
 			SELECT id, min(k) AS k, min(priority) AS priority FROM (
 				SELECT e2.id AS id, e2.@KEY@ AS k, CASE WHEN e2.w = ?2 THEN 0 ELSE 1 END AS priority FROM entry e2
 					WHERE e2.@KEY@ LIKE ?1 ESCAPE '\'`+subEntryFilter("e2.w")+`
@@ -630,7 +630,7 @@ func (s *Store) fuzzy(ctx context.Context, word string, limit int) ([]dict.Resul
 		return nil, nil
 	}
 	return s.collect(s.db.QueryContext(ctx, `
-		SELECT e.w, e.m FROM entry_fts f JOIN entry e ON e.id = f.rowid
+		SELECT e.id, e.w, e.m FROM entry_fts f JOIN entry e ON e.id = f.rowid
 		WHERE entry_fts MATCH ?1`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?2`, match, clamp(limit)))
 }
 
@@ -655,25 +655,25 @@ func (s *Store) ContainsContext(ctx context.Context, word string, limit int) ([]
 		if len([]rune(folded)) >= 3 {
 			match := trigramCandidates(folded)
 			res, err := s.collect(s.db.QueryContext(ctx, `
-				SELECT e.w, e.m FROM entry_trigram t JOIN entry e ON e.id = t.rowid
+				SELECT e.id, e.w, e.m FROM entry_trigram t JOIN entry e ON e.id = t.rowid
 				WHERE entry_trigram MATCH ?1 AND instr(e.wf, ?2) > 0`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?3`, match, folded, n))
 			if err != nil || len(res) > 0 {
 				return res, err
 			}
 		}
-		return s.collect(s.db.QueryContext(ctx, `SELECT e.w, e.m FROM entry e WHERE e.w LIKE ?1 ESCAPE '\'`+
+		return s.collect(s.db.QueryContext(ctx, `SELECT e.id, e.w, e.m FROM entry e WHERE e.w LIKE ?1 ESCAPE '\'`+
 			subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?2`, "%"+escapeLike(word)+"%", n))
 	}
 	column, key := s.headwordSearchKey(ctx, word)
 	if len([]rune(folded)) >= 3 {
 		match := trigramCandidates(folded)
 		query := strings.ReplaceAll(`
-			SELECT e.w, e.m FROM entry_trigram t JOIN entry e ON e.id = t.rowid
+			SELECT e.id, e.w, e.m FROM entry_trigram t JOIN entry e ON e.id = t.rowid
 			WHERE entry_trigram MATCH ?1 AND instr(e.@KEY@, ?2) > 0`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?3`, "@KEY@", column)
 		return s.collect(s.db.QueryContext(ctx, query, match, key, n))
 	}
 	// Short queries have no usable trigrams and scan the selected key.
-	query := strings.ReplaceAll(`SELECT e.w, e.m FROM entry e WHERE instr(e.@KEY@, ?1) > 0`+
+	query := strings.ReplaceAll(`SELECT e.id, e.w, e.m FROM entry e WHERE instr(e.@KEY@, ?1) > 0`+
 		subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?2`, "@KEY@", column)
 	return s.collect(s.db.QueryContext(ctx, query, key, n))
 }

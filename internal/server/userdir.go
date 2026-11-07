@@ -25,6 +25,9 @@ func (d UserDir) Groups() string { return d.join(GroupsFileName) }
 // Builtin is where the wudict howto is written (internal/howto).
 func (d UserDir) Builtin() string { return d.join("builtin") }
 
+// Favorites is the user's durable snapshot store, beside their settings.
+func (d UserDir) Favorites() string { return d.join("favourites") }
+
 func (d UserDir) join(name string) string {
 	if d == "" {
 		return ""
