@@ -16,6 +16,46 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/mdictwrite"
 )
 
+type repeatReader struct{}
+
+func (repeatReader) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = 'a'
+	}
+	return len(p), nil
+}
+
+func TestLargeResourceAcrossBlocks(t *testing.T) {
+	const size = 65 << 20
+	path := filepath.Join(t.TempDir(), "large.mdd")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	open := func() (io.ReadCloser, error) { return io.NopCloser(io.LimitReader(repeatReader{}, size)), nil }
+	err = mdictwrite.Write(f, "Large", "", true, []mdictwrite.Entry{{Key: `\large.bin`, Size: size, Open: open}})
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := dict.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	r, _, err := d.Resource("large.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := io.Copy(io.Discard, r)
+	r.Close()
+	if err != nil || got != size {
+		t.Fatalf("resource length %d, %v", got, err)
+	}
+}
+
 func TestRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	for _, media := range []bool{false, true} {

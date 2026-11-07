@@ -66,10 +66,8 @@ func newV12Fixture(t *testing.T, blocks []string) *MdictBase {
 
 // The bug this guards: splitKeyBlock only ever backfilled end offsets inside
 // one key block, so the last entry of every block kept the 0 sentinel and came
-// back with its own record plus the rest of the record block. Chaining fixes
-// that, and introduces the case the clamp exists for - a chained end that names
-// an offset in the NEXT record block, which without clamping slices out of
-// range.
+// back with the rest of the record block. Chaining fixes that, including when
+// an article or resource spans two compressed record blocks.
 func TestLocateByKeywordEntryV12Extents(t *testing.T) {
 	m := newV12Fixture(t, []string{"0123456789", "ABCDEF"})
 
@@ -82,7 +80,7 @@ func TestLocateByKeywordEntryV12Extents(t *testing.T) {
 		{name: "within a block", start: 2, end: 5, want: "234"},
 		{name: "whole first block", start: 0, end: 10, want: "0123456789"},
 		{name: "chained end at the block seam", start: 7, end: 10, want: "789"},
-		{name: "chained end in the next block is clamped", start: 7, end: 13, want: "789"},
+		{name: "chained end in the next block", start: 7, end: 13, want: "789ABC"},
 		{name: "zero sentinel reads to end of block", start: 7, end: 0, want: "789"},
 		{name: "second block", start: 12, end: 14, want: "CD"},
 		{name: "last entry of the dictionary", start: 12, end: 0, want: "CDEF"},

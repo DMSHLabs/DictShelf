@@ -205,46 +205,51 @@ func Write(w io.Writer, title, about string, media bool, entries []Entry) error 
 		if err != nil {
 			return err
 		}
-		start, err := tmp.Seek(0, io.SeekCurrent)
-		if err != nil {
-			r.Close()
-			return err
-		}
-		if _, err := tmp.Write(make([]byte, 8)); err != nil {
-			r.Close()
-			return err
-		}
-		checksum := adler32.New()
-		z := zlib.NewWriter(tmp)
-		copied, err := io.CopyBuffer(z, io.TeeReader(io.LimitReader(r, e.Size), checksum), buf)
-		if err != nil {
-			r.Close()
-			return fmt.Errorf("read %q: %w", e.Key, err)
-		}
-		if copied != e.Size {
-			r.Close()
-			return fmt.Errorf("short record %q", e.Key)
-		}
-		if err := z.Close(); err != nil {
-			r.Close()
-			return err
-		}
-		end, err := tmp.Seek(0, io.SeekCurrent)
-		if err != nil {
-			r.Close()
-			return err
-		}
-		if _, err := tmp.Seek(start, io.SeekStart); err != nil {
-			r.Close()
-			return err
-		}
-		if err := writeBlockHeader(tmp, checksum); err != nil {
-			r.Close()
-			return err
-		}
-		if _, err := tmp.Seek(end, io.SeekStart); err != nil {
-			r.Close()
-			return err
+		for remaining, first := e.Size, true; remaining > 0 || first; first = false {
+			chunk := min(remaining, int64(64<<20))
+			start, err := tmp.Seek(0, io.SeekCurrent)
+			if err != nil {
+				r.Close()
+				return err
+			}
+			if _, err := tmp.Write(make([]byte, 8)); err != nil {
+				r.Close()
+				return err
+			}
+			checksum := adler32.New()
+			z := zlib.NewWriter(tmp)
+			copied, err := io.CopyBuffer(z, io.TeeReader(io.LimitReader(r, chunk), checksum), buf)
+			if err != nil {
+				r.Close()
+				return fmt.Errorf("read %q: %w", e.Key, err)
+			}
+			if copied != chunk {
+				r.Close()
+				return fmt.Errorf("short record %q", e.Key)
+			}
+			if err := z.Close(); err != nil {
+				r.Close()
+				return err
+			}
+			end, err := tmp.Seek(0, io.SeekCurrent)
+			if err != nil {
+				r.Close()
+				return err
+			}
+			if _, err := tmp.Seek(start, io.SeekStart); err != nil {
+				r.Close()
+				return err
+			}
+			if err := writeBlockHeader(tmp, checksum); err != nil {
+				r.Close()
+				return err
+			}
+			if _, err := tmp.Seek(end, io.SeekStart); err != nil {
+				r.Close()
+				return err
+			}
+			blocks = append(blocks, recordBlock{uint64(end - start), uint64(chunk)})
+			remaining -= chunk
 		}
 		var one [1]byte
 		n, readErr := r.Read(one[:])
@@ -252,7 +257,6 @@ func Write(w io.Writer, title, about string, media bool, entries []Entry) error 
 		if n != 0 || (readErr != nil && readErr != io.EOF) || closeErr != nil {
 			return fmt.Errorf("record size mismatch: %q", e.Key)
 		}
-		blocks = append(blocks, recordBlock{uint64(end - start), uint64(e.Size)})
 	}
 	var recordBytes uint64
 	for _, b := range blocks {

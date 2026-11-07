@@ -97,6 +97,16 @@ func (mdict *Mdict) BuildIndex() error {
 	if err != nil {
 		return err
 	}
+	// A complete key index identifies the final record, so its end is the end
+	// of the container. An incomplete index keeps the block-local sentinel to
+	// avoid handing a surviving key the records of unreadable key blocks.
+	if entries := mdict.keyBlockData.keyEntries; len(entries) > 0 && int64(len(entries)) == mdict.keyBlockMeta.entriesNum {
+		blocks := mdict.recordBlockInfo.recordInfoList
+		if len(blocks) > 0 {
+			last := blocks[len(blocks)-1]
+			entries[len(entries)-1].RecordEndOffset = last.deCompressAccumulatorOffset + last.deCompressSize
+		}
+	}
 
 	return nil
 }
@@ -241,7 +251,7 @@ func (mdict *Mdict) LocateByKeywordEntry(entry *MDictKeywordEntry) ([]byte, erro
 // entry). Pair it with BuildRecordIndex to serve a resource out of an .mdd that
 // was never fully opened.
 //
-// size < 0 means "to the end of the containing block", which is how the LAST
+// size < 0 means "to the end of the container", which is how the LAST
 // entry of a container is stored - readKeyEntries only ever fills in the end
 // offset of an entry's predecessor, so the final one has none. The sentinel for
 // that differs between layouts (0 for v1/v2, negative for v3), so it is
