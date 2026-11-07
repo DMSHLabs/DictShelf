@@ -688,18 +688,22 @@ paths:
       tags: [internal]
       operationId: addFavourite
       x-internal: true
-      summary: Save a self-contained article snapshot
+      summary: Save or copy a self-contained article snapshot
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [dict, headword]
+              required: [dict]
+              anyOf:
+                - required: [headword]
+                - required: [favoriteId]
               properties:
                 dict: { type: string }
-                headword: { type: string }
-                collectionId: { type: string, description: Destination collection; defaults to the original Favourites dictionary. }
+                headword: { type: string, description: Source headword for a regular dictionary article. }
+                favoriteId: { type: string, description: Snapshot ID when copying an article from another favourites collection. }
+                collectionId: { type: string, description: Destination collection; defaults to the first available collection. }
       responses:
         '200': { description: Article saved with its referenced media }
         '404': { description: Dictionary or article not found }
@@ -719,7 +723,7 @@ paths:
               required: [favoriteId]
               properties:
                 favoriteId: { type: string }
-                collectionId: { type: string, description: Collection that contains the saved article; defaults to the original Favourites dictionary. }
+                collectionId: { type: string, description: Collection that contains the saved article; defaults to the first available collection. }
       responses:
         '200': { description: Article removed }
         '404': { description: Snapshot not found }
@@ -794,10 +798,10 @@ paths:
               type: object
               required: [id]
               properties:
-                id: { type: string, description: Collection ID; the default collection cannot be deleted. }
+                id: { type: string, description: Collection ID; at least one collection must remain. }
       responses:
         '200': { description: Collection and its saved articles deleted permanently }
-        '400': { description: The default collection cannot be deleted }
+        '400': { description: Invalid collection or deletion would remove the last collection }
         '500': { $ref: '#/components/responses/ServerError' }
 
   /api/ingest:

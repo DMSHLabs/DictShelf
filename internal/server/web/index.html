@@ -4695,7 +4695,7 @@ function favouriteEditorTile(collection,isNew=false){
   }else{
     const label=document.createElement("b");label.className="favourite-editor-name";label.textContent=favouriteCollectionLabel(collection.id)||collection.name;
     nameLine.append(label,favouriteEditorButton("dict-rename","favourites.renameTitle","rename",()=>beginFavouriteCollectionEdit(collection.id)));
-    if(collection.id!=="favourites")nameLine.append(favouriteEditorButton("favourite-editor-delete","favourites.deleteTitle","delete",()=>openFavouriteDelete(collection.id)));
+    if(favouriteCollections.length>1)nameLine.append(favouriteEditorButton("favourite-editor-delete","favourites.deleteTitle","delete",()=>openFavouriteDelete(collection.id)));
   }
   head.append(nameLine);card.append(head);
   if(!isNew){
@@ -4765,7 +4765,7 @@ $("favouritesEditor").addEventListener("close",()=>{favouriteEditorEdit=null;$("
 $("favouritesEditor").addEventListener("cancel",event=>{if(favouriteEditorSaving)event.preventDefault()});
 function openFavouriteDelete(id){
   const collection=favouriteCollections.find(c=>c.id===id);
-  if(!collection||id==="favourites")return;
+  if(!collection||favouriteCollections.length<=1)return;
   favouriteDeleteID=id;
   const name=favouriteCollectionLabel(id)||collection.name;
   $("favouritesDeleteMessage").textContent=tx("favourites.deleteConfirm",{
@@ -4784,7 +4784,7 @@ async function deleteFavouriteCollection(){
     if(!response.ok)throw new Error(value.error||tx("favourites.failed"));
     $("favouritesDeleteDialog").close();favouriteDeleteID="";
     await loadFavouriteCollections();
-    if(selectedFavourite===id)selectFavouriteCollection("favourites");
+    if(selectedFavourite===id)selectFavouriteCollection(favouriteCollections[0]?.id||"");
     await loadDicts();renderFavouritesEditor();if(lastQuery)doSearch();
   }catch(failure){error.textContent=favouriteEditorErrorText(failure.message);error.hidden=false}
   finally{button.disabled=false}
@@ -7988,16 +7988,23 @@ function favouriteControl(result,dictID,dt,dd){
   const actions=document.createElement("span");actions.className="favourite-action-group";
   const button=document.createElement("button");
   button.type="button";button.className="favourite-control";
-  button.setAttribute("aria-label",tx(inFavourites?"favourites.remove":"favourites.add"));
   button.innerHTML=inFavourites
-    ?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 3v6m4-6v6"/></svg>'
+    ?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>'
     :'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.75 5.57 6.15.9-4.45 4.33 1.05 6.12L12 17.03l-5.5 2.89 1.05-6.12L3.1 9.47l6.15-.9z"/></svg>';
+  const copyTargets=inFavourites?favouriteCollections.filter(c=>c.id!==dictID):[];
+  const target=document.createElement("select");
+  if(inFavourites&&copyTargets.length){
+    target.className="favourite-target";target.setAttribute("aria-label",tx("favourites.chooseCollection"));target.title=tx("favourites.chooseCollection");
+    for(const collection of copyTargets){const option=document.createElement("option");option.value=collection.id;option.textContent=favouriteCollectionLabel(collection.id)||collection.name;target.appendChild(option)}
+    if(copyTargets.some(c=>c.id===selectedFavourite))target.value=selectedFavourite;
+  }
   const paint=()=>{
-    const saved=!inFavourites&&Array.isArray(result.favoriteIn)&&result.favoriteIn.includes(selectedFavourite);
+    const targetID=inFavourites?target.value:selectedFavourite;
+    const saved=Array.isArray(result.favoriteIn)&&result.favoriteIn.includes(targetID);
     button.classList.toggle("is-saved",saved);
-    button.disabled=saved;
-    button.title=inFavourites?tx("favourites.remove"):
-      saved?tx("favourites.savedIn",{name:favouriteCollectionLabel(selectedFavourite)}):
+    button.disabled=inFavourites?(!copyTargets.length||saved):saved;
+    button.title=saved?tx("favourites.savedIn",{name:favouriteCollectionLabel(targetID)}):
+      inFavourites?tx("favourites.copyTo",{name:favouriteCollectionLabel(targetID)}):
       tx("favourites.saveTo",{name:favouriteCollectionLabel(selectedFavourite)});
     button.setAttribute("aria-label",button.title);
   };
@@ -8005,24 +8012,33 @@ function favouriteControl(result,dictID,dt,dd){
   actions.addEventListener("favourite-target-change",paint);
   button.addEventListener("click",async event=>{
     event.preventDefault();event.stopPropagation();if(button.disabled)return;button.disabled=true;
-    const method=inFavourites?"DELETE":"POST";
-    const payload=inFavourites?{favoriteId:result.favoriteId,collectionId:dictID}:
+    const payload=inFavourites?{dict:dictID,favoriteId:result.favoriteId,collectionId:target.value}:
       {dict:dictID,headword:result.Headword,collectionId:selectedFavourite};
     try{
-      const response=await apiFetch("/api/favourites",{method,headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      const response=await apiFetch("/api/favourites",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
       const value=await response.json();
       if(!response.ok)throw new Error(value.error||tx("favourites.failed"));
-      if(inFavourites){dt.remove();dd.remove();try{await loadFavouriteCollections()}catch(_){}return}
       result.favoriteIn=Array.isArray(result.favoriteIn)?result.favoriteIn:[];
-      if(!result.favoriteIn.includes(selectedFavourite))result.favoriteIn.push(selectedFavourite);
+      const targetID=inFavourites?target.value:selectedFavourite;
+      if(!result.favoriteIn.includes(targetID))result.favoriteIn.push(targetID);
       result.favorite=result.favoriteIn.length>0;paint();
       try{await loadFavouriteCollections()}catch(_){}
     }catch(error){alert(window.wudictI18n.errorText(error.message))}
     finally{if(button.isConnected)paint()}
   });
-  actions.append(button);
-  if(!inFavourites&&favouriteCollections.length>1){
-    const target=document.createElement("select");target.className="favourite-target";
+  if(inFavourites){
+    const remove=document.createElement("button");remove.type="button";remove.className="favourite-control";remove.title=tx("favourites.remove");remove.setAttribute("aria-label",remove.title);
+    remove.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 3v6m4-6v6"/></svg>';
+    remove.addEventListener("click",async event=>{
+      event.preventDefault();event.stopPropagation();remove.disabled=true;
+      try{const response=await apiFetch("/api/favourites",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({favoriteId:result.favoriteId,collectionId:dictID})});const value=await response.json();if(!response.ok)throw new Error(value.error||tx("favourites.failed"));dt.remove();dd.remove();try{await loadFavouriteCollections()}catch(_){}}
+      catch(error){alert(window.wudictI18n.errorText(error.message));remove.disabled=false}
+    });
+    actions.append(remove);
+    if(copyTargets.length){actions.append(target);target.addEventListener("change",paint)}
+    actions.append(button);
+  }else if(favouriteCollections.length>1){
+    target.className="favourite-target";
     target.setAttribute("aria-label",tx("favourites.chooseCollection"));target.title=tx("favourites.chooseCollection");
     for(const collection of favouriteCollections){
       const option=document.createElement("option");option.value=collection.id;option.textContent=favouriteCollectionLabel(collection.id)||collection.name;
@@ -8035,6 +8051,9 @@ function favouriteControl(result,dictID,dt,dd){
       for(const group of document.querySelectorAll(".favourite-action-group"))group.dispatchEvent(new Event("favourite-target-change"));
     });
     actions.append(target);
+    actions.append(button);
+  }else{
+    actions.append(button);
   }
   return actions;
 }

@@ -1074,6 +1074,7 @@
   "favourites.renameTitle": "Rename favourites dictionary",
   "favourites.collectionStats": "{count} articles · {size}",
   "favourites.chooseCollection": "Choose a favourites dictionary",
+  "favourites.copyTo": "Add to {name}",
   "favourites.deleteTitle": "Delete favourites dictionary",
   "favourites.delete": "Delete",
   "favourites.deleteConfirm": "Permanently delete “{name}”, its {count} saved articles and media? Size: {size}.",

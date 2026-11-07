@@ -1088,6 +1088,7 @@
   "favourites.renameTitle": "Переименовать словарь избранного",
   "favourites.collectionStats": "Статей: {count} · {size}",
   "favourites.chooseCollection": "Выбрать словарь избранного",
+  "favourites.copyTo": "Добавить в «{name}»",
   "favourites.deleteTitle": "Удалить словарь избранного",
   "favourites.delete": "Удалить",
   "favourites.deleteConfirm": "Безвозвратно удалить словарь «{name}», все его сохранённые статьи ({count}) и медиафайлы? Размер: {size}.",
