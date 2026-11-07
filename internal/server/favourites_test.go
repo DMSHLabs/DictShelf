@@ -137,7 +137,7 @@ func TestFavouriteSnapshotFindsEncodedImageInRealZIM(t *testing.T) {
 		if !ok {
 			t.Fatalf("Hammond image reference was rejected: %q", ref.URL)
 		}
-		resource, _, err := d.Resource(name)
+		resource, mime, err := d.Resource(name)
 		if err != nil {
 			t.Fatalf("Resource(%q): %v", name, err)
 		}
@@ -145,6 +145,39 @@ func TestFavouriteSnapshotFindsEncodedImageInRealZIM(t *testing.T) {
 		closeErr := resource.Close()
 		if readErr != nil || closeErr != nil || len(data) == 0 {
 			t.Fatalf("Hammond image bytes = %d, read %v, close %v", len(data), readErr, closeErr)
+		}
+		snapshots := favorites.New(filepath.Join(t.TempDir(), "favourites"))
+		if err := snapshots.Ensure(); err != nil {
+			t.Fatal(err)
+		}
+		saved, err := snapshots.Add(favorites.Provenance{DictionaryID: "zim", Headword: rows[0].Headword}, rows[0].Body,
+			[]favorites.AssetInput{{URL: ref.URL, Name: name, MIME: mime, Data: data}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		token, ok := snapshots.AssetToken(1, ref.URL)
+		if !ok || token != saved.Assets[name].Token {
+			t.Fatalf("saved image token = %q, %t; want %q", token, ok, saved.Assets[name].Token)
+		}
+		rendered := rewriteEntryHTMLFor(rows[0].Body, favorites.ID, 1, nil, snapshots.AssetToken)
+		imageMapped := false
+		for _, got := range (htmlref.Rewriter{}).Refs(rendered) {
+			if got.Tag == "img" && got.URL == "/res/favourites/"+token {
+				imageMapped = true
+				break
+			}
+		}
+		if !imageMapped {
+			t.Fatal("saved Hammond image was not rewritten to the favourites resource")
+		}
+		reg, err := NewRegistry(nil, false, WithBuiltin(Builtin{ID: favorites.ID, Path: snapshots.Path()}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		served := httptest.NewRecorder()
+		New(reg).ServeHTTP(served, newRequest(http.MethodGet, "/res/favourites/"+token, nil))
+		if served.Code != http.StatusOK || !bytes.Equal(served.Body.Bytes(), data) {
+			t.Fatalf("saved Hammond image response = %d, %d bytes; want %d bytes", served.Code, served.Body.Len(), len(data))
 		}
 		return
 	}
