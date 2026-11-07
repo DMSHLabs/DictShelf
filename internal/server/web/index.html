@@ -4772,11 +4772,11 @@ function favouriteEditorTile(collection,isNew=false){
   head.append(nameLine);card.append(head);
   if(!isNew){
     const meta=document.createElement("div");meta.className="meta";meta.textContent="favs"+tx("dictUI.indexed");card.append(meta);
-    const size=document.createElement("div");const badge=document.createElement("span");badge.className="feat on locked";badge.textContent=mb(Number(collection.size||0));size.append(badge);card.append(size);
     const dictionary=dicts.find(item=>item.id===collection.id);
     const indexes=document.createElement("div");indexes.className="favourite-editor-indexes";
-    for(const[label,on,bytes]of [[tx("dictUI.contains"),dictionary?.caps?.Contains,dictionary?.containsSize],[tx("dictUI.fts"),dictionary?.ourFullText,dictionary?.fullTextSize]]){
-      if(!on)continue;const index=document.createElement("span");index.className="feat on locked";index.textContent=label+(bytes?": "+mb(Number(bytes)):"");indexes.append(index);
+    if(dictionary?.dbSize){const index=document.createElement("span");index.className="feat on locked";index.title=tx("dictUI.indexedSize",{size:mb(Number(dictionary.dbSize))});index.textContent=mb(Number(dictionary.dbSize));indexes.append(index)}
+    if(dictionary&&dictionary.format!=="dsl")for(const[label,on,bytes]of [[tx("dictUI.contains"),dictionary.caps?.Contains,dictionary.containsSize],[tx("dictUI.fts"),dictionary.ourFullText,dictionary.fullTextSize]]){
+      const index=document.createElement("span");index.className="feat"+(on?" on":"")+" locked";index.title=tx("dictUI.onlyCopy");index.textContent=label+(on&&bytes?": "+mb(Number(bytes)):"");indexes.append(index);
     }
     if(indexes.childElementCount)card.append(indexes);
     const actions=document.createElement("div");actions.className="acts favourite-editor-acts";
