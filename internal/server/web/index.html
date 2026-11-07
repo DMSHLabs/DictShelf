@@ -4766,21 +4766,27 @@ function favouriteEditorTile(collection,isNew=false){
     });
     if(isNew)requestAnimationFrame(()=>input.focus());
   }else{
-    const label=document.createElement("b");label.className="favourite-editor-name";label.textContent=favouriteCollectionLabel(collection.id)||collection.name;
+    const label=document.createElement("b");label.className="dict-info-name";label.textContent=favouriteCollectionLabel(collection.id)||collection.name;
     nameLine.append(label,favouriteEditorButton("dict-rename","favourites.renameTitle","rename",()=>beginFavouriteCollectionEdit(collection.id)));
   }
   head.append(nameLine);card.append(head);
   if(!isNew){
     const meta=document.createElement("div");meta.className="meta";meta.textContent="favs"+tx("dictUI.indexed");card.append(meta);
     const size=document.createElement("div");const badge=document.createElement("span");badge.className="feat on locked";badge.textContent=mb(Number(collection.size||0));size.append(badge);card.append(size);
-    const actions=document.createElement("div");actions.className="acts";
+    const dictionary=dicts.find(item=>item.id===collection.id);
+    const indexes=document.createElement("div");indexes.className="favourite-editor-indexes";
+    for(const[label,on,bytes]of [[tx("dictUI.contains"),dictionary?.caps?.Contains,dictionary?.containsSize],[tx("dictUI.fts"),dictionary?.ourFullText,dictionary?.fullTextSize]]){
+      if(!on)continue;const index=document.createElement("span");index.className="feat on locked";index.textContent=label+(bytes?": "+mb(Number(bytes)):"");indexes.append(index);
+    }
+    if(indexes.childElementCount)card.append(indexes);
+    const actions=document.createElement("div");actions.className="acts favourite-editor-acts";
     const browse=document.createElement("a");browse.className="browse btn";browse.href="/browse?dict="+encodeURIComponent(collection.id)+"&"+browseOriginQuery(collection.id);browse.textContent=tx("dictUI.browse");actions.append(browse);card.append(actions);
-    const exportButton=document.createElement("button");exportButton.type="button";exportButton.className="btn";exportButton.textContent=tx("favourites.export");exportButton.disabled=favouriteEditorSaving||!Number(collection.articles||0);exportButton.onclick=()=>openFavouriteExport(collection);actions.append(exportButton);
+    const exportButton=document.createElement("button");exportButton.type="button";exportButton.className="btn favourite-editor-export";exportButton.textContent=tx("favourites.export");exportButton.disabled=favouriteEditorSaving||!Number(collection.articles||0);exportButton.onclick=()=>openFavouriteExport(collection);actions.append(exportButton);
     const counts=document.createElement("div");counts.className="dict-info-counts";counts.textContent=tx("dictUI.numberOfEntries",{number:window.wudictI18n.number(Number(collection.articles||0))});card.append(counts);
     const info=document.createElement("details");info.className="prov";const summary=document.createElement("summary");summary.textContent=tx("favourites.info");info.append(summary);
     const body=document.createElement("div");body.className="provbody";
     for(const file of collection.files||[collection.path]){if(!file)continue;const row=document.createElement("div");row.className="prow";const path=document.createElement("span");path.className="path";path.textContent=file;path.title=tx("panel.copyPath");path.dataset.full=file;row.append(path);body.append(row)}
-    if(favouriteCollections.length>1){const remove=document.createElement("div");remove.className="rmwrap";const button=favouriteEditorButton("btn favourite-editor-remove","favourites.deleteTitle","delete",()=>openFavouriteDelete(collection.id));button.append(document.createTextNode(" "+tx("dictUI.remove")));remove.append(button);body.append(remove)}
+    if(favouriteCollections.length>1){const remove=document.createElement("div");remove.className="rmwrap";const button=document.createElement("button");button.type="button";button.className="rm";button.title=tx("favourites.deleteTitle");button.textContent=tx("dictUI.remove");button.disabled=favouriteEditorSaving;button.addEventListener("click",()=>openFavouriteDelete(collection.id));remove.append(button);body.append(remove)}
     info.append(body);card.append(info);
     const about=document.createElement("details");about.className="about favourite-about";about.open=!!collection.about||favouriteAboutEdit?.id===collection.id;
     const aboutSummary=document.createElement("summary");aboutSummary.textContent=tx("dictUI.about");about.append(aboutSummary);
