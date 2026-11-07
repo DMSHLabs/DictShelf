@@ -478,7 +478,7 @@ final class Shell {
         }
 
         @JavascriptInterface public String favouritesExportDirectory() {
-            try { return FavouriteMdxExport.tempDirectory(activity); }
+            try { return FavouriteMdxExport.prepareDirectory(activity); }
             catch (Exception e) { return ""; }
         }
 

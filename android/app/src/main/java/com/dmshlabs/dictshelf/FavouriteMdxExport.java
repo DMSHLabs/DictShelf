@@ -66,14 +66,22 @@ final class FavouriteMdxExport {
         if (callback != null) { if (value == null) callback.cancel(); else callback.confirm(value); }
     }
 
-    static String tempDirectory(Activity activity) throws IOException {
+    private static File directory(Activity activity) throws IOException {
         File base = activity.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
         if (base == null) base = activity.getFilesDir();
         File dir = new File(base, "favourites-export");
         if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("Cannot prepare export folder");
-        File[] stale = dir.listFiles((parent, name) -> name.endsWith(".mdx") || name.endsWith(".mdd"));
-        if (stale != null) for (File file : stale) if (!file.delete()) throw new IOException("Cannot clear previous export files");
-        return dir.getAbsolutePath();
+        return dir;
+    }
+
+    static String prepareDirectory(Activity activity) throws IOException {
+        synchronized (LOCK) {
+            if (status.running) throw new IOException("An export is still being saved");
+            File dir = directory(activity);
+            File[] stale = dir.listFiles((parent, name) -> name.endsWith(".mdx") || name.endsWith(".mdd"));
+            if (stale != null) for (File file : stale) if (!file.delete()) throw new IOException("Cannot clear previous export files");
+            return dir.getAbsolutePath();
+        }
     }
 
     static String startCopy(Activity activity, String treeText, String filesText) {
@@ -108,24 +116,36 @@ final class FavouriteMdxExport {
         java.util.ArrayList<Uri> created = new java.util.ArrayList<>();
         java.util.ArrayList<File> sources = new java.util.ArrayList<>();
         try {
-            for(int i=0;i<files.length();i++) sources.add(new File(files.getString(i)));
+            File exportDir = directory(activity).getCanonicalFile();
+            String exportPrefix = exportDir.getPath() + File.separator;
+            for (int i = 0; i < files.length(); i++) {
+                File source = new File(files.getString(i)).getCanonicalFile();
+                String extension = source.getName().substring(source.getName().lastIndexOf('.'));
+                if (!source.getPath().startsWith(exportPrefix)
+                        || (i == 0 && !".mdx".equals(extension))
+                        || (i == 1 && !".mdd".equals(extension)))
+                    throw new IOException("Invalid temporary export file");
+                sources.add(source);
+            }
+            if (sources.size() == 2 && !sources.get(0).getName().equalsIgnoreCase(
+                    sources.get(1).getName().substring(0, sources.get(1).getName().lastIndexOf('.')) + ".mdx"))
+                throw new IOException("Invalid temporary export files");
             String treeId = DocumentsContract.getTreeDocumentId(tree);
             Uri parent = DocumentsContract.buildDocumentUriUsingTree(tree, treeId);
             Set<String> existing = childNames(activity, tree, treeId);
-            String base = new File(files.getString(0)).getName().replaceFirst("(?i)\\.mdx$", "");
+            String base = sources.get(0).getName().replaceFirst("(?i)\\.mdx$", "");
             for (int n = 1; n <= 10000; n++) {
                 String candidate = n == 1 ? base : base + " (" + n + ")";
                 boolean free = true;
-                for (int i = 0; i < files.length(); i++) {
-                    String ext = files.getString(i).substring(files.getString(i).lastIndexOf('.'));
+                for (File source : sources) {
+                    String ext = source.getName().substring(source.getName().lastIndexOf('.'));
                     if (existing.contains(candidate + ext)) { free = false; break; }
                 }
                 if (!free) continue;
                 for (int i = 0; i < files.length(); i++) {
                     if (current.canceled) throw new IOException("Export canceled");
-                    String source = files.getString(i);
-                    File sourceFile = new File(source);
-                    String ext = source.substring(source.lastIndexOf('.'));
+                    File sourceFile = sources.get(i);
+                    String ext = sourceFile.getName().substring(sourceFile.getName().lastIndexOf('.'));
                     Uri target = DocumentsContract.createDocument(activity.getContentResolver(), parent, "application/octet-stream", candidate + ext);
                     if (target == null) throw new IOException("Could not create " + candidate + ext);
                     created.add(target);
