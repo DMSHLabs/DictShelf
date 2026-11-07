@@ -47,6 +47,8 @@ type Provenance struct {
 	DictionaryUUID string    `json:"dictionary_uuid,omitempty"`
 	SourcePath     string    `json:"source_path,omitempty"`
 	Headword       string    `json:"headword"`
+	Headwords      int       `json:"headwords,omitempty"`
+	Articles       int       `json:"articles,omitempty"`
 	EntryID        string    `json:"entry_id,omitempty"`
 	SavedAt        time.Time `json:"saved_at"`
 }

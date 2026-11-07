@@ -7834,11 +7834,12 @@ function favouriteSource(dd,source){
   if(!source)return;
   const details=document.createElement("details");details.className="favourite-source";
   const summary=document.createElement("summary");summary.textContent=tx("favourites.source");details.append(summary);
+  const number=value=>value?window.wudictI18n.number(Number(value)):"";
   const rows=[
     ["favourites.sourceDictionary",source.dictionaryName],
     ["favourites.sourceFile",source.sourcePath],
-    ["favourites.sourceHeadwords",source.headwordsPath],
-    ["favourites.sourceArticles",source.articlesPath],
+    ["favourites.sourceHeadwords",number(source.headwords)],
+    ["favourites.sourceArticles",number(source.articles)],
   ];
   for(const [label,value] of rows){
     if(!value)continue;

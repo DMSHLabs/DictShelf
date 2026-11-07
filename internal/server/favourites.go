@@ -116,8 +116,9 @@ func (s *Server) addFavourite(req favouriteRequest) error {
 	if display := s.reg.prefs.DisplayTitle(id); display != "" {
 		name = display
 	}
+	counts := s.aboutSourceFor(e)
 	provenance := favorites.Provenance{DictionaryID: id, DictionaryName: name, SourcePath: e.Path,
-		Headword: row.Headword, EntryID: fmt.Sprint(row.EntryID)}
+		Headword: row.Headword, Headwords: counts.headwords, Articles: counts.entries, EntryID: fmt.Sprint(row.EntryID)}
 	if _, err := s.favourites.Add(provenance, row.Body, assets); err != nil {
 		return err
 	}
@@ -227,15 +228,6 @@ func (s *Server) decorateFavouriteSource(source *dict.FavoriteSource) {
 	if source == nil {
 		return
 	}
-	if source.SourcePath != "" {
-		if dir, ok := store.LookupDir(source.SourcePath); ok {
-			textDB := store.TextDBPath(dir)
-			source.HeadwordsPath = textDB
-			if articles, ok := store.ArticlesSibling(textDB); ok {
-				source.ArticlesPath = articles
-			}
-		}
-	}
 	if source.SourcePath == "" {
 		return
 	}
@@ -244,6 +236,15 @@ func (s *Server) decorateFavouriteSource(source *dict.FavoriteSource) {
 			source.DictionaryID = e.ID
 			source.SourcePath = e.Path
 			source.Available = true
+			if source.Headwords == 0 || source.Articles == 0 {
+				counts := s.aboutSourceFor(e)
+				if source.Headwords == 0 {
+					source.Headwords = counts.headwords
+				}
+				if source.Articles == 0 {
+					source.Articles = counts.entries
+				}
+			}
 			return
 		}
 	}
