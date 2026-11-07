@@ -760,10 +760,22 @@ dd{margin:var(--sp-1) 0 0 0}
 .favourites-editor-card .dict-info-counts{margin:.7em 0;line-height:1.5}
 .favourites-editor-card .favourite-about{position:relative}
 .favourites-editor-card .favourite-about>summary{padding-right:3em}
+/* Editing swaps the pencil for a pair of controls in the same corner, so the
+   summary has to keep both of them clear of its text. */
+.favourites-editor-card .favourite-about:has(textarea)>summary{padding-right:6.5em}
 .favourites-editor-card .favourite-about-edit{position:absolute;right:.3em;top:0}
 .favourites-editor-card .favourite-about .aboutbody{white-space:pre-wrap;overflow-wrap:anywhere}
-.favourites-editor-card .favourite-about textarea{box-sizing:border-box;width:100%;min-height:10em;margin:.5em 0;padding:.7em;font:inherit;resize:vertical}
-.favourites-editor-card .favourite-about-buttons{display:flex;justify-content:flex-end;gap:.5em}
+/* The editable field follows the paper the window is drawn on, with the same
+   recipe the hotkeys input uses (#hotkeysSection): the theme's paper colour
+   and its image under a white wash, so a themed window has no white hole in it. */
+.favourites-editor-card .favourite-about textarea{box-sizing:border-box;width:100%;min-height:10em;margin:.5em 0;padding:.7em;font:inherit;resize:vertical;
+  color:var(--fg);background-color:var(--paper-bg,var(--bg));background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%;border:1px solid var(--line);border-radius:6px}
+html:not([data-shell-image]) .favourites-editor-card .favourite-about textarea{background-image:linear-gradient(#ffffff24,#ffffff24)}
+html:not([data-shell-image]) .favourites-editor-card .dict-rename-input{background-image:linear-gradient(#ffffff24,#ffffff24)}
+.favourites-editor-card .dict-rename-input{background-color:var(--paper-bg,var(--bg));background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%}
+/* Save and cancel stand exactly where the pencil was: absolutely placed in the
+   details' top-right corner, as .favourite-about-edit is. */
+.favourites-editor-card .favourite-about-buttons{display:flex;gap:.5em;position:absolute;right:.3em;top:0}
 .favourites-editor-card.is-editing{border-color:var(--accent)}
 .favourites-editor-card .dict-rename-save,.favourites-editor-card .dict-rename-reset,.favourites-editor-card .dict-rename,.favourites-editor-card .favourite-editor-delete{width:calc(var(--ui-control-height) * 1em);height:calc(var(--ui-control-height) * 1em);min-width:calc(var(--ui-control-height) * 1em);min-height:calc(var(--ui-control-height) * 1em)}
 
@@ -1481,7 +1493,10 @@ dialog.panel-card:not([open]){display:none}
 .dict-icon{width:1.25em;height:1.25em;flex:0 0 auto;object-fit:contain;vertical-align:middle}
 html[data-dict-icons-off] .dict-icon{display:none}
 .dict-name-line>b{min-width:0}
-.dict-rename,.dict-rename-reset,.dict-rename-save{display:grid;place-items:center;flex:none;width:44px;height:44px;padding:.65em;border:0;border-radius:50%;background:transparent;color:var(--label-quiet);cursor:pointer}
+/* No padding: with .65em the content box was 6px against a 1.25em icon, so the
+   glyph spilled out of the hover circle toward the bottom right (off by
+   (icon - box)/2, measured 5.3px). The button keeps its 44px box either way. */
+.dict-rename,.dict-rename-reset,.dict-rename-save{display:grid;place-items:center;flex:none;width:44px;height:44px;padding:0;border:0;border-radius:50%;background:transparent;color:var(--label-quiet);cursor:pointer}
 .favourite-editor-delete{display:grid;place-items:center;flex:none;width:44px;height:44px;padding:.65em;border:0;border-radius:50%;background:transparent;color:var(--label-quiet);cursor:pointer}
 .favourite-editor-delete:hover{background:var(--line-soft);color:var(--danger)}
 .favourite-editor-delete svg{width:1.25em;height:1.25em}
