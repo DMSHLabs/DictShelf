@@ -156,7 +156,17 @@ func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
 	var list struct {
 		Collections []favorites.CollectionInfo `json:"collections"`
 	}
-	if listed.Code != http.StatusOK || json.Unmarshal(listed.Body.Bytes(), &list) != nil || len(list.Collections) != 3 || list.Collections[1].ID != collection.ID {
+	parseErr := json.Unmarshal(listed.Body.Bytes(), &list)
+	present := false
+	for _, current := range list.Collections {
+		if current.ID == collection.ID {
+			present = true
+		}
+	}
+	// The new collection must be IN the list, not at a fixed index: an earlier
+	// step of this test creates one of its own, and the list is in creation
+	// order, so the index belongs to whoever ran first.
+	if listed.Code != http.StatusOK || parseErr != nil || len(list.Collections) != 3 || !present {
 		t.Fatalf("collection list status %d: %s", listed.Code, listed.Body.String())
 	}
 	duplicate := httptestNew(s, http.MethodPost, "/api/favourites/collections", []byte(`{"name":"deutsch"}`))
