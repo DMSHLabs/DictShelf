@@ -110,6 +110,7 @@ func (s *Server) routes() []route {
 		{"POST", "/api/favourites/collections", s.handleFavouriteCollections, "/api/favourites/collections", false},
 		{"PUT", "/api/favourites/collections", s.handleFavouriteCollections, "/api/favourites/collections", false},
 		{"DELETE", "/api/favourites/collections", s.handleFavouriteCollections, "/api/favourites/collections", false},
+		{"POST", "/api/favourites/export", s.handleFavouriteExport, "/api/favourites/export", false},
 		{"GET", "/api/ingest", s.handleIngest, "/api/ingest", false},
 		{"DELETE", "/api/ingest", s.handleIngest, "/api/ingest", false},
 		{"GET", "/api/system-log", s.handleIndexLog, "/api/system-log", false},

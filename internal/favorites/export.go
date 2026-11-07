@@ -74,7 +74,7 @@ func (s *Store) ExportMDX(ctx context.Context, folder string) (mdxPath, mddPath 
 				base = "resource"
 			}
 			base = strings.ReplaceAll(base, "\\", "_")
-			rel := "_favourites/" + article.ID + "/" + base
+			rel := "_favourites/" + article.ID + "/" + path.Base(asset.Token) + path.Ext(base)
 			assets[asset.URL] = rel
 			object := filepath.Join(s.Objects(), asset.Hash)
 			st, statErr := os.Stat(object)
@@ -163,23 +163,27 @@ func (s *Store) ExportMDX(ctx context.Context, folder string) (mdxPath, mddPath 
 			if mddFile != nil {
 				os.Remove(mddPath)
 			}
+			mdxPath, mddPath = "", ""
 		}
 	}()
 	if err = mdictwrite.Write(mdxFile, name, about, false, mdxEntries); err != nil {
-		return "", "", err
+		return
 	}
 	if err = mdxFile.Sync(); err != nil {
-		return "", "", err
+		return
 	}
 	if mddFile != nil {
 		if err = mdictwrite.Write(mddFile, name, about, true, mddEntries); err != nil {
-			return "", "", err
+			return
 		}
 		if err = mddFile.Sync(); err != nil {
-			return "", "", err
+			return
 		}
 	} else {
 		mddPath = ""
+	}
+	if err = ctx.Err(); err != nil {
+		return
 	}
 	return mdxPath, mddPath, nil
 }
@@ -194,6 +198,10 @@ func safeExportName(name string) string {
 	name = strings.Trim(name, " .")
 	if name == "" {
 		name = "Favourites"
+	}
+	first := strings.ToUpper(strings.SplitN(name, ".", 2)[0])
+	if first == "CON" || first == "PRN" || first == "AUX" || first == "NUL" || (len(first) == 4 && (strings.HasPrefix(first, "COM") || strings.HasPrefix(first, "LPT")) && first[3] >= '1' && first[3] <= '9') {
+		name = "_" + name
 	}
 	if len([]rune(name)) > 100 {
 		name = string([]rune(name)[:100])

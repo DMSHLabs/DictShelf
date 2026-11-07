@@ -15,6 +15,7 @@ import (
 	"hash/adler32"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"unicode/utf16"
@@ -188,7 +189,11 @@ func Write(w io.Writer, title, about string, media bool, entries []Entry) error 
 	}
 	// Record section needs its block index before the data. Spool compressed
 	// blocks to a temporary file rather than retaining the dictionary in RAM.
-	tmp, err := os.CreateTemp("", "dictshelf-mdict-*")
+	tempDir := ""
+	if file, ok := w.(*os.File); ok {
+		tempDir = filepath.Dir(file.Name())
+	}
+	tmp, err := os.CreateTemp(tempDir, "dictshelf-mdict-*")
 	if err != nil {
 		return err
 	}

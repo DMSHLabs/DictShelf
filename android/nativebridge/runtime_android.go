@@ -229,12 +229,13 @@ func WudictGoBridgeFavourites(method, body *C.char) *C.char {
 	bodyText := C.GoString(body)
 	var collectionsRequest struct {
 		Collections bool   `json:"collections"`
+		Export      bool   `json:"export"`
 		Body        string `json:"body"`
 	}
 	var argument []byte
-	if json.Unmarshal([]byte(bodyText), &collectionsRequest) == nil && collectionsRequest.Collections {
+	if json.Unmarshal([]byte(bodyText), &collectionsRequest) == nil && (collectionsRequest.Collections || collectionsRequest.Export) {
 		argument, _ = json.Marshal(map[string]any{
-			"method": C.GoString(method), "collections": true, "body": collectionsRequest.Body,
+			"method": C.GoString(method), "collections": collectionsRequest.Collections, "export": collectionsRequest.Export, "body": collectionsRequest.Body,
 		})
 	} else {
 		argument, _ = json.Marshal(map[string]string{"method": C.GoString(method), "body": bodyText})
