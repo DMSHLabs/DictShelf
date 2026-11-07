@@ -127,8 +127,8 @@ func (s *Server) deleteFavouriteCollection(id string) error {
 	if s.favSets == nil || s.reg == nil {
 		return errors.New("favourites are unavailable")
 	}
-	if id == favorites.ID {
-		return fmt.Errorf("%w: the default collection cannot be deleted", favorites.ErrInvalidCollection)
+	if len(s.favouriteIDs()) <= 1 {
+		return fmt.Errorf("%w: at least one collection must remain", favorites.ErrInvalidCollection)
 	}
 	e, err := s.reg.get(id)
 	if err != nil {
@@ -154,6 +154,9 @@ func (s *Server) deleteFavouriteCollection(id string) error {
 	if deleteErr != nil {
 		_ = s.reg.rescan(false)
 		return deleteErr
+	}
+	if id == favorites.ID {
+		s.favourites = nil
 	}
 	s.reg.RemoveBuiltin(id)
 	if err := s.reg.rescan(false); err != nil {
@@ -213,7 +216,7 @@ func (s *Server) createFavouriteCollection(name string) (favorites.CollectionInf
 }
 
 func (s *Server) handleFavourites(w http.ResponseWriter, r *http.Request) {
-	if s.favourites == nil {
+	if s.favSets == nil && s.favourites == nil {
 		httpErr(w, http.StatusServiceUnavailable, "favourites are unavailable")
 		return
 	}
@@ -249,16 +252,19 @@ func (s *Server) handleFavourites(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) addFavourite(req favouriteRequest) error {
+	collectionID := strings.TrimSpace(req.Collection)
+	if collectionID == "" {
+		collectionID = s.defaultFavouriteID()
+	}
+	if strings.TrimSpace(req.FavoriteID) != "" {
+		return s.copyFavourite(strings.TrimSpace(req.Dictionary), strings.TrimSpace(req.FavoriteID), collectionID)
+	}
 	id, word := strings.TrimSpace(req.Dictionary), strings.TrimSpace(req.Headword)
 	if id == "" || word == "" {
 		return fmt.Errorf("dictionary and headword are required")
 	}
 	if s.isFavouriteDictionaryID(id) {
 		return fmt.Errorf("an article in favourites cannot be saved again")
-	}
-	collectionID := strings.TrimSpace(req.Collection)
-	if collectionID == "" {
-		collectionID = favorites.ID
 	}
 	_, ok := s.favouriteStore(collectionID)
 	if !ok {
@@ -320,6 +326,50 @@ func (s *Server) addFavourite(req favouriteRequest) error {
 	})
 }
 
+func (s *Server) copyFavourite(sourceID, articleID, targetID string) error {
+	if sourceID == "" || articleID == "" || targetID == "" {
+		return fmt.Errorf("dictionary, favoriteId and collection are required")
+	}
+	source, ok := s.favouriteStore(sourceID)
+	if !ok {
+		return fmt.Errorf("unknown favourites collection")
+	}
+	article, err := source.Article(articleID)
+	if err != nil {
+		return dict.ErrNotFound
+	}
+	body, err := source.Body(article)
+	if err != nil {
+		return err
+	}
+	assets := make([]favorites.AssetInput, 0, len(article.Assets))
+	for _, asset := range article.Assets {
+		reader, mime, err := source.OpenAsset(asset.Token)
+		if err != nil {
+			return err
+		}
+		data, readErr := io.ReadAll(io.LimitReader(reader, favorites.MaxAsset+1))
+		closeErr := reader.Close()
+		if readErr != nil {
+			return readErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		if len(data) > favorites.MaxAsset {
+			return fmt.Errorf("resource %q exceeds the snapshot limit", asset.URL)
+		}
+		if mime == "" {
+			mime = asset.MIME
+		}
+		assets = append(assets, favorites.AssetInput{URL: asset.URL, Name: asset.Name, MIME: mime, Data: data})
+	}
+	return s.rebuildFavourites(targetID, func(target *favorites.Store) error {
+		_, err := target.Add(article.Provenance, body, assets)
+		return err
+	})
+}
+
 func (s *Server) removeFavourite(req favouriteRequest) error {
 	id := strings.TrimSpace(req.FavoriteID)
 	if id == "" {
@@ -327,7 +377,7 @@ func (s *Server) removeFavourite(req favouriteRequest) error {
 	}
 	collectionID := strings.TrimSpace(req.Collection)
 	if collectionID == "" {
-		collectionID = favorites.ID
+		collectionID = s.defaultFavouriteID()
 	}
 	_, ok := s.favouriteStore(collectionID)
 	if !ok {
@@ -356,6 +406,17 @@ func (s *Server) favouriteIDs() []string {
 		return []string{favorites.ID}
 	}
 	return nil
+}
+
+func (s *Server) defaultFavouriteID() string {
+	if _, ok := s.favouriteStore(favorites.ID); ok {
+		return favorites.ID
+	}
+	ids := s.favouriteIDs()
+	if len(ids) > 0 {
+		return ids[0]
+	}
+	return favorites.ID
 }
 
 func (s *Server) isFavouriteDictionaryID(id string) bool {
@@ -431,7 +492,7 @@ func (s *Server) rebuildFavourites(collectionID string, update func(*favorites.S
 }
 
 func (s *Server) decorateFavourite(dictionaryID string, result *dict.Result) {
-	if s.favourites == nil || result == nil {
+	if (s.favSets == nil && s.favourites == nil) || result == nil {
 		return
 	}
 	if s.isFavouriteDictionaryID(dictionaryID) {
@@ -454,6 +515,15 @@ func (s *Server) decorateFavourite(dictionaryID string, result *dict.Result) {
 			}
 		}
 		s.decorateFavouriteSource(result.FavoriteSource)
+		result.FavoriteIn = result.FavoriteIn[:0]
+		if result.FavoriteSource != nil {
+			for _, collectionID := range s.favouriteIDs() {
+				set, ok := s.favouriteStore(collectionID)
+				if ok && set.Has(result.FavoriteSource.DictionaryID, result.FavoriteSource.Headword) {
+					result.FavoriteIn = append(result.FavoriteIn, collectionID)
+				}
+			}
+		}
 		return
 	}
 	for _, collectionID := range s.favouriteIDs() {

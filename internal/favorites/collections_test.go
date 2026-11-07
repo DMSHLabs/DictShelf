@@ -98,37 +98,37 @@ func TestCollectionsRejectUnsafeCatalogueIDs(t *testing.T) {
 	}
 }
 
-func TestCollectionsDeleteKeepsDefaultAndRemovesCustom(t *testing.T) {
+func TestCollectionsCanDeleteAnyButLastCollection(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "favourites")
 	collections, err := OpenCollections(root, "Favourites")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := collections.Delete(ID); err == nil {
-		t.Fatal("default collection was deleted")
-	}
 	created, err := collections.Create("Deutsch")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := collections.Delete(created.ID); err != nil {
+	if err := collections.Delete(ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := collections.Store(created.ID); ok {
-		t.Fatal("deleted collection remains available")
+	if _, ok := collections.Store(ID); ok {
+		t.Fatal("deleted default collection remains available")
 	}
-	if _, err := os.Stat(created.Path); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("deleted collection file status = %v", err)
+	if _, err := os.Stat(filepath.Join(root, "favourites.favs")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("deleted default file status = %v", err)
+	}
+	if err := collections.Delete(created.ID); err == nil {
+		t.Fatal("last collection was deleted")
 	}
 	list, err := collections.List()
-	if err != nil || len(list) != 1 || list[0].ID != ID {
+	if err != nil || len(list) != 1 || list[0].ID != created.ID {
 		t.Fatalf("collections after delete = %+v, %v", list, err)
 	}
 	reloaded, err := OpenCollections(root, "Favourites")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ids := reloaded.IDs(); len(ids) != 1 || ids[0] != ID {
+	if ids := reloaded.IDs(); len(ids) != 1 || ids[0] != created.ID {
 		t.Fatalf("reloaded collections = %v", ids)
 	}
 }

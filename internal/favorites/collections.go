@@ -19,7 +19,7 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/fsx"
 )
 
-const collectionCatalogVersion = 1
+const collectionCatalogVersion = 2
 
 var ErrInvalidCollection = errors.New("invalid favourites collection")
 
@@ -36,8 +36,8 @@ type CollectionInfo struct {
 	Size     int64  `json:"size"`
 }
 
-// Collections owns the default snapshot store and any additional collections.
-// The default store stays at the legacy path so existing users keep their data.
+// Collections owns the available snapshot stores. The original store stays at
+// the legacy path so existing users keep their data, even if they later remove it.
 type Collections struct {
 	root   string
 	mu     sync.RWMutex
@@ -55,24 +55,31 @@ func OpenCollections(root, defaultName string) (*Collections, error) {
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return nil, err
 	}
-	defaultStore := New(root)
-	if err := defaultStore.EnsureNamed(defaultName); err != nil {
-		return nil, err
-	}
-	c := &Collections{root: root, ids: []string{ID}, stores: map[string]*Store{ID: defaultStore}}
+	c := &Collections{root: root, stores: map[string]*Store{}}
 	ids, err := c.readCatalog()
 	if err != nil {
 		return nil, err
 	}
+	if ids == nil {
+		ids = []string{ID}
+	}
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("%w: at least one collection is required", ErrInvalidCollection)
+	}
+	c.ids = append([]string(nil), ids...)
 	for _, id := range ids {
-		if !validCollectionID(id) || id == ID || c.stores[id] != nil {
+		if (id != ID && !validCollectionID(id)) || c.stores[id] != nil {
 			return nil, fmt.Errorf("%w: %q", ErrInvalidCollection, id)
 		}
-		store := NewAt(filepath.Join(root, "collections", id), id+".favs")
-		if err := store.Ensure(); err != nil {
+		var store *Store
+		if id == ID {
+			store = New(root)
+		} else {
+			store = NewAt(filepath.Join(root, "collections", id), id+".favs")
+		}
+		if err := store.EnsureNamed(defaultName); err != nil {
 			return nil, fmt.Errorf("open favourites collection %q: %w", id, err)
 		}
-		c.ids = append(c.ids, id)
 		c.stores[id] = store
 	}
 	return c, nil
@@ -91,8 +98,11 @@ func (c *Collections) readCatalog() ([]string, error) {
 		return nil, fmt.Errorf("%w: catalogue is too large", ErrInvalidCollection)
 	}
 	var catalog collectionCatalog
-	if err := json.Unmarshal(data, &catalog); err != nil || catalog.Version != collectionCatalogVersion || catalog.IDs == nil {
+	if err := json.Unmarshal(data, &catalog); err != nil || (catalog.Version != 1 && catalog.Version != collectionCatalogVersion) || catalog.IDs == nil {
 		return nil, fmt.Errorf("%w: cannot read collection catalogue", ErrInvalidCollection)
+	}
+	if catalog.Version == 1 {
+		return append([]string{ID}, catalog.IDs...), nil
 	}
 	return catalog.IDs, nil
 }
@@ -125,22 +135,51 @@ func (c *Collections) List() ([]CollectionInfo, error) {
 }
 
 func (c *Collections) Delete(id string) error {
-	if id == ID {
-		return fmt.Errorf("%w: the default collection cannot be deleted", ErrInvalidCollection)
-	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if !validCollectionID(id) || c.stores[id] == nil {
+	if (id != ID && !validCollectionID(id)) || c.stores[id] == nil {
 		return fmt.Errorf("%w: collection not found", ErrInvalidCollection)
+	}
+	if len(c.ids) <= 1 {
+		return fmt.Errorf("%w: at least one collection must remain", ErrInvalidCollection)
 	}
 	root := filepath.Join(c.root, "collections")
 	data := filepath.Join(root, id)
+	trashRoot := root
+	if id == ID {
+		trashRoot = c.root
+	}
 	trashID, err := randomID()
 	if err != nil {
 		return err
 	}
-	trash := filepath.Join(root, "."+id+"-removing-"+trashID[:8])
-	if err := os.Rename(data, trash); err != nil {
+	trash := filepath.Join(trashRoot, "."+id+"-removing-"+trashID[:8])
+	if id == ID {
+		if err := os.Mkdir(trash, 0o700); err != nil {
+			return err
+		}
+		var moved []string
+		for _, item := range []string{c.stores[id].Path(), c.stores[id].Objects()} {
+			if _, err := os.Stat(item); errors.Is(err, os.ErrNotExist) {
+				continue
+			} else if err != nil {
+				for _, name := range moved {
+					_ = os.Rename(filepath.Join(trash, name), filepath.Join(c.root, name))
+				}
+				_ = os.RemoveAll(trash)
+				return err
+			}
+			name := filepath.Base(item)
+			if err := os.Rename(item, filepath.Join(trash, name)); err != nil {
+				for _, movedName := range moved {
+					_ = os.Rename(filepath.Join(trash, movedName), filepath.Join(c.root, movedName))
+				}
+				_ = os.RemoveAll(trash)
+				return err
+			}
+			moved = append(moved, name)
+		}
+	} else if err := os.Rename(data, trash); err != nil {
 		return err
 	}
 	next := make([]string, 0, len(c.ids)-1)
@@ -149,8 +188,15 @@ func (c *Collections) Delete(id string) error {
 			next = append(next, current)
 		}
 	}
-	if err := c.saveCatalog(next[1:]); err != nil {
-		_ = os.Rename(trash, data)
+	if err := c.saveCatalog(next); err != nil {
+		if id == ID {
+			for _, name := range []string{filepath.Base(c.stores[id].Path()), filepath.Base(c.stores[id].Objects())} {
+				_ = os.Rename(filepath.Join(trash, name), filepath.Join(c.root, name))
+			}
+			_ = os.RemoveAll(trash)
+		} else {
+			_ = os.Rename(trash, data)
+		}
 		return err
 	}
 	c.ids = next
@@ -241,7 +287,7 @@ func (c *Collections) Create(name string) (CollectionInfo, error) {
 		return CollectionInfo{}, err
 	}
 	next := append(append([]string(nil), c.ids...), id)
-	if err := c.saveCatalog(next[1:]); err != nil {
+	if err := c.saveCatalog(next); err != nil {
 		_ = os.RemoveAll(root)
 		return CollectionInfo{}, err
 	}

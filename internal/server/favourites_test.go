@@ -36,7 +36,6 @@ func TestFavouriteSnapshotsRoundTripThroughServerAndPreparedMedia(t *testing.T) 
 	if err := s.reg.rescan(false); err != nil {
 		t.Fatal(err)
 	}
-
 	requestBody, _ := json.Marshal(favouriteRequest{Dictionary: sources[0].ID, Headword: "corazón"})
 	added := httptestNew(s, http.MethodPost, "/api/favourites", requestBody)
 	if added.Code != http.StatusOK {
@@ -121,7 +120,8 @@ func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
 	if len(sources) != 1 {
 		t.Fatalf("source dictionaries = %d", len(sources))
 	}
-	sets, err := favorites.OpenCollections(filepath.Join(t.TempDir(), "favourites"), "Favourites")
+	favRoot := filepath.Join(t.TempDir(), "favourites")
+	sets, err := favorites.OpenCollections(favRoot, "Favourites")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,6 +131,15 @@ func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
 		store, _ := sets.Store(collection.ID)
 		s.reg.AddBuiltin(Builtin{ID: collection.ID, Path: store.Path()})
 	}
+	if err := s.reg.rescan(false); err != nil {
+		t.Fatal(err)
+	}
+	second, err := sets.Create("Español")
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondStore, _ := sets.Store(second.ID)
+	s.reg.AddBuiltin(Builtin{ID: second.ID, Path: secondStore.Path()})
 	if err := s.reg.rescan(false); err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +156,7 @@ func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
 	var list struct {
 		Collections []favorites.CollectionInfo `json:"collections"`
 	}
-	if listed.Code != http.StatusOK || json.Unmarshal(listed.Body.Bytes(), &list) != nil || len(list.Collections) != 2 || list.Collections[1].ID != collection.ID {
+	if listed.Code != http.StatusOK || json.Unmarshal(listed.Body.Bytes(), &list) != nil || len(list.Collections) != 3 || list.Collections[1].ID != collection.ID {
 		t.Fatalf("collection list status %d: %s", listed.Code, listed.Body.String())
 	}
 	duplicate := httptestNew(s, http.MethodPost, "/api/favourites/collections", []byte(`{"name":"deutsch"}`))
@@ -172,8 +181,17 @@ func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
 	if len(copySearch) < 2 || len(copySearch[1].Results) != 1 || copySearch[1].Results[0].FavoriteID == "" {
 		t.Fatalf("saved article in custom collection = %+v", copySearch)
 	}
+	copyBody, _ := json.Marshal(favouriteRequest{Dictionary: collection.ID, FavoriteID: copySearch[1].Results[0].FavoriteID, Collection: second.ID})
+	copied := httptestNew(s, http.MethodPost, "/api/favourites", copyBody)
+	if copied.Code != http.StatusOK {
+		t.Fatalf("copy favourite status %d: %s", copied.Code, copied.Body.String())
+	}
+	secondSearch := collectLookup(t, s, SearchRequest{Query: "corazón", Mode: "exact", Dictionary: second.ID})
+	if len(secondSearch) < 2 || len(secondSearch[1].Results) != 1 || secondSearch[1].Results[0].FavoriteID == "" {
+		t.Fatalf("copied article in second collection = %+v", secondSearch)
+	}
 	sourceSearch := collectLookup(t, s, SearchRequest{Query: "corazón", Mode: "exact", Dictionary: sources[0].ID})
-	if len(sourceSearch) < 2 || len(sourceSearch[1].Results) != 1 || len(sourceSearch[1].Results[0].FavoriteIn) != 1 || sourceSearch[1].Results[0].FavoriteIn[0] != collection.ID {
+	if len(sourceSearch) < 2 || len(sourceSearch[1].Results) != 1 || len(sourceSearch[1].Results[0].FavoriteIn) != 2 {
 		t.Fatalf("source collection membership = %+v", sourceSearch)
 	}
 
@@ -191,8 +209,11 @@ func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
 		t.Fatalf("custom collection after removal = %d, %v", len(articles), err)
 	}
 	defaultDelete := httptestNew(s, http.MethodDelete, "/api/favourites/collections", []byte(`{"id":"favourites"}`))
-	if defaultDelete.Code != http.StatusBadRequest {
+	if defaultDelete.Code != http.StatusOK {
 		t.Fatalf("default collection delete status %d: %s", defaultDelete.Code, defaultDelete.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(favRoot, "favourites.favs")); !os.IsNotExist(err) {
+		t.Fatalf("deleted default file status = %v", err)
 	}
 	collectionPath := collectionStore.Path()
 	preparedDir, hadPrepared := store.LookupDir(collectionPath)
@@ -211,6 +232,10 @@ func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
 	}
 	if _, err := s.reg.get(collection.ID); err == nil {
 		t.Fatal("deleted collection remains registered")
+	}
+	last := httptestNew(s, http.MethodDelete, "/api/favourites/collections", []byte(`{"id":"`+second.ID+`"}`))
+	if last.Code != http.StatusBadRequest {
+		t.Fatalf("last collection delete status %d: %s", last.Code, last.Body.String())
 	}
 }
 
