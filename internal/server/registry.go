@@ -1472,6 +1472,18 @@ func (r *Registry) AddBuiltin(b Builtin) {
 	r.builtin = append(r.builtin, b)
 }
 
+func (r *Registry) RemoveBuiltin(id string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, current := range r.builtin {
+		if current.ID == id {
+			r.builtin = append(r.builtin[:i], r.builtin[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
 // IsBuiltin reports whether path is the source of a dictionary the app ships.
 func (r *Registry) IsBuiltin(path string) bool {
 	if path == "" {

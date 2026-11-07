@@ -119,6 +119,7 @@ type Result struct {
 	Body           string            // article HTML (native markup already converted)
 	EntryID        int64             `json:"entryId,omitempty"` // prepared article ID, for source-specific resource resolution
 	Favorite       bool              `json:"favorite,omitempty"`
+	FavoriteIn     []string          `json:"favoriteIn,omitempty"`
 	FavoriteID     string            `json:"favoriteId,omitempty"`
 	FavoriteSource *FavoriteSource   `json:"favoriteSource,omitempty"`
 	ResourceMap    map[string]string `json:"-"` // source resource name to snapshot token, for saved articles

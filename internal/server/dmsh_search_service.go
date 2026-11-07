@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
-	"github.com/DMSHLabs/DictShelf/internal/favorites"
 	"github.com/DMSHLabs/DictShelf/internal/ftsq"
 	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 	"github.com/DMSHLabs/DictShelf/internal/lang"
@@ -347,7 +346,7 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 		}
 		for j := range h.Results {
 			s.decorateFavourite(id, &h.Results[j])
-			if id == favorites.ID && len(h.Results[j].ResourceMap) > 0 {
+			if s.isFavouriteDictionaryID(id) && len(h.Results[j].ResourceMap) > 0 {
 				h.Results[j].Body = RewriteFavouriteHTML(h.Results[j].Body, id, h.Results[j].ResourceMap)
 			} else {
 				h.Results[j].Body = rewriteEntryHTMLFor(h.Results[j].Body, id, h.Results[j].EntryID, hl, assetTokens)
@@ -420,7 +419,7 @@ func (s *Server) searchTermFor(entries []*entry, mode search.Mode, q string) fun
 		return nil
 	}
 	return func(i int, meta dict.Meta, typed string) string {
-		if entries[i].ID == favorites.ID {
+		if s.isFavouriteDictionaryID(entries[i].ID) {
 			return typed
 		}
 		code := lang.Resolve(meta.IndexLang, langPath(entries[i].Path), s.reg.Dirs(), meta.Name)

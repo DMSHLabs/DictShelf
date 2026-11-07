@@ -80,6 +80,7 @@ type manifest struct {
 
 type Store struct {
 	root          string
+	fileName      string
 	mu            sync.Mutex
 	cacheMu       sync.Mutex
 	cacheRev      string
@@ -87,9 +88,19 @@ type Store struct {
 	cacheHas      map[string]struct{}
 }
 
-func New(root string) *Store { return &Store{root: root} }
+func New(root string) *Store { return NewAt(root, "favourites.favs") }
 
-func (s *Store) Path() string    { return filepath.Join(s.root, "favourites.favs") }
+// NewAt opens a collection whose manifest uses fileName within root.
+// fileName is reduced to a basename so a dictionary path cannot escape root.
+func NewAt(root, fileName string) *Store {
+	fileName = filepath.Base(fileName)
+	if !strings.HasSuffix(strings.ToLower(fileName), ".favs") {
+		fileName = "favourites.favs"
+	}
+	return &Store{root: root, fileName: fileName}
+}
+
+func (s *Store) Path() string    { return filepath.Join(s.root, s.fileName) }
 func (s *Store) Objects() string { return filepath.Join(s.root, "objects") }
 
 func (s *Store) Name() (string, error) {

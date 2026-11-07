@@ -191,6 +191,7 @@ type Server struct {
 	reg        *Registry
 	mux        *http.ServeMux
 	favourites *favorites.Store
+	favSets    *favorites.Collections
 
 	wildcardPages wildcardPageCache
 	searchReturns searchReturnCacheStore
@@ -1328,7 +1329,7 @@ func (s *Server) langFacts(info *dictInfo, name, declared, contents string) {
 		Declared:           declared,
 		Contents:           contents,
 		File:               filepath.Base(langPath(info.Path)),
-		SkipLanguageFacets: info.ID == favorites.ID,
+		SkipLanguageFacets: s.isFavouriteDictionaryID(info.ID),
 	}
 	info.Groups = s.pickerGroups(in)
 	if s.userGroupsOnly {
@@ -1745,7 +1746,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 		for j := range h.Results {
 			s.decorateFavourite(id, &h.Results[j])
-			if id == favorites.ID && len(h.Results[j].ResourceMap) > 0 {
+			if s.isFavouriteDictionaryID(id) && len(h.Results[j].ResourceMap) > 0 {
 				h.Results[j].Body = RewriteFavouriteHTML(h.Results[j].Body, id, h.Results[j].ResourceMap)
 			} else {
 				h.Results[j].Body = rewriteEntryHTMLFor(h.Results[j].Body, id, h.Results[j].EntryID, hl, assetTokens)
