@@ -92,12 +92,21 @@ func (s *Server) deleteFavouriteCollection(id string) error {
 	if err != nil {
 		return fmt.Errorf("%w: collection not found", favorites.ErrInvalidCollection)
 	}
+	preparedDir, hasPrepared := store.LookupDir(e.Path)
 	e.ingestMu.Lock()
 	e.rebuilding.Store(true)
 	e.openMu.Lock()
 	e.closeNow()
 	e.openMu.Unlock()
-	deleteErr := s.favSets.Delete(id)
+	var deleteErr error
+	if hasPrepared {
+		release := e.walk.own()
+		_, deleteErr = store.RemovePrepared(preparedDir)
+		release()
+	}
+	if deleteErr == nil {
+		deleteErr = s.favSets.Delete(id)
+	}
 	e.rebuilding.Store(false)
 	e.ingestMu.Unlock()
 	if deleteErr != nil {
