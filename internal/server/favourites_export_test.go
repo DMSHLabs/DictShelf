@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/favorites"
+	_ "github.com/DMSHLabs/DictShelf/internal/format/mdx"
 )
 
 func TestFavouriteExportRoute(t *testing.T) {
@@ -23,7 +25,7 @@ func TestFavouriteExportRoute(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	request, _ := json.Marshal(favouriteExportRequest{Action: "start", ID: favorites.ID, Path: dir})
+	request, _ := json.Marshal(favouriteExportRequest{Action: "start", ID: favorites.ID, Path: dir, Name: "Saved words renamed"})
 	r := httptestNew(s, http.MethodPost, "/api/favourites/export", request)
 	if r.Code != http.StatusOK {
 		t.Fatalf("start: %d %s", r.Code, r.Body.String())
@@ -37,11 +39,20 @@ func TestFavouriteExportRoute(t *testing.T) {
 	if err := json.Unmarshal(status.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Err != "" || result.Done != 1 || result.Running {
+	if result.Err != "" || result.Running || result.Done != result.Total || result.Done == 0 {
 		t.Fatalf("export status: %+v", result)
 	}
 	files, err := filepath.Glob(filepath.Join(dir, "*.mdx"))
 	if err != nil || len(files) != 1 {
 		t.Fatalf("export files: %v %v", files, err)
+	}
+	// The name the request carried is the dictionary's name inside the export.
+	exported, err := dict.Open(files[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer exported.Close()
+	if want := "Saved words renamed"; exported.Meta().Name != want {
+		t.Fatalf("export title %q, want %q", exported.Meta().Name, want)
 	}
 }

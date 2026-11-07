@@ -1078,6 +1078,8 @@
   "favourites.info": "Info",
   "favourites.export": "Export dictionary",
   "favourites.exportTitle": "Export favourites as MDX",
+  "favourites.exportNameLabel": "Dictionary name",
+  "favourites.exportDone": "Done",
   "favourites.chooseExportFolder": "Choose export folder",
   "favourites.exportFolderSelected": "Export folder selected",
   "favourites.exporting": "Saving dictionary…",

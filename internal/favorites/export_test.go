@@ -28,10 +28,20 @@ func TestExportMDX(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
+	// The name the dialog passes types the dictionary inside the export and on
+	// its filename, and the progress the job shows is two steps per article.
+	type sample struct{ done, total int }
+	var progress []sample
 	for i := 0; i < 2; i++ {
-		mdx, mdd, err := s.ExportMDX(context.Background(), dir)
+		progress = nil
+		mdx, mdd, err := s.ExportMDX(context.Background(), dir, "Осенние вырезки", func(done, total int) {
+			progress = append(progress, sample{done, total})
+		})
 		if err != nil {
 			t.Fatal(err)
+		}
+		if want := "Осенние вырезки"; !strings.HasPrefix(filepath.Base(mdx), want) {
+			t.Fatalf("export named %q, want it to start with %q", filepath.Base(mdx), want)
 		}
 		if filepath.Base(mdx) == filepath.Base(mdd) {
 			t.Fatal("extensions should differ")
@@ -39,6 +49,9 @@ func TestExportMDX(t *testing.T) {
 		d, err := dict.Open(mdx)
 		if err != nil {
 			t.Fatal(err)
+		}
+		if want := "Осенние вырезки"; d.Meta().Name != want {
+			t.Fatalf("export title %q, want %q", d.Meta().Name, want)
 		}
 		hits, err := d.Exact("Яблоко", 5)
 		if err != nil || len(hits) != 1 {
@@ -82,5 +95,16 @@ func TestExportMDX(t *testing.T) {
 	files, err := os.ReadDir(dir)
 	if err != nil || len(files) != 4 {
 		t.Fatalf("exports: %v %v", files, err)
+	}
+	if len(progress) == 0 {
+		t.Fatal("no progress was reported")
+	}
+	if last := progress[len(progress)-1]; last.done != last.total || last.total != 2 {
+		t.Fatalf("last progress %+v, want the two steps of one article", last)
+	}
+	for i := 1; i < len(progress); i++ {
+		if progress[i].done < progress[i-1].done {
+			t.Fatalf("progress went backwards: %+v", progress)
+		}
 	}
 }

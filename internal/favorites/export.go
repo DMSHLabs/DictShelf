@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 
 	"github.com/DMSHLabs/DictShelf/internal/htmlref"
 	"github.com/DMSHLabs/DictShelf/internal/mdictwrite"
@@ -34,7 +35,12 @@ func (r contextReader) Read(p []byte) (int, error) {
 // ExportMDX saves the pinned collection as an MDX and, when needed, a companion
 // MDD. Existing files are never replaced. Both unfinished files are removed on
 // failure or cancellation.
-func (s *Store) ExportMDX(ctx context.Context, folder string) (mdxPath, mddPath string, err error) {
+//
+// title names the dictionary inside the export and on its filename; empty takes
+// the collection's own name. progress, when given, is called with the units done
+// and the total: two per article, because preparing an entry and writing it both
+// read every body.
+func (s *Store) ExportMDX(ctx context.Context, folder, title string, progress func(done, total int)) (mdxPath, mddPath string, err error) {
 	snap, err := s.OpenSnapshot()
 	if err != nil {
 		return "", "", err
@@ -51,10 +57,24 @@ func (s *Store) ExportMDX(ctx context.Context, folder string) (mdxPath, mddPath 
 	if !info.IsDir() {
 		return "", "", errors.New("export path is not a folder")
 	}
-	name := snap.Name()
+	name := strings.TrimSpace(title)
+	if name == "" {
+		name = snap.Name()
+	}
 	about, err := s.About()
 	if err != nil {
 		return "", "", err
+	}
+	var progressDone atomic.Int64
+	total := int64(2 * len(articles))
+	report := func() {
+		if progress != nil {
+			progress(int(progressDone.Load()), int(total))
+		}
+	}
+	step := func() {
+		progressDone.Add(1)
+		report()
 	}
 	mdxEntries := make([]mdictwrite.Entry, 0, len(articles))
 	mddEntries := make([]mdictwrite.Entry, 0)
@@ -106,12 +126,14 @@ func (s *Store) ExportMDX(ctx context.Context, folder string) (mdxPath, mddPath 
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
+			step()
 			body, err := snap.Body(article)
 			if err != nil {
 				return nil, err
 			}
 			return contextReader{ctx, io.NopCloser(bytes.NewReader(append([]byte(rewrite(body)), 0)))}, nil
 		}})
+		step()
 	}
 	// Reserve a pair under the same base name. The exclusive create protects
 	// older exports even when another export starts in the same folder.

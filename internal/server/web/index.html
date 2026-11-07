@@ -1050,10 +1050,11 @@ window.wudictFontScale=(function(){
 </dialog>
 <dialog id="favouritesExportDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="favouritesExportTitle">
   <h2 id="favouritesExportTitle">{{T:favourites.exportTitle}} <button type="button" class="btn" id="favouritesExportX" aria-label="{{T:panel.close}}">✕</button></h2>
-  <p class="export-dict"><span>{{T:favourites.sourceDictionary}}:</span> <b id="favouritesExportName"></b></p>
+  <div class="export-dict"><label for="favouritesExportName">{{T:favourites.exportNameLabel}}</label><input type="text" id="favouritesExportName" autocomplete="off" spellcheck="false" maxlength="100"></div>
   <div class="export-path"><label for="favouritesExportPath">{{T:export.folder}}</label><input type="text" id="favouritesExportPath" autocomplete="off" spellcheck="false"><button type="button" class="btn" id="favouritesExportFolder" aria-label="{{T:pages.chooseFolder}}" hidden>📁</button></div>
+  <progress id="favouritesExportProgress" hidden></progress>
   <p id="favouritesExportStatus" role="status" aria-live="polite"></p>
-  <div class="export-actions export-footer"><button type="button" class="btn" id="favouritesExportSave">{{T:panel.save}}</button><button type="button" class="btn" id="favouritesExportStop" hidden>{{T:dictUI.stop}}</button><button type="button" class="btn" id="favouritesExportClose">{{T:panel.close}}</button></div>
+  <div class="export-actions export-footer"><button type="button" class="btn" id="favouritesExportSave">{{T:panel.save}}</button><button type="button" class="btn" id="favouritesExportStop" hidden>{{T:dictUI.stop}}</button><button type="button" class="btn" id="favouritesExportDone" hidden>{{T:favourites.exportDone}}</button><button type="button" class="btn" id="favouritesExportClose">{{T:panel.close}}</button></div>
 </dialog>
 <dialog id="dictInfoDialog" lang="{{T:locale}}" class="group-dialog panel-card dict-info-dialog" aria-labelledby="dictInfoTitle">
   <h2 id="dictInfoTitle"><span id="dictInfoName"></span><button type="button" class="btn" id="dictInfoClose" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
@@ -4698,11 +4699,28 @@ async function favouriteExportCall(action,extra={}){
   const response=await apiFetch("/api/favourites/export",{method:"POST",headers:{"Content-Type":"application/json"},body});
   const value=await response.json();if(!response.ok)throw new Error(value.error||tx("favourites.exportFailed"));return value;
 }
+/* The name the export carries is the reader's to change, and it is not optional:
+   an MDX named nothing is not what one asked to save. Empty marks the field with
+   the app's own accent and takes Save away until it is filled. */
+function favouriteExportValidate(){
+  const input=$("favouritesExportName");if(!input)return false;
+  const ok=input.value.trim()!=="";
+  input.setAttribute("aria-invalid",ok?"false":"true");
+  if(ok)input.removeAttribute("title");else input.title=tx("favourites.nameRequired");
+  return ok;
+}
 function favouriteExportStatus(st){
-  const running=!!st?.Running;
+  const running=!!st?.Running,done=!running&&!!st?.Result;
   const hasDestination=window.wudictAndroidGo?!!favouriteExportTree:!!$("favouritesExportPath").value.trim();
-  $("favouritesExportSave").disabled=running||!hasDestination;
+  const named=favouriteExportValidate();
+  $("favouritesExportSave").disabled=running||done||!hasDestination||!named;
+  $("favouritesExportSave").hidden=done;
   $("favouritesExportStop").hidden=!running;
+  $("favouritesExportDone").hidden=!done;
+  $("favouritesExportClose").hidden=done;
+  const bar=$("favouritesExportProgress");
+  if(running){bar.max=Math.max(1,Number(st?.Total)||0);bar.value=Math.min(bar.max,Number(st?.Done)||0);bar.hidden=false}
+  else{bar.hidden=true;bar.removeAttribute("value");bar.removeAttribute("max")}
   if(running)$("favouritesExportStatus").textContent=tx("favourites.exporting");
   else if(st?.Err)$("favouritesExportStatus").textContent=tx("favourites.exportFailed")+": "+st.Err;
   else if(st?.Canceled)$("favouritesExportStatus").textContent=tx("favourites.exportStopped");
@@ -4733,7 +4751,7 @@ async function favouriteExportFollow(){
 }
 function openFavouriteExport(collection){
   favouriteExportID=collection.id;
-  $("favouritesExportName").textContent=collection.name;
+  $("favouritesExportName").value=collection.name;
   favouriteExportTree="";favouriteExportCopyStarted=false;
   const android=!!window.wudictAndroidGo;
   $("favouritesExportPath").hidden=android;
@@ -4741,21 +4759,29 @@ function openFavouriteExport(collection){
   $("favouritesExportFolder").hidden=android?false:typeof window.wudictPickFolder!=="function";
   if(android){$("favouritesExportPath").value="";$("favouritesExportFolder").setAttribute("aria-label",tx("favourites.chooseExportFolder"));}
   $("favouritesExportStatus").textContent="";
-  $("favouritesExportSave").disabled=android||!$("favouritesExportPath").value.trim();
+  $("favouritesExportDone").hidden=true;$("favouritesExportClose").hidden=false;$("favouritesExportSave").hidden=false;
+  $("favouritesExportProgress").hidden=true;$("favouritesExportProgress").removeAttribute("value");$("favouritesExportProgress").removeAttribute("max");
+  const named=favouriteExportValidate();
+  $("favouritesExportSave").disabled=(android||!$("favouritesExportPath").value.trim())||!named;
   $("favouritesExportDialog").showModal();
 }
 $("favouritesExportPath").oninput=()=>{$("favouritesExportSave").disabled=!$("favouritesExportPath").value.trim()};
+$("favouritesExportName").oninput=()=>{
+  const named=favouriteExportValidate();
+  $("favouritesExportSave").disabled=!named||!(window.wudictAndroidGo?!!favouriteExportTree:!!$("favouritesExportPath").value.trim());
+};
 $("favouritesExportFolder").onclick=()=>{
   if(window.wudictAndroidGo){const tree=prompt("wudict:favourites-export-picker","");if(tree){favouriteExportTree=tree;$("favouritesExportSave").disabled=false;$("favouritesExportStatus").textContent=tx("favourites.exportFolderSelected")}return}
   window.wudictPickFolder?.(path=>{if(path){$("favouritesExportPath").value=path;$("favouritesExportSave").disabled=false}})
 };
 $("favouritesExportSave").onclick=async()=>{
   const android=!!window.wudictAndroidGo,path=android?window.wudictAndroidGo.favouritesExportDirectory():$("favouritesExportPath").value.trim();$("favouritesExportSave").disabled=true;
-  try{if(!path)throw new Error(tx("favourites.exportFailed"));const st=await favouriteExportCall("start",{id:favouriteExportID,path});if(!android)localStorage.setItem("wudict_favourites_export_path",path);favouriteExportStatus(st);favouriteExportFollow()}
+  try{if(!path)throw new Error(tx("favourites.exportFailed"));const st=await favouriteExportCall("start",{id:favouriteExportID,path,name:$("favouritesExportName").value.trim()});if(!android)localStorage.setItem("wudict_favourites_export_path",path);favouriteExportStatus(st);favouriteExportFollow()}
   catch(error){$("favouritesExportSave").disabled=false;$("favouritesExportStatus").textContent=tx("favourites.exportFailed")+": "+error.message}
 };
 $("favouritesExportStop").onclick=async()=>{try{if(window.wudictAndroidGo&&favouriteExportCopyStarted){const st=await favouriteExportCopyStatus("stop");favouriteExportStatus(await favouriteExportCall("status"));if(!st.running)$("favouritesExportStatus").textContent=tx("favourites.exportStopped")}else favouriteExportStatus(await favouriteExportCall("stop"))}catch(error){$("favouritesExportStatus").textContent=error.message}};
 $("favouritesExportClose").onclick=()=>$("favouritesExportDialog").close();
+$("favouritesExportDone").onclick=()=>$("favouritesExportDialog").close();
 $("favouritesExportX").onclick=()=>$("favouritesExportDialog").close();
 function favouriteEditorIcon(name){
   const icons={save:'<path d="m5 12 4 4L19 6"/>',cancel:'<path d="m6 6 12 12M18 6 6 18"/>',delete:'<path d="M4 7h16M10 11v6m4-6v6M5 7l1 14h12l1-14M9 7V4h6v3"/>',rename:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/>'};

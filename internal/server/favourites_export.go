@@ -20,6 +20,10 @@ type favouriteExportRequest struct {
 	Action string `json:"action"`
 	ID     string `json:"id"`
 	Path   string `json:"path"`
+	// Name is the dictionary's name inside the export, and on its filename.
+	// The dialog requires it; so does this, because an export with an empty
+	// title is not what the reader asked to save.
+	Name string `json:"name"`
 }
 
 func (s *Server) favouriteExport(argument string) (any, error) {
@@ -46,6 +50,9 @@ func (s *Server) favouriteExport(argument string) (any, error) {
 	if strings.TrimSpace(req.Path) == "" {
 		return nil, errors.New("choose an output folder")
 	}
+	if strings.TrimSpace(req.Name) == "" {
+		return nil, errors.New("a dictionary name is required")
+	}
 	folder, err := filepath.Abs(strings.TrimSpace(req.Path))
 	if err != nil {
 		return nil, err
@@ -57,8 +64,12 @@ func (s *Server) favouriteExport(argument string) (any, error) {
 	if !info.IsDir() {
 		return nil, errors.New("output path is not a folder")
 	}
-	st, started := s.jobs.start(favouriteExportKey, 0, jobStatus{Total: 1, Current: req.ID}, func(j *job) {
-		mdx, mdd, err := set.ExportMDX(j.ctx, folder)
+	st, started := s.jobs.start(favouriteExportKey, 0, jobStatus{Total: 0, Current: req.ID}, func(j *job) {
+		mdx, mdd, err := set.ExportMDX(j.ctx, folder, req.Name, func(done, total int) {
+			j.update(func(st *jobStatus) {
+				st.Done, st.Total = int64(done), int64(total)
+			})
+		})
 		j.update(func(st *jobStatus) {
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
@@ -68,7 +79,13 @@ func (s *Server) favouriteExport(argument string) (any, error) {
 				}
 				return
 			}
-			st.Done = 1
+			// Done and Total are the export's own units now, so a finished
+			// export is a full bar, not the single step it used to report.
+			if st.Total > 0 {
+				st.Done = st.Total
+			} else {
+				st.Done = 1
+			}
 			st.Result = []string{mdx}
 			if mdd != "" {
 				st.Result = []string{mdx, mdd}

@@ -2379,7 +2379,13 @@ html:is([data-shell-sepia],[data-shell-image]) .list-search-input{background-col
 #favouritesExportDialog{width:min(560px,calc(100vw - 32px));box-sizing:border-box}
 #favouritesExportDialog[open]{display:flex;flex-direction:column;gap:.6em}
 #favouritesExportDialog h2{display:flex;align-items:center;justify-content:space-between;gap:.6em;margin:0;padding-bottom:.4em;border-bottom:1px solid var(--line)}
-#favouritesExportDialog .export-dict{display:flex;align-items:baseline;gap:.4em;margin:0;flex-wrap:wrap;overflow-wrap:anywhere}
+#favouritesExportDialog .export-dict{display:flex;align-items:baseline;gap:.6em;margin:0;flex-wrap:wrap;overflow-wrap:anywhere}
+#favouritesExportDialog .export-dict>label{flex:none;white-space:nowrap}
+#favouritesExportDialog .export-dict>input{flex:1 1 0;width:0;min-width:0}
+/* An export named nothing cannot be saved: the field says so in the app's own
+   accent, which is also what marks the star and the built index. */
+#favouritesExportDialog #favouritesExportName[aria-invalid="true"]{outline:2px solid var(--accent);outline-offset:1px}
+#favouritesExportDialog progress{width:100%}
 #favouritesExportDialog .export-path{display:flex;align-items:center;gap:.6em;flex-wrap:nowrap}
 #favouritesExportDialog .export-actions{display:flex;align-items:center;gap:.6em;flex-wrap:wrap}
 #favouritesExportDialog .export-path>label{flex:none;white-space:nowrap}
@@ -2391,6 +2397,9 @@ html:is([data-shell-sepia],[data-shell-image]) .list-search-input{background-col
 #favouritesExportDialog p{margin:0}
 #favouritesExportDialog #favouritesExportStatus:empty{display:none}
 #favouritesExportDialog #favouritesExportClose{margin-inline-start:auto}
+/* Done stands where Close does: whichever of the two the footer offers, it is
+   the last control and sits at the content's right edge. */
+#favouritesExportDialog #favouritesExportDone{margin-inline-start:auto}
 @font-face{font-family:"wudict-Charis";font-weight:400;font-style:normal;src:url("/assets/fonts/Charis-Regular.woff2?v=7.000") format("woff2")}
 @font-face{font-family:"wudict-Charis";font-weight:400;font-style:italic;src:url("/assets/fonts/Charis-Italic.woff2?v=7.000") format("woff2")}
 @font-face{font-family:"wudict-Charis";font-weight:500;font-style:normal;src:url("/assets/fonts/Charis-Medium.woff2?v=7.000") format("woff2")}
