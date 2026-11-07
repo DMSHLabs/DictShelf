@@ -156,3 +156,22 @@ func TestCollectionsRenameUpdatesNamesAndRejectsDuplicates(t *testing.T) {
 		t.Fatal("empty collection name was accepted")
 	}
 }
+
+func TestCollectionDescriptionPersistsAcrossReopen(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "favourites")
+	collections, err := OpenCollections(root, "Favourites")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := collections.SetAbout(ID, "My articles\nEnglish and German"); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := OpenCollections(root, "Favourites")
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, err := reloaded.List()
+	if err != nil || len(list) != 1 || list[0].About != "My articles\nEnglish and German" {
+		t.Fatalf("reloaded description = %+v, %v", list, err)
+	}
+}

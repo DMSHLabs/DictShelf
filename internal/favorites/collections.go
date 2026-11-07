@@ -29,11 +29,13 @@ type collectionCatalog struct {
 }
 
 type CollectionInfo struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Path     string `json:"path"`
-	Articles int    `json:"articles"`
-	Size     int64  `json:"size"`
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	About    string   `json:"about"`
+	Path     string   `json:"path"`
+	Files    []string `json:"files,omitempty"`
+	Articles int      `json:"articles"`
+	Size     int64    `json:"size"`
 }
 
 // Collections owns the available snapshot stores. The original store stays at
@@ -129,7 +131,7 @@ func (c *Collections) List() ([]CollectionInfo, error) {
 		if name == "" {
 			name = "Favourites"
 		}
-		out = append(out, CollectionInfo{ID: id, Name: name, Path: set.Path(), Articles: len(m.Articles), Size: m.TotalSize})
+		out = append(out, CollectionInfo{ID: id, Name: name, About: m.About, Path: set.Path(), Articles: len(m.Articles), Size: m.TotalSize})
 	}
 	return out, nil
 }
@@ -234,7 +236,24 @@ func (c *Collections) Rename(id, name string) (CollectionInfo, error) {
 	if err != nil {
 		return CollectionInfo{}, err
 	}
-	return CollectionInfo{ID: id, Name: name, Path: set.Path(), Articles: len(m.Articles), Size: m.TotalSize}, nil
+	return CollectionInfo{ID: id, Name: name, About: m.About, Path: set.Path(), Articles: len(m.Articles), Size: m.TotalSize}, nil
+}
+
+func (c *Collections) SetAbout(id, about string) (CollectionInfo, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	set := c.stores[id]
+	if set == nil {
+		return CollectionInfo{}, fmt.Errorf("%w: collection not found", ErrInvalidCollection)
+	}
+	if err := set.SetAbout(about); err != nil {
+		return CollectionInfo{}, fmt.Errorf("%w: %v", ErrInvalidCollection, err)
+	}
+	m, err := set.currentManifest()
+	if err != nil {
+		return CollectionInfo{}, err
+	}
+	return CollectionInfo{ID: id, Name: m.Name, About: m.About, Path: set.Path(), Articles: len(m.Articles), Size: m.TotalSize}, nil
 }
 
 func (c *Collections) Store(id string) (*Store, bool) {

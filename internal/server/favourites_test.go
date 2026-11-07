@@ -181,6 +181,15 @@ func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
 	if err := json.Unmarshal(renamed.Body.Bytes(), &collection); err != nil || collection.Name != "Deutsch - English" {
 		t.Fatalf("renamed collection = %+v, %v", collection, err)
 	}
+	aboutBody, _ := json.Marshal(map[string]string{"id": collection.ID, "about": "German notes"})
+	aboutSaved := httptestNew(s, http.MethodPut, "/api/favourites/collections", aboutBody)
+	if aboutSaved.Code != http.StatusOK || !strings.Contains(aboutSaved.Body.String(), "German notes") {
+		t.Fatalf("description update status %d: %s", aboutSaved.Code, aboutSaved.Body.String())
+	}
+	aboutShown := httptestNew(s, http.MethodGet, "/api/about?dict="+collection.ID, nil)
+	if aboutShown.Code != http.StatusOK || !strings.Contains(aboutShown.Body.String(), "German notes") {
+		t.Fatalf("dictionary description status %d: %s", aboutShown.Code, aboutShown.Body.String())
+	}
 
 	requestBody, _ := json.Marshal(favouriteRequest{Dictionary: sources[0].ID, Headword: "corazón", Collection: collection.ID})
 	added := httptestNew(s, http.MethodPost, "/api/favourites", requestBody)

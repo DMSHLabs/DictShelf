@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/DMSHLabs/DictShelf/internal/fsx"
 )
@@ -74,6 +75,7 @@ type manifest struct {
 	Version   int       `json:"version"`
 	Revision  string    `json:"revision"`
 	Name      string    `json:"name,omitempty"`
+	About     string    `json:"about,omitempty"`
 	TotalSize int64     `json:"total_size"`
 	Articles  []Article `json:"articles"`
 }
@@ -114,6 +116,14 @@ func (s *Store) Name() (string, error) {
 	return m.Name, nil
 }
 
+func (s *Store) About() (string, error) {
+	m, err := s.currentManifest()
+	if err != nil {
+		return "", err
+	}
+	return m.About, nil
+}
+
 func (s *Store) SetName(name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -134,6 +144,28 @@ func (s *Store) SetName(name string) error {
 		return nil
 	}
 	m.Name = name
+	return s.publishLocked(m, false)
+}
+
+func (s *Store) SetAbout(about string) error {
+	if !utf8.ValidString(about) || len(about) > 65536 {
+		return fmt.Errorf("favourites description is too long or invalid")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	writer, err := s.lockWriter()
+	if err != nil {
+		return err
+	}
+	defer writer.Close()
+	m, err := s.readManifestLocked()
+	if err != nil {
+		return err
+	}
+	if m.About == about {
+		return nil
+	}
+	m.About = about
 	return s.publishLocked(m, false)
 }
 

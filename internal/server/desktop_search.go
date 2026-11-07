@@ -687,7 +687,7 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 			Body        string `json:"body"`
 			Collections bool   `json:"collections"`
 		}
-		if len(argument) > 8192 || json.Unmarshal([]byte(argument), &request) != nil {
+		if len(argument) > 1<<20 || json.Unmarshal([]byte(argument), &request) != nil {
 			return nil, errors.New("invalid favourites operation")
 		}
 		if request.Collections {
@@ -712,11 +712,15 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 			}
 			if request.Method == http.MethodPut {
 				var rename struct {
-					ID   string `json:"id"`
-					Name string `json:"name"`
+					ID    string  `json:"id"`
+					Name  string  `json:"name"`
+					About *string `json:"about"`
 				}
 				if json.Unmarshal([]byte(request.Body), &rename) != nil {
 					return nil, errors.New("invalid favourites collection request")
+				}
+				if rename.About != nil {
+					return s.setFavouriteCollectionAbout(rename.ID, *rename.About)
 				}
 				return s.renameFavouriteCollection(rename.ID, rename.Name)
 			}

@@ -23,6 +23,14 @@ func init() {
 	dict.RegisterFormat(".favs", func(path string) (dict.Dictionary, error) { return Open(path) })
 	dict.RegisterReader(".favs", func(path string) (dict.Reader, error) { return NewReader(path) })
 	dict.RegisterReaderVersion(favorites.Format, ReaderVersion)
+	dict.RegisterAbout(favorites.Format, func(srcPath string) (dict.About, bool) {
+		set := favorites.NewAt(filepath.Dir(srcPath), filepath.Base(srcPath))
+		text, err := set.About()
+		if err != nil || strings.TrimSpace(text) == "" {
+			return dict.About{}, false
+		}
+		return dict.About{Sections: []dict.Section{{Text: text}}}, true
+	})
 	dict.RegisterProber(".favs", Probe)
 }
 

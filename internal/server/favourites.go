@@ -10,7 +10,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
@@ -60,13 +62,20 @@ func (s *Server) handleFavouriteCollections(w http.ResponseWriter, r *http.Reque
 	}
 	if r.Method == http.MethodPut {
 		var request struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
+			ID    string  `json:"id"`
+			Name  string  `json:"name"`
+			About *string `json:"about"`
 		}
-		if !decodeJSON(w, r, &request, 4096) {
+		if !decodeJSON(w, r, &request, 1<<20) {
 			return
 		}
-		collection, err := s.renameFavouriteCollection(request.ID, request.Name)
+		var collection favorites.CollectionInfo
+		var err error
+		if request.About != nil {
+			collection, err = s.setFavouriteCollectionAbout(request.ID, *request.About)
+		} else {
+			collection, err = s.renameFavouriteCollection(request.ID, request.Name)
+		}
 		if err != nil {
 			status := http.StatusInternalServerError
 			if errors.Is(err, favorites.ErrInvalidCollection) {
@@ -99,6 +108,13 @@ func (s *Server) handleFavouriteCollections(w http.ResponseWriter, r *http.Reque
 	}
 	w.WriteHeader(http.StatusCreated)
 	writeJSON(w, collection)
+}
+
+func (s *Server) setFavouriteCollectionAbout(id, about string) (favorites.CollectionInfo, error) {
+	if s.favSets == nil {
+		return favorites.CollectionInfo{}, errors.New("favourites are unavailable")
+	}
+	return s.favSets.SetAbout(id, about)
 }
 
 func (s *Server) renameFavouriteCollection(id, name string) (favorites.CollectionInfo, error) {
@@ -173,6 +189,17 @@ func (s *Server) listFavouriteCollections() ([]favorites.CollectionInfo, error) 
 	collections, err := s.favSets.List()
 	if err != nil {
 		return nil, err
+	}
+	for i := range collections {
+		files := []string{collections[i].Path}
+		if dir, ok := store.LookupDir(collections[i].Path); ok {
+			for _, file := range []string{store.TextDBPath(dir), store.ArticlesFilePath(store.TextDBPath(dir)), store.MediaDBPath(dir)} {
+				if info, err := os.Stat(file); err == nil && !info.IsDir() {
+					files = append(files, filepath.Clean(file))
+				}
+			}
+		}
+		collections[i].Files = files
 	}
 	if s.reg != nil && s.reg.prefs != nil {
 		for i := range collections {
