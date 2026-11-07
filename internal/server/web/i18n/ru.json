@@ -1090,6 +1090,8 @@
   "favourites.info": "Информация",
   "favourites.export": "Экспортировать словарь…",
   "favourites.exportTitle": "Экспорт избранного в MDX",
+  "favourites.chooseExportFolder": "Выбрать папку для экспорта",
+  "favourites.exportFolderSelected": "Папка для экспорта выбрана",
   "favourites.exporting": "Сохранение словаря…",
   "favourites.exportSaved": "Сохранено",
   "favourites.exportStopped": "Экспорт остановлен",

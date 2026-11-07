@@ -391,7 +391,7 @@ final class Shell {
 
     /** The settings the SPA needs. Identical in every window, by construction. */
     static void configure(WebView web) {
-        web.addJavascriptInterface(new GoPageBridge(), "wudictAndroidGo");
+        web.addJavascriptInterface(new GoPageBridge((Activity) web.getContext()), "wudictAndroidGo");
         web.getSettings().setJavaScriptEnabled(true);                 // the UI is one SPA
         web.getSettings().setDomStorageEnabled(true);                 // prefs live in localStorage
         web.getSettings().setMediaPlaybackRequiresUserGesture(false); // dictionary audio
@@ -402,6 +402,9 @@ final class Shell {
     }
 
     private static final class GoPageBridge {
+        private final Activity activity;
+        GoPageBridge(Activity activity) { this.activity = activity; }
+
         @JavascriptInterface public boolean isDebugBuild() {
             return BuildConfig.DEBUG;
         }
@@ -472,6 +475,19 @@ final class Shell {
 
         @JavascriptInterface public String favourites(String method, String body) {
             return GoBridge.favourites(method, body);
+        }
+
+        @JavascriptInterface public String favouritesExportDirectory() {
+            try { return FavouriteMdxExport.tempDirectory(activity); }
+            catch (Exception e) { return ""; }
+        }
+
+        @JavascriptInterface public String favouritesExportCopyStart(String tree, String files) {
+            return FavouriteMdxExport.startCopy(activity, tree, files);
+        }
+
+        @JavascriptInterface public String favouritesExportCopyStatus(String action) {
+            return FavouriteMdxExport.copyStatus(action);
         }
 
         @JavascriptInterface public String looks(String argument) {
@@ -644,6 +660,10 @@ final class Shell {
         SystemLogExport.result(a, requestCode, resultCode, data);
         if (requestCode == REQ_FILES) {
             settleFiles(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
+            return;
+        }
+        if (requestCode == FavouriteMdxExport.REQUEST) {
+            FavouriteMdxExport.onActivityResult(a, requestCode, resultCode, data);
             return;
         }
         if (requestCode != REQ_DIR) return;
@@ -975,6 +995,10 @@ final class Shell {
                         pendingDir = null;
                         result.cancel();
                     }
+                    return true;
+                }
+                if ("wudict:favourites-export-picker".equals(message)) {
+                    FavouriteMdxExport.pick(a, result);
                     return true;
                 }
                 if (!"wudict:native-select-picker".equals(message)) return false;

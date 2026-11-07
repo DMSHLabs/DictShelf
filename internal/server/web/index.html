@@ -4671,7 +4671,7 @@ $("editDictSettings").onclick=async()=>{
 $("closeDictSettings").onclick=()=>$("dictSettings").close();
 let favouriteDeleteID="";
 let favouriteEditorEdit=null,favouriteAboutEdit=null,favouriteEditorSaving=false;
-let favouriteExportID="",favouriteExportPolling=false;
+let favouriteExportID="",favouriteExportPolling=false,favouriteExportTree="",favouriteExportCopyStarted=false;
 async function favouriteExportCall(action,extra={}){
   const body=JSON.stringify({action,...extra});
   if(window.wudictAndroidGo){const result=JSON.parse(window.wudictAndroidGo.favourites("POST",JSON.stringify({export:true,body})));if(result.status!==200)throw new Error(result.body?.error||tx("favourites.exportFailed"));return result.body}
@@ -4681,37 +4681,61 @@ async function favouriteExportCall(action,extra={}){
 }
 function favouriteExportStatus(st){
   const running=!!st?.Running;
-  $("favouritesExportSave").disabled=running||!$("favouritesExportPath").value.trim();
+  const hasDestination=window.wudictAndroidGo?!!favouriteExportTree:!!$("favouritesExportPath").value.trim();
+  $("favouritesExportSave").disabled=running||!hasDestination;
   $("favouritesExportStop").hidden=!running;
   if(running)$("favouritesExportStatus").textContent=tx("favourites.exporting");
   else if(st?.Err)$("favouritesExportStatus").textContent=tx("favourites.exportFailed")+": "+st.Err;
   else if(st?.Canceled)$("favouritesExportStatus").textContent=tx("favourites.exportStopped");
   else if(st?.Result)$("favouritesExportStatus").textContent=tx("favourites.exportSaved")+": "+st.Result.join(" · ");
 }
+async function favouriteExportCopyStatus(action="status"){
+  return JSON.parse(window.wudictAndroidGo.favouritesExportCopyStatus(action)||"{}");
+}
 async function favouriteExportFollow(){
   if(favouriteExportPolling)return;favouriteExportPolling=true;
-  try{while(true){const st=await favouriteExportCall("status");favouriteExportStatus(st);if(!st?.Running)break;await new Promise(resolve=>setTimeout(resolve,500))}}
-  catch(error){$("favouritesExportStatus").textContent=error.message}
+  try{while(true){
+    const st=await favouriteExportCall("status");favouriteExportStatus(st);
+    if(!st?.Running&&window.wudictAndroidGo&&st?.Result&&!favouriteExportCopyStarted){
+      favouriteExportCopyStarted=true;const error=window.wudictAndroidGo.favouritesExportCopyStart(favouriteExportTree,JSON.stringify(st.Result));
+      if(error)throw new Error(error);
+    }
+    if(!st?.Running&&window.wudictAndroidGo&&favouriteExportCopyStarted){
+      const copy=await favouriteExportCopyStatus();
+      if(copy.running){$("favouritesExportSave").disabled=true;$("favouritesExportStatus").textContent=tx("favourites.exporting");await new Promise(resolve=>setTimeout(resolve,500));continue}
+      if(copy.canceled){$("favouritesExportStatus").textContent=tx("favourites.exportStopped");$("favouritesExportSave").disabled=false;break}
+      if(copy.error)throw new Error(copy.error);
+      if(st?.Result){$("favouritesExportStatus").textContent=tx("favourites.exportSaved");$("favouritesExportStop").hidden=true;$("favouritesExportSave").disabled=false;break}
+    }
+    if(!st?.Running)break;await new Promise(resolve=>setTimeout(resolve,500))
+  }}
+  catch(error){$("favouritesExportSave").disabled=window.wudictAndroidGo?!favouriteExportTree:!$("favouritesExportPath").value.trim();$("favouritesExportStatus").textContent=error.message}
   finally{favouriteExportPolling=false}
 }
 function openFavouriteExport(collection){
   favouriteExportID=collection.id;
   $("favouritesExportName").textContent=collection.name;
+  favouriteExportTree="";favouriteExportCopyStarted=false;
+  const android=!!window.wudictAndroidGo;
+  $("favouritesExportPath").hidden=android;
   $("favouritesExportPath").value=localStorage.getItem("wudict_favourites_export_path")||"";
-  $("favouritesExportFolder").hidden=typeof window.wudictPickFolder!=="function";
+  $("favouritesExportFolder").hidden=android?false:typeof window.wudictPickFolder!=="function";
+  if(android){$("favouritesExportPath").value="";$("favouritesExportFolder").setAttribute("aria-label",tx("favourites.chooseExportFolder"));}
   $("favouritesExportStatus").textContent="";
-  $("favouritesExportSave").disabled=!$("favouritesExportPath").value.trim();
+  $("favouritesExportSave").disabled=android||!$("favouritesExportPath").value.trim();
   $("favouritesExportDialog").showModal();
-  favouriteExportFollow();
 }
 $("favouritesExportPath").oninput=()=>{$("favouritesExportSave").disabled=!$("favouritesExportPath").value.trim()};
-$("favouritesExportFolder").onclick=()=>window.wudictPickFolder(path=>{if(path){$("favouritesExportPath").value=path;$("favouritesExportSave").disabled=false}});
+$("favouritesExportFolder").onclick=()=>{
+  if(window.wudictAndroidGo){const tree=prompt("wudict:favourites-export-picker","");if(tree){favouriteExportTree=tree;$("favouritesExportSave").disabled=false;$("favouritesExportStatus").textContent=tx("favourites.exportFolderSelected")}return}
+  window.wudictPickFolder?.(path=>{if(path){$("favouritesExportPath").value=path;$("favouritesExportSave").disabled=false}})
+};
 $("favouritesExportSave").onclick=async()=>{
-  const path=$("favouritesExportPath").value.trim();$("favouritesExportSave").disabled=true;
-  try{const st=await favouriteExportCall("start",{id:favouriteExportID,path});localStorage.setItem("wudict_favourites_export_path",path);favouriteExportStatus(st);favouriteExportFollow()}
+  const android=!!window.wudictAndroidGo,path=android?window.wudictAndroidGo.favouritesExportDirectory():$("favouritesExportPath").value.trim();$("favouritesExportSave").disabled=true;
+  try{if(!path)throw new Error(tx("favourites.exportFailed"));const st=await favouriteExportCall("start",{id:favouriteExportID,path});if(!android)localStorage.setItem("wudict_favourites_export_path",path);favouriteExportStatus(st);favouriteExportFollow()}
   catch(error){$("favouritesExportSave").disabled=false;$("favouritesExportStatus").textContent=tx("favourites.exportFailed")+": "+error.message}
 };
-$("favouritesExportStop").onclick=async()=>{try{favouriteExportStatus(await favouriteExportCall("stop"))}catch(error){$("favouritesExportStatus").textContent=error.message}};
+$("favouritesExportStop").onclick=async()=>{try{if(window.wudictAndroidGo&&favouriteExportCopyStarted){const st=await favouriteExportCopyStatus("stop");favouriteExportStatus(await favouriteExportCall("status"));if(!st.running)$("favouritesExportStatus").textContent=tx("favourites.exportStopped")}else favouriteExportStatus(await favouriteExportCall("stop"))}catch(error){$("favouritesExportStatus").textContent=error.message}};
 $("favouritesExportClose").onclick=()=>$("favouritesExportDialog").close();
 function favouriteEditorIcon(name){
   const icons={save:'<path d="m5 12 4 4L19 6"/>',cancel:'<path d="m6 6 12 12M18 6 6 18"/>',delete:'<path d="M4 7h16M10 11v6m4-6v6M5 7l1 14h12l1-14M9 7V4h6v3"/>',rename:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/>'};
