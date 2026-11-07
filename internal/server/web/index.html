@@ -4246,7 +4246,8 @@ function renderPanel(){
        full-text each cost real disk, so each is a switch.
        Switching is offered only while the SOURCE is on disk — that is what
        makes it reversible, and why none of this needs a confirmation. */
-    const canToggle=!!d.source;
+    const favouriteDictionary=favouriteCollections.some(collection=>collection.id===d.id);
+    const canToggle=!!d.source&&!favouriteDictionary;
     const feats=[
       ["contains",tx("dictUI.contains"),d.caps?.Contains,d.containsSize||0],
       /* The full-text chip names the SAME thing on every dictionary - our own
@@ -4308,7 +4309,8 @@ function renderPanel(){
       /* On a ZIM whose archive answers for itself our index is a choice rather
          than a need, so an absent chip says what it adds instead of promising
          what the archive already gives. */
-      const tip=key==="fts"&&d.archiveIndex&&!on?tx("dictUI.ftsOursHint"):
+      const tip=favouriteDictionary?tx("dictUI.favouritesIndexesHint"):
+        key==="fts"&&d.archiveIndex&&!on?tx("dictUI.ftsOursHint"):
         !canToggle?tx("dictUI.onlyCopy"):
         stale?tx("dictUI.stale",{what}):
         on?tx("dictUI.removeHint",{what}):tx("dictUI.addHint",{what});
@@ -4776,7 +4778,7 @@ function favouriteEditorTile(collection,isNew=false){
     const indexes=document.createElement("div");indexes.className="favourite-editor-indexes";
     if(dictionary?.dbSize){const index=document.createElement("span");index.className="feat on locked";index.title=tx("dictUI.indexedSize",{size:mb(Number(dictionary.dbSize))});index.textContent=mb(Number(dictionary.dbSize));indexes.append(index)}
     if(dictionary&&dictionary.format!=="dsl")for(const[label,on,bytes]of [[tx("dictUI.contains"),dictionary.caps?.Contains,dictionary.containsSize],[tx("dictUI.fts"),dictionary.ourFullText,dictionary.fullTextSize]]){
-      const index=document.createElement("span");index.className="feat"+(on?" on":"")+" locked";index.title=tx("dictUI.onlyCopy");index.textContent=label+(on&&bytes?": "+mb(Number(bytes)):"");indexes.append(index);
+      const index=document.createElement("span");index.className="feat"+(on?" on":"")+" locked";index.title=tx("dictUI.favouritesIndexesHint");index.textContent=label+(on&&bytes?": "+mb(Number(bytes)):"");indexes.append(index);
     }
     if(indexes.childElementCount)card.append(indexes);
     const actions=document.createElement("div");actions.className="acts favourite-editor-acts";

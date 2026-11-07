@@ -798,6 +798,7 @@
   "dictUI.ftsIndex": "полнотекстовый индекс",
   "dictUI.media": "медиа",
   "dictUI.onlyCopy": "Заблокировано: файлов словаря нет, это единственная копия",
+  "dictUI.favouritesIndexesHint": "Индексы «Внутри слова» и «По тексту» этого словаря поддерживаются автоматически",
   "dictUI.stale": "Устаревший {what}: нажмите, чтобы пересоздать",
   "dictUI.removeHint": "Убрать {what}",
   "dictUI.addHint": "Добавить {what}",

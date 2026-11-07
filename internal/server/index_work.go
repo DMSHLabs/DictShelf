@@ -380,6 +380,9 @@ func (s *Server) startIndexWork(raw []byte, single bool) (indexWorkStatus, error
 		if op.Action != "create" && op.Action != "update" && op.Action != "recreate" && op.Action != "delete" {
 			return indexWorkStatus{}, indexWorkError{http.StatusBadRequest, "invalid index action"}
 		}
+		if s.isFavouriteDictionaryID(op.Dict) && op.Action == "delete" && (op.Feature == "contains" || op.Feature == "fts") {
+			return indexWorkStatus{}, indexWorkError{http.StatusBadRequest, "favourites indexes are maintained automatically"}
+		}
 		if op.Action == "delete" && op.Feature == "base" {
 			// The index of a dictionary cannot be deleted: the prepared database
 			// is what makes the dictionary usable, and wanting the space back is

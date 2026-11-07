@@ -230,8 +230,8 @@ func (s *Server) createFavouriteCollection(name string) (favorites.CollectionInf
 		return favorites.CollectionInfo{}, err
 	}
 	collectionStore, _ := s.favSets.Store(collection.ID)
-	fullText := true
-	if _, err := store.Reconcile(collectionStore.Path(), store.Target{FullText: &fullText, Media: store.MediaOn}, store.Hooks{}); err != nil {
+	contains, fullText := true, true
+	if _, err := store.Reconcile(collectionStore.Path(), store.Target{Contains: &contains, FullText: &fullText, Media: store.MediaOn}, store.Hooks{}); err != nil {
 		return favorites.CollectionInfo{}, fmt.Errorf("could not prepare favourites: %w", err)
 	}
 	s.reg.AddBuiltin(Builtin{ID: collection.ID, Path: collectionStore.Path()})
@@ -507,8 +507,8 @@ func (s *Server) rebuildFavourites(collectionID string, update func(*favorites.S
 	if err := update(collectionStore); err != nil {
 		return err
 	}
-	yes := true
-	if _, err := e.reconcileLocked("Favourites", store.Target{FullText: &yes, Media: store.MediaOn}, nil); err != nil {
+	contains, fullText := true, true
+	if _, err := e.reconcileLocked("Favourites", store.Target{Contains: &contains, FullText: &fullText, Media: store.MediaOn}, nil); err != nil {
 		return err
 	}
 	collectionStore.Collect()

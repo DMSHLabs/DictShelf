@@ -106,8 +106,8 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 		if !ok {
 			return nil, fmt.Errorf("favourites collection %q is unavailable", collection.ID)
 		}
-		fullText := true
-		if _, err := store.Reconcile(set.Path(), store.Target{FullText: &fullText, Media: store.MediaOn}, store.Hooks{}); err != nil {
+		contains, fullText := true, true
+		if _, err := store.Reconcile(set.Path(), store.Target{Contains: &contains, FullText: &fullText, Media: store.MediaOn}, store.Hooks{}); err != nil {
 			return nil, fmt.Errorf("prepare favourites collection %q: %w", collection.ID, err)
 		}
 		set.Collect()

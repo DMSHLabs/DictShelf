@@ -788,6 +788,7 @@
   "dictUI.ftsIndex": "full-text index",
   "dictUI.media": "media",
   "dictUI.onlyCopy": "Locked: the dictionary files are gone, and this is the only copy",
+  "dictUI.favouritesIndexesHint": "The Contains and full-text indexes in this favourites dictionary are maintained automatically",
   "dictUI.stale": "Outdated {what}: click to rebuild",
   "dictUI.removeHint": "Remove the {what}",
   "dictUI.addHint": "Add the {what}",

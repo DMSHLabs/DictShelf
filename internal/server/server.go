@@ -2231,6 +2231,9 @@ func (s *Server) startIngest(e *entry, q url.Values) string {
 			*f.to = on
 		}
 	}
+	if s.isFavouriteDictionaryID(e.ID) {
+		want.Contains, want.FullText = true, true
+	}
 	action, indexes := ingestAction(e, q)
 	s.jobs.start(key, 0, jobStatus{Action: action, Indexes: indexes}, func(j *job) {
 		ctx := adaptiveSingleIndexContext(j.ctx, e)
