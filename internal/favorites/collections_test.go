@@ -12,19 +12,18 @@ import (
 	"testing"
 )
 
-func TestCollectionsKeepLegacyStoreAndPersistNewCollection(t *testing.T) {
+func TestCollectionsCreateDefaultAndPersistSiblingCollection(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "favourites")
-	legacy := New(root)
-	if err := legacy.EnsureNamed("Избранное"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := legacy.Add(Provenance{DictionaryID: "source", Headword: "слово"}, "saved article", nil); err != nil {
-		t.Fatal(err)
-	}
-
 	collections, err := OpenCollections(root, "Favourites")
 	if err != nil {
 		t.Fatal(err)
+	}
+	defaultStore, ok := collections.Store(ID)
+	if !ok || defaultStore.Path() != filepath.Join(root, "fav", "favourites.favs") {
+		t.Fatalf("default store = %#v, want a store below fav", defaultStore)
+	}
+	if _, err := os.Stat(defaultStore.Path()); err != nil {
+		t.Fatalf("default store was not initialized: %v", err)
 	}
 	created, err := collections.Create("Deutsch")
 	if err != nil {
@@ -33,17 +32,8 @@ func TestCollectionsKeepLegacyStoreAndPersistNewCollection(t *testing.T) {
 	if created.ID == ID || !strings.HasPrefix(created.ID, ID+"-") {
 		t.Fatalf("new collection id = %q", created.ID)
 	}
-	if got := created.Path; got != filepath.Join(root, "collections", created.ID, created.ID+".favs") {
+	if got := created.Path; got != filepath.Join(root, created.ID, created.ID+".favs") {
 		t.Fatalf("new collection path = %q", got)
-	}
-
-	defaultStore, ok := collections.Store(ID)
-	if !ok {
-		t.Fatal("legacy collection is missing")
-	}
-	articles, err := defaultStore.Manifest()
-	if err != nil || len(articles) != 1 || articles[0].Headword != "слово" {
-		t.Fatalf("legacy articles = %+v, %v", articles, err)
 	}
 
 	reloaded, err := OpenCollections(root, "Favourites")
@@ -61,6 +51,38 @@ func TestCollectionsKeepLegacyStoreAndPersistNewCollection(t *testing.T) {
 	list, err := reloaded.List()
 	if err != nil || len(list) != 2 || list[0].ID != ID || list[1].ID != created.ID {
 		t.Fatalf("collection list = %+v, %v", list, err)
+	}
+}
+
+func TestCollectionsCreateDefaultForMissingAndEmptyRoots(t *testing.T) {
+	for _, rootKind := range []string{"missing", "empty", "empty-catalogue"} {
+		t.Run(rootKind, func(t *testing.T) {
+			root := filepath.Join(t.TempDir(), "favourites")
+			if rootKind != "missing" {
+				if err := os.MkdirAll(root, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if rootKind == "empty-catalogue" {
+				if err := os.WriteFile(filepath.Join(root, "collections.json"), []byte(`{"version":2,"ids":[]}`), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			collections, err := OpenCollections(root, "Favourites")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ids := collections.IDs(); len(ids) != 1 || ids[0] != ID {
+				t.Fatalf("collection IDs = %v, want default %q", ids, ID)
+			}
+			set, ok := collections.Store(ID)
+			if !ok {
+				t.Fatal("default collection was not created")
+			}
+			if _, err := os.Stat(set.Path()); err != nil {
+				t.Fatalf("default collection file was not initialized: %v", err)
+			}
+		})
 	}
 }
 
@@ -114,7 +136,7 @@ func TestCollectionsCanDeleteAnyButLastCollection(t *testing.T) {
 	if _, ok := collections.Store(ID); ok {
 		t.Fatal("deleted default collection remains available")
 	}
-	if _, err := os.Stat(filepath.Join(root, "favourites.favs")); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(filepath.Join(root, "fav", "favourites.favs")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("deleted default file status = %v", err)
 	}
 	if err := collections.Delete(created.ID); err == nil {

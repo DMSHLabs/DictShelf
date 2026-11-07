@@ -38,8 +38,8 @@ type CollectionInfo struct {
 	Size     int64    `json:"size"`
 }
 
-// Collections owns the available snapshot stores. The original store stays at
-// the legacy path so existing users keep their data, even if they later remove it.
+// Collections owns the available stores. Every collection gets a directory
+// directly below the favourites root; "fav" is reserved for the default one.
 type Collections struct {
 	root   string
 	mu     sync.RWMutex
@@ -66,7 +66,10 @@ func OpenCollections(root, defaultName string) (*Collections, error) {
 		ids = []string{ID}
 	}
 	if len(ids) == 0 {
-		return nil, fmt.Errorf("%w: at least one collection is required", ErrInvalidCollection)
+		ids = []string{ID}
+		if err := c.saveCatalog(ids); err != nil {
+			return nil, err
+		}
 	}
 	c.ids = append([]string(nil), ids...)
 	for _, id := range ids {
@@ -75,9 +78,9 @@ func OpenCollections(root, defaultName string) (*Collections, error) {
 		}
 		var store *Store
 		if id == ID {
-			store = New(root)
+			store = NewAt(filepath.Join(root, "fav"), "favourites.favs")
 		} else {
-			store = NewAt(filepath.Join(root, "collections", id), id+".favs")
+			store = NewAt(filepath.Join(root, id), id+".favs")
 		}
 		if err := store.EnsureNamed(defaultName); err != nil {
 			return nil, fmt.Errorf("open favourites collection %q: %w", id, err)
@@ -145,43 +148,13 @@ func (c *Collections) Delete(id string) error {
 	if len(c.ids) <= 1 {
 		return fmt.Errorf("%w: at least one collection must remain", ErrInvalidCollection)
 	}
-	root := filepath.Join(c.root, "collections")
-	data := filepath.Join(root, id)
-	trashRoot := root
-	if id == ID {
-		trashRoot = c.root
-	}
+	data := filepath.Join(c.root, collectionDirectory(id))
 	trashID, err := randomID()
 	if err != nil {
 		return err
 	}
-	trash := filepath.Join(trashRoot, "."+id+"-removing-"+trashID[:8])
-	if id == ID {
-		if err := os.Mkdir(trash, 0o700); err != nil {
-			return err
-		}
-		var moved []string
-		for _, item := range []string{c.stores[id].Path(), c.stores[id].Objects()} {
-			if _, err := os.Stat(item); errors.Is(err, os.ErrNotExist) {
-				continue
-			} else if err != nil {
-				for _, name := range moved {
-					_ = os.Rename(filepath.Join(trash, name), filepath.Join(c.root, name))
-				}
-				_ = os.RemoveAll(trash)
-				return err
-			}
-			name := filepath.Base(item)
-			if err := os.Rename(item, filepath.Join(trash, name)); err != nil {
-				for _, movedName := range moved {
-					_ = os.Rename(filepath.Join(trash, movedName), filepath.Join(c.root, movedName))
-				}
-				_ = os.RemoveAll(trash)
-				return err
-			}
-			moved = append(moved, name)
-		}
-	} else if err := os.Rename(data, trash); err != nil {
+	trash := filepath.Join(c.root, "."+id+"-removing-"+trashID[:8])
+	if err := os.Rename(data, trash); err != nil {
 		return err
 	}
 	next := make([]string, 0, len(c.ids)-1)
@@ -191,14 +164,7 @@ func (c *Collections) Delete(id string) error {
 		}
 	}
 	if err := c.saveCatalog(next); err != nil {
-		if id == ID {
-			for _, name := range []string{filepath.Base(c.stores[id].Path()), filepath.Base(c.stores[id].Objects())} {
-				_ = os.Rename(filepath.Join(trash, name), filepath.Join(c.root, name))
-			}
-			_ = os.RemoveAll(trash)
-		} else {
-			_ = os.Rename(trash, data)
-		}
+		_ = os.Rename(trash, data)
 		return err
 	}
 	c.ids = next
@@ -300,7 +266,7 @@ func (c *Collections) Create(name string) (CollectionInfo, error) {
 	if id == "" {
 		return CollectionInfo{}, errors.New("could not allocate a favourites collection id")
 	}
-	root := filepath.Join(c.root, "collections", id)
+	root := filepath.Join(c.root, collectionDirectory(id))
 	store := NewAt(root, id+".favs")
 	if err := store.EnsureNamed(name); err != nil {
 		return CollectionInfo{}, err
@@ -312,6 +278,13 @@ func (c *Collections) Create(name string) (CollectionInfo, error) {
 	}
 	c.ids, c.stores[id] = next, store
 	return CollectionInfo{ID: id, Name: name, Path: store.Path()}, nil
+}
+
+func collectionDirectory(id string) string {
+	if id == ID {
+		return "fav"
+	}
+	return id
 }
 
 func validCollectionID(id string) bool {

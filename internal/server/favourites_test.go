@@ -231,7 +231,7 @@ func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
 	if defaultDelete.Code != http.StatusOK {
 		t.Fatalf("default collection delete status %d: %s", defaultDelete.Code, defaultDelete.Body.String())
 	}
-	if _, err := os.Stat(filepath.Join(favRoot, "favourites.favs")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(favRoot, "fav", "favourites.favs")); !os.IsNotExist(err) {
 		t.Fatalf("deleted default file status = %v", err)
 	}
 	collectionPath := collectionStore.Path()
