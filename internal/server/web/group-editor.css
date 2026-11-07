@@ -18,12 +18,12 @@ html[data-shell-image] dialog#updateInstallDialog.group-dialog.panel-card,html[d
 #clearSystemLogDialog #clearSystemLogStatus:empty{display:none}
 #clearSystemLogDialog .system-log-saved-actions{margin-top:.35em}
 #groupEditor{height:calc(100dvh - 32px);max-height:calc(100dvh - 32px)}
-#groupEditor.workspace-dialog,#dictSettings.workspace-dialog,#clearDatabaseDialog.workspace-dialog{height:auto;max-height:none}
+#groupEditor.workspace-dialog,#dictSettings.workspace-dialog,#favouritesEditor.workspace-dialog,#clearDatabaseDialog.workspace-dialog{height:auto;max-height:none}
 /* The dictionary list is the long one — a real library is a hundred cards — so
    Dictionary settings takes the same fixed height rather than fit-content, and
    the list scrolls inside it under a fixed toolbar. On a phone that fixed
    height is what the media query below lifts: see it for why. */
-#dictSettings{height:calc(100dvh - 32px);max-height:calc(100dvh - 32px)}
+#dictSettings,#favouritesEditor{height:calc(100dvh - 32px);max-height:calc(100dvh - 32px)}
 .workspace-dialog{box-sizing:border-box;position:fixed;inset:var(--workspace-inset,8px);width:auto;max-width:none;
   height:auto;max-height:none;margin:0;padding:16px;border:1px solid var(--line);
   border-radius:var(--workspace-radius,12px);background:var(--paper-bg,var(--bg));
@@ -111,7 +111,7 @@ dialog#systemSettingsDialog:not([open]){display:none}
   #systemSettingsDialog{height:auto}
   dialog.group-dialog.panel-card.workspace-dialog{inset:var(--wd-inset-top,0px) 0 var(--wd-inset-bottom,0px);
     width:auto;max-width:none;height:auto;max-height:none;padding:16px;border-radius:0}
-  #dictSettings{height:auto;max-height:none}
+  #dictSettings,#favouritesEditor{height:auto;max-height:none}
   /* The colour window is short by nature - three sliders, a preview and one
      button - so it keeps its own height and centres itself in the same
      card-wide column, rather than stretching to the full card the way a list

@@ -768,22 +768,26 @@ paths:
         '500': { $ref: '#/components/responses/ServerError' }
     put:
       tags: [internal]
-      operationId: renameFavouriteCollection
+      operationId: updateFavouriteCollection
       x-internal: true
-      summary: Rename a saved article collection
+      summary: Rename a saved article collection or update its description
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [id, name]
+              required: [id]
+              anyOf:
+                - required: [name]
+                - required: [about]
               properties:
                 id: { type: string }
                 name: { type: string, minLength: 1, maxLength: 100 }
+                about: { type: string, maxLength: 65536 }
       responses:
         '200': { description: Collection renamed }
-        '400': { description: Invalid or duplicate collection name }
+        '400': { description: Invalid collection name or description }
         '500': { $ref: '#/components/responses/ServerError' }
     delete:
       tags: [internal]
@@ -3404,11 +3408,13 @@ components:
 
     FavouriteCollection:
       type: object
-      required: [id, name, path, articles, size]
+      required: [id, name, about, path, articles, size]
       properties:
         id: { type: string }
         name: { type: string }
+        about: { type: string, description: User editable plain text description. }
         path: { type: string }
+        files: { type: array, items: { type: string }, description: Existing snapshot and prepared index files. }
         articles: { type: integer, description: Number of saved articles. }
         size: { type: integer, description: Stored article and resource bytes. }
 

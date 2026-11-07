@@ -4663,7 +4663,7 @@ $("editDictSettings").onclick=async()=>{
 };
 $("closeDictSettings").onclick=()=>$("dictSettings").close();
 let favouriteDeleteID="";
-let favouriteEditorEdit=null,favouriteEditorSaving=false;
+let favouriteEditorEdit=null,favouriteAboutEdit=null,favouriteEditorSaving=false;
 function favouriteEditorIcon(name){
   const icons={save:'<path d="m5 12 4 4L19 6"/>',cancel:'<path d="m6 6 12 12M18 6 6 18"/>',delete:'<path d="M4 7h16M10 11v6m4-6v6M5 7l1 14h12l1-14M9 7V4h6v3"/>',rename:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/>'};
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`;
@@ -4695,13 +4695,29 @@ function favouriteEditorTile(collection,isNew=false){
   }else{
     const label=document.createElement("b");label.className="favourite-editor-name";label.textContent=favouriteCollectionLabel(collection.id)||collection.name;
     nameLine.append(label,favouriteEditorButton("dict-rename","favourites.renameTitle","rename",()=>beginFavouriteCollectionEdit(collection.id)));
-    if(favouriteCollections.length>1)nameLine.append(favouriteEditorButton("favourite-editor-delete","favourites.deleteTitle","delete",()=>openFavouriteDelete(collection.id)));
   }
   head.append(nameLine);card.append(head);
   if(!isNew){
-    const meta=document.createElement("div");meta.className="meta";
-    meta.textContent=tx("favourites.collectionStats",{count:window.wudictI18n.number(Number(collection.articles||0)),size:mb(Number(collection.size||0))});
-    card.append(meta);
+    const meta=document.createElement("div");meta.className="meta";meta.textContent="favs"+tx("dictUI.indexed");card.append(meta);
+    const size=document.createElement("div");const badge=document.createElement("span");badge.className="feat on locked";badge.textContent=mb(Number(collection.size||0));size.append(badge);card.append(size);
+    const actions=document.createElement("div");actions.className="acts";
+    const browse=document.createElement("a");browse.className="browse btn";browse.href="/browse?dict="+encodeURIComponent(collection.id)+"&"+browseOriginQuery(collection.id);browse.textContent=tx("dictUI.browse");actions.append(browse);card.append(actions);
+    const counts=document.createElement("div");counts.className="dict-info-counts";counts.textContent=tx("dictUI.numberOfEntries",{number:window.wudictI18n.number(Number(collection.articles||0))});card.append(counts);
+    const info=document.createElement("details");info.className="prov";const summary=document.createElement("summary");summary.textContent=tx("favourites.info");info.append(summary);
+    const body=document.createElement("div");body.className="provbody";
+    for(const file of collection.files||[collection.path]){if(!file)continue;const row=document.createElement("div");row.className="prow";const path=document.createElement("span");path.className="path";path.textContent=file;path.title=tx("panel.copyPath");path.dataset.full=file;row.append(path);body.append(row)}
+    if(favouriteCollections.length>1){const remove=document.createElement("div");remove.className="rmwrap";const button=favouriteEditorButton("btn favourite-editor-remove","favourites.deleteTitle","delete",()=>openFavouriteDelete(collection.id));button.append(document.createTextNode(" "+tx("dictUI.remove")));remove.append(button);body.append(remove)}
+    info.append(body);card.append(info);
+    const about=document.createElement("details");about.className="about favourite-about";about.open=!!collection.about||favouriteAboutEdit?.id===collection.id;
+    const aboutSummary=document.createElement("summary");aboutSummary.textContent=tx("dictUI.about");about.append(aboutSummary);
+    if(favouriteAboutEdit?.id===collection.id){
+      const input=document.createElement("textarea");input.maxLength=65536;input.value=favouriteAboutEdit.value;input.setAttribute("aria-label",tx("dictUI.about"));input.addEventListener("input",()=>{if(favouriteAboutEdit)favouriteAboutEdit.value=input.value});about.append(input);
+      const buttons=document.createElement("div");buttons.className="favourite-about-buttons";buttons.append(favouriteEditorButton("dict-rename-save","panel.save","save",()=>saveFavouriteAbout(collection.id,input.value)),favouriteEditorButton("dict-rename-reset","panel.cancel","cancel",()=>{favouriteAboutEdit=null;renderFavouritesEditor()}));about.append(buttons);
+    }else{
+      const edit=favouriteEditorButton("dict-rename favourite-about-edit","favourites.editAbout","rename",event=>{event.stopPropagation();favouriteAboutEdit={id:collection.id,value:collection.about||(collection.id==="favourites"?tx("dictUI.favouritesDescription"):"")};renderFavouritesEditor()});aboutSummary.append(edit);
+      const text=document.createElement("div");text.className="aboutbody";text.textContent=collection.about||tx(collection.id==="favourites"?"dictUI.favouritesDescription":"favourites.emptyAbout");about.append(text);
+    }
+    card.append(about);
   }
   if(editing){
     const error=document.createElement("p");error.className="favourites-editor-error";error.setAttribute("role","alert");
@@ -4716,6 +4732,16 @@ function renderFavouritesEditor(){
   $("addFavouriteCollection").disabled=favouriteEditorSaving||!!favouriteEditorEdit;
   $("closeFavouritesEditor").disabled=favouriteEditorSaving;
 }
+async function saveFavouriteAbout(id,about){
+  if(favouriteEditorSaving)return;
+  favouriteEditorSaving=true;
+  try{
+    const response=await apiFetch("/api/favourites/collections",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,about})});
+    const result=await response.json();if(!response.ok)throw new Error(result.error||tx("favourites.failed"));
+    favouriteAboutEdit=null;await loadFavouriteCollections();renderFavouritesEditor();
+  }catch(error){alert(favouriteEditorErrorText(error.message))}
+  finally{favouriteEditorSaving=false;renderFavouritesEditor()}
+}
 function favouriteEditorErrorText(message){
   if(message.includes("a collection with that name already exists"))return tx("favourites.duplicateName");
   return window.wudictI18n.errorText(message);
@@ -4723,7 +4749,7 @@ function favouriteEditorErrorText(message){
 async function openFavouritesEditor(){
   const button=$("editFavourites");button.disabled=true;
   try{
-    await loadFavouriteCollections();favouriteEditorEdit=null;renderFavouritesEditor();
+    await loadFavouriteCollections();favouriteEditorEdit=null;favouriteAboutEdit=null;renderFavouritesEditor();
     $("favouritesEditor").showModal();
   }catch(failure){setStatus(esc(favouriteEditorErrorText(failure.message)))}
   finally{button.disabled=false}
@@ -4759,9 +4785,10 @@ async function saveFavouriteCollection(id,isNew,value){
   }finally{favouriteEditorSaving=false;renderFavouritesEditor()}
 }
 $("editFavourites").addEventListener("click",openFavouritesEditor);
+$("favouritesEditorRows").addEventListener("click",event=>{const path=event.target.closest(".path");if(path){navigator.clipboard?.writeText(path.dataset.full||path.textContent);path.style.color="var(--accent)"}});
 $("closeFavouritesEditor").addEventListener("click",()=>$("favouritesEditor").close());
 $("addFavouriteCollection").addEventListener("click",beginFavouriteCollectionCreate);
-$("favouritesEditor").addEventListener("close",()=>{favouriteEditorEdit=null;$("editFavourites").focus()});
+$("favouritesEditor").addEventListener("close",()=>{favouriteEditorEdit=null;favouriteAboutEdit=null;$("editFavourites").focus()});
 $("favouritesEditor").addEventListener("cancel",event=>{if(favouriteEditorSaving)event.preventDefault()});
 function openFavouriteDelete(id){
   const collection=favouriteCollections.find(c=>c.id===id);

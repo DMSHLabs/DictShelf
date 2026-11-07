@@ -754,6 +754,15 @@ dd{margin:var(--sp-1) 0 0 0}
 .favourites-editor-card .hd{min-height:44px}
 .favourites-editor-card .dict-name-line>b{font-size:calc(var(--ui-font-section) * 1rem)}
 .favourites-editor-card .meta{margin-top:.45em}
+.favourites-editor-card .dict-info-counts{margin:.5em 0}
+.favourites-editor-card .favourite-about{position:relative}
+.favourites-editor-card .favourite-about>summary{padding-right:3em}
+.favourites-editor-card .favourite-about-edit{position:absolute;right:.3em;top:0}
+.favourites-editor-card .favourite-about .aboutbody{white-space:pre-wrap;overflow-wrap:anywhere}
+.favourites-editor-card .favourite-about textarea{box-sizing:border-box;width:100%;min-height:10em;margin:.5em 0;padding:.7em;font:inherit;resize:vertical}
+.favourites-editor-card .favourite-about-buttons{display:flex;justify-content:flex-end;gap:.5em}
+.favourites-editor-card .favourite-editor-remove{display:inline-flex;align-items:center;gap:.4em;color:var(--danger,#ba4545)}
+.favourites-editor-card .favourite-editor-remove svg{width:1.1em;height:1.1em}
 .favourites-editor-card.is-editing{border-color:var(--accent)}
 .favourites-editor-card .dict-rename-save,.favourites-editor-card .dict-rename-reset,.favourites-editor-card .dict-rename,.favourites-editor-card .favourite-editor-delete{width:calc(var(--ui-control-height) * 1em);height:calc(var(--ui-control-height) * 1em);min-width:calc(var(--ui-control-height) * 1em);min-height:calc(var(--ui-control-height) * 1em)}
 
