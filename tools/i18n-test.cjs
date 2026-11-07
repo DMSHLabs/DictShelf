@@ -203,11 +203,12 @@ for (const language of ['en', 'ru']) {
   // Exercise actual result rendering: translating the surrounding UI must not
   // alter headwords, article HTML, dictionary IDs or the index action values.
   const articles = [];
-  const node = () => ({dataset:{}, children:[], appendChild(n){this.children.push(n)}, append(...n){this.children.push(...n)}, addEventListener(){},setAttribute(){},querySelector(){return null}});
+  const node = () => ({dataset:{}, children:[], classList:{toggle(){}}, appendChild(n){this.children.push(n)}, append(...n){this.children.push(...n)}, addEventListener(){},setAttribute(){},querySelector(){return null}});
   const resultContext = {tx:t, window:context.window, document:{createElement:node},URL,location:{href:'http://localhost/?q=word',origin:'http://localhost'},
     esc:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),
     escAttr:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'),
     expandAll:false, anchorOnce:null, hitName:h=>h.name,dictIconHTML:()=>'',observeSearchDictName(){},searchPortionSize:()=>5,articleCacheGroupID:'',
+    favouriteCollections:[],selectedFavourite:'',favouriteCollectionLabel:()=>'',
     renderArticle:(dd,body,id)=>{articles.push({body,id});return null}};
   vm.runInNewContext(main.match(/^const FEAT_NAME=.*;$/m)[0] + '\n' +
     main.match(/^const fullTextReading=.*;$/m)[0] + '\n' +
@@ -267,6 +268,7 @@ for (const language of ['en', 'ru']) {
   const name = '<b>My "dictionary" {name}</b>';
   const panel = {innerHTML:'', closest:()=>null, appendChild:card=>cards.push(card),querySelectorAll:()=>[]};
   const cardContext = {tx:t, window:context.window, dicts:[],dslSaving:false,cfgInfo:null,
+    favouriteCollections:[], favouriteCollectionLabel:()=>'',
     $:()=>panel, document:{createElement:()=>({dataset:{}}),querySelectorAll:()=>[]},
     orderedDicts:()=>[{id:'unchanged-id',name,source:'sample.dsl',format:'dsl',entries:22,caps:{},dbSize:0}],
     dictLabel:d=>d.name, dictIconHTML:()=>'', browseOriginQuery:()=>'', mb:n=>`${n} B`, baseIndexBytes:()=>100,

@@ -182,6 +182,21 @@ func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
 	if err != nil || len(articles) != 0 {
 		t.Fatalf("custom collection after removal = %d, %v", len(articles), err)
 	}
+	defaultDelete := httptestNew(s, http.MethodDelete, "/api/favourites/collections", []byte(`{"id":"favourites"}`))
+	if defaultDelete.Code != http.StatusBadRequest {
+		t.Fatalf("default collection delete status %d: %s", defaultDelete.Code, defaultDelete.Body.String())
+	}
+	collectionPath := store.Path()
+	deleted := httptestNew(s, http.MethodDelete, "/api/favourites/collections", []byte(`{"id":"`+collection.ID+`"}`))
+	if deleted.Code != http.StatusOK {
+		t.Fatalf("custom collection delete status %d: %s", deleted.Code, deleted.Body.String())
+	}
+	if _, err := os.Stat(collectionPath); !os.IsNotExist(err) {
+		t.Fatalf("deleted collection path status = %v", err)
+	}
+	if _, err := s.reg.get(collection.ID); err == nil {
+		t.Fatal("deleted collection remains registered")
+	}
 }
 
 func mustCollectionList(t *testing.T, sets *favorites.Collections) []favorites.CollectionInfo {

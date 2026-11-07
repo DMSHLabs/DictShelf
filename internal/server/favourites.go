@@ -40,6 +40,24 @@ func (s *Server) handleFavouriteCollections(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, map[string]any{"collections": collections})
 		return
 	}
+	if r.Method == http.MethodDelete {
+		var request struct {
+			ID string `json:"id"`
+		}
+		if !decodeJSON(w, r, &request, 4096) {
+			return
+		}
+		if err := s.deleteFavouriteCollection(request.ID); err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, favorites.ErrInvalidCollection) {
+				status = http.StatusBadRequest
+			}
+			httpErr(w, status, "%v", err)
+			return
+		}
+		writeJSON(w, map[string]bool{"deleted": true})
+		return
+	}
 	if r.Method != http.MethodPost {
 		httpErr(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -61,6 +79,37 @@ func (s *Server) handleFavouriteCollections(w http.ResponseWriter, r *http.Reque
 	}
 	w.WriteHeader(http.StatusCreated)
 	writeJSON(w, collection)
+}
+
+func (s *Server) deleteFavouriteCollection(id string) error {
+	if s.favSets == nil || s.reg == nil {
+		return errors.New("favourites are unavailable")
+	}
+	if id == favorites.ID {
+		return fmt.Errorf("%w: the default collection cannot be deleted", favorites.ErrInvalidCollection)
+	}
+	e, err := s.reg.get(id)
+	if err != nil {
+		return fmt.Errorf("%w: collection not found", favorites.ErrInvalidCollection)
+	}
+	e.ingestMu.Lock()
+	e.rebuilding.Store(true)
+	e.openMu.Lock()
+	e.closeNow()
+	e.openMu.Unlock()
+	deleteErr := s.favSets.Delete(id)
+	e.rebuilding.Store(false)
+	e.ingestMu.Unlock()
+	if deleteErr != nil {
+		_ = s.reg.rescan(false)
+		return deleteErr
+	}
+	s.reg.RemoveBuiltin(id)
+	if err := s.reg.rescan(false); err != nil {
+		return err
+	}
+	s.dictRows.flush()
+	return nil
 }
 
 func (s *Server) listFavouriteCollections() ([]favorites.CollectionInfo, error) {

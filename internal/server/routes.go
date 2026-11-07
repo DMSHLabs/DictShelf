@@ -108,6 +108,7 @@ func (s *Server) routes() []route {
 		{"DELETE", "/api/favourites", s.handleFavourites, "/api/favourites", false},
 		{"GET", "/api/favourites/collections", s.handleFavouriteCollections, "/api/favourites/collections", false},
 		{"POST", "/api/favourites/collections", s.handleFavouriteCollections, "/api/favourites/collections", false},
+		{"DELETE", "/api/favourites/collections", s.handleFavouriteCollections, "/api/favourites/collections", false},
 		{"GET", "/api/ingest", s.handleIngest, "/api/ingest", false},
 		{"DELETE", "/api/ingest", s.handleIngest, "/api/ingest", false},
 		{"GET", "/api/system-log", s.handleIndexLog, "/api/system-log", false},

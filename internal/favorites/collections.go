@@ -29,9 +29,11 @@ type collectionCatalog struct {
 }
 
 type CollectionInfo struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Path string `json:"path"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Path     string `json:"path"`
+	Articles int    `json:"articles"`
+	Size     int64  `json:"size"`
 }
 
 // Collections owns the default snapshot store and any additional collections.
@@ -66,7 +68,7 @@ func OpenCollections(root, defaultName string) (*Collections, error) {
 		if !validCollectionID(id) || id == ID || c.stores[id] != nil {
 			return nil, fmt.Errorf("%w: %q", ErrInvalidCollection, id)
 		}
-		store := New(filepath.Join(root, "collections", id))
+		store := NewAt(filepath.Join(root, "collections", id), id+".favs")
 		if err := store.Ensure(); err != nil {
 			return nil, fmt.Errorf("open favourites collection %q: %w", id, err)
 		}
@@ -108,14 +110,52 @@ func (c *Collections) List() ([]CollectionInfo, error) {
 	defer c.mu.RUnlock()
 	out := make([]CollectionInfo, 0, len(c.ids))
 	for _, id := range c.ids {
-		store := c.stores[id]
-		name, err := store.Name()
+		set := c.stores[id]
+		m, err := set.currentManifest()
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, CollectionInfo{ID: id, Name: name, Path: store.Path()})
+		name := m.Name
+		if name == "" {
+			name = "Favourites"
+		}
+		out = append(out, CollectionInfo{ID: id, Name: name, Path: set.Path(), Articles: len(m.Articles), Size: m.TotalSize})
 	}
 	return out, nil
+}
+
+func (c *Collections) Delete(id string) error {
+	if id == ID {
+		return fmt.Errorf("%w: the default collection cannot be deleted", ErrInvalidCollection)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !validCollectionID(id) || c.stores[id] == nil {
+		return fmt.Errorf("%w: collection not found", ErrInvalidCollection)
+	}
+	root := filepath.Join(c.root, "collections")
+	data := filepath.Join(root, id)
+	trashID, err := randomID()
+	if err != nil {
+		return err
+	}
+	trash := filepath.Join(root, "."+id+"-removing-"+trashID[:8])
+	if err := os.Rename(data, trash); err != nil {
+		return err
+	}
+	next := make([]string, 0, len(c.ids)-1)
+	for _, current := range c.ids {
+		if current != id {
+			next = append(next, current)
+		}
+	}
+	if err := c.saveCatalog(next[1:]); err != nil {
+		_ = os.Rename(trash, data)
+		return err
+	}
+	c.ids = next
+	delete(c.stores, id)
+	return os.RemoveAll(trash)
 }
 
 func (c *Collections) Store(id string) (*Store, bool) {
@@ -123,6 +163,12 @@ func (c *Collections) Store(id string) (*Store, bool) {
 	defer c.mu.RUnlock()
 	store, ok := c.stores[id]
 	return store, ok
+}
+
+func (c *Collections) IDs() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return append([]string(nil), c.ids...)
 }
 
 func (c *Collections) Create(name string) (CollectionInfo, error) {
@@ -157,7 +203,7 @@ func (c *Collections) Create(name string) (CollectionInfo, error) {
 		return CollectionInfo{}, errors.New("could not allocate a favourites collection id")
 	}
 	root := filepath.Join(c.root, "collections", id)
-	store := New(root)
+	store := NewAt(root, id+".favs")
 	if err := store.EnsureNamed(name); err != nil {
 		return CollectionInfo{}, err
 	}

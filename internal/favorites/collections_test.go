@@ -5,6 +5,7 @@
 package favorites
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,7 +33,7 @@ func TestCollectionsKeepLegacyStoreAndPersistNewCollection(t *testing.T) {
 	if created.ID == ID || !strings.HasPrefix(created.ID, ID+"-") {
 		t.Fatalf("new collection id = %q", created.ID)
 	}
-	if got := created.Path; got != filepath.Join(root, "collections", created.ID, "favourites.favs") {
+	if got := created.Path; got != filepath.Join(root, "collections", created.ID, created.ID+".favs") {
 		t.Fatalf("new collection path = %q", got)
 	}
 
@@ -94,5 +95,40 @@ func TestCollectionsRejectUnsafeCatalogueIDs(t *testing.T) {
 	}
 	if _, err := OpenCollections(root, "Favourites"); err == nil {
 		t.Fatal("unsafe collection id was accepted")
+	}
+}
+
+func TestCollectionsDeleteKeepsDefaultAndRemovesCustom(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "favourites")
+	collections, err := OpenCollections(root, "Favourites")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := collections.Delete(ID); err == nil {
+		t.Fatal("default collection was deleted")
+	}
+	created, err := collections.Create("Deutsch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := collections.Delete(created.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := collections.Store(created.ID); ok {
+		t.Fatal("deleted collection remains available")
+	}
+	if _, err := os.Stat(created.Path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("deleted collection file status = %v", err)
+	}
+	list, err := collections.List()
+	if err != nil || len(list) != 1 || list[0].ID != ID {
+		t.Fatalf("collections after delete = %+v, %v", list, err)
+	}
+	reloaded, err := OpenCollections(root, "Favourites")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ids := reloaded.IDs(); len(ids) != 1 || ids[0] != ID {
+		t.Fatalf("reloaded collections = %v", ids)
 	}
 }

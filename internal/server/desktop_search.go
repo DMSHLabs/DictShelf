@@ -698,6 +698,18 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 				collections, err := s.listFavouriteCollections()
 				return map[string]any{"collections": collections}, err
 			}
+			if request.Method == http.MethodDelete {
+				var remove struct {
+					ID string `json:"id"`
+				}
+				if json.Unmarshal([]byte(request.Body), &remove) != nil {
+					return nil, errors.New("invalid favourites collection request")
+				}
+				if err := s.deleteFavouriteCollection(remove.ID); err != nil {
+					return nil, err
+				}
+				return map[string]bool{"deleted": true}, nil
+			}
 			if request.Method != http.MethodPost {
 				return nil, errors.New("invalid favourites collection operation")
 			}
