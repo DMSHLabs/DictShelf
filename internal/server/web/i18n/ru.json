@@ -28,8 +28,8 @@
   "export.failed": "Не удалось экспортировать заголовки: {error}",
   "export.saved": "Экспортировано: {done} из {total}",
 
-  "panel.saveSystemLog": "Сохранить",
-  "panel.clearSystemLog": "Очистить",
+  "panel.saveSystemLog": "Сохранить системный журнал",
+  "panel.clearSystemLog": "Очистить системный журнал",
   "panel.clearSystemLogTitle": "Очистить System Log?",
   "panel.clearSystemLogHint": "История System Log и старые сведения о сбоях будут удалены без возможности восстановления. Новые записи журнала продолжат сохраняться.",
   "panel.clearSystemLogFailed": "Не удалось очистить System Log.",
