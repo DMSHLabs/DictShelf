@@ -199,22 +199,35 @@
 
   window.wudictListSearch = Object.freeze({ create });
   const t = window.wudictI18n?.t;
+  const labels = t ? {
+    placeholder: t("dictUI.listSearchPlaceholder"),
+    filterPlaceholder: t("dictUI.listFilterPlaceholder"),
+    search: t("dictUI.listSearchLabel"),
+    previous: t("dictUI.listSearchPrevious"),
+    next: t("dictUI.listSearchNext"),
+    filter: t("dictUI.listSearchFilter"),
+    count: t("dictUI.listSearchCount", {current:"{current}", total:"{total}"})
+  } : null;
   const dock = document.getElementById("dictSettingsSearch");
   const root = document.getElementById("panelList");
-  if (dock && root && t) {
+  if (dock && root && labels) {
     window.dictSettingsListSearch = create({
       root, itemSelector: ".pd", dock, highlightSelector: ".hd > b",
       scrollContainer: document.getElementById("dictSettingsScroll"),
       initiallyFiltering: true, storageKey: "wudict_list_search_mode_dict_settings",
-      labels: {
-        placeholder: t("dictUI.listSearchPlaceholder"),
-        filterPlaceholder: t("dictUI.listFilterPlaceholder"),
-        search: t("dictUI.listSearchLabel"),
-        previous: t("dictUI.listSearchPrevious"),
-        next: t("dictUI.listSearchNext"),
-        filter: t("dictUI.listSearchFilter"),
-        count: t("dictUI.listSearchCount", {current:"{current}", total:"{total}"})
-      }
+      labels
+    });
+  }
+  /* The favourites editor is the same list of dictionary cards behind another
+     door, so it gets the same dock - its own instance, mode and storage key. */
+  const favDock = document.getElementById("favouritesEditorSearch");
+  const favRoot = document.getElementById("favouritesEditorRows");
+  if (favDock && favRoot && labels) {
+    window.favouritesEditorListSearch = create({
+      root: favRoot, itemSelector: ".pd", dock: favDock, highlightSelector: ".dict-info-name",
+      scrollContainer: favRoot,
+      initiallyFiltering: true, storageKey: "wudict_list_search_mode_favourites_editor",
+      labels
     });
   }
 })();

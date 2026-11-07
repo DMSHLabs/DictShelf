@@ -1037,6 +1037,7 @@ window.wudictFontScale=(function(){
   <h2 id="favouritesEditorTitle">{{T:panel.editFavourites}} <button type="button" class="btn" id="closeFavouritesEditor" aria-label="{{T:dictUI.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
   <div class="favourites-editor-toolbar"><button type="button" class="btn" id="addFavouriteCollection">{{T:favourites.addCollection}}</button></div>
   <div id="favouritesEditorRows" class="favourites-editor-rows"></div>
+  <div id="favouritesEditorSearch" class="list-search-dock" role="search" aria-label="{{T:dictUI.listSearchLabel}}"></div>
 </dialog>
 <dialog id="favouritesDeleteDialog" class="group-dialog panel-card" aria-labelledby="favouritesDeleteTitle">
   <h2 id="favouritesDeleteTitle">{{T:favourites.deleteTitle}}</h2>
@@ -1686,7 +1687,7 @@ let stylerTab="app",
     appearanceState=null,
     stylerPickForBackground=false;
 const tx=window.wudictI18n.t;
-function browseOriginQuery(openDict=""){
+function browseOriginQuery(openDict="",windowName=""){
   const url=new URL(location.href);
   url.pathname="/";
   url.searchParams.delete("openDict");
@@ -1700,8 +1701,23 @@ function browseOriginQuery(openDict=""){
     if(url.searchParams.get("mode")==="wildcards"&&maskMergeAZ)url.searchParams.set("maskmerge","1");
     if(openDict&&url.searchParams.get("mode")!=="wildcards")url.searchParams.set("openDict",openDict);
   }
+  /* A Browse page opened from a window carries that window home in its return
+     URL, so its close control lands back in the window instead of a bare page. */
+  if(windowName)url.searchParams.set("wudict_window",windowName);
   if(browseArticleDiagnosticsEnabled())url.searchParams.set("browseReturnDiag",String(Date.now()));
   return new URLSearchParams({return:url.pathname+url.search+url.hash}).toString();
+}
+/* Closing a Browse page returns to the `return` URL it was given; when that URL
+   names the window Browse was opened from, the window reopens here. The
+   parameter is dropped first, so a reload does not reopen it again. */
+function reopenWindowFromURL(){
+  const name=new URLSearchParams(location.search).get("wudict_window");
+  if(!name)return;
+  const url=new URL(location.href);
+  url.searchParams.delete("wudict_window");
+  history.replaceState(history.state,"",url.pathname+url.search+url.hash);
+  if(name==="favourites")openFavouritesEditor();
+  else if(name==="dicts")showDictSettings();
 }
 function systemLogClick(event){
   if(!window.wudictNativeShell)return;
@@ -3887,6 +3903,7 @@ async function loadDicts(rescan){
   if(listDiagnostics)sendBrowseDiagnostic({event:"dictionary_list_client",words:dicts.length,fetchMs:Math.max(0,beginMs),
     wordsMs:Math.max(0,firstRowMs),totalMs:streamMs,stripBuildMs:renderMs});
   setPhase("ready");
+  reopenWindowFromURL();
   showNoDictionaries();
   if(blocking)logBrowseArticleTransition("dictionary_list_ready");
   finishDesktopStartup();
@@ -4224,7 +4241,7 @@ function dslIndexControls(d){
     }
     const icon=`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6M11 8h2.6M11 11h2.6"/></svg>`;
     const browse=indexed
-      ? `<a class="browse btn" href="/browse?dict=${encodeURIComponent(target.id)}&${browseOriginQuery(target.id)}" title="${escAttr(tx("dictUI.browseHint"))}">${icon}${esc(tx("dictUI.browse"))}</a>`
+      ? `<a class="browse btn" href="/browse?dict=${encodeURIComponent(target.id)}&${browseOriginQuery(target.id,"dicts")}" title="${escAttr(tx("dictUI.browseHint"))}">${icon}${esc(tx("dictUI.browse"))}</a>`
       : "";
     return `<div class="dsl-index-row"><div class="dsl-index-tools"><div class="dsl-feature-line">${controls}</div></div><div class="dsl-browse-line">${browse}</div></div>`;
   })()+(empty?`<div class="dsl-index-warning"><b aria-hidden="true">!</b> ${esc(tx("dictUI.dslNeedsIndex"))}</div>`:"")+"</div>";
@@ -4335,7 +4352,7 @@ function renderPanel(){
        list and never starts index creation. This is the card for one
        dictionary, so unlike the row above it carries
        the id. */
-    else if(indexed||selfIndexed)acts=`<a class="browse btn" href="/browse?dict=${encodeURIComponent(d.id)}&${browseOriginQuery(d.id)}" title="${escAttr(tx("dictUI.browseHint"))}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>${esc(tx("dictUI.browse"))}</a>`;
+    else if(indexed||selfIndexed)acts=`<a class="browse btn" href="/browse?dict=${encodeURIComponent(d.id)}&${browseOriginQuery(d.id,"dicts")}" title="${escAttr(tx("dictUI.browseHint"))}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>${esc(tx("dictUI.browse"))}</a>`;
     /* A ZIM this fork would now prepare as the title index: the archive answers
        full text and the database still holds an index of ours. The chip cannot
        say this - it is "on" for the index we are about to stop keeping - so the
@@ -4786,7 +4803,7 @@ function favouriteEditorTile(collection,isNew=false){
     /* Nothing to browse and nothing to export until the collection holds an
        article: an empty dictionary has no index to open either. */
     browse.disabled=favouriteEditorSaving||!Number(collection.articles||0);
-    browse.addEventListener("click",()=>{location.href="/browse?dict="+encodeURIComponent(collection.id)+"&"+browseOriginQuery(collection.id)});
+    browse.addEventListener("click",()=>{location.href="/browse?dict="+encodeURIComponent(collection.id)+"&"+browseOriginQuery(collection.id,"favourites")});
     actions.append(browse);card.append(actions);
     const exportButton=document.createElement("button");exportButton.type="button";exportButton.className="browse btn favourites-editor-export";exportButton.textContent=tx("favourites.export");exportButton.disabled=favouriteEditorSaving||!Number(collection.articles||0);exportButton.onclick=()=>openFavouriteExport(collection);actions.append(exportButton);
     const counts=document.createElement("div");counts.className="dict-info-counts";counts.textContent=tx("dictUI.numberOfEntries",{number:window.wudictI18n.number(Number(collection.articles||0))});card.append(counts);
@@ -4816,6 +4833,7 @@ function renderFavouritesEditor(){
   const rows=$("favouritesEditorRows");rows.replaceChildren();
   favouriteCollections.forEach(collection=>rows.append(favouriteEditorTile(collection)));
   if(favouriteEditorEdit?.isNew)rows.append(favouriteEditorTile({id:"",name:""},true));
+  window.favouritesEditorListSearch?.refresh();
   $("addFavouriteCollection").disabled=favouriteEditorSaving||!!favouriteEditorEdit;
   $("closeFavouritesEditor").disabled=favouriteEditorSaving;
 }
