@@ -17,6 +17,7 @@ import (
 
 func TestProvisionAndOpenEmptyFavorites(t *testing.T) {
 	root := t.TempDir()
+	t.Setenv("WUDICT_DB_DIR", filepath.Join(root, "library"))
 	s := favorites.New(root)
 	if err := s.Ensure(); err != nil {
 		t.Fatal(err)
@@ -24,10 +25,30 @@ func TestProvisionAndOpenEmptyFavorites(t *testing.T) {
 	if err := s.Ensure(); err != nil {
 		t.Fatal(err)
 	}
+	fullText := true
+	out, err := store.Reconcile(s.Path(), store.Target{FullText: &fullText, Media: store.MediaOn}, store.Hooks{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{out.TextDB, store.ArticlesFilePath(out.TextDB)} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("empty favourites prepared file %s: %v", p, err)
+		}
+	}
+	prepared, err := store.Open(out.TextDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caps := prepared.Caps()
+	if !caps.Exact || !caps.Prefix || !caps.FTS {
+		t.Errorf("empty prepared favourites caps = %+v", caps)
+	}
+	_ = prepared.Close()
 	d, err := Open(s.Path())
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer d.Close()
 	if d.Meta().EntryCount != 0 {
 		t.Fatalf("entries = %d", d.Meta().EntryCount)
 	}
@@ -35,6 +56,7 @@ func TestProvisionAndOpenEmptyFavorites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer r.Close()
 	if _, err := r.Next(); err != io.EOF {
 		t.Fatalf("empty reader = %v", err)
 	}
@@ -57,6 +79,7 @@ func TestReaderPreservesSavedBodyBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer r.Close()
 	e, err := r.Next()
 	if err != nil {
 		t.Fatal(err)

@@ -189,6 +189,7 @@ func (s *Server) rebuildFavourites() error {
 	if _, err := e.reconcileLocked("Favourites", store.Target{FullText: &yes, Media: store.MediaOn}, nil); err != nil {
 		return err
 	}
+	s.favourites.Collect()
 	if err := s.reg.rescan(false); err != nil {
 		return err
 	}

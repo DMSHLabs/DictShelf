@@ -79,8 +79,12 @@ type manifest struct {
 }
 
 type Store struct {
-	root string
-	mu   sync.Mutex
+	root          string
+	mu            sync.Mutex
+	cacheMu       sync.Mutex
+	cacheRev      string
+	cacheManifest manifest
+	cacheHas      map[string]struct{}
 }
 
 func New(root string) *Store { return &Store{root: root} }
@@ -89,16 +93,8 @@ func (s *Store) Path() string    { return filepath.Join(s.root, "favourites.favs
 func (s *Store) Objects() string { return filepath.Join(s.root, "objects") }
 
 func (s *Store) Name() (string, error) {
-	rev, err := s.Current()
+	m, err := s.currentManifest()
 	if err != nil {
-		return "", err
-	}
-	b, err := fsx.ReadBounded(filepath.Join(s.root, "versions", rev, "manifest.json"), 64<<20)
-	if err != nil {
-		return "", err
-	}
-	var m manifest
-	if err := json.Unmarshal(b, &m); err != nil {
 		return "", err
 	}
 	if m.Name == "" {
@@ -114,6 +110,11 @@ func (s *Store) SetName(name string) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	writer, err := s.lockWriter()
+	if err != nil {
+		return err
+	}
+	defer writer.Close()
 	m, err := s.readManifestLocked()
 	if err != nil {
 		return err
@@ -122,7 +123,7 @@ func (s *Store) SetName(name string) error {
 		return nil
 	}
 	m.Name = name
-	return s.publishLocked(m)
+	return s.publishLocked(m, false)
 }
 
 // Ensure provisions the empty source pointer and its first manifest. Repeated
@@ -138,8 +139,13 @@ func (s *Store) EnsureNamed(name string) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	writer, err := s.lockWriter()
+	if err != nil {
+		return err
+	}
+	defer writer.Close()
 	if _, err := os.Stat(s.Path()); errors.Is(err, os.ErrNotExist) {
-		return s.publishLocked(manifest{Version: Version, Name: name})
+		return s.publishLocked(manifest{Version: Version, Name: name}, false)
 	} else if err != nil {
 		return err
 	}
@@ -148,20 +154,25 @@ func (s *Store) EnsureNamed(name string) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	return s.publishLocked(manifest{Version: Version, Name: name})
+	return s.publishLocked(manifest{Version: Version, Name: name}, false)
 }
 
 func (s *Store) Has(dictionaryID, headword string) bool {
-	articles, err := s.Manifest()
+	m, err := s.currentManifest()
 	if err != nil {
 		return false
 	}
-	for _, a := range articles {
-		if a.Provenance.DictionaryID == dictionaryID && a.Headword == headword {
-			return true
-		}
+	s.cacheMu.Lock()
+	index := s.cacheHas
+	if s.cacheRev != m.Revision {
+		index = nil
 	}
-	return false
+	s.cacheMu.Unlock()
+	if index == nil {
+		index = buildHasIndex(m.Articles)
+	}
+	_, ok := index[starKey(dictionaryID, headword)]
+	return ok
 }
 
 func (s *Store) Current() (string, error) {
@@ -180,23 +191,11 @@ func (s *Store) Current() (string, error) {
 }
 
 func (s *Store) Manifest() ([]Article, error) {
-	rev, err := s.Current()
+	m, err := s.currentManifest()
 	if err != nil {
 		return nil, err
 	}
-	p := filepath.Join(s.root, "versions", rev, "manifest.json")
-	b, err := fsx.ReadBounded(p, 64<<20)
-	if err != nil {
-		return nil, err
-	}
-	var m manifest
-	if err := json.Unmarshal(b, &m); err != nil {
-		return nil, err
-	}
-	if m.Version != Version || m.Revision != rev {
-		return nil, fmt.Errorf("unsupported or mismatched favourites manifest")
-	}
-	return m.Articles, nil
+	return cloneArticles(m.Articles), nil
 }
 
 func (s *Store) Article(id string) (Article, error) {
@@ -213,16 +212,25 @@ func (s *Store) Article(id string) (Article, error) {
 }
 
 func (s *Store) Body(a Article) (string, error) {
-	b, err := fsx.ReadBounded(filepath.Join(s.Objects(), a.BodyHash), MaxArticle)
-	return string(b), err
+	snap, err := s.OpenSnapshot()
+	if err != nil {
+		return "", err
+	}
+	defer snap.Close()
+	for _, current := range snap.data.Articles {
+		if current.ID == a.ID && current.BodyHash == a.BodyHash {
+			return snap.Body(a)
+		}
+	}
+	return "", os.ErrNotExist
 }
 
 func (s *Store) Asset(token string) (Asset, error) {
-	articles, err := s.Manifest()
+	m, err := s.currentManifest()
 	if err != nil {
 		return Asset{}, err
 	}
-	for _, a := range articles {
+	for _, a := range m.Articles {
 		for _, asset := range a.Assets {
 			if asset.Token == token {
 				return asset, nil
@@ -236,28 +244,11 @@ func (s *Store) Asset(token string) (Asset, error) {
 // yields records in manifest order, and the prepared writer assigns the same
 // stable, one-based article ID because snapshots contain no redirects.
 func (s *Store) AssetToken(entryID int64, url string) (string, bool) {
-	if entryID <= 0 {
+	m, err := s.currentManifest()
+	if err != nil || entryID <= 0 || entryID > int64(len(m.Articles)) {
 		return "", false
 	}
-	articles, err := s.Manifest()
-	if err != nil || entryID > int64(len(articles)) {
-		return "", false
-	}
-	a := articles[entryID-1]
-	asset, ok := a.Assets[url]
-	if ok {
-		return asset.Token, true
-	}
-	name := snapshotAssetName(url)
-	if name == "" {
-		return "", false
-	}
-	for key, asset := range a.Assets {
-		if strings.EqualFold(key, name) || strings.EqualFold(asset.Name, name) || strings.EqualFold(snapshotAssetName(asset.URL), name) {
-			return asset.Token, true
-		}
-	}
-	return "", false
+	return assetToken(m.Articles[entryID-1], url)
 }
 
 // snapshotAssetName resolves a URL to the same once-decoded resource path the
@@ -283,25 +274,22 @@ func snapshotAssetName(raw string) string {
 }
 
 func (s *Store) OpenAsset(token string) (io.ReadCloser, string, error) {
-	a, err := s.Asset(token)
+	snap, err := s.OpenSnapshot()
 	if err != nil {
 		return nil, "", err
 	}
-	f, err := os.Open(filepath.Join(s.Objects(), a.Hash))
-	if err != nil {
-		return nil, "", err
-	}
-	return f, a.MIME, nil
+	defer snap.Close()
+	return snap.OpenAsset(token)
 }
 
 func (s *Store) ResourceTokens() ([]string, error) {
-	articles, err := s.Manifest()
+	m, err := s.currentManifest()
 	if err != nil {
 		return nil, err
 	}
 	seen := map[string]bool{}
 	var out []string
-	for _, a := range articles {
+	for _, a := range m.Articles {
 		for _, asset := range a.Assets {
 			if !seen[asset.Token] {
 				seen[asset.Token] = true
@@ -325,6 +313,11 @@ func (s *Store) Add(p Provenance, body string, assets []AssetInput) (Article, er
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	writer, err := s.lockWriter()
+	if err != nil {
+		return Article{}, err
+	}
+	defer writer.Close()
 	old, err := s.readManifestLocked()
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return Article{}, err
@@ -378,7 +371,7 @@ func (s *Store) Add(p Provenance, body string, assets []AssetInput) (Article, er
 	}
 	old.TotalSize += total
 	old.Articles = append(old.Articles, article)
-	if err := s.publishLocked(old); err != nil {
+	if err := s.publishLocked(old, false); err != nil {
 		return Article{}, err
 	}
 	return article, nil
@@ -392,6 +385,11 @@ type AssetInput struct {
 func (s *Store) Remove(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	writer, err := s.lockWriter()
+	if err != nil {
+		return err
+	}
+	defer writer.Close()
 	m, err := s.readManifestLocked()
 	if err != nil {
 		return err
@@ -420,7 +418,7 @@ func (s *Store) Remove(id string) error {
 			m.TotalSize += fi.Size()
 		}
 	}
-	return s.publishLocked(m)
+	return s.publishLocked(m, true)
 }
 
 func (s *Store) readManifestLocked() (manifest, error) {
@@ -431,7 +429,7 @@ func (s *Store) readManifestLocked() (manifest, error) {
 		}
 		return manifest{}, err
 	}
-	b, err := fsx.ReadBounded(filepath.Join(s.root, "versions", rev, "manifest.json"), 64<<20)
+	b, err := readManifestBytes(filepath.Join(s.root, "versions", rev, "manifest.json"))
 	if err != nil {
 		return manifest{}, err
 	}
@@ -445,7 +443,7 @@ func (s *Store) readManifestLocked() (manifest, error) {
 	return m, nil
 }
 
-func (s *Store) publishLocked(m manifest) error {
+func (s *Store) publishLocked(m manifest, sweepObjects bool) error {
 	rev, err := randomID()
 	if err != nil {
 		return err
@@ -467,7 +465,23 @@ func (s *Store) publishLocked(m manifest) error {
 	if err := fsx.WriteAtomic(filepath.Join(versionDir, "manifest.json"), b, 0o600); err != nil {
 		return err
 	}
-	return fsx.WriteAtomic(s.Path(), []byte(rev+"\n"), 0o600)
+	leasesDir := filepath.Join(s.root, "leases")
+	if err := os.MkdirAll(leasesDir, 0o700); err != nil {
+		return err
+	}
+	lease, err := os.OpenFile(filepath.Join(leasesDir, rev+".lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return err
+	}
+	_ = lease.Close()
+	if err := fsx.WriteAtomic(s.Path(), []byte(rev+"\n"), 0o600); err != nil {
+		return err
+	}
+	s.cacheMu.Lock()
+	s.cacheRev, s.cacheManifest, s.cacheHas = "", manifest{}, nil
+	s.cacheMu.Unlock()
+	s.reclaimLocked(rev, sweepObjects)
+	return nil
 }
 
 func putObject(dir string, data []byte) (string, error) {

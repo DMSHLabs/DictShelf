@@ -27,35 +27,29 @@ func init() {
 }
 
 type Dict struct {
-	store    *favorites.Store
+	snapshot *favorites.Snapshot
 	meta     dict.Meta
 	articles []favorites.Article
 }
 
 func Open(path string) (*Dict, error) {
 	s := favorites.New(filepath.Dir(path))
-	articles, err := s.Manifest()
+	snapshot, err := s.OpenSnapshot()
 	if err != nil {
 		return nil, err
 	}
-	name, err := s.Name()
-	if err != nil {
-		return nil, err
-	}
-	return &Dict{store: s, articles: articles, meta: dict.Meta{Name: name, Format: favorites.Format, Path: path, EntryCount: len(articles)}}, nil
+	articles := snapshot.Articles()
+	return &Dict{snapshot: snapshot, articles: articles, meta: dict.Meta{Name: snapshot.Name(), Format: favorites.Format, Path: path, EntryCount: len(articles)}}, nil
 }
 
 func Probe(path string) (dict.Meta, error) {
 	s := favorites.New(filepath.Dir(path))
-	articles, err := s.Manifest()
+	snapshot, err := s.OpenSnapshot()
 	if err != nil {
 		return dict.Meta{}, err
 	}
-	name, err := s.Name()
-	if err != nil {
-		return dict.Meta{}, err
-	}
-	return dict.Meta{Name: name, Format: favorites.Format, Path: path, EntryCount: len(articles)}, nil
+	defer snapshot.Close()
+	return dict.Meta{Name: snapshot.Name(), Format: favorites.Format, Path: path, EntryCount: len(snapshot.Articles())}, nil
 }
 
 func (d *Dict) Meta() dict.Meta { return d.meta }
@@ -69,7 +63,7 @@ func (d *Dict) Exact(word string, limit int) ([]dict.Result, error) {
 		if a.Headword != word {
 			continue
 		}
-		body, err := d.store.Body(a)
+		body, err := d.snapshot.Body(a)
 		if err != nil {
 			return nil, err
 		}
@@ -89,7 +83,7 @@ func (d *Dict) Prefix(word string, limit int) ([]dict.Result, error) {
 		if !strings.HasPrefix(strings.ToLower(a.Headword), strings.ToLower(word)) {
 			continue
 		}
-		body, err := d.store.Body(a)
+		body, err := d.snapshot.Body(a)
 		if err != nil {
 			return nil, err
 		}
@@ -141,9 +135,11 @@ func (d *Dict) Keywords(offset, n int) []string {
 	}
 	return words[lo:hi]
 }
-func (d *Dict) Resource(name string) (io.ReadCloser, string, error) { return d.store.OpenAsset(name) }
+func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
+	return d.snapshot.OpenAsset(name)
+}
 func (d *Dict) AssetToken(entryID int64, url string) (string, bool) {
-	return d.store.AssetToken(entryID, url)
+	return d.snapshot.AssetToken(entryID, url)
 }
 func (d *Dict) FavoriteID(entryID int64) string {
 	if entryID <= 0 || entryID > int64(len(d.articles)) {
@@ -162,12 +158,12 @@ func (d *Dict) FavoriteSource(entryID int64) *dict.FavoriteSource {
 		Headwords: a.Provenance.Headwords, Articles: a.Provenance.Articles,
 	}
 }
-func (d *Dict) Resources() []string { names, _ := d.store.ResourceTokens(); return names }
-func (d *Dict) Close() error        { return nil }
+func (d *Dict) Resources() []string { return d.snapshot.ResourceTokens() }
+func (d *Dict) Close() error        { return d.snapshot.Close() }
 
 type Reader struct {
 	path     string
-	store    *favorites.Store
+	snapshot *favorites.Snapshot
 	articles []favorites.Article
 	at       int
 	meta     dict.Meta
@@ -175,23 +171,20 @@ type Reader struct {
 
 func NewReader(path string) (*Reader, error) {
 	s := favorites.New(filepath.Dir(path))
-	articles, err := s.Manifest()
+	snapshot, err := s.OpenSnapshot()
 	if err != nil {
 		return nil, err
 	}
-	name, err := s.Name()
-	if err != nil {
-		return nil, err
-	}
-	return &Reader{path: path, store: s, articles: articles, meta: dict.Meta{Name: name, Format: favorites.Format, Path: path, EntryCount: len(articles)}}, nil
+	articles := snapshot.Articles()
+	return &Reader{path: path, snapshot: snapshot, articles: articles, meta: dict.Meta{Name: snapshot.Name(), Format: favorites.Format, Path: path, EntryCount: len(articles)}}, nil
 }
 func (r *Reader) Meta() dict.Meta { return r.meta }
-func (r *Reader) Close() error    { return nil }
+func (r *Reader) Close() error    { return r.snapshot.Close() }
 func (r *Reader) Next() (dict.Entry, error) {
 	for r.at < len(r.articles) {
 		a := r.articles[r.at]
 		r.at++
-		body, err := r.store.Body(a)
+		body, err := r.snapshot.Body(a)
 		if err != nil {
 			return dict.Entry{}, fmt.Errorf("read favourite %q: %w", a.Headword, err)
 		}
