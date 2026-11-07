@@ -120,14 +120,25 @@ func TestFavouriteSnapshotFindsEncodedImageInRealZIM(t *testing.T) {
 	if p == "" {
 		t.Skip("WUDICT_TEST_ZIM not set")
 	}
+	if _, err := os.Stat(p); err != nil {
+		t.Skipf("WUDICT_TEST_ZIM unreadable: %v", err)
+	}
 	d, err := zim.Open(p)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer d.Close()
+	// The article is the fixture, and only an archive that has it can test
+	// what this test is about: an image whose name carries a percent escape.
+	// A ZIM without it is not a failure - sibling real-file tests skip the
+	// same way when the environment does not supply their fixture
+	// (zim_test.go, redirect_test.go, mdx/mdd_test.go).
 	rows, err := d.Exact("Хаммонд_(Луизиана)", 1)
-	if err != nil || len(rows) != 1 {
-		t.Fatalf("Hammond article = %d rows, %v", len(rows), err)
+	if err != nil {
+		t.Fatalf("Hammond article lookup: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Skipf("this archive has no %q article to snapshot", "Хаммонд_(Луизиана)")
 	}
 	for _, ref := range (htmlref.Rewriter{}).Refs(rows[0].Body) {
 		if ref.Tag != "img" || !strings.Contains(ref.URL, "East_Side_School") {
