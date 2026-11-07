@@ -97,10 +97,14 @@ func (s *Store) EnsureNamed(name string) error {
 		return err
 	}
 	reader := &emptyReader{name: name, path: s.Path()}
-	if _, err := store.IngestPlan(reader, s.Path(), store.Plan{Contains: true, FullText: true}, nil); err != nil {
-		return err
-	}
-	return store.WriteFavouriteRecords(s.Path(), name, "", nil)
+	contains, fullText := true, true
+	_, err := store.Reconcile("", store.Target{Out: s.Path(), Contains: &contains, FullText: &fullText}, store.Hooks{
+		Reader: func() (dict.Reader, error) { return reader, nil },
+		FinalizeText: func(textDB string) error {
+			return store.WriteFavouriteRecords(textDB, name, "", nil)
+		},
+	})
+	return err
 }
 
 func (s *Store) Name() (string, error) {
@@ -376,7 +380,7 @@ func (r *rebuildReader) Meta() dict.Meta {
 }
 
 func (r *rebuildReader) ExtraMeta() map[string]string {
-	return map[string]string{"favourites_version": "1", "favourites_about": r.about}
+	return map[string]string{"description": r.about, "favourites_version": "1", "favourites_about": r.about}
 }
 
 func (r *rebuildReader) Next() (dict.Entry, error) {
@@ -472,33 +476,31 @@ func (s *Store) rebuild(change rebuildChange) (resultErr error) {
 		}
 	}()
 	textDB := store.TextDBPath(tmpDir)
-	if _, err := store.IngestPlan(reader, textDB, store.Plan{Contains: true, FullText: true}, nil); err != nil {
-		return err
-	}
-	assets := map[string]AssetInput{}
-	for _, record := range reader.newRows {
-		article, err := articleFromRecord(record)
-		if err != nil {
-			return err
-		}
-		for _, asset := range article.Assets {
-			assets[asset.Token] = AssetInput{URL: asset.URL, Name: asset.Name, MIME: asset.MIME, Token: asset.Token}
-		}
-	}
-	for _, input := range change.assets {
-		assets[input.Token] = input
-	}
-	if len(assets) > 0 {
-		uuid, err := store.ReadMetaValue(textDB, "dict_uuid")
-		if err != nil {
-			return err
-		}
-		overlay := &mediaOverlay{Store: source, name: name, path: s.Path(), assets: assets}
-		if err := store.IngestMedia(overlay, overlay.Resources(), store.MediaDBPath(tmpDir), uuid, nil); err != nil {
-			return err
-		}
-	}
-	if err := store.WriteFavouriteRecords(textDB, name, about, reader.newRows); err != nil {
+	contains, fullText := true, true
+	_, err = store.Reconcile("", store.Target{Out: textDB, Contains: &contains, FullText: &fullText, Media: store.MediaOn}, store.Hooks{
+		Reader: func() (dict.Reader, error) { return reader, nil },
+		FinalizeText: func(path string) error {
+			return store.WriteFavouriteRecords(path, name, about, reader.newRows)
+		},
+		Backend: func() (dict.Dictionary, func(), error) {
+			assets := map[string]AssetInput{}
+			for _, record := range reader.newRows {
+				article, err := articleFromRecord(record)
+				if err != nil {
+					return nil, nil, err
+				}
+				for _, asset := range article.Assets {
+					assets[asset.Token] = AssetInput{URL: asset.URL, Name: asset.Name, MIME: asset.MIME, Token: asset.Token}
+				}
+			}
+			for _, input := range change.assets {
+				assets[input.Token] = input
+			}
+			overlay := &mediaOverlay{Store: source, name: name, path: s.Path(), assets: assets}
+			return overlay, func() {}, nil
+		},
+	})
+	if err != nil {
 		return err
 	}
 	if err := source.Close(); err != nil {
@@ -567,6 +569,9 @@ type emptyReader struct{ name, path string }
 func (r *emptyReader) Meta() dict.Meta           { return dict.Meta{Name: r.name, Format: Format, Path: r.path} }
 func (r *emptyReader) Next() (dict.Entry, error) { return dict.Entry{}, io.EOF }
 func (r *emptyReader) Close() error              { return nil }
+func (r *emptyReader) ExtraMeta() map[string]string {
+	return map[string]string{"description": "", "favourites_version": "1", "favourites_about": ""}
+}
 
 func boolInt(v bool) int {
 	if v {

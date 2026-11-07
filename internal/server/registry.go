@@ -1172,12 +1172,17 @@ func (r *Registry) rescan(prepare bool) error {
 		if !fsx.FileExists(b.Path) {
 			continue // removed by the user (howto.MarkRemoved), or never written
 		}
-		if copyPath, ok := fileNamed(paths, filepath.Base(b.Path)); ok {
-			// The user's copy stands in, under the builtin's id, so every
-			// link written to the guide still reaches it. It is theirs:
-			// not flagged builtin, removable like any file of theirs.
-			ids[copyPath] = b.ID
-			continue
+		// Prepared collections all use the same main filename (`text.db`).
+		// A same-named dictionary file cannot identify a user's replacement for
+		// one of them, so keep each builtin at its own registered path.
+		if filepath.Base(b.Path) != store.TextDBName {
+			if copyPath, ok := fileNamed(paths, filepath.Base(b.Path)); ok {
+				// The user's copy stands in, under the builtin's id, so every
+				// link written to the guide still reaches it. It is theirs:
+				// not flagged builtin, removable like any file of theirs.
+				ids[copyPath] = b.ID
+				continue
+			}
 		}
 		ids[b.Path] = b.ID
 		shippedBy[b.Path] = true

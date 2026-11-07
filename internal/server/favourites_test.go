@@ -183,18 +183,11 @@ func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
 		t.Fatalf("description update status %d: %s", aboutSaved.Code, aboutSaved.Body.String())
 	}
 	collectionStore, _ := sets.Store(collection.ID)
-	for _, registered := range s.reg.all() {
-		t.Logf("registry id=%q path=%q", registered.ID, registered.Path)
-	}
-	t.Logf("created collection id=%q path=%q", collection.ID, collectionStore.Path())
 	meta, err := store.ReadMeta(collectionStore.Path())
 	if err != nil || meta["description"] != "German notes" {
 		t.Fatalf("saved dictionary description = %q, %v", meta["description"], err)
 	}
 	aboutShown := httptestNew(s, http.MethodGet, "/api/about?dict="+collection.ID, nil)
-	if e, err := s.reg.get(collection.ID); err == nil {
-		t.Logf("about path=%q meta=%+v", e.Path, store.Inspect(e.Path).Meta)
-	}
 	if aboutShown.Code != http.StatusOK || !strings.Contains(aboutShown.Body.String(), "German notes") {
 		t.Fatalf("dictionary description status %d: %s", aboutShown.Code, aboutShown.Body.String())
 	}
@@ -239,14 +232,11 @@ func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
 	if defaultDelete.Code != http.StatusOK {
 		t.Fatalf("default collection delete status %d: %s", defaultDelete.Code, defaultDelete.Body.String())
 	}
-	if _, err := os.Stat(filepath.Join(favRoot, "fav", "favourites.favs")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(favRoot, "fav")); !os.IsNotExist(err) {
 		t.Fatalf("deleted default file status = %v", err)
 	}
 	collectionPath := collectionStore.Path()
-	preparedDir, hadPrepared := store.LookupDir(collectionPath)
-	if !hadPrepared {
-		t.Fatal("custom collection has no prepared store")
-	}
+	collectionDir := filepath.Dir(collectionPath)
 	deleted := httptestNew(s, http.MethodDelete, "/api/favourites/collections", []byte(`{"id":"`+collection.ID+`"}`))
 	if deleted.Code != http.StatusOK {
 		t.Fatalf("custom collection delete status %d: %s", deleted.Code, deleted.Body.String())
@@ -254,8 +244,8 @@ func TestFavouriteCollectionsCreateSaveSearchAndRemove(t *testing.T) {
 	if _, err := os.Stat(collectionPath); !os.IsNotExist(err) {
 		t.Fatalf("deleted collection path status = %v", err)
 	}
-	if _, err := os.Stat(preparedDir); !os.IsNotExist(err) {
-		t.Fatalf("deleted collection prepared path status = %v", err)
+	if _, err := os.Stat(collectionDir); !os.IsNotExist(err) {
+		t.Fatalf("deleted collection directory status = %v", err)
 	}
 	if _, err := s.reg.get(collection.ID); err == nil {
 		t.Fatal("deleted collection remains registered")
