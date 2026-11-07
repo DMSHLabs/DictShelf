@@ -6455,7 +6455,8 @@ $("panelList").addEventListener("toggle",async e=>{
     /* Inserted as markup on purpose: the server normalised it (escaped if it
        was plain text, reduced to prose elements if it was markup), so this is
        the one client that does NOT need a sanitiser of its own. */
-    body.innerHTML=(j.html||`<p>${esc(tx("dictUI.emptyAbout"))}</p>`)+aboutLangs(j);
+    const about=j.html||`<p>${esc(tx(pd.dataset.id==="favourites"?"dictUI.favouritesDescription":"dictUI.emptyAbout"))}</p>`;
+    body.innerHTML=about+aboutLangs(j);
   }catch(err){
     body.textContent=tx("dictUI.notAvailable");
     det.dataset.loaded=""; // a failed fetch is worth retrying on the next open
