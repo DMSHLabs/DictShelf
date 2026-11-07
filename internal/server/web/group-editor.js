@@ -298,7 +298,10 @@ function updateGroupSplit(){
   const gap=parseFloat(getComputedStyle(lists).rowGap)||0;
   const listsHeight=lists.clientHeight;
   const panelSpace=Math.max(0,listsHeight-gap);
-  const inactiveTarget=panelSpace/3;
+  const activeRows=groupActivePanel==='members'?$('groupRows'):availableRows;
+  const activeCount=activeRows.querySelectorAll('.group-row:not([hidden])').length;
+  const equalPanels=activeCount>8;
+  const inactiveTarget=panelSpace*(equalPanels?1/2:1/3);
   const memberRow=groupRowHeight('groupRows'),availableRow=groupRowHeight('groupOtherRows');
   if(groupActivePanel==='available')editor.classList.add('compact-controls');
 
@@ -319,8 +322,11 @@ function updateGroupSplit(){
   if(groupActivePanel==='members'||groupActivePanel==='available'){
     const activeTen=groupActivePanel==='members'?memberTen:availableTen;
     const inactiveTwo=groupActivePanel==='members'?availableTwo:memberTwo;
-    const activeFloor=Math.ceil(panelSpace*2/3);
-    const activeHeight=Math.min(Math.max(0,panelSpace-inactiveTwo),Math.max(activeTen,activeFloor));
+    const inactiveCeiling=Math.floor(Math.max(0,panelSpace-(equalPanels?0:1))/2);
+    const inactiveHeight=equalPanels?inactiveCeiling:Math.min(inactiveTwo,inactiveCeiling);
+    const activeCeiling=Math.max(0,panelSpace-inactiveHeight);
+    const activeFloor=Math.ceil(panelSpace*(equalPanels?1/2:2/3));
+    const activeHeight=equalPanels?activeCeiling:Math.min(activeCeiling,Math.max(activeTen,activeFloor));
     const memberHeight=groupActivePanel==='members'?activeHeight:panelSpace-activeHeight;
     lists.style.setProperty('--group-members-height',Math.ceil(memberHeight)+'px');
     lists.classList.add('members-sized');
