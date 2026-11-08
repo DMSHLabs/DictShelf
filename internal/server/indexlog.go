@@ -6,6 +6,7 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"strconv"
@@ -64,7 +65,69 @@ func (s *Server) systemLogSnapshot() ([]byte, string, error) {
 		runtime.NumCPU(), currentIndexCPUCount(), runtime.GOMAXPROCS(0), totalMemoryText, availableText,
 		memoryLimitText, formatLogBytes(int64(memory.Alloc)), memory.Alloc, formatLogBytes(int64(memory.Sys)), memory.Sys)
 	filename := fmt.Sprintf("DictShelf_SystemLog_%s.log", time.Now().Format("2006_01_02-15-04"))
-	return append([]byte(header), b...), filename, nil
+	var out strings.Builder
+	out.WriteString(header)
+	s.writeOutdatedIndexSummary(&out)
+	out.Write(b)
+	return []byte(out.String()), filename, nil
+}
+
+// writeOutdatedIndexSummary records the same per-dictionary selection that the
+// Rebuild action uses, with the stored source name, user-facing name and stale
+// stamps that explain why each prepared index needs work.
+func (s *Server) writeOutdatedIndexSummary(out *strings.Builder) {
+	type row struct{ name, source, path, reason string }
+	rows := make([]row, 0)
+	for _, e := range s.reg.all() {
+		if !rebuildable(e.Path) {
+			continue
+		}
+		dir, ok := store.LookupDir(e.Path)
+		if !ok {
+			continue
+		}
+		prepared := store.Inspect(store.TextDBPath(dir))
+		nativeIndex := !isZIMPath(e.Path) && formatHasSelfIndex(prepared.Meta["format"])
+		if !isZIMPath(e.Path) && prepared.Meta != nil && !preparedIndexesNeedRebuild(prepared.Meta["format"], prepared.Plan) {
+			nativeIndex = true
+		}
+		if nativeIndex {
+			continue
+		}
+		reasons := prepared.Stale(e.Path)
+		if isZIMPath(e.Path) && !zimPreparedHeadwords(prepared) {
+			reasons = append(reasons, store.Reason("zim-headwords"))
+		}
+		if len(reasons) == 0 {
+			continue
+		}
+		name := prepared.Meta["name"]
+		if name == "" {
+			name = e.probeName()
+		}
+		label := s.reg.prefs.DisplayTitle(e.ID)
+		if label == "" {
+			label = name
+		}
+		rows = append(rows, row{name: label, source: name, path: e.Path, reason: strings.Join(reasonNames(reasons), ", ")})
+	}
+	fmt.Fprintf(out, "--- Dictionaries requiring rebuild: %d ---\n", len(rows))
+	if len(rows) == 0 {
+		out.WriteString("None\n\n")
+		return
+	}
+	for _, r := range rows {
+		fmt.Fprintf(out, "- %s (Name: %s; reason: %s)\n  Source: %s\n", r.name, r.source, r.reason, filepath.Clean(r.path))
+	}
+	out.WriteByte('\n')
+}
+
+func reasonNames(reasons []store.Reason) []string {
+	names := make([]string, len(reasons))
+	for i, reason := range reasons {
+		names[i] = string(reason)
+	}
+	return names
 }
 
 func formatLogBytes(n int64) string {
