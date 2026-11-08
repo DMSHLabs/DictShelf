@@ -1187,9 +1187,7 @@ window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation, saveT
     void remoteFindDiagnostic({diagnosticRun:remoteFindDiagnosticRun,diagnosticStarted:performance.now()},"navigation_trace_article_save_failed",{detail:`trace=${remoteFindTraceRun}; dict=${dict}; article=${article}; bytes=${bytes}; reason=over_limit`});
     return Promise.resolve(false);
   }
-  return fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({event:"search_trace_article",runId:remoteFindTraceRun,dict,page:Number(article)||0,completed:remoteFindTraceRun,html})})
-    .then(response=>response.ok)
-    .catch(()=>false)
+  return sendBrowseDiagnostic({event:"search_trace_article",runId:remoteFindTraceRun,dict,page:Number(article)||0,completed:remoteFindTraceRun,html})
     .then(async saved=>{
     if(!saved)await remoteFindDiagnostic({diagnosticRun:remoteFindDiagnosticRun,diagnosticStarted:performance.now()},"navigation_trace_article_save_failed",{detail:`trace=${remoteFindTraceRun}; dict=${dict}; article=${article}; bytes=${bytes}; reason=server_rejected`});
     return saved;

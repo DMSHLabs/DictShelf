@@ -298,13 +298,16 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 	case "storageWrite":
 		return map[string]bool{"saved": true}, s.saveUserStorage(argument)
 	case "browseDiagnostic":
-		if len(argument) > 2048 {
+		if len(argument) > 3*1024*1024 {
 			return nil, errors.New("invalid diagnostic")
 		}
 		var diagnostic browseDiagnostic
 		decoder := json.NewDecoder(strings.NewReader(argument))
 		decoder.DisallowUnknownFields()
 		if decoder.Decode(&diagnostic) != nil || decoder.Decode(new(any)) != io.EOF {
+			return nil, errors.New("invalid diagnostic")
+		}
+		if diagnostic.Event != "search_trace_article" && len(argument) > 2048 {
 			return nil, errors.New("invalid diagnostic")
 		}
 		if err := s.recordBrowseDiagnostic(diagnostic); err != nil {
