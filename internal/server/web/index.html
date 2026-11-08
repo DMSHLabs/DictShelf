@@ -11150,8 +11150,19 @@ async function navAdjacentDictionary(current,step){
   try{
     const sections=[...$("out").querySelectorAll("details.dict")],start=sections.indexOf(current.det);
     if(start<0)return navMove(step);
-    for(let distance=1;distance<sections.length;distance++){
-      const det=sections[(start+step*distance+sections.length)%sections.length];
+    for(let distance=1;distance<=Math.max(1,sections.length-1);distance++){
+      const sectionIndex=(start+step*distance+sections.length)%sections.length;
+      let det=sections[sectionIndex];
+      const wrapped=step>0?start+distance>=sections.length:start-distance<0;
+      // Forward wrap starts a new pass through the result set. Return to the
+      // first result block, even when the first dictionary currently shows a
+      // later block from the pass that just ended.
+      if(wrapped&&step>0&&sectionIndex===0&&(Number(det.dataset.searchPageStart)||0)>0){
+        const first=await window.wudictRestoreArticleBlock?.(det,0);
+        if(token!==navBlockToken||generation!==searchSeq||navSuppressed)return;
+        if(!first)return;
+        det=first;
+      }
       navDet=det;if(!det.open)det.open=true;
       for(let attempt=0;attempt<30;attempt++){
         if(token!==navBlockToken||generation!==searchSeq||navSuppressed)return;
