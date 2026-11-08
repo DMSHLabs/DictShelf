@@ -1351,6 +1351,8 @@
   "articleFind.previous": "Найти предыдущее",
   "articleFind.next": "Найти следующее",
   "articleFind.scrollToMatch": "Прокрутить к текущему совпадению",
+  "articleFind.traceStart": "Пройти все",
+  "articleFind.traceStop": "Остановить проход",
   "articleFind.position": "{current} из {total}",
   "articleFind.resultBlock": "статьи {start}–{end}",
   "articleFind.noMatches": "Совпадений нет",

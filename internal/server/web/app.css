@@ -276,6 +276,7 @@ html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image
 #articleFindPrev,#articleFindNext{min-width:44px;min-height:44px}
 #articleFindScrollToMatch{display:grid;place-items:center;min-width:44px;min-height:44px}
 #articleFindScrollToMatch svg{width:20px;height:20px}
+#articleFindTrace{white-space:nowrap}
 #articleFindNext{margin-left:var(--sp-2)}
 .article-find-query-row,.article-find-mode{display:grid;grid-template-columns:max-content minmax(0,1fr);align-items:center;gap:calc(var(--ui-control-gap) * 1em)}
 .article-find-query-row input,.article-find-mode select{width:100%;min-width:0}

@@ -1333,6 +1333,8 @@
   "articleFind.previous": "Find previous",
   "articleFind.next": "Find next",
   "articleFind.scrollToMatch": "Scroll to current match",
+  "articleFind.traceStart": "Trace all",
+  "articleFind.traceStop": "Stop trace",
   "articleFind.position": "{current} of {total}",
   "articleFind.resultBlock": "articles {start}–{end}",
   "articleFind.noMatches": "No matches",

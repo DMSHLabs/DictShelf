@@ -192,6 +192,7 @@ function open(preserveAnchor=false) {
   else { $("articleFindQuery").focus(); $("articleFindQuery").select(); }
 }
 function syncControls() {
+  syncRemoteFindTraceButton();
   const select = $("articleFindMode"), hasFTS = !!fullTextNavigation;
   const ftsOption=select.querySelector('option[value="fts"]');
   ftsOption.disabled=!hasFTS;ftsOption.hidden=!hasFTS;
@@ -289,6 +290,7 @@ function matcherFor(host,query){
   return {regex:new RegExp(unique.map(escapeRE).join("|"),options.matchCase?"gu":"giu")};
 }
 function paint() {
+  syncRemoteFindTraceButton();
   clearPaint();
   for (const doc of docs) {
     const win = doc.defaultView;
@@ -460,11 +462,24 @@ function remoteFindID(){
   return [...bytes].map(value=>value.toString(16).padStart(2,"0")).join("");
 }
 let remoteFindDiagnosticRun=0;
+let remoteFindTraceRun=0,remoteFindTraceActive=false,remoteFindTraceStop=false,remoteFindDiagnosticTail=Promise.resolve();
+function remoteFindTraceEnabled(){return searchArticleDiagnosticsEnabled()||remoteFindTraceActive}
+function syncRemoteFindTraceButton(){
+  const button=$("articleFindTrace");
+  if(!button)return;
+  const visible=searchArticleDiagnosticsEnabled()&&!!remoteFind?.id&&options.mode!=="fts";
+  button.hidden=!visible;
+  button.textContent=remoteFindTraceActive?t("articleFind.traceStop"):t("articleFind.traceStart");
+  button.setAttribute("aria-label",button.textContent);button.title=button.textContent;
+  button.disabled=!remoteFindTraceActive&&(!remoteFind?.state?.found||remoteFindPending);
+}
 function remoteFindDiagnostic(record,stage,fields={}){
-  if(!searchArticleDiagnosticsEnabled())return;
-  sendBrowseDiagnostic({event:"search_article",stage,runId:record?.diagnosticRun||remoteFindDiagnosticRun,
+  if(!remoteFindTraceEnabled())return Promise.resolve(false);
+  const payload={event:"search_article",stage,runId:record?.diagnosticRun||remoteFindDiagnosticRun,
     query:String(options.query||"").replace(/[\r\n]/g," ").slice(0,1024),mode:options.mode,
-    elapsedMs:Math.max(0,Math.round(performance.now()-(record?.diagnosticStarted||performance.now()))),...fields});
+    elapsedMs:Math.max(0,Math.round(performance.now()-(record?.diagnosticStarted||performance.now()))),...fields};
+  remoteFindDiagnosticTail=remoteFindDiagnosticTail.then(()=>sendBrowseDiagnostic(payload)).catch(()=>false);
+  return remoteFindDiagnosticTail;
 }
 function remoteFindContext(){
   const source=window.wudictArticleFindContext?.()||{};
@@ -485,16 +500,22 @@ function remoteFindURL(record,action,extra={}){
 }
 async function remoteFindFetch(record,action,extra={}){
 	const started=performance.now();
-	remoteFindDiagnostic(record,"navigation_request",{detail:`action=${action}`});
-  const response=await apiFetch(remoteFindURL(record,action,extra));
+	const requestMeta={action,fromPosition:Number(record.state?.position)||0,fromTotal:Number(record.state?.total)||0,
+    fromDict:record.state?.target?.dict||"",fromBlock:Number(record.state?.target?.blockStart)||0};
+	const requestLogStarted=performance.now();
+	await remoteFindDiagnostic(record,"navigation_request",{detail:`action=${action}; from=${requestMeta.fromPosition}/${requestMeta.fromTotal}; dict=${requestMeta.fromDict}; block=${requestMeta.fromBlock}; trace=${record.traceRun||0}`});
+	const requestLogMs=Math.round(performance.now()-requestLogStarted);
+	let response;
+	try{response=await apiFetch(remoteFindURL(record,action,extra))}
+	catch(error){await remoteFindDiagnostic(record,"navigation_response",{elapsedMs:Math.round(performance.now()-started),detail:`action=${action}; transport_error=${String(error).slice(0,700)}`});throw error}
   if(!response.ok){
     const error=await response.text();
-    remoteFindDiagnostic(record,"navigation_response",{elapsedMs:Math.round(performance.now()-started),detail:`action=${action}; status=${response.status}; error=${String(error).slice(0,700)}`});
+    await remoteFindDiagnostic(record,"navigation_response",{elapsedMs:Math.round(performance.now()-started),detail:`action=${action}; status=${response.status}; error=${String(error).slice(0,700)}`});
     throw new Error(error||"article search failed");
   }
   const state=await response.json();
-  remoteFindDiagnostic(record,"navigation_response",{elapsedMs:Math.round(performance.now()-started),completed:Math.min(100000,state.total||0),
-    detail:`action=${action}; found=${!!state.found}; complete=${!!state.complete}; dict=${state.target?.dict||""}; block=${state.target?.blockStart??""}`});
+  await remoteFindDiagnostic(record,"navigation_response",{elapsedMs:Math.round(performance.now()-started),completed:Math.min(100000,state.total||0),
+    detail:`action=${action}; found=${!!state.found}; complete=${!!state.complete}; position=${state.position||0}/${state.total||0}; dict=${state.target?.dict||""}; article=${state.target?.articleIndex??""}; block=${state.target?.blockStart??""}; occurrences=${state.target?.occurrences?.length||0}; diagnostic_request_ms=${requestLogMs}`});
   return state;
 }
 async function startRemoteFind(){
@@ -652,7 +673,7 @@ async function showRemoteFindTarget(target,state,token){
   return true;
 }
 async function moveRemoteFind(step){
-  if(!remoteFind?.id||remoteFindPending)return;
+  if(!remoteFind?.id||remoteFindPending)return false;
   remoteFindPending=true;const record=remoteFind,token=remoteFindToken,request=++remoteFindRequestSeq;
   try{
     if(record.pendingTarget){
@@ -660,17 +681,48 @@ async function moveRemoteFind(step){
       if(step===record.anchorDirection){
         const paintStarted=performance.now();
         record.error=await showRemoteFindTarget(target.target,target,token)?"":t("search.fullListUnavailable");
-        remoteFindDiagnostic(record,"navigation_target_painted",{elapsedMs:Math.round(performance.now()-paintStarted),detail:`dict=${target.target?.dict||""}; block=${target.target?.blockStart??""}; success=${!record.error}`});
-        return;
+        await remoteFindDiagnostic(record,"navigation_target_painted",{elapsedMs:Math.round(performance.now()-paintStarted),detail:`dict=${target.target?.dict||""}; article=${target.target?.articleIndex??""}; block=${target.target?.blockStart??""}; position=${target.position||0}/${target.total||0}; success=${!record.error}`});
+        return !record.error;
       }
     }
     const state=await remoteFindFetch(record,step<0?"navPrevious":"navNext");
     if(request!==remoteFindRequestSeq||token!==remoteFindToken||remoteFind!==record)return;
     if(state.found){record.state=state;const paintStarted=performance.now();record.error=await showRemoteFindTarget(state.target,state,token)?"":t("search.fullListUnavailable");
-      remoteFindDiagnostic(record,"navigation_target_painted",{elapsedMs:Math.round(performance.now()-paintStarted),detail:`dict=${state.target?.dict||""}; block=${state.target?.blockStart??""}; success=${!record.error}`})}
+      await remoteFindDiagnostic(record,"navigation_target_painted",{elapsedMs:Math.round(performance.now()-paintStarted),detail:`dict=${state.target?.dict||""}; article=${state.target?.articleIndex??""}; block=${state.target?.blockStart??""}; position=${state.position||0}/${state.total||0}; success=${!record.error}`})}
     else record.state={...record.state,...state};
-  }catch(error){record.error=String(error?.message||error)}
+    return !!state.found&&!record.error;
+  }catch(error){record.error=String(error?.message||error);await remoteFindDiagnostic(record,"navigation_trace_error",{detail:`action=move; error=${record.error.slice(0,700)}`});return false}
   finally{if(request===remoteFindRequestSeq&&token===remoteFindToken){remoteFindPending=false;paint()}}
+}
+async function runRemoteFindTrace(){
+  const record=remoteFind;
+  if(!record?.id||remoteFindPending||remoteFindTraceActive||!record.state?.found)return;
+  remoteFindTraceActive=true;remoteFindTraceStop=false;record.traceRun=++remoteFindTraceRun;
+  const started=performance.now(),startPosition=Number(record.state.position)||1;
+  let steps=0,reason="end",previousPosition=startPosition;
+  syncRemoteFindTraceButton();
+  await remoteFindDiagnostic(record,"navigation_trace_start",{detail:`trace=${record.traceRun}; position=${startPosition}; total=${record.state.total||0}; dict=${record.state.target?.dict||""}; block=${record.state.target?.blockStart??""}`});
+  try{
+    while(!remoteFindTraceStop&&remoteFind===record&&steps<100000){
+      if(record.state?.complete&&Number(record.state.position)>=Number(record.state.total)){reason="last_match";break}
+      const stepStarted=performance.now(),from=Number(record.state?.position)||0;
+      const moved=await moveRemoteFind(1);
+      if(remoteFind!==record){reason="search_changed";break}
+      if(!moved){reason=record.error?"error":"no_next_match";break}
+      steps++;
+      const state=record.state||{},position=Number(state.position)||0;
+      await remoteFindDiagnostic(record,"navigation_trace_step",{completed:Math.min(100000,steps),total:Math.min(100000,state.total||0),detail:`trace=${record.traceRun}; step=${steps}; from=${from}; to=${position}; complete=${!!state.complete}; step_ms=${Math.round(performance.now()-stepStarted)}; dict=${state.target?.dict||""}; article=${state.target?.articleIndex??""}; block=${state.target?.blockStart??""}`});
+      if(state.complete&&position<=previousPosition){reason="wrapped";break}
+      previousPosition=position;
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    }
+    if(steps>=100000)reason="limit";
+    if(remoteFindTraceStop)reason="stopped";
+  }catch(error){reason="error";await remoteFindDiagnostic(record,"navigation_trace_error",{detail:`trace=${record.traceRun}; error=${String(error?.message||error).slice(0,700)}`})}
+  finally{
+    await remoteFindDiagnostic(record,reason==="stopped"?"navigation_trace_stop":"navigation_trace_end",{completed:Math.min(100000,steps),total:Math.min(100000,record.state?.total||0),detail:`trace=${record.traceRun}; reason=${reason}; steps=${steps}; elapsed_ms=${Math.round(performance.now()-started)}; position=${record.state?.position||0}`});
+    remoteFindTraceActive=false;remoteFindTraceStop=false;syncRemoteFindTraceButton();paint();
+  }
 }
 async function restoreRemoteFindTarget(){
   if(!remoteFind?.target||remoteFindPending)return;
@@ -1029,6 +1081,11 @@ $("articleFindScrollToMatch").onclick = () => {
   if(index<0)index=0;
   revealCurrent();
 };
+$("articleFindTrace").onclick = () => {
+  if(remoteFindTraceActive){remoteFindTraceStop=true;return}
+  void runRemoteFindTrace();
+};
+$("sysLogSearch")?.addEventListener("change",syncRemoteFindTraceButton);
 $("articleFindDialogPrev").onclick = () => go(-1);
 $("articleFindDialogNext").onclick = () => go(1);
 $("articleFindMode").onchange = () => {
