@@ -726,19 +726,21 @@ dl{margin:0;padding:var(--sp-1) var(--sp-2) var(--sp-2)}
 dt{font-size:1.272em;font-weight:700;color:var(--accent);word-break:break-word;
   margin-top:var(--sp-2)}
 details.dict>dl>dt{display:flex;align-items:center;gap:var(--sp-1)}
+details.dict>dl>dt{flex-wrap:wrap}
 dt:first-child{margin-top:var(--sp-1)}
 dd{margin:var(--sp-1) 0 0 0}
 .favourite-control{display:inline-flex;align-items:center;justify-content:center;flex:none;
-  width:1.8em;height:1.8em;padding:.18em;border:1px solid var(--line-soft);
+  box-sizing:border-box;width:2.4em;height:2.4em;padding:4px;border:1px solid var(--line-soft);
   border-radius:7px;background:transparent;color:var(--label-quiet);cursor:pointer;line-height:1}
 .favourite-action-group{display:inline-flex;align-items:center;flex:none;gap:.2em;margin-inline-start:auto}
 .favourite-action-group .favourite-control{border-radius:7px}
-.favourite-target{height:1.8em;max-width:10em;padding:0 .35em;border:1px solid var(--line-soft);
-  border-radius:7px;background:transparent;color:var(--label);font:inherit;font-size:.8em;cursor:pointer}
+.favourite-target{box-sizing:border-box;width:max-content;min-width:0;max-width:min(90vw,24em);height:1.8em;padding:0 .5em;border:1px solid var(--line-soft);
+  border-radius:7px;background-color:var(--paper-bg,var(--bg-card));background-image:var(--paper-bk-image,none);background-size:cover;color:var(--fg);font:inherit;font-size:.8em;cursor:pointer}
+.favourite-target option{background-color:var(--paper-bg,var(--bg-card));color:var(--fg)}
 .favourite-target:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-.favourite-control svg{width:1.2em;height:1.2em;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.favourite-control svg{display:block;width:1.8em;height:1.8em;flex:none;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .favourite-control.is-saved{color:var(--accent)}
-.favourite-control.is-saved svg{fill:currentColor}
+.favourite-control.is-saved svg{fill:none}
 .favourite-control:disabled{opacity:.55;cursor:progress}
 .favourite-control:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .favourites-dialog-actions{display:flex;justify-content:flex-end;gap:var(--sp-1);margin-top:var(--sp-2)}

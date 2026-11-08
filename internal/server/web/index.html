@@ -4852,7 +4852,8 @@ function favouriteEditorTile(collection,isNew=false){
       const buttons=document.createElement("div");buttons.className="favourite-about-buttons";buttons.append(favouriteEditorButton("dict-rename-save","panel.save","save",()=>saveFavouriteAbout(collection.id,input.value)),favouriteEditorButton("dict-rename-reset","panel.cancel","cancel",()=>{favouriteAboutEdit=null;renderFavouritesEditor()}));about.append(buttons);
     }else{
       const edit=favouriteEditorButton("dict-rename favourite-about-edit","favourites.editAbout","rename",event=>{event.stopPropagation();favouriteAboutEdit={id:collection.id,value:collection.about||(collection.id==="favourites"?tx("dictUI.favouritesDescription"):"")};renderFavouritesEditor()});aboutSummary.append(edit);
-      const text=document.createElement("div");text.className="aboutbody";text.textContent=collection.about||tx(collection.id==="favourites"?"dictUI.favouritesDescription":"favourites.emptyAbout");about.append(text);
+      const emptyAboutKey=Number(collection.articles||0)>0?"favourites.hasEntriesEmptyAbout":"favourites.emptyAbout";
+      const text=document.createElement("div");text.className="aboutbody";text.textContent=collection.about||tx(emptyAboutKey);about.append(text);
     }
     card.append(about);
   }
@@ -6798,7 +6799,9 @@ $("panelList").addEventListener("toggle",async e=>{
     /* Inserted as markup on purpose: the server normalised it (escaped if it
        was plain text, reduced to prose elements if it was markup), so this is
        the one client that does NOT need a sanitiser of its own. */
-    const about=j.html||`<p>${esc(tx(pd.dataset.id==="favourites"?"dictUI.favouritesDescription":"dictUI.emptyAbout"))}</p>`;
+    const favCollection=favouriteCollections.find(item=>item.id===pd.dataset.id);
+    const emptyKey=Number(favCollection?.articles||0)>0?"favourites.hasEntriesEmptyAbout":"favourites.emptyAbout";
+    const about=j.html||`<p>${esc(tx(favCollection?emptyKey:"dictUI.emptyAbout"))}</p>`;
     body.innerHTML=about+aboutLangs(j);
   }catch(err){
     body.textContent=tx("dictUI.notAvailable");
