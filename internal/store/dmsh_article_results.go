@@ -156,6 +156,14 @@ func (s *Store) StreamArticleIDs(ctx context.Context, query, mode, fullTextMatch
 		}
 		return emit(ids, total, true)
 	}
+	if rows == nil {
+		// A strict reading answers through articleMatches, and an answer with no
+		// match is a nil slice, not an open cursor - there is nothing to scan.
+		// Reading it anyway dereferenced a nil *sql.Rows and took the request
+		// down, which the favourites dictionary hit on every search: its cache
+		// build asks a phrase of a database that can answer with nothing.
+		return emit(nil, 0, true)
+	}
 	for rows.Next() {
 		if err := ctx.Err(); err != nil {
 			return err

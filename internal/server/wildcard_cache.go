@@ -476,7 +476,14 @@ func (c *wildcardPageCache) page(id string, signature wildcardCacheSignature, di
 	if err := rows.Close(); err != nil {
 		return browseFindResp{}, false, err
 	}
-	if len(record.Words) == 0 {
+	if len(record.Words) == 0 && start < total {
+		// The page lies inside the answer but its words are not written yet (a
+		// build that has not reached this block): that is not an answer, keep
+		// waiting. A page at or past the end - including the whole list of a
+		// dictionary whose strict reading matched nothing - is an EMPTY answer,
+		// and the dictionary row above already said so: the row is written when
+		// the build finishes, even for zero ids, and answering it here is what
+		// keeps an empty dictionary from costing the caller a timeout.
 		return browseFindResp{}, false, nil
 	}
 	if err := json.Unmarshal([]byte(alphabetJSON), &record.Alphabet); err != nil {

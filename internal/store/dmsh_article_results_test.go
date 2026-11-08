@@ -137,3 +137,41 @@ func TestStreamArticleIDsContainsListsLongTerms(t *testing.T) {
 		}
 	}
 }
+
+// A strict reading with no match answers with ONE empty complete page. The ids
+// of those readings come from the MATCH (a nil slice, no cursor), and walking a
+// nil cursor to find that out took the request down: the favourites dictionary
+// - a slot in every search - asked a phrase of a database that can answer with
+// nothing, and its cache build returned 500 instead of an empty answer.
+func TestStreamArticleIDsAnswersEmptyForAStrictReadingWithNoMatch(t *testing.T) {
+	dir := t.TempDir()
+	textDB := filepath.Join(dir, TextDBName)
+	src := filepath.Join(dir, "source.dsl")
+	if err := os.WriteFile(src, []byte("#NAME test\n\nword\n\tbody\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := &fakeReader{meta: dict.Meta{Name: "Empty", Format: "dsl", Path: src},
+		entries: []dict.Entry{h("word", "<p>body</p>")}}
+	if _, err := IngestPlan(r, textDB, Plan{FullText: true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(textDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	pages := 0
+	if err := s.StreamArticleIDs(context.Background(), "alpha beta", "phrase", `"alpha beta"`,
+		func(ids []int64, total int, done bool) error {
+			pages++
+			if len(ids) != 0 || total != 0 || !done {
+				t.Fatalf("page = %v, total %d, done %t; want one empty complete page", ids, total, done)
+			}
+			return nil
+		}); err != nil {
+		t.Fatalf("StreamArticleIDs: %v", err)
+	}
+	if pages != 1 {
+		t.Fatalf("pages = %d, want 1", pages)
+	}
+}

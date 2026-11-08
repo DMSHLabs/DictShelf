@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 // wireMark is one mark as the wire carries it: which words, and with which
@@ -248,5 +249,44 @@ func TestSearchPhraseMarking(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A page for a dictionary whose list is EMPTY is an empty answer, not a wait.
+// The cache row is written when a build finishes even with no ids (a strict
+// reading that matched nothing), and a page request must read that row instead
+// of polling for a block that will never exist: the favourites slot, empty for
+// most readers, made every Find in articles session start with a 30-second wait
+// and "article result cache is unavailable".
+func TestArticleResultCacheAnswersAnEmptyList(t *testing.T) {
+	s, id := newHLServer(t)
+	s.User = UserDir(t.TempDir())
+	s.wildcardPages.init(s.wildcardCacheDir())
+	t.Cleanup(func() {
+		s.wildcardPages.mu.Lock()
+		defer s.wildcardPages.mu.Unlock()
+		for _, entry := range s.wildcardPages.entries {
+			_ = entry.db.Close()
+		}
+	})
+	const cacheID = "e000000000000001"
+	base := "/api/search?q=" + url.QueryEscape("zebra quagga") + "&mode=phrase&rung=phrase&hl=1&dict=" + id + "&cacheID=" + cacheID
+	built, total := false, -1
+	build := stream(t, s, base+"&cacheAction=build")
+	for _, m := range build {
+		if m.T == "cache" && m.Complete {
+			built, total = true, m.Total
+		}
+	}
+	if !built || total != 0 {
+		t.Fatalf("the empty build = built %t, total %d; want a completed empty list: %+v", built, total, build)
+	}
+	started := time.Now()
+	page := stream(t, s, base+"&cacheAction=page&start=0&size=5")
+	if elapsed := time.Since(started); elapsed > 5*time.Second {
+		t.Fatalf("the empty page waited %v; it must answer at once", elapsed)
+	}
+	if got := bodies(page); got != "" {
+		t.Fatalf("the empty page returned bodies: %q", got)
 	}
 }
