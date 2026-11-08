@@ -772,7 +772,12 @@ func (s *Store) FullTextMatch(ctx context.Context, match string, limit int) ([]d
 	}
 	out := make([]dict.Result, 0, len(hits))
 	for _, h := range hits {
-		out = append(out, dict.Result{Headword: h.W, Body: s.body.decode(h.M)})
+		out = append(out, dict.Result{EntryID: h.ID, Headword: h.W, Body: s.body.decode(h.M)})
+	}
+	if s.favouriteData {
+		if err := s.decorateFavouriteResults(out); err != nil {
+			return nil, err
+		}
 	}
 	return out, nil
 }

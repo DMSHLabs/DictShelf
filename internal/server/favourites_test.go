@@ -83,6 +83,14 @@ func TestFavouriteSnapshotsRoundTripThroughServerAndPreparedMedia(t *testing.T) 
 	if len(copySearch) < 2 || len(copySearch[1].Results) != 1 || copySearch[1].Results[0].FavoriteID != article.ID {
 		t.Fatalf("saved snapshot result = %+v", copySearch)
 	}
+	fullTextSearch := collectLookup(t, s, SearchRequest{Query: "órgano muscular", Mode: "phrase", Dictionary: favorites.ID})
+	if len(fullTextSearch) < 2 || len(fullTextSearch[1].Results) != 1 {
+		t.Fatalf("saved full-text result = %+v", fullTextSearch)
+	}
+	fullTextResult := fullTextSearch[1].Results[0]
+	if fullTextResult.FavoriteID != article.ID || !strings.Contains(fullTextResult.Body, "/res/favourites/") || !strings.Contains(fullTextResult.Body, "<b>1.</b>") {
+		t.Fatalf("saved full-text article lost its media or markup: %+v", fullTextResult)
+	}
 
 	removeBody, _ := json.Marshal(favouriteRequest{FavoriteID: article.ID})
 	removed := httptestNew(s, http.MethodDelete, "/api/favourites", removeBody)

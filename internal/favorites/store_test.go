@@ -5,6 +5,7 @@
 package favorites
 
 import (
+	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -45,6 +46,18 @@ func TestStoreUsesTextAndMediaDatabasesAsCanonicalStorage(t *testing.T) {
 	if err != nil || body != `<p>fruit</p><img src="apple.png">` {
 		t.Fatalf("stored body = %q, %v", body, err)
 	}
+	dictionary, err = store.Open(set.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	results, err := dictionary.FullTextMatch(context.Background(), `"fruit"`, 10)
+	if err != nil || len(results) != 1 {
+		t.Fatalf("full-text results = %+v, %v", results, err)
+	}
+	if results[0].EntryID != article.EntryID || results[0].FavoriteID != article.ID || results[0].FavoriteSource == nil || results[0].ResourceMap["apple.png"] == "" {
+		t.Fatalf("full-text favourite metadata = %+v", results[0])
+	}
+	dictionary.Close()
 	token, ok := set.AssetToken(article.EntryID, "apple.png")
 	if !ok {
 		t.Fatal("stored image resource token is missing")
