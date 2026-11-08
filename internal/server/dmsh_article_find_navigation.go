@@ -155,9 +155,9 @@ func (s *Server) handleArticleFindNavigation(w http.ResponseWriter, r *http.Requ
 		s.articleFindNavigationMu.Unlock()
 		var response articleFindNavigationResponse
 		if q.Get("anchorDict") != "" && mode != "fts" {
-			article, articleErr := navigationNumber(q.Get("anchorArticle"), 0, int(^uint(0)>>1))
-			group, groupErr := navigationNumber(q.Get("anchorGroup"), 0, int(^uint(0)>>1))
-			offset, offsetErr := navigationNumber(q.Get("anchorOffset"), 0, int(^uint(0)>>1))
+			article, articleErr := navigationCoordinate(q.Get("anchorArticle"))
+			group, groupErr := navigationCoordinate(q.Get("anchorGroup"))
+			offset, offsetErr := navigationCoordinate(q.Get("anchorOffset"))
 			direction, directionErr := strconv.Atoi(q.Get("anchorDirection"))
 			if articleErr != nil || groupErr != nil || offsetErr != nil || directionErr != nil || direction != 1 && direction != -1 {
 				httpErr(w, http.StatusBadRequest, "invalid article find anchor")
@@ -253,6 +253,17 @@ func navigationNumber(value string, fallback, maxValue int) (int, error) {
 	n, err := strconv.Atoi(value)
 	if err != nil || n < 1 || n > maxValue {
 		return 0, errors.New("invalid article navigation number")
+	}
+	return n, nil
+}
+
+func navigationCoordinate(value string) (int, error) {
+	if value == "" {
+		return 0, errors.New("missing article navigation coordinate")
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil || n < 0 {
+		return 0, errors.New("invalid article navigation coordinate")
 	}
 	return n, nil
 }
