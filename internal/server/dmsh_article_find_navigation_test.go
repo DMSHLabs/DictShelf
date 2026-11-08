@@ -143,6 +143,14 @@ func TestArticleFindNavigationUsesServerSearchAndHighlights(t *testing.T) {
 		}
 		session.current = target
 	}
+	fullTextSession := &articleFindNavigationSession{query: "джазовый кларнетист", mode: "fts",
+		resultQuery: "джазовый кларнетист", resultMode: "fts", rungs: []string{"phrase"},
+		dictionaries: []string{dictionaryIDs["first.dsl"]},
+		pageSize:     1, firstSize: 1, pages: []map[int]articleFindNavigationPage{make(map[int]articleFindNavigationPage)}}
+	phrasePage, err := server.loadArticleFindNavigationPage(context.Background(), fullTextSession, 0, 0)
+	if err != nil || len(phrasePage.Counts) != 1 || phrasePage.Counts[0] != 1 || len(phrasePage.Occurrences[0]) != 1 {
+		t.Fatalf("full-text phrase page = %+v, err=%v; want one phrase occurrence", phrasePage, err)
+	}
 	target, wrapped, err := session.move(context.Background(), 1, load)
 	if err != nil || target == nil || target.DictionaryIndex != 0 || target.BlockStart != 0 || target.ArticleIndex != 0 || !wrapped {
 		t.Fatalf("server search wrap = %+v, wrapped=%t, err=%v; want first dictionary block", target, wrapped, err)
@@ -168,4 +176,19 @@ func sameArticleFindTarget(actual, expected *articleFindNavigationTarget) bool {
 	return actual != nil && expected != nil && actual.Dictionary == expected.Dictionary &&
 		actual.DictionaryIndex == expected.DictionaryIndex && actual.BlockStart == expected.BlockStart &&
 		actual.ArticleIndex == expected.ArticleIndex && actual.MatchIndex == expected.MatchIndex
+}
+
+func TestArticleFindFullTextTargetKeepsPhraseOccurrences(t *testing.T) {
+	occurrences := []articleFindOccurrence{{Group: 0, Start: 0, End: 21}, {Group: 0, Start: 24, End: 45}}
+	session := &articleFindNavigationSession{
+		mode: "fts", dictionaries: []string{"dict"},
+		pages: []map[int]articleFindNavigationPage{{0: {
+			Counts: []int{len(occurrences)}, Occurrences: [][]articleFindOccurrence{occurrences},
+		}}},
+	}
+	target := session.target(0, 0, 0, 1)
+	if target.ExpectedMatches != 2 || target.MatchIndex != 1 || len(target.Occurrences) != 2 ||
+		target.Occurrences[1] != occurrences[1] {
+		t.Fatalf("full-text target = %+v; want the second complete phrase occurrence", target)
+	}
 }

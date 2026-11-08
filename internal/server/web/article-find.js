@@ -1176,7 +1176,9 @@ window.addEventListener("resize",()=>{if(!$("articleFindHistory").hidden)sizeFin
 if(window.visualViewport){window.visualViewport.addEventListener("resize",()=>{if(!$("articleFindHistory").hidden)sizeFindHistory()});window.visualViewport.addEventListener("scroll",()=>{if(!$("articleFindHistory").hidden)sizeFindHistory()})}
 $("sbarExamples").addEventListener("click",schedule);
 $("examplesRow")?.addEventListener("click",schedule);
-window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation, saveTraceArticle:(dict,article,html)=>{
+window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation,
+  serverRanges:(root,occurrences,includeExamples)=>serverFindRanges(root,occurrences,includeExamples),
+  saveTraceArticle:(dict,article,html)=>{
   if(!remoteFindTraceActive)return Promise.resolve(false);
   if(!html){
     void remoteFindDiagnostic({diagnosticRun:remoteFindDiagnosticRun,diagnosticStarted:performance.now()},"navigation_trace_article_save_failed",{detail:`trace=${remoteFindTraceRun}; dict=${dict}; article=${article}; reason=empty_html`});

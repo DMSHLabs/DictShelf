@@ -37,7 +37,7 @@ type articleFindNavigationTarget struct {
 	Occurrences     []articleFindOccurrence `json:"occurrences,omitempty"`
 	Headword        string                  `json:"headword,omitempty"`
 	EntryID         int64                   `json:"entryId,omitempty"`
-	ExpectedMarks   int                     `json:"expectedMarks,omitempty"`
+	ExpectedMatches int                     `json:"expectedMatches,omitempty"`
 }
 
 type articleFindNavigationResponse struct {
@@ -516,6 +516,15 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 	occurrences := make([][]articleFindOccurrence, len(counts))
 	options := articleFindMatchOptions{query: session.query, mode: session.mode, matchCase: session.matchCase,
 		examples: session.examples, nearWords: session.nearWords}
+	resultReading := session.resultMode
+	if dictionaryIndex < len(session.rungs) && session.rungs[dictionaryIndex] != "" {
+		resultReading = session.rungs[dictionaryIndex]
+	}
+	if findFullText && resultReading == "phrase" {
+		// Full-text results can be highlighted as separate words when markup
+		// splits a phrase. Navigation still counts the phrase as one occurrence.
+		options.mode = "phrase"
+	}
 	if session.mode == "wordLemma" && !strings.ContainsAny(session.query, " \t\r\n") && s.Morph.Enabled() {
 		if session.lemmas == nil {
 			session.lemmas = make(map[string]string)
@@ -537,7 +546,7 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 	}
 	for i := range results {
 		headwords[i], entryIDs[i] = results[i].Headword, results[i].EntryID
-		if findFullText {
+		if findFullText && resultReading != "phrase" {
 			counts[i] = strings.Count(results[i].Body, `<mark class="wu-hl">`)
 			continue
 		}
@@ -731,7 +740,7 @@ func (session *articleFindNavigationSession) blockLength(start int) int {
 func (session *articleFindNavigationSession) target(dictionaryIndex, blockStart, articleIndex, matchIndex int) *articleFindNavigationTarget {
 	target := &articleFindNavigationTarget{Dictionary: session.dictionaries[dictionaryIndex], DictionaryIndex: dictionaryIndex,
 		BlockStart: blockStart, ArticleIndex: articleIndex, MatchIndex: matchIndex}
-	if !sessionUsesFullTextMarks(session) && dictionaryIndex >= 0 && dictionaryIndex < len(session.pages) {
+	if dictionaryIndex >= 0 && dictionaryIndex < len(session.pages) {
 		if page, ok := session.pages[dictionaryIndex][blockStart]; ok {
 			row := articleIndex - blockStart
 			if row >= 0 && row < len(page.Occurrences) && matchIndex >= 0 && matchIndex < len(page.Occurrences[row]) {
@@ -745,7 +754,7 @@ func (session *articleFindNavigationSession) target(dictionaryIndex, blockStart,
 		if page, ok := session.pages[dictionaryIndex][blockStart]; ok {
 			row := articleIndex - blockStart
 			if row >= 0 && row < len(page.Counts) {
-				target.ExpectedMarks = page.Counts[row]
+				target.ExpectedMatches = page.Counts[row]
 				if row < len(page.Headwords) {
 					target.Headword = page.Headwords[row]
 				}

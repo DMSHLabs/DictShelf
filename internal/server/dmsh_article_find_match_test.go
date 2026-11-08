@@ -19,6 +19,15 @@ func TestArticleFindHTMLMatchesAcrossInlineMarkup(t *testing.T) {
 	}
 }
 
+func TestArticleFindPhraseMatchesAcrossHighlightFragments(t *testing.T) {
+	body := `<p><mark class="wu-hl">джазовый</mark> <a><mark class="wu-hl">кларнетист</mark></a>; ` +
+		`<mark class="wu-hl">джазовый</mark> один <mark class="wu-hl">кларнетист</mark></p>`
+	got := matchArticleFindHTML(body, articleFindMatchOptions{query: "джазовый кларнетист", mode: "phrase"})
+	if len(got) != 1 {
+		t.Fatalf("phrase matches = %+v, want only the complete phrase across highlight fragments", got)
+	}
+}
+
 func TestArticleFindHTMLMatchesModesAndUTF16Offsets(t *testing.T) {
 	body := `<p>🍎 Catapult cat catfish.</p>`
 	tests := []struct {

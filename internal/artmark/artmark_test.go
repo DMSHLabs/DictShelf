@@ -33,8 +33,10 @@ func TestDefaultCSSIsInjectionSafe(t *testing.T) {
 // has; it is the app answering the query the reader just typed, and a
 // dictionary that can erase it turns the feature off without saying so.
 var specificityExempt = map[string]bool{
-	".wu-hl.wu-hl":        true,
-	".wu-hl.wu-hl.wu-cur": true,
+	".wu-hl.wu-hl":              true,
+	".wu-hl-ex.wu-hl-ex":        true,
+	".wu-hl.wu-hl.wu-cur":       true,
+	".wu-hl-ex.wu-hl-ex.wu-cur": true,
 }
 
 func TestDefaultCSSSelectorsAreZeroSpecificity(t *testing.T) {

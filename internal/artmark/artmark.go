@@ -57,7 +57,8 @@
 //	         data-dict / title carry the target dictionary's own name
 //	wu-sub   an article section pulled in beside a link (written by the UI)
 //	wu-hl    a full-text match, marked at response time (internal/hilite)
-//	wu-cur   the one match being walked to (written by the UI, not ingested)
+//	wu-hl-ex a visual continuation of a phrase match, not a navigation stop
+//	wu-cur   the occurrence being walked to (written by the UI, not ingested)
 //	wu-xonly a line whose whole content is examples (written by the UI, web/examples.js)
 //
 // DefaultCSS is served once per page into both article surfaces (the shadow
@@ -104,7 +105,7 @@ const DefaultCSS = `
   background:rgba(224,134,0,.06);border-radius:0 6px 6px 0}
 :where(.wu-sub-close){float:right;cursor:pointer;color:#999;font-size:12px;padding:0 .3em}
 :where(.wu-sub-close:hover){color:var(--wd-sub,#e08600)}
-/* The two highlight rules are the ONE exception to the zero-specificity law,
+/* The highlight rules are the ONE exception to the zero-specificity law,
    and the exception is the point. Every other default here dresses a ROLE the
    article HAS, so the dictionary's own sheet and the reader's Custom styles
    must be able to win. A highlight is not a role: it is the app answering the
@@ -116,11 +117,12 @@ const DefaultCSS = `
    and a dictionary's own !important too, while --wd-hl / --wd-hl-cur keep both
    colours themeable: the custom property is read, the cascade is not fought. */
 .wu-hl.wu-hl{background:var(--wd-hl,#ffe066)!important;color:inherit!important;border-radius:2px}
-/* One of the marks is where the reader was just taken; the rest are still
-   the same colour, because losing sight of them is what a stronger tint on
-   the current one is for. Written by the UI, never ingested, so no Version
-   bump: an article already in a library folder is unaffected. */
+.wu-hl-ex.wu-hl-ex{background:var(--wd-hl,#ffe066)!important;color:inherit!important;border-radius:2px}
+/* The first phrase fragment is the navigation anchor; following fragments
+   share its current tint but are not separate stops. These classes are
+   written by the UI, never ingested, so no Version bump is needed. */
 .wu-hl.wu-hl.wu-cur{background:var(--wd-hl-cur,#ffab40)!important;box-shadow:0 0 0 2px var(--wd-hl-cur,#ffab40)}
+.wu-hl-ex.wu-hl-ex.wu-cur{background:var(--wd-hl-cur,#ffab40)!important;box-shadow:0 0 0 2px var(--wd-hl-cur,#ffab40)}
 `
 
 // IsColor accepts the two forms a DSL [c] argument may legally take - a
