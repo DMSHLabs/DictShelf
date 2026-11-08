@@ -1002,6 +1002,7 @@ type dictInfo struct {
 	SelfIndexed bool      `json:"selfIndexed,omitempty"`
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
+	UIName      string    `json:"uiName,omitempty"`
 	Format      string    `json:"format"`
 	Path        string    `json:"path"`
 	Entries     int       `json:"entries"`
@@ -1177,6 +1178,7 @@ func (s *Server) dictInfoFor(e *entry, global, key string) (info dictInfo, held 
 		}
 	}
 	s.rowState(e, &info)
+	info.UIName = s.reg.prefs.DisplayTitle(e.ID)
 	return info, held
 }
 

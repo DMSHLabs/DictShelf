@@ -708,6 +708,7 @@
   "dictUI.title": "Dictionary settings",
   "dictUI.renameDictionary": "Rename dictionary",
   "dictUI.dictionaryName": "Dictionary name",
+  "dictUI.sourceName": "Name",
   "dictUI.resetDictionaryName": "Restore original dictionary name",
   "dictUI.saveDictionaryName": "Save dictionary name",
   "dictUI.close": "Close dictionary settings",
