@@ -1176,5 +1176,8 @@ window.addEventListener("resize",()=>{if(!$("articleFindHistory").hidden)sizeFin
 if(window.visualViewport){window.visualViewport.addEventListener("resize",()=>{if(!$("articleFindHistory").hidden)sizeFindHistory()});window.visualViewport.addEventListener("scroll",()=>{if(!$("articleFindHistory").hidden)sizeFindHistory()})}
 $("sbarExamples").addEventListener("click",schedule);
 $("examplesRow")?.addEventListener("click",schedule);
-window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation, setHistoryLimit:n=>{findHistory=findHistory.slice(0,Math.max(0,Math.min(1000,Number(n)||0)));saveFindHistory();renderFindHistory()}, fullTextModeActive:()=>options.mode === "fts", isActive:()=>active&&!!options.query, searchAcrossBlocks:()=>true, searchFrom, goto};
+window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation, traceEvent:(stage,detail,elapsedMs=0)=>{
+  if(!remoteFindTraceActive)return;
+  void remoteFindDiagnostic({diagnosticRun:remoteFindDiagnosticRun,diagnosticStarted:performance.now(),traceRun:remoteFindTraceRun},stage,{elapsedMs,detail:`trace=${remoteFindTraceRun}; source=full_text; ${detail}`});
+}, fullTextModeActive:()=>options.mode === "fts", isActive:()=>active&&!!options.query, searchAcrossBlocks:()=>true, searchFrom, goto, setHistoryLimit:n=>{findHistory=findHistory.slice(0,Math.max(0,Math.min(1000,Number(n)||0)));saveFindHistory();renderFindHistory()}};
 })();

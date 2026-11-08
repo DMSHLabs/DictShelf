@@ -10982,9 +10982,12 @@ function navWalkable(){
 async function navRequest(action,extra={}){
   if(!navSessionID)return null;
   const params=new URLSearchParams({cacheAction:action,cacheID:navSessionID,...extra});
+  const started=performance.now();
   const response=await apiFetch("/api/search?"+params);
   if(!response.ok){const failure=await response.json();throw new Error(failure.error||"article navigation failed")}
-  return response.json();
+  const state=await response.json();
+  window.wudictArticleFind?.traceEvent?.("navigation_response",`action=${action}; found=${!!state.found}; position=${state.position||0}/${state.total||0}; dict=${state.target?.dict||""}; block=${state.target?.blockStart??""}`,Math.round(performance.now()-started));
+  return state;
 }
 async function navStart(det){
   if(navPending||!navSessionID||!markedAnswer)return;
@@ -11017,12 +11020,15 @@ async function navGo(step){
 }
 async function navShowTarget(target,state){
   if(!target)return;
+  const displayStarted=performance.now();
   const dict=target.dict||"",start=Number(target.blockStart)||0;
   let det=[...document.querySelectorAll("details.dict")].find(item=>item.dataset.searchDict===dict);
   if(!det)return;
   const token=searchSeq;
   if((Number(det.dataset.searchPageStart)||0)!==start){
+    const blockStarted=performance.now();
     const replacement=await window.wudictRestoreArticleBlock?.(det,start);
+    window.wudictArticleFind?.traceEvent?.("navigation_trace_block",`dict=${dict}; block=${start}; loaded=${!!replacement}`,Math.round(performance.now()-blockStarted));
     if(!replacement||token!==searchSeq)return;
     det=replacement;
   }
@@ -11032,17 +11038,22 @@ async function navShowTarget(target,state){
   const row=det.querySelectorAll(":scope>dl>dd")[articleOffset];
   const host=row?.querySelector(".article");
   if(!host)return;
+  const markStarted=performance.now();
   let mark=null;
+  let frameMissing=0,markScans=0;
   for(let attempt=0;attempt<50;attempt++){
     const root=host.shadowRoot||host.contentDocument;
-    mark=root?.querySelectorAll(".wu-hl")[Number(target.matchIndex)]||null;
+    if(!root)frameMissing++;
+    else {markScans++;mark=root.querySelectorAll(".wu-hl")[Number(target.matchIndex)]||null}
     if(mark)break;
     if(token!==searchSeq||navSuppressed)return;
     await new Promise(resolve=>setTimeout(resolve,100));
   }
+  window.wudictArticleFind?.traceEvent?.("navigation_trace_mark",`dict=${dict}; article=${target.articleIndex}; block=${start}; found=${!!mark}; frame_missing=${frameMissing}; scans=${markScans}; match_index=${target.matchIndex}`,Math.round(performance.now()-markStarted));
   if(!mark)return;
   mark.classList.add("wu-cur");
   navCurrent={det,host,el:mark};navServerState=state;
+  window.wudictArticleFind?.traceEvent?.("navigation_trace_display",`dict=${dict}; article=${target.articleIndex}; block=${start}; mark_ready=true`,Math.round(performance.now()-displayStarted));
   navSettleCurrent(navCurrent);navPos();
 }
 function navGoto(page){
@@ -11123,9 +11134,11 @@ window.wudictArticleFindBlockRange=det=>{
 };
 function navSettleCurrent(cur){
   navScrollSettle?.();
+  const settleStarted=performance.now();
   let moved=false,attempts=0,stable=0,timer=0,frame=0,timeout=0,observer=null;
   const quit=["wheel","touchstart","pointerdown","keydown"];
   const stop=()=>{
+    window.wudictArticleFind?.traceEvent?.("navigation_trace_settle",`attempts=${attempts}; stable=${stable}; moved=${moved}; current=${navCurrent===cur};`,Math.round(performance.now()-settleStarted));
     observer?.disconnect();clearTimeout(timer);clearTimeout(timeout);cancelAnimationFrame(frame);
     for(const event of quit)removeEventListener(event,stop);
     if(navScrollSettle===stop)navScrollSettle=null;
