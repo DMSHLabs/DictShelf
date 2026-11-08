@@ -6,6 +6,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"runtime"
@@ -95,6 +96,7 @@ type browseDiagnostic struct {
 	FTS                    bool   `json:"fts"`
 	Trigram                bool   `json:"trigram"`
 	Detail                 string `json:"detail"`
+	HTML                   string `json:"html"`
 	SpinnerVisible         bool   `json:"spinnerVisible"`
 	NoticeVisible          bool   `json:"noticeVisible"`
 	BusyWanted             bool   `json:"busyWanted"`
@@ -184,7 +186,7 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 8192)
+	r.Body = http.MaxBytesReader(w, r.Body, 3*1024*1024)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	var d browseDiagnostic
@@ -212,6 +214,20 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 }
 
 func recordBrowseDiagnostic(d browseDiagnostic) error {
+	if d.Event == "search_trace_article" {
+		if !logx.SystemLogSearchEventsEnabled() || len(d.HTML) == 0 || len(d.HTML) > 2*1024*1024 ||
+			len(d.Dict) > 128 || strings.ContainsAny(d.Dict, `\\/:*?"<>|`) || !bounded(d.Page, 1_000_000) ||
+			!bounded(d.RunID, 1_000_000_000) || !bounded(d.Completed, 100_000) {
+			return errors.New("invalid trace article")
+		}
+		name := fmt.Sprintf("DictShelf_SearchTrace_%d_%s_%06d.html", time.Now().UnixNano(), d.Dict, d.Page)
+		path, err := logx.SaveSystemDiagnosticFile(name, []byte(d.HTML))
+		if err != nil {
+			return err
+		}
+		logx.SystemDiagnostic("search_article run=%d stage=navigation_trace_article_saved dict=%q article=%d file=%q bytes=%d", d.RunID, d.Dict, d.Page, path, len(d.HTML))
+		return nil
+	}
 	if d.Event == "indexing_mode" {
 		return setIndexingMode(d.Mode, nil)
 	}
@@ -254,7 +270,7 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 	}
 	if d.Event == "search_article" {
 		switch d.Stage {
-		case "search_start", "search_empty_group", "search_stream_begin", "dictionary_response", "article_open", "return_target_open", "return_target_after_paint", "return_target_search_end", "return_target_after_search_paint", "first_article_painted", "search_end", "search_aborted", "search_error", "navigation_request", "navigation_response", "navigation_target_painted", "navigation_trace_start", "navigation_trace_step", "navigation_trace_end", "navigation_trace_stop", "navigation_trace_error", "navigation_trace_display", "navigation_trace_block", "navigation_trace_mark", "navigation_trace_settle":
+		case "search_start", "search_empty_group", "search_stream_begin", "dictionary_response", "article_open", "return_target_open", "return_target_after_paint", "return_target_search_end", "return_target_after_search_paint", "first_article_painted", "search_end", "search_aborted", "search_error", "navigation_request", "navigation_response", "navigation_target_painted", "navigation_trace_start", "navigation_trace_step", "navigation_trace_end", "navigation_trace_stop", "navigation_trace_error", "navigation_trace_display", "navigation_trace_block", "navigation_trace_mark", "navigation_trace_settle", "navigation_trace_article_saved", "navigation_trace_article_save_failed":
 		default:
 			return errors.New("invalid diagnostic")
 		}

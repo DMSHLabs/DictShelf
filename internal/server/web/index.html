@@ -11050,7 +11050,12 @@ async function navShowTarget(target,state){
     await new Promise(resolve=>setTimeout(resolve,100));
   }
   window.wudictArticleFind?.traceEvent?.("navigation_trace_mark",`dict=${dict}; article=${target.articleIndex}; block=${start}; found=${!!mark}; frame_missing=${frameMissing}; scans=${markScans}; match_index=${target.matchIndex}`,Math.round(performance.now()-markStarted));
-  if(!mark)return;
+  if(!mark){
+    const root=host.shadowRoot||host.contentDocument;
+    const html=root?.documentElement?.outerHTML||"";
+    await window.wudictArticleFind?.saveTraceArticle?.(dict,target.articleIndex,html);
+    return;
+  }
   mark.classList.add("wu-cur");
   navCurrent={det,host,el:mark};navServerState=state;
   window.wudictArticleFind?.traceEvent?.("navigation_trace_display",`dict=${dict}; article=${target.articleIndex}; block=${start}; mark_ready=true`,Math.round(performance.now()-displayStarted));

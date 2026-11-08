@@ -98,6 +98,38 @@ func systemDir() string {
 	return filepath.Clean(systemRoot()) + ".logs"
 }
 
+// SaveSystemDiagnosticFile stores a bounded diagnostic artifact beside the
+// system log and returns its full path.
+func SaveSystemDiagnosticFile(name string, data []byte) (string, error) {
+	if filepath.Base(name) != name || name == "." || name == ".." || len(data) > 2*1024*1024 {
+		return "", fmt.Errorf("invalid diagnostic artifact")
+	}
+	systemMu.Lock()
+	defer systemMu.Unlock()
+	root := systemDir()
+	if root == "" {
+		return "", fmt.Errorf("system log location is not configured")
+	}
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return "", err
+	}
+	path := filepath.Join(root, name)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return "", err
+	}
+	if _, err = f.Write(data); err != nil {
+		f.Close()
+		os.Remove(path)
+		return "", err
+	}
+	if err = f.Close(); err != nil {
+		os.Remove(path)
+		return "", err
+	}
+	return path, nil
+}
+
 // System writes diagnostics independently of verbose console output. Logging
 // failures never replace the original failure and never recurse into logging.
 func System(format string, args ...any) {
