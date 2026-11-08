@@ -11052,7 +11052,7 @@ async function navShowTarget(target,state){
   window.wudictArticleFind?.traceEvent?.("navigation_trace_mark",`dict=${dict}; article=${target.articleIndex}; block=${start}; found=${!!mark}; frame_missing=${frameMissing}; scans=${markScans}; match_index=${target.matchIndex}`,Math.round(performance.now()-markStarted));
   if(!mark){
     const root=host.shadowRoot||host.contentDocument;
-    const html=root?.documentElement?.outerHTML||"";
+    const html=root?.documentElement?.outerHTML||root?.innerHTML||"";
     await window.wudictArticleFind?.saveTraceArticle?.(dict,target.articleIndex,html);
     return;
   }

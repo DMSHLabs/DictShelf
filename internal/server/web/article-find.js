@@ -1177,7 +1177,11 @@ if(window.visualViewport){window.visualViewport.addEventListener("resize",()=>{i
 $("sbarExamples").addEventListener("click",schedule);
 $("examplesRow")?.addEventListener("click",schedule);
 window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation, saveTraceArticle:(dict,article,html)=>{
-  if(!remoteFindTraceActive||!html)return Promise.resolve(false);
+  if(!remoteFindTraceActive)return Promise.resolve(false);
+  if(!html){
+    void remoteFindDiagnostic({diagnosticRun:remoteFindDiagnosticRun,diagnosticStarted:performance.now()},"navigation_trace_article_save_failed",{detail:`trace=${remoteFindTraceRun}; dict=${dict}; article=${article}; reason=empty_html`});
+    return Promise.resolve(false);
+  }
   const bytes=new TextEncoder().encode(html).byteLength;
   if(bytes>2*1024*1024){
     void remoteFindDiagnostic({diagnosticRun:remoteFindDiagnosticRun,diagnosticStarted:performance.now()},"navigation_trace_article_save_failed",{detail:`trace=${remoteFindTraceRun}; dict=${dict}; article=${article}; bytes=${bytes}; reason=over_limit`});
