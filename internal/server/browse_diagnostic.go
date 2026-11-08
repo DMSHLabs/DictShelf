@@ -254,7 +254,7 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 	}
 	if d.Event == "search_article" {
 		switch d.Stage {
-		case "search_start", "search_empty_group", "search_stream_begin", "dictionary_response", "article_open", "return_target_open", "return_target_after_paint", "return_target_search_end", "return_target_after_search_paint", "first_article_painted", "search_end", "search_aborted", "search_error":
+		case "search_start", "search_empty_group", "search_stream_begin", "dictionary_response", "article_open", "return_target_open", "return_target_after_paint", "return_target_search_end", "return_target_after_search_paint", "first_article_painted", "search_end", "search_aborted", "search_error", "navigation_request", "navigation_response", "navigation_target_painted":
 		default:
 			return errors.New("invalid diagnostic")
 		}

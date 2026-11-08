@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 	"github.com/DMSHLabs/DictShelf/internal/search"
 )
 
@@ -79,6 +80,17 @@ type articleFindNavigationSession struct {
 
 func (s *Server) handleArticleFindNavigation(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
+	action := q.Get("cacheAction")
+	started := time.Now()
+	diagnostics := logx.SystemLogSearchEventsEnabled()
+	if diagnostics {
+		logx.SystemDiagnostic("article_find_navigation stage=request action=%q id=%q query=%q mode=%q dictionaries=%d",
+			action, q.Get("cacheID"), q.Get("q"), q.Get("mode"), len(strings.Split(q.Get("dict"), ",")))
+		defer func() {
+			logx.SystemDiagnostic("article_find_navigation stage=response action=%q id=%q elapsed_ms=%d",
+				action, q.Get("cacheID"), time.Since(started).Milliseconds())
+		}()
+	}
 	id := q.Get("cacheID")
 	if !wildcardCacheIDPattern.MatchString(id) {
 		httpErr(w, http.StatusBadRequest, "invalid article find session")
@@ -434,8 +446,11 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 		return articleFindNavigationPage{}, errors.New("invalid article result block")
 	}
 	if page, ok := session.pages[dictionaryIndex][start]; ok {
+		logx.SystemDiagnosticIf(logx.SystemLogSearchEventsEnabled(),
+			"article_find_navigation stage=page_cache_hit id=%q dict=%q start=%d", session.id, session.dictionaries[dictionaryIndex], start)
 		return page, nil
 	}
+	pageStarted := time.Now()
 	blockSize := session.pageSize
 	if start == 0 {
 		blockSize = session.firstSize
@@ -449,7 +464,7 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 	cacheComplete, cacheHasNext := false, false
 	findFullText := sessionUsesFullTextMarks(session)
 	request := SearchRequest{Query: session.resultQuery, Mode: session.resultMode, Dictionary: session.dictionaries[dictionaryIndex],
-		Format: "raw", Limit: limit, Highlight: findFullText, IgnoreDiacritics: session.ignore}
+		Format: "raw", Limit: limit, Highlight: findFullText, IgnoreDiacritics: session.ignore, Transport: "article_find_navigation"}
 	if session.cacheID != "" {
 		request.CacheAction = "page"
 		request.CacheID = session.cacheID
@@ -473,8 +488,15 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 		}
 		return nil
 	}); err != nil {
+		logx.SystemDiagnosticIf(logx.SystemLogSearchEventsEnabled(),
+			"article_find_navigation stage=page_read_failed id=%q dict=%q start=%d elapsed_ms=%d error=%q",
+			session.id, request.Dictionary, start, time.Since(pageStarted).Milliseconds(), err)
 		return articleFindNavigationPage{}, err
 	}
+	resultsReady := time.Now()
+	logx.SystemDiagnosticIf(logx.SystemLogSearchEventsEnabled(),
+		"article_find_navigation stage=page_articles_ready id=%q dict=%q start=%d articles=%d elapsed_ms=%d",
+		session.id, request.Dictionary, start, len(results), time.Since(pageStarted).Milliseconds())
 	resultCount := len(results)
 	if session.cacheID == "" {
 		end = min(end, len(results))
@@ -514,6 +536,13 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 		occurrences[i] = matchArticleFindHTML(results[i].Body, options)
 		counts[i] = len(occurrences[i])
 	}
+	matches := 0
+	for _, count := range counts {
+		matches += count
+	}
+	logx.SystemDiagnosticIf(logx.SystemLogSearchEventsEnabled(),
+		"article_find_navigation stage=page_scan_done id=%q dict=%q start=%d articles=%d matches=%d elapsed_ms=%d",
+		session.id, request.Dictionary, start, len(results), matches, time.Since(resultsReady).Milliseconds())
 	page := articleFindNavigationPage{Start: start, Counts: counts, Occurrences: occurrences,
 		HasNext:  session.cacheID != "" && cacheHasNext || session.cacheID == "" && end < articleFindNavigationFallbackResults && resultCount > end,
 		Complete: session.cacheID != "" && cacheComplete || session.cacheID == "" && resultCount <= end}

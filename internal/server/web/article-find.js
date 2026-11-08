@@ -459,6 +459,13 @@ function remoteFindID(){
   try{crypto.getRandomValues(bytes)}catch(_){for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256)}
   return [...bytes].map(value=>value.toString(16).padStart(2,"0")).join("");
 }
+let remoteFindDiagnosticRun=0;
+function remoteFindDiagnostic(record,stage,fields={}){
+  if(!searchArticleDiagnosticsEnabled())return;
+  sendBrowseDiagnostic({event:"search_article",stage,runId:record?.diagnosticRun||remoteFindDiagnosticRun,
+    query:String(options.query||"").replace(/[\r\n]/g," ").slice(0,1024),mode:options.mode,
+    elapsedMs:Math.max(0,Math.round(performance.now()-(record?.diagnosticStarted||performance.now()))),...fields});
+}
 function remoteFindContext(){
   const source=window.wudictArticleFindContext?.()||{};
   const details=[...$("out").querySelectorAll("details.dict[data-searchDict]")];
@@ -477,9 +484,18 @@ function remoteFindURL(record,action,extra={}){
   return "/api/search?"+new URLSearchParams({cacheAction:action,cacheID:record.id,...extra});
 }
 async function remoteFindFetch(record,action,extra={}){
+	const started=performance.now();
+	remoteFindDiagnostic(record,"navigation_request",{detail:`action=${action}`});
   const response=await apiFetch(remoteFindURL(record,action,extra));
-  if(!response.ok)throw new Error(await response.text()||"article search failed");
-  return response.json();
+  if(!response.ok){
+    const error=await response.text();
+    remoteFindDiagnostic(record,"navigation_response",{elapsedMs:Math.round(performance.now()-started),detail:`action=${action}; status=${response.status}; error=${String(error).slice(0,700)}`});
+    throw new Error(error||"article search failed");
+  }
+  const state=await response.json();
+  remoteFindDiagnostic(record,"navigation_response",{elapsedMs:Math.round(performance.now()-started),completed:Math.min(100000,state.total||0),
+    detail:`action=${action}; found=${!!state.found}; complete=${!!state.complete}; dict=${state.target?.dict||""}; block=${state.target?.blockStart??""}`});
+  return state;
 }
 async function startRemoteFind(){
   if(options.mode==="fts")return;
@@ -488,7 +504,7 @@ async function startRemoteFind(){
   if(remoteFind?.signature===signature){paint();return}
   closeRemoteFind();
   if(!context.dictionaries.length||!context.query||!context.mode){remoteFind={signature,state:{complete:true,total:0,found:false}};paint();return}
-  const record={id:remoteFindID(),signature,state:null,pending:true,error:""};
+  const record={id:remoteFindID(),signature,state:null,pending:true,error:"",diagnosticRun:++remoteFindDiagnosticRun,diagnosticStarted:performance.now()};
   remoteFind=record;remoteFindPending=true;
   const token=++remoteFindToken;
   matches=[];index=-1;docs.clear();restoreExamples();clearPaint();paint();
@@ -642,13 +658,16 @@ async function moveRemoteFind(step){
     if(record.pendingTarget){
       const target=record.pendingTarget;record.pendingTarget=null;
       if(step===record.anchorDirection){
+        const paintStarted=performance.now();
         record.error=await showRemoteFindTarget(target.target,target,token)?"":t("search.fullListUnavailable");
+        remoteFindDiagnostic(record,"navigation_target_painted",{elapsedMs:Math.round(performance.now()-paintStarted),detail:`dict=${target.target?.dict||""}; block=${target.target?.blockStart??""}; success=${!record.error}`});
         return;
       }
     }
     const state=await remoteFindFetch(record,step<0?"navPrevious":"navNext");
     if(request!==remoteFindRequestSeq||token!==remoteFindToken||remoteFind!==record)return;
-    if(state.found){record.state=state;record.error=await showRemoteFindTarget(state.target,state,token)?"":t("search.fullListUnavailable")}
+    if(state.found){record.state=state;const paintStarted=performance.now();record.error=await showRemoteFindTarget(state.target,state,token)?"":t("search.fullListUnavailable");
+      remoteFindDiagnostic(record,"navigation_target_painted",{elapsedMs:Math.round(performance.now()-paintStarted),detail:`dict=${state.target?.dict||""}; block=${state.target?.blockStart??""}; success=${!record.error}`})}
     else record.state={...record.state,...state};
   }catch(error){record.error=String(error?.message||error)}
   finally{if(request===remoteFindRequestSeq&&token===remoteFindToken){remoteFindPending=false;paint()}}
@@ -667,7 +686,8 @@ async function gotoRemoteFind(page){
   try{
     const state=await remoteFindFetch(record,"navGoto",{position:String(page)});
     if(request!==remoteFindRequestSeq||token!==remoteFindToken||remoteFind!==record)return;
-    if(state.found){record.state=state;record.error=await showRemoteFindTarget(state.target,state,token)?"":t("search.fullListUnavailable")}
+    if(state.found){record.state=state;const paintStarted=performance.now();record.error=await showRemoteFindTarget(state.target,state,token)?"":t("search.fullListUnavailable");
+      remoteFindDiagnostic(record,"navigation_target_painted",{elapsedMs:Math.round(performance.now()-paintStarted),detail:`dict=${state.target?.dict||""}; block=${state.target?.blockStart??""}; success=${!record.error}`})}
     else record.state={...record.state,total:state.total,complete:state.complete};
   }catch(error){record.error=String(error?.message||error)}
   finally{if(request===remoteFindRequestSeq&&token===remoteFindToken){remoteFindPending=false;paint()}}
