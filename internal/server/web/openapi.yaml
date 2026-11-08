@@ -347,9 +347,11 @@ paths:
             preference, which is why the default here is off and the default
             there is on. Marking follows what the full-text index matched:
             word readings are prefix-based and whole-token, the near window is
-            the reader's setting, and every reading stops at 500 occurrences per
-            article - past the cap the article is still returned complete, just
-            no longer marked. An article whose phrase or near marks were painted
+            the reader's setting, and every reading - and every literal mode
+            asked for through a navigation session - stops at 500 matches per
+            article: past the cap the article is still returned complete, just no
+            longer marked, and a navigation total that saw a capped article stays
+            provisional (`complete` false) rather than claim an exact number. An article whose phrase or near marks were painted
             comes back re-serialized: its text is unchanged, its markup is
             canonical (quoted attribute values, spelled-out entities).
             `format=text` drops the marks with all other markup.

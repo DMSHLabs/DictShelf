@@ -68,7 +68,9 @@ const (
 	// better served by ten thousand marks than by five hundred. The cap is per
 	// Cursor, which is to say per article; past it marking stops, and the
 	// ARTICLE IS STILL EMITTED WHOLE - the tail is copied verbatim, never
-	// truncated.
+	// truncated. A body cut here is a LOWER BOUND on the article's matches, and
+	// the navigation that counts its marks says so (server's completeAnswer):
+	// the reader is never told an exact number that is not one.
 	MaxMarks = 500
 
 	// maxEntity bounds the entity guard's lookahead. "&thickapprox;" is 13

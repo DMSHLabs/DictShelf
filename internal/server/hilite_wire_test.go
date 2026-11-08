@@ -164,8 +164,8 @@ func TestArticleResultCacheMarksWithoutARung(t *testing.T) {
 	if !strings.Contains(got, `<mark class="wu-hl" data-wu-match="0">vivienda es una</mark>`) {
 		t.Fatalf("a page built without a rung came back unmarked: %s", got)
 	}
-	if n := countArticleFindHeads(got); n != 1 {
-		t.Fatalf("heads on the unmarked page = %d, want 1", n)
+	if n, capped := countArticleFindHeads(got); n != 1 || capped {
+		t.Fatalf("heads on the unmarked page = %d (capped %t), want 1", n, capped)
 	}
 }
 

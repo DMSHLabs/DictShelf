@@ -8,7 +8,10 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/DMSHLabs/DictShelf/internal/hilite"
 )
 
 func TestArticleFindNavigationWalksDictionaryBlocksAndWraps(t *testing.T) {
@@ -291,5 +294,57 @@ func TestArticleFindAnchorLocatesItsSnippet(t *testing.T) {
 				t.Fatalf("anchor %q (%d) = %+v, err=%v; want position %d", tc.anchor, tc.direction, response, err, tc.position)
 			}
 		})
+	}
+}
+
+// The literal list is bounded the way the marks are, and a bounded list makes the
+// total a LOWER BOUND: an article that matches a short needle more times than
+// hilite.MaxMarks paints and counts the first MaxMarks, records that it did, and
+// from then on reports its total as provisional - "Complete" false, which is the
+// page's "+". A reader may see fewer matches than exist; being told an exact
+// number that is not one would be worse.
+func TestArticleFindCapBoundsALiteralList(t *testing.T) {
+	dir := t.TempDir()
+	source := "#NAME \"Cap\"\n\nbig\n\t" + strings.Repeat("a ", hilite.MaxMarks+50) + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "cap.dsl"), []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	isolatedDBDir(t)
+	registry, err := NewRegistry([]string{dir}, false, WithComparisons(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitNewDictionaryIndexing(t, registry)
+	entries := registry.all()
+	if len(entries) != 1 {
+		t.Fatalf("entries = %d, want one", len(entries))
+	}
+	server := New(registry)
+	server.User = UserDir(t.TempDir())
+	server.wildcardPages.init(server.wildcardCacheDir())
+	t.Cleanup(func() {
+		server.wildcardPages.mu.Lock()
+		defer server.wildcardPages.mu.Unlock()
+		for _, cached := range server.wildcardPages.entries {
+			_ = cached.db.Close()
+		}
+	})
+	session := &articleFindNavigationSession{query: "a", mode: "contains",
+		resultQuery: "big", resultMode: "exact", dictionaries: []string{entries[0].ID},
+		pageSize: 1, firstSize: 1, pages: []map[int]articleFindNavigationPage{make(map[int]articleFindNavigationPage)}}
+	page, err := server.loadArticleFindNavigationPage(context.Background(), session, 0, 0)
+	if err != nil || len(page.Counts) != 1 {
+		t.Fatalf("page = %+v, err=%v; want one article", page, err)
+	}
+	if page.Counts[0] != hilite.MaxMarks || len(page.Occurrences[0]) != hilite.MaxMarks {
+		t.Fatalf("count = %d, occurrences = %d; want the cap %d",
+			page.Counts[0], len(page.Occurrences[0]), hilite.MaxMarks)
+	}
+	if !session.capped {
+		t.Fatal("the session did not record that an article was cut")
+	}
+	session.complete = true
+	if session.completeAnswer() {
+		t.Fatal("a capped session claimed its total was exact")
 	}
 }

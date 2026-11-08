@@ -196,14 +196,24 @@ func TestCountArticleFindHeads(t *testing.T) {
 		`<span class="wu-hl-ex2" data-wu-match="0">x</span>` +
 		`<mark class="wu-hl-ex" data-wu-match="0">b</mark></p>` +
 		`<p><mark class="wu-hl" data-wu-match="1">c</mark></p>`
-	if n := countArticleFindHeads(body); n != 2 {
-		t.Errorf("heads = %d, want 2", n)
+	if n, capped := countArticleFindHeads(body); n != 2 || capped {
+		t.Errorf("heads = %d (capped %t), want 2", n, capped)
 	}
-	if n := countArticleFindHeads(`<mark class="wu-hl wu-extra" data-wu-match="0">a</mark>`); n != 1 {
+	if n, _ := countArticleFindHeads(`<mark class="wu-hl wu-extra" data-wu-match="0">a</mark>`); n != 1 {
 		t.Errorf("a multi-name class list = %d, want 1", n)
 	}
-	if n := countArticleFindHeads(`<mark class="wu-hl-lemma">a</mark>`); n != 0 {
+	if n, _ := countArticleFindHeads(`<mark class="wu-hl-lemma">a</mark>`); n != 0 {
 		t.Errorf("a lemma mark counted as a match: %d", n)
+	}
+	// The cap is a lower bound, and the count admits it: a body holding the cap's
+	// worth of heads may have been cut there, so its total must stay provisional.
+	full := markArticleFindHTML(strings.Repeat(`<p>ax</p>`, hilite.MaxMarks+1), articleFindMarking{phrases: []hilite.Phrase{{{Text: "ax", Prefix: true}}}})
+	if n, capped := countArticleFindHeads(full); n != hilite.MaxMarks || !capped {
+		t.Errorf("capped body = %d heads (capped %t), want %d and capped", n, capped, hilite.MaxMarks)
+	}
+	exact := markArticleFindHTML(strings.Repeat(`<p>ax</p>`, hilite.MaxMarks-1), articleFindMarking{phrases: []hilite.Phrase{{{Text: "ax", Prefix: true}}}})
+	if n, capped := countArticleFindHeads(exact); n != hilite.MaxMarks-1 || capped {
+		t.Errorf("short body = %d heads (capped %t), want %d and exact", n, capped, hilite.MaxMarks-1)
 	}
 }
 
@@ -228,6 +238,6 @@ func BenchmarkCountArticleFindHeads(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = countArticleFindHeads(body)
+		_, _ = countArticleFindHeads(body)
 	}
 }

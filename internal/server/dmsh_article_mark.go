@@ -355,13 +355,18 @@ func articleFindTextNode(text string) *html.Node {
 // match, so a class list carrying more than one name, or attributes in another
 // order, cannot silently zero the count - the number the arrows use is read
 // from the same markup the reader sees.
-func countArticleFindHeads(body string) int {
+//
+// The second value says the count MAY BE a lower bound: the marker stops at
+// hilite.MaxMarks per article, so a body holding exactly that many heads may
+// have been cut there. The count is still what the arrows walk; the CALLER must
+// not report it as exact (the session keeps its total marked provisional).
+func countArticleFindHeads(body string) (int, bool) {
 	z := html.NewTokenizer(strings.NewReader(body))
 	count := 0
 	for {
 		switch z.Next() {
 		case html.ErrorToken:
-			return count
+			return count, count >= hilite.MaxMarks
 		case html.StartTagToken:
 		default:
 			continue

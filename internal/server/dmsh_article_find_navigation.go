@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/hilite"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
 	"github.com/DMSHLabs/DictShelf/internal/search"
 )
@@ -81,6 +82,7 @@ type articleFindNavigationSession struct {
 	pages        []map[int]articleFindNavigationPage
 	lemmas       map[string]string
 	complete     bool
+	capped       bool // an article hit the mark cap: the total is a lower bound
 	updated      time.Time
 }
 
@@ -553,10 +555,21 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 			// A reading's answer already carries its marks, and one head is one
 			// occurrence: the number the arrows walk IS the number painted into
 			// the article, so the two cannot disagree.
-			counts[i] = countArticleFindHeads(results[i].Body)
+			var capped bool
+			counts[i], capped = countArticleFindHeads(results[i].Body)
+			if capped {
+				session.markCapped(request.Dictionary, results[i].EntryID, session.mode)
+			}
 			continue
 		}
 		groups, matches := articleFindHTMLSpans(results[i].Body, options)
+		if len(matches) > hilite.MaxMarks {
+			// The literal list is bounded the way the marks are: an article that
+			// matches a short needle thousands of times would otherwise travel
+			// whole and be painted whole, and no reader steps through that.
+			matches = matches[:hilite.MaxMarks]
+			session.markCapped(request.Dictionary, results[i].EntryID, session.mode)
+		}
 		occurrences[i] = articleFindWireOccurrences(groups, matches)
 		counts[i] = len(occurrences[i])
 	}
@@ -870,6 +883,26 @@ func articleFindBefore(occurrence articleFindWireOccurrence, path []int, offset 
 		return len(start.Path) < len(path)
 	}
 	return start.Start < offset
+}
+
+// markCapped records that one article's marks were cut at hilite.MaxMarks, and
+// names the article once in the system log. From then on the session's total is
+// a lower bound, and every response says so - the reader must not be told that an
+// exact number of matches exists when the tail was never painted.
+func (session *articleFindNavigationSession) markCapped(dict string, entryID int64, reading string) {
+	if session.capped {
+		return
+	}
+	session.capped = true
+	logx.SystemDiagnosticIf(logx.SystemLogSearchEventsEnabled(),
+		"article_find stage=capped dict=%q entry_id=%d reading=%q marks=%d", dict, entryID, reading, hilite.MaxMarks)
+}
+
+// completeAnswer is what a response may claim: the scan finished AND no article
+// was cut at the cap. A capped total is a lower bound, and the page's "+" is the
+// only honest way to say that.
+func (session *articleFindNavigationSession) completeAnswer() bool {
+	return session.complete && !session.capped
 }
 
 func sessionUsesFullTextMarks(session *articleFindNavigationSession) bool {
