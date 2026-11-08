@@ -712,7 +712,12 @@ async function runRemoteFindTrace(){
       steps++;
       const state=record.state||{},position=Number(state.position)||0;
       await remoteFindDiagnostic(record,"navigation_trace_step",{completed:Math.min(100000,steps),total:Math.min(100000,state.total||0),detail:`trace=${record.traceRun}; step=${steps}; from=${from}; to=${position}; complete=${!!state.complete}; step_ms=${Math.round(performance.now()-stepStarted)}; dict=${state.target?.dict||""}; article=${state.target?.articleIndex??""}; block=${state.target?.blockStart??""}`});
-      if(state.complete&&position<=previousPosition){reason="wrapped";break}
+      if(state.complete&&position<=previousPosition){
+        reason="last_match";
+        const restored=await moveRemoteFind(-1);
+        if(restored)steps++;
+        break;
+      }
       previousPosition=position;
       await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
     }
