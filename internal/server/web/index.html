@@ -11131,14 +11131,38 @@ function navGo(step){
   if(!navDet||!navDet.isConnected)return navDetach();
   if(!navList||!navList.length||!navList[navIdx].el.isConnected)navRefresh();
   const current=navList?.[navIdx];
-  if(step&&current&&window.wudictArticleFind?.searchAcrossBlocks?.()){
+  if(step&&current){
     const boundary=step>0?navList.slice(navIdx+1).every(item=>item.det!==current.det):
       navList.slice(0,navIdx).every(item=>item.det!==current.det);
-    if(boundary&&window.wudictArticleBlockHasMore?.(current.det,step)){
-      navCrossResultBlocks(current,step);return;
+    if(boundary){
+      if(window.wudictArticleFind?.searchAcrossBlocks?.()&&window.wudictArticleBlockHasMore?.(current.det,step)){
+        navCrossResultBlocks(current,step);return;
+      }
+      navAdjacentDictionary(current,step);return;
     }
   }
   navMove(step);
+}
+async function navAdjacentDictionary(current,step){
+  if(navBlockPending)return;
+  navBlockPending=true;
+  const token=++navBlockToken,generation=searchSeq;
+  try{
+    const sections=[...$("out").querySelectorAll("details.dict")],start=sections.indexOf(current.det);
+    if(start<0)return navMove(step);
+    for(let distance=1;distance<sections.length;distance++){
+      const det=sections[(start+step*distance+sections.length)%sections.length];
+      navDet=det;if(!det.open)det.open=true;
+      for(let attempt=0;attempt<30;attempt++){
+        if(token!==navBlockToken||generation!==searchSeq||navSuppressed)return;
+        navRefresh();
+        const found=navList.filter(item=>item.det===det);
+        if(found.length){navSelect(step>0?found[0]:found.at(-1));return}
+        if(attempt)await new Promise(resolve=>setTimeout(resolve,100));
+      }
+    }
+    if(token===navBlockToken&&generation===searchSeq&&!navSuppressed)navMove(step);
+  }finally{if(token===navBlockToken)navBlockPending=false}
 }
 async function navGoto(page){
   if(!navList||!navList.length)navRefresh();
