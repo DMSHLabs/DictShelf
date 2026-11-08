@@ -38,6 +38,7 @@ type articleFindNavigationTarget struct {
 	Headword        string                  `json:"headword,omitempty"`
 	EntryID         int64                   `json:"entryId,omitempty"`
 	ExpectedMatches int                     `json:"expectedMatches,omitempty"`
+	Reading         string                  `json:"reading,omitempty"`
 }
 
 type articleFindNavigationResponse struct {
@@ -520,10 +521,10 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 	if dictionaryIndex < len(session.rungs) && session.rungs[dictionaryIndex] != "" {
 		resultReading = session.rungs[dictionaryIndex]
 	}
-	if findFullText && resultReading == "phrase" {
-		// Full-text results can be highlighted as separate words when markup
-		// splits a phrase. Navigation still counts the phrase as one occurrence.
-		options.mode = "phrase"
+	if findFullText && (resultReading == "phrase" || resultReading == "near") {
+		// Full-text terms can be marked separately when markup splits a match.
+		// Navigation counts complete phrase or near windows as one occurrence.
+		options.mode = resultReading
 	}
 	if session.mode == "wordLemma" && !strings.ContainsAny(session.query, " \t\r\n") && s.Morph.Enabled() {
 		if session.lemmas == nil {
@@ -546,7 +547,7 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 	}
 	for i := range results {
 		headwords[i], entryIDs[i] = results[i].Headword, results[i].EntryID
-		if findFullText && resultReading != "phrase" {
+		if findFullText && resultReading != "phrase" && resultReading != "near" {
 			counts[i] = strings.Count(results[i].Body, `<mark class="wu-hl">`)
 			continue
 		}
@@ -740,6 +741,10 @@ func (session *articleFindNavigationSession) blockLength(start int) int {
 func (session *articleFindNavigationSession) target(dictionaryIndex, blockStart, articleIndex, matchIndex int) *articleFindNavigationTarget {
 	target := &articleFindNavigationTarget{Dictionary: session.dictionaries[dictionaryIndex], DictionaryIndex: dictionaryIndex,
 		BlockStart: blockStart, ArticleIndex: articleIndex, MatchIndex: matchIndex}
+	target.Reading = session.resultMode
+	if dictionaryIndex >= 0 && dictionaryIndex < len(session.rungs) && session.rungs[dictionaryIndex] != "" {
+		target.Reading = session.rungs[dictionaryIndex]
+	}
 	if dictionaryIndex >= 0 && dictionaryIndex < len(session.pages) {
 		if page, ok := session.pages[dictionaryIndex][blockStart]; ok {
 			row := articleIndex - blockStart

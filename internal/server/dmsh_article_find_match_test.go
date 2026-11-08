@@ -28,6 +28,14 @@ func TestArticleFindPhraseMatchesAcrossHighlightFragments(t *testing.T) {
 	}
 }
 
+func TestArticleFindNearMatchesBothWordOrders(t *testing.T) {
+	body := `<p>кларнетист x джаз; джаз at кларнетист</p>`
+	got := matchArticleFindHTML(body, articleFindMatchOptions{query: "джаз кларнетист", mode: "near", nearWords: 2})
+	if len(got) != 2 || got[0].Start != 0 || got[1].Start <= got[0].Start {
+		t.Fatalf("near matches = %+v; want one complete window in each word order", got)
+	}
+}
+
 func TestArticleFindHTMLMatchesModesAndUTF16Offsets(t *testing.T) {
 	body := `<p>🍎 Catapult cat catfish.</p>`
 	tests := []struct {

@@ -58,6 +58,7 @@
 //	wu-sub   an article section pulled in beside a link (written by the UI)
 //	wu-hl    a full-text match, marked at response time (internal/hilite)
 //	wu-hl-ex a visual continuation of a phrase match, not a navigation stop
+//	wu-hl-ex2 words between terms in a near match
 //	wu-cur   the occurrence being walked to (written by the UI, not ingested)
 //	wu-xonly a line whose whole content is examples (written by the UI, web/examples.js)
 //
@@ -118,11 +119,13 @@ const DefaultCSS = `
    colours themeable: the custom property is read, the cascade is not fought. */
 .wu-hl.wu-hl{background:var(--wd-hl,#ffe066)!important;color:inherit!important;border-radius:2px}
 .wu-hl-ex.wu-hl-ex{background:var(--wd-hl,#ffe066)!important;color:inherit!important;border-radius:2px}
+.wu-hl-ex2.wu-hl-ex2{background:rgba(255,224,102,.32)!important;background:color-mix(in srgb,var(--wd-hl,#ffe066) 32%,transparent)!important;border-radius:2px}
 /* The first phrase fragment is the navigation anchor; following fragments
    share its current tint but are not separate stops. These classes are
    written by the UI, never ingested, so no Version bump is needed. */
 .wu-hl.wu-hl.wu-cur{background:var(--wd-hl-cur,#ffab40)!important;box-shadow:0 0 0 2px var(--wd-hl-cur,#ffab40)}
 .wu-hl-ex.wu-hl-ex.wu-cur{background:var(--wd-hl-cur,#ffab40)!important;box-shadow:0 0 0 2px var(--wd-hl-cur,#ffab40)}
+.wu-hl-ex2.wu-hl-ex2.wu-cur{background:rgba(255,171,64,.48)!important;background:color-mix(in srgb,var(--wd-hl-cur,#ffab40) 48%,transparent)!important}
 `
 
 // IsColor accepts the two forms a DSL [c] argument may legally take - a

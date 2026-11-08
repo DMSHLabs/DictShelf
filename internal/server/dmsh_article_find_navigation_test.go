@@ -181,14 +181,18 @@ func sameArticleFindTarget(actual, expected *articleFindNavigationTarget) bool {
 func TestArticleFindFullTextTargetKeepsPhraseOccurrences(t *testing.T) {
 	occurrences := []articleFindOccurrence{{Group: 0, Start: 0, End: 21}, {Group: 0, Start: 24, End: 45}}
 	session := &articleFindNavigationSession{
-		mode: "fts", dictionaries: []string{"dict"},
+		mode: "fts", resultMode: "fts", rungs: []string{"phrase"}, dictionaries: []string{"dict"},
 		pages: []map[int]articleFindNavigationPage{{0: {
 			Counts: []int{len(occurrences)}, Occurrences: [][]articleFindOccurrence{occurrences},
 		}}},
 	}
 	target := session.target(0, 0, 0, 1)
-	if target.ExpectedMatches != 2 || target.MatchIndex != 1 || len(target.Occurrences) != 2 ||
+	if target.ExpectedMatches != 2 || target.MatchIndex != 1 || target.Reading != "phrase" || len(target.Occurrences) != 2 ||
 		target.Occurrences[1] != occurrences[1] {
 		t.Fatalf("full-text target = %+v; want the second complete phrase occurrence", target)
+	}
+	session.rungs[0] = "near"
+	if nearTarget := session.target(0, 0, 0, 0); nearTarget.Reading != "near" {
+		t.Fatalf("full-text near target reading = %q; want the reading answered by the dictionary", nearTarget.Reading)
 	}
 }

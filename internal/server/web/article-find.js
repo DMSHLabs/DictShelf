@@ -612,6 +612,30 @@ function serverFindRanges(root,occurrences,includeExamples){
   }
   return out;
 }
+function wrapRangeText(root,range,className){
+  const doc=root.ownerDocument||root,win=doc.defaultView;
+  if(!win?.NodeFilter)return [];
+  const walker=doc.createTreeWalker(root,win.NodeFilter.SHOW_TEXT),nodes=[];
+  while(walker.nextNode()){
+    const node=walker.currentNode;
+    if(node.parentElement?.closest("mark.wu-hl,mark.wu-hl-ex,span.wu-hl-ex2"))continue;
+    let intersects=false;try{intersects=range.intersectsNode(node)}catch(_){}
+    if(!intersects)continue;
+    const start=node===range.startContainer?range.startOffset:0;
+    const end=node===range.endContainer?range.endOffset:node.data.length;
+    if(end>start)nodes.push({node,start,end});
+  }
+  const wrapped=[];
+  for(const {node,start,end} of nodes){
+    if(!node.parentNode||!node.data.slice(start,end).trim())continue;
+    const fragment=doc.createDocumentFragment(),span=doc.createElement("span");
+    if(start)fragment.append(doc.createTextNode(node.data.slice(0,start)));
+    span.className=className;span.textContent=node.data.slice(start,end);fragment.append(span);
+    if(end<node.data.length)fragment.append(doc.createTextNode(node.data.slice(end)));
+    node.replaceWith(fragment);wrapped.push(span);
+  }
+  return wrapped;
+}
 function serverFindAnchor(){
   if(!searchAnchor||options.mode==="fts")return null;
   const host=searchAnchor.host,det=host?.closest("details.dict"),row=host?.closest("dd");
@@ -1178,6 +1202,7 @@ $("sbarExamples").addEventListener("click",schedule);
 $("examplesRow")?.addEventListener("click",schedule);
 window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation,
   serverRanges:(root,occurrences,includeExamples)=>serverFindRanges(root,occurrences,includeExamples),
+  wrapRangeText:(root,range,className)=>wrapRangeText(root,range,className),
   saveTraceArticle:(dict,article,html)=>{
   if(!remoteFindTraceActive)return Promise.resolve(false);
   if(!html){
