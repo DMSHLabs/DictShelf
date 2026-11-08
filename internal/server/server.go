@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -433,8 +434,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// Path, never RequestURI: the query string carries ?k=<token>,
 			// and a log file is exactly where it must not end up (auth.go
 			// scrubs it from the address bar for the same reason).
-			logx.V("PANIC %s %s: %v", r.Method, r.URL.Path, rec)
-			logx.Warn("panic serving %s: %v", r.URL.Path, rec)
+			// A panic is rare and unreproducible from the reader's side, so the
+			// stack goes with the line: without it the 500 says where but not why.
+			logx.V("PANIC %s %s: %v\n%s", r.Method, r.URL.Path, rec, debug.Stack())
+			logx.Warn("panic serving %s: %v\n%s", r.URL.Path, rec, debug.Stack())
 			httpErr(w, 500, "internal error: %v", rec)
 		}
 	}()
