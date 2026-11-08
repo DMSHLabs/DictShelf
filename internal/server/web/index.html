@@ -11008,15 +11008,31 @@ async function navStart(det){
   finally{if(operation===navOpToken){navPending=false;navPos()}}
 }
 async function navGo(step){
-  if(navPending||!navSessionID||![-1,1].includes(step))return;
-  if(!navServerState)return navStart(navDet);
+  if(![-1,1].includes(step)||navSuppressed)return false;
+  if(navPending){
+    for(let attempt=0;navPending&&attempt<100;attempt++)await new Promise(resolve=>setTimeout(resolve,50));
+    if(navPending){
+      window.wudictArticleFind?.traceEvent?.("navigation_request_skipped",`step=${step}; reason=pending; session=${!!navSessionID}`);
+      return false;
+    }
+  }
+  if(!navSessionID){
+    if(!navDet||!markedAnswer)return false;
+    navSessionID=articleCacheGroupID||newArticleResultCacheID();navServerState=null;
+  }
+  if(!navServerState){
+    await navStart(navDet);
+    if(!navServerState?.found)return false;
+  }
   navPending=true;const operation=++navOpToken;
   try{
     const state=await navRequest(step<0?"navPrevious":"navNext");
-    if(!state||operation!==navOpToken||navSuppressed)return;
+    if(!state||operation!==navOpToken||navSuppressed)return false;
     navServerState=state;navPos();await navShowTarget(state.target,state);
+    return !!state.found;
   }catch(error){console.warn("Article match navigation failed",error)}
   finally{if(operation===navOpToken){navPending=false;navPos()}}
+  return false;
 }
 async function navShowTarget(target,state){
   if(!target)return;

@@ -769,13 +769,13 @@ async function runFullTextTrace(){
       if(current.complete&&current.current>=current.total)break;
       const started=performance.now(),from=Number(current.current)||0;
       await remoteFindDiagnostic(record,"navigation_request",{detail:`trace=${record.traceRun}; source=full_text; action=navNext; from=${from}`});
-      await current.next();
+      const advanced=await current.next();
       const next=fullTextNavigation;
       if(!next||next.generation!==generation){reason="search_changed";break}
       const position=Number(next.current)||0;
       steps++;
       await remoteFindDiagnostic(record,"navigation_trace_step",{completed:steps,total:Math.min(100000,next.total||0),detail:`trace=${record.traceRun}; source=full_text; step=${steps}; from=${from}; to=${position}; complete=${!!next.complete}; step_ms=${Math.round(performance.now()-started)}`});
-      if(!position||position===from){reason="no_next_match";break}
+      if(!position||position===from){reason=advanced===false?"navigation_unavailable":"no_next_match";break}
       if(next.complete&&position<=previous){await next.previous();break}
       previous=position;
       await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
