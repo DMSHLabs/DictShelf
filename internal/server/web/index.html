@@ -8156,7 +8156,7 @@ function favouriteControl(result,dictID,dt,dd){
   const button=document.createElement("button");
   button.type="button";button.className="favourite-control";
   button.innerHTML=inFavourites
-    ?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>'
+    ?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5 9.5 17.5 19.5 6.5"/></svg>'
     :'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.75 5.57 6.15.9-4.45 4.33 1.05 6.12L12 17.03l-5.5 2.89 1.05-6.12L3.1 9.47l6.15-.9z"/></svg>';
   const copyTargets=inFavourites?favouriteCollections.filter(c=>c.id!==dictID):[];
   const target=document.createElement("select");

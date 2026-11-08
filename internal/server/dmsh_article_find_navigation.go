@@ -154,7 +154,17 @@ func (s *Server) handleArticleFindNavigation(w http.ResponseWriter, r *http.Requ
 		s.pruneArticleFindNavigationLocked(time.Now())
 		s.articleFindNavigationMu.Unlock()
 		var response articleFindNavigationResponse
-		if q.Get("prime") == "0" {
+		if q.Get("anchorDict") != "" && mode != "fts" {
+			article, articleErr := navigationNumber(q.Get("anchorArticle"), 0, int(^uint(0)>>1))
+			group, groupErr := navigationNumber(q.Get("anchorGroup"), 0, int(^uint(0)>>1))
+			offset, offsetErr := navigationNumber(q.Get("anchorOffset"), 0, int(^uint(0)>>1))
+			direction, directionErr := strconv.Atoi(q.Get("anchorDirection"))
+			if articleErr != nil || groupErr != nil || offsetErr != nil || directionErr != nil || direction != 1 && direction != -1 {
+				httpErr(w, http.StatusBadRequest, "invalid article find anchor")
+				return
+			}
+			response, err = s.startArticleFindNavigationFromAnchor(r.Context(), session, q.Get("anchorDict"), article, group, offset, direction)
+		} else if q.Get("prime") == "0" {
 			response, err = s.peekArticleFindNavigation(r.Context(), session)
 		} else {
 			response, err = s.moveArticleFindNavigation(r.Context(), session, 1)
@@ -317,6 +327,66 @@ func (s *Server) peekArticleFindNavigation(ctx context.Context, session *article
 		session.complete = true
 		return articleFindNavigationResponse{Complete: true, Total: session.total()}, nil
 	}
+	position, total := session.position(target)
+	return articleFindNavigationResponse{Found: true, Target: target, Position: position, Total: total, Complete: session.complete}, nil
+}
+
+func (s *Server) startArticleFindNavigationFromAnchor(ctx context.Context, session *articleFindNavigationSession, dictionary string, article, group, offset, direction int) (articleFindNavigationResponse, error) {
+	dictionaryIndex := -1
+	for i, id := range session.dictionaries {
+		if id == dictionary {
+			dictionaryIndex = i
+			break
+		}
+	}
+	if dictionaryIndex < 0 {
+		return articleFindNavigationResponse{}, errors.New("article find anchor dictionary is not in the result set")
+	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	blockStart := session.blockStart(article)
+	page, err := s.loadArticleFindNavigationPage(ctx, session, dictionaryIndex, blockStart)
+	if err != nil {
+		return articleFindNavigationResponse{}, err
+	}
+	row := article - blockStart
+	if row < 0 || row >= len(page.Occurrences) {
+		return articleFindNavigationResponse{}, errors.New("article find anchor is outside the result set")
+	}
+	occurrences := page.Occurrences[row]
+	cursorMatch := -1
+	if direction > 0 {
+		for i, match := range occurrences {
+			if match.Group < group || match.Group == group && match.Start < offset {
+				cursorMatch = i
+			}
+		}
+	} else {
+		cursorMatch = len(occurrences)
+		for i, match := range occurrences {
+			if match.Group > group || match.Group == group && match.Start >= offset {
+				cursorMatch = i
+				break
+			}
+		}
+	}
+	session.current = session.target(dictionaryIndex, blockStart, article, cursorMatch)
+	load := func(_ context.Context, index, start int) (articleFindNavigationPage, error) {
+		return s.loadArticleFindNavigationPage(ctx, session, index, start)
+	}
+	target, wrapped, err := session.move(ctx, direction, load)
+	if err != nil {
+		return articleFindNavigationResponse{}, err
+	}
+	if target == nil {
+		session.complete = true
+		return articleFindNavigationResponse{Complete: true, Total: session.total()}, nil
+	}
+	session.current = target
+	if wrapped && direction > 0 {
+		session.complete = true
+	}
+	session.updated = time.Now()
 	position, total := session.position(target)
 	return articleFindNavigationResponse{Found: true, Target: target, Position: position, Total: total, Complete: session.complete}, nil
 }

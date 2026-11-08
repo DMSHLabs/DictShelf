@@ -185,7 +185,7 @@ function open(preserveAnchor=false) {
     options = {...options, query:fullTextNavigation.query};
   fillOptions();
   active = options.mode !== "fts" && !!options.query;
-  if (active) rebuild();
+  if (active&&!searchAnchor) rebuild();
   dialog.showModal();
   strip.hidden = true; measure();
   if (options.mode === "fts") $("articleFindMode").focus();
@@ -482,7 +482,7 @@ async function remoteFindFetch(record,action,extra={}){
 async function startRemoteFind(){
   if(options.mode==="fts")return;
   if(!options.query){closeRemoteFind();matches=[];index=-1;docs.clear();restoreExamples();clearPaint();syncControls();return}
-  const context=remoteFindContext(),signature=remoteFindSignature(context);
+  const context=remoteFindContext(),anchor=serverFindAnchor(),signature=remoteFindSignature(context)+JSON.stringify(anchor);
   if(remoteFind?.signature===signature){paint();return}
   closeRemoteFind();
   if(!context.dictionaries.length||!context.query||!context.mode){remoteFind={signature,state:{complete:true,total:0,found:false}};paint();return}
@@ -492,12 +492,17 @@ async function startRemoteFind(){
   matches=[];index=-1;docs.clear();restoreExamples();clearPaint();paint();
   try{
     const size=Math.max(1,Math.min(500,context.pageSize)),firstSize=Math.max(1,Math.min(500,context.firstSize));
-    const state=await remoteFindFetch(record,"navStart",{dict:context.dictionaries.join(","),q:options.query,mode:options.mode,
+    const params={dict:context.dictionaries.join(","),q:options.query,mode:options.mode,
       resultQuery:context.query,resultMode:context.mode,ignoreDiacritics:context.ignore?"1":"0",
       matchCase:options.matchCase?"1":"0",examples:options.examples?"1":"0",nearWords:String(nearWords()),
-      pageSize:String(size),firstSize:String(firstSize),prime:"0",groupID:context.groupID,rungs:context.rungs.join(",")});
+      pageSize:String(size),firstSize:String(firstSize),prime:"0",groupID:context.groupID,rungs:context.rungs.join(",")};
+    if(anchor){params.anchorDict=anchor.dict;params.anchorArticle=String(anchor.article);params.anchorGroup=String(anchor.group);
+      params.anchorOffset=String(anchor.offset);params.anchorDirection=String(anchor.direction)}
+    searchAnchor=null;
+    const state=await remoteFindFetch(record,"navStart",params);
     if(token!==remoteFindToken||remoteFind!==record)return;
-    record.state=state;record.pending=false;record.error="";
+    record.state=state;record.pendingTarget=anchor&&state.found?state:null;record.anchorDirection=anchor?.direction||0;
+    record.pending=false;record.error="";
   }catch(error){
     if(token!==remoteFindToken||remoteFind!==record)return;
     record.state={complete:true,total:0,found:false};record.pending=false;record.error=String(error?.message||error);
@@ -515,7 +520,7 @@ function serverFindPosition(){
   const total=Number(state.total)||0;
   return t("articleFind.position",{current:Number(state.position)||1,total:String(total)+(state.complete?"":"+")});
 }
-function serverFindRanges(root,occurrences,includeExamples){
+function serverFindPoints(root,includeExamples){
   const doc=root.ownerDocument,win=doc.defaultView;
   if(!win)return [];
   const groups=[];let text="",points=[],group=null;
@@ -551,6 +556,11 @@ function serverFindRanges(root,occurrences,includeExamples){
     }
   }
   flush();
+  return groups;
+}
+function serverFindRanges(root,occurrences,includeExamples){
+  const doc=root.ownerDocument,groups=serverFindPoints(root,includeExamples);
+  if(!doc.defaultView)return [];
   const out=[];
   for(const occurrence of occurrences||[]){
     const items=groups[Number(occurrence.group)],start=Number(occurrence.start),end=Number(occurrence.end);
@@ -560,6 +570,31 @@ function serverFindRanges(root,occurrences,includeExamples){
     out.push({range,example:a.node.parentElement?.closest(".wu-xonly,.wu-sec,.dsl_opt,.wu-exonly,.wu-ex,.dsl_ex")||null});
   }
   return out;
+}
+function serverFindAnchor(){
+  if(!searchAnchor||options.mode==="fts")return null;
+  const host=searchAnchor.host,det=host?.closest("details.dict"),row=host?.closest("dd");
+  if(!det||!row)return null;
+  const rows=[...det.querySelectorAll(":scope>dl>dd")],articleOffset=rows.indexOf(row);
+  if(articleOffset<0)return null;
+  const root=rootFor(host),groups=root&&serverFindPoints(root,options.examples);
+  if(!groups)return null;
+  for(let group=0;group<groups.length;group++){
+    const points=groups[group];
+    for(let i=0;i<points.length;i++){
+      const point=points[i],node=searchAnchor.range.startContainer,offset=searchAnchor.range.startOffset;
+      if(node===point.node&&offset>=point.start&&offset<=point.end){
+        const within=offset>=point.end?1:0;
+        return {dict:det.dataset.searchDict||"",article:(Number(det.dataset.searchPageStart)||0)+articleOffset,
+          group,offset:i+within,direction:searchAnchor.direction};
+      }
+      if(node===point.endNode&&point.endNode!==point.node&&offset<=point.end){
+        return {dict:det.dataset.searchDict||"",article:(Number(det.dataset.searchPageStart)||0)+articleOffset,
+          group,offset:i+1,direction:searchAnchor.direction};
+      }
+    }
+  }
+  return null;
 }
 async function showRemoteFindTarget(target,state,token){
   if(!target)return false;
@@ -602,6 +637,13 @@ async function moveRemoteFind(step){
   if(!remoteFind?.id||remoteFindPending)return;
   remoteFindPending=true;const record=remoteFind,token=remoteFindToken,request=++remoteFindRequestSeq;
   try{
+    if(record.pendingTarget){
+      const target=record.pendingTarget;record.pendingTarget=null;
+      if(step===record.anchorDirection){
+        record.error=await showRemoteFindTarget(target.target,target,token)?"":t("search.fullListUnavailable");
+        return;
+      }
+    }
     const state=await remoteFindFetch(record,step<0?"navPrevious":"navNext");
     if(request!==remoteFindRequestSeq||token!==remoteFindToken||remoteFind!==record)return;
     if(state.found){record.state=state;record.error=await showRemoteFindTarget(state.target,state,token)?"":t("search.fullListUnavailable")}
