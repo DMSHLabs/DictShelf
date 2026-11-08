@@ -1436,7 +1436,7 @@ function newArticleResultCacheID(){
 }
 window.wudictArticleFindContext=()=>({dictionaries:searchNavDictionaries.slice(),query:lastQuery,
   mode:lastSearchMode,ignoreDiacritics,nearWords:window.wudictNearWords,groupID:articleCacheGroupID,
-  rungs:searchNavDictionaries.map(id=>[...document.querySelectorAll("details.dict[data-searchDict]")]
+  rungs:searchNavDictionaries.map(id=>[...document.querySelectorAll("details.dict[data-search-dict]")]
     .find(det=>det.dataset.searchDict===id)?.dataset.searchRung||"")});
 function stopArticleResultCaches(){
   articleCacheSeq++;articleCacheAbort?.abort();articleCacheAbort=null;

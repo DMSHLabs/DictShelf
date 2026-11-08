@@ -485,7 +485,7 @@ function remoteFindDiagnostic(record,stage,fields={}){
 }
 function remoteFindContext(){
   const source=window.wudictArticleFindContext?.()||{};
-  const details=[...$("out").querySelectorAll("details.dict[data-searchDict]")];
+  const details=[...$("out").querySelectorAll("details.dict[data-search-dict]")];
   const dictionaries=source.dictionaries?.length?source.dictionaries:details.map(det=>det.dataset.searchDict).filter(Boolean);
   const first=details[0];
   return {dictionaries,query:source.query??first?.dataset.searchQuery??"",mode:source.mode??first?.dataset.searchMode??"",

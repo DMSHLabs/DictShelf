@@ -100,6 +100,42 @@ func articleFullTextMatch(query, rung string) (string, error) {
 	return "", fmt.Errorf("full-text reading %q is unavailable", rung)
 }
 
+// articleCacheReading resolves which reading a page is built and marked with.
+//
+// request.Rung is the per-dictionary reading that answered - an archive index
+// without positions falls back to words - and a caller that sends it is
+// believed. A caller that leaves it out is asking by MODE, and the mode already
+// names the reading; refusing the page, or serving it unmarked, would be wrong
+// for the second reason: the article walk counts marks, so an unmarked page
+// reads as "no matches" and the whole strip disappears. An explicit expression
+// has one rung on its ladder, whatever the mode says.
+func articleCacheReading(query, mode, rung string) (string, error) {
+	rungs := ftsq.Parse(query).RungsWith(search.NearWords())
+	find := func(name string) (string, bool) {
+		for _, r := range rungs {
+			if r.Name == name {
+				return r.Name, true
+			}
+		}
+		return "", false
+	}
+	if rung != "" {
+		if name, ok := find(rung); ok {
+			return name, nil
+		}
+		return "", fmt.Errorf("full-text reading %q is unavailable", rung)
+	}
+	if want, ok := map[string]string{"phrase": "phrase", "near": "near", "fts": "words"}[mode]; ok {
+		if name, ok := find(want); ok {
+			return name, nil
+		}
+	}
+	if len(rungs) == 1 {
+		return rungs[0].Name, nil
+	}
+	return "", fmt.Errorf("full-text reading for mode %q is unavailable", mode)
+}
+
 // fullTextReadingMode names the three article readings - the modes whose answer
 // carries the server's highlight marks. They are one thing here for the same
 // reason `searchModeForArticleCache` calls them one index query: the reader's
@@ -166,9 +202,14 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 		if err := func() error {
 			match := ""
 			if fullTextReadingMode(request.Mode) {
-				match, err = articleFullTextMatch(query, request.Rung)
-				if err != nil {
-					return err
+				reading, readingErr := articleCacheReading(query, request.Mode, request.Rung)
+				if readingErr != nil {
+					return readingErr
+				}
+				var matchErr error
+				match, matchErr = articleFullTextMatch(query, reading)
+				if matchErr != nil {
+					return matchErr
 				}
 			}
 			entry, token, err := s.wildcardPages.begin(request.CacheID, signature, indexconst.BrowsePageSize,
@@ -273,7 +314,21 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 		if err != nil {
 			return err
 		}
-		hl, marking := marker(request.Highlight && fullTextReadingMode(request.Mode))(query, request.Rung)
+		reading := request.Rung
+		if request.Highlight && fullTextReadingMode(request.Mode) {
+			// The page's marks are what the walk counts, so the reading is
+			// resolved even when the caller did not name one - and a page that
+			// cannot be resolved says why instead of arriving unmarked.
+			resolved, readingErr := articleCacheReading(query, request.Mode, request.Rung)
+			if readingErr != nil {
+				logx.SystemDiagnostic("search_article_marks stage=unresolved dict=%q mode=%q rung=%q query=%q error=%q",
+					e.ID, request.Mode, request.Rung, query, readingErr)
+				reading = ""
+			} else {
+				reading = resolved
+			}
+		}
+		hl, marking := marker(request.Highlight && fullTextReadingMode(request.Mode))(query, reading)
 		var assetTokens func(int64, string) (string, bool)
 		if len(results) > 0 {
 			if d, openErr := e.open(); openErr == nil {

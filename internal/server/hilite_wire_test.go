@@ -131,6 +131,43 @@ func TestArticleResultCacheMarksStrictReadings(t *testing.T) {
 	}
 }
 
+// A caller that leaves the reading out is asking by MODE, and the page must
+// still come back marked: the article walk counts marks, so an unmarked page
+// reads as "no matches" and the bottom strip hides. That is not hypothetical -
+// the page's rung lookup silently matched nothing for a while
+// (`[data-searchDict]` does not select `data-search-dict`), so every navigation
+// page was served unmarked while the strip's counts still came from the text.
+func TestArticleResultCacheMarksWithoutARung(t *testing.T) {
+	s, id := newHLServer(t)
+	s.User = UserDir(t.TempDir())
+	s.wildcardPages.init(s.wildcardCacheDir())
+	t.Cleanup(func() {
+		s.wildcardPages.mu.Lock()
+		defer s.wildcardPages.mu.Unlock()
+		for _, entry := range s.wildcardPages.entries {
+			_ = entry.db.Close()
+		}
+	})
+	const cacheID = "no-rung-reading-0001"
+	base := "/api/search?q=" + url.QueryEscape("vivienda es una") + "&mode=phrase&hl=1&dict=" + id + "&cacheID=" + cacheID
+	built := false
+	for _, m := range stream(t, s, base+"&cacheAction=build") {
+		if m.T == "cache" && m.Complete {
+			built = true
+		}
+	}
+	if !built {
+		t.Fatal("the cache never completed without a rung")
+	}
+	got := bodies(stream(t, s, base+"&cacheAction=page&start=0&size=100"))
+	if !strings.Contains(got, `<mark class="wu-hl" data-wu-match="0">vivienda es una</mark>`) {
+		t.Fatalf("a page built without a rung came back unmarked: %s", got)
+	}
+	if n := countArticleFindHeads(got); n != 1 {
+		t.Fatalf("heads on the unmarked page = %d, want 1", n)
+	}
+}
+
 func bodies(hits []streamMsg) string {
 	var b strings.Builder
 	for _, h := range hits {
