@@ -262,13 +262,13 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 		}
 		logx.SystemDiagnosticIf(request.SearchDiagnostics,
 			"search stage=article_id_cache_read dict=%q result=hit start=%d ids=%d total=%d", e.ID, request.Start, len(ids), total)
-		started := time.Now()
+		articleReadStarted := time.Now()
 		results, err := source.ArticlesByIDs(ctx, ids)
 		if err != nil {
 			return err
 		}
 		logx.SystemDiagnosticIf(request.SearchDiagnostics,
-			"search stage=article_sql_read dict=%q source=prepared_sql_articles ids=%d elapsed_ms=%d", e.ID, len(ids), time.Since(started).Milliseconds())
+			"search stage=article_sql_read dict=%q source=prepared_sql_articles ids=%d elapsed_ms=%d", e.ID, len(ids), time.Since(articleReadStarted).Milliseconds())
 		format, err := parseFormat(request.Format)
 		if err != nil {
 			return err
