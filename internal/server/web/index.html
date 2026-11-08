@@ -2923,6 +2923,7 @@ function dictBaseLabel(d){return d.name||d.path.split("/").pop()}
    by id, because the callers hold ids and the list holds the format. */
 function isZimDict(id){const d=dicts.find(x=>x.id===id);return !!d&&String(d.format||"").toLowerCase()==="zim"}
 function dictLabel(d){return d?.uiName||dictTitles.get(d?.id)||dictBaseLabel(d)}
+function dictHasCustomLabel(d){return !!d&&dictLabel(d)!==dictBaseLabel(d)}
 /* A dictionary's two counts, for the places that show them in a NARROW slot:
    the articles it opens, and the headwords those carry once every alias is
    counted with them. Both numbers when they differ, one when they agree or when
@@ -4374,7 +4375,7 @@ function renderPanel(){
     const countLines=counts.length?`<div class="dict-info-counts">${counts.join("<br>")}</div>`:"";
     const renameControl=favouriteCollections.some(collection=>collection.id===d.id)?"":`<button type="button" class="dict-rename" aria-label="${escAttr(tx("dictUI.renameDictionary"))}" title="${escAttr(tx("dictUI.renameDictionary"))}" data-rename="${escAttr(d.id)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button>`;
     div.innerHTML=`<div class="hd">
-        <span class="dict-name-line">${dictIconHTML(d.id)}<b class="dict-info-name" data-dict="${escAttr(d.id)}" tabindex="${d.unavailable?-1:0}" role="button" aria-disabled="${!!d.unavailable}" title="${escAttr(tx(d.unavailable?"dictUI.dslUnavailable":"dictUI.searchOnly"))}">${esc(dictLabel(d))}</b>${renameControl}</span><small class="dict-source-name">${esc(tx("dictUI.sourceName"))}: ${esc(dictBaseLabel(d))}</small>
+        <span class="dict-name-line">${dictIconHTML(d.id)}<b class="dict-info-name" data-dict="${escAttr(d.id)}" tabindex="${d.unavailable?-1:0}" role="button" aria-disabled="${!!d.unavailable}" title="${escAttr(tx(d.unavailable?"dictUI.dslUnavailable":"dictUI.searchOnly"))}">${esc(dictLabel(d))}</b>${renameControl}</span>${dictHasCustomLabel(d)?`<small class="dict-source-name">${esc(tx("dictUI.sourceName"))}: ${esc(dictBaseLabel(d))}</small>`:""}
       </div>
       <div class="meta">${esc(d.format||"?")}${d.dbSize||selfIndexed?tx("dictUI.indexed"):""}</div>
       ${dslIndexControls(d)}
@@ -4819,7 +4820,7 @@ function favouriteEditorTile(collection,isNew=false){
   if(!isNew){
     const meta=document.createElement("div");meta.className="meta";meta.textContent="favs"+tx("dictUI.indexed");card.append(meta);
     const dictionary=dicts.find(item=>item.id===collection.id);
-    if(dictionary){const source=document.createElement("small");source.className="dict-source-name";source.textContent=tx("dictUI.sourceName")+": "+dictBaseLabel(dictionary);card.append(source)}
+    if(dictHasCustomLabel(dictionary)){const source=document.createElement("small");source.className="dict-source-name";source.textContent=tx("dictUI.sourceName")+": "+dictBaseLabel(dictionary);card.append(source)}
     const indexes=document.createElement("div");indexes.className="favourites-editor-indexes";
     if(dictionary?.dbSize){const index=document.createElement("span");index.className="feat on locked";index.title=tx("dictUI.indexedSize",{size:mb(Number(dictionary.dbSize))});index.textContent=mb(Number(dictionary.dbSize));indexes.append(index)}
     if(dictionary&&dictionary.format!=="dsl")for(const[label,on,bytes]of [[tx("dictUI.contains"),dictionary.caps?.Contains,dictionary.containsSize],[tx("dictUI.fts"),dictionary.ourFullText,dictionary.fullTextSize]]){
@@ -6817,8 +6818,7 @@ window.wudictShowDictionaryInfo=async id=>{
   const request=++dictInfoRequest;
   dialog.dataset.dict=id;
   name.textContent=dictLabel(d);
-  const sourceName=document.createElement("div");sourceName.className="dict-info-source-name";sourceName.textContent=tx("dictUI.sourceName")+": "+dictBaseLabel(d);
-  name.after(sourceName);
+  name.parentElement.querySelector(".dict-info-source-name")?.remove();
   const fullPaths=[...(d.sourceFiles||[]),d.source,...(d.mediaSrc||[])].filter((path,index,all)=>path&&all.indexOf(path)===index);
   paths.innerHTML=fullPaths.map(path=>`<div class="prow"><span class="path" data-full="${escAttr(path)}" title="${escAttr(tx("panel.copyPath"))}">${pathHTML(path)}</span></div>`).join("");
   /* File and index sizes come from the About fetch (the server stats the source
@@ -6830,6 +6830,7 @@ window.wudictShowDictionaryInfo=async id=>{
        "5,153,776" beside the group editor's "5 153 776". */
     const number=n=>window.wudictI18n.number(Number(n));
     const counts=[];
+    if(dictHasCustomLabel(d))counts.push(tx("dictUI.sourceName")+": "+dictBaseLabel(d));
     if(fileSize>0)counts.push(tx("dictUI.fileSize",{count:fileSize,size:mb(fileSize),bytes:number(fileSize)}));
     if(indexSize>0)counts.push(tx("dictUI.indexSize",{count:indexSize,size:mb(indexSize),bytes:number(indexSize)}));
     if(headwords)counts.push(tx("dictUI.numberOfHeadwords",{number:number(headwords)}));
@@ -6846,7 +6847,7 @@ window.wudictShowDictionaryInfo=async id=>{
     const info=await response.json();
     if(request!==dictInfoRequest||!dialog.open)return;
     paintCounts(d.headwords||info.headwords,d.entries||info.entries,info.fileSize||0,info.indexSize||0);
-    about.innerHTML=`<p>${esc(tx("dictUI.sourceName"))}: ${esc(dictBaseLabel(d))}</p>`+(info.html||`<p>${esc(tx("dictUI.emptyAbout"))}</p>`)+aboutLangs(info);
+    about.innerHTML=(info.html||`<p>${esc(tx("dictUI.emptyAbout"))}</p>`)+aboutLangs(info);
   }catch(_){
     if(request===dictInfoRequest&&dialog.open)about.textContent=tx("dictUI.notAvailable");
   }
