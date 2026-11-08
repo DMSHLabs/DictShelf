@@ -15,6 +15,7 @@ extern char *WudictGoBridgeConfigSnapshot(void);
 extern char *WudictGoBridgePrefsSnapshot(void);
 extern char *WudictGoBridgeBrowsePage(char *query);
 extern char *WudictGoBridgeBrowseFindPage(char *query);
+extern char *WudictGoBridgeArticleFindNavigation(char *query);
 extern char *WudictGoBridgeBrowseDiagnostic(char *payload);
 extern char *WudictGoBridgeAbout(char *origin, char *dictionary);
 extern char *WudictGoBridgeOrphans(char *action, char *body);
@@ -174,6 +175,20 @@ Java_com_dmshlabs_dictshelf_GoBridge_nativeBrowseFindPage(JNIEnv *env, jclass ow
     const char *text = (*env)->GetStringUTFChars(env, query, NULL);
     if (text == NULL) return NULL;
     char *result = WudictGoBridgeBrowseFindPage((char *)text);
+    (*env)->ReleaseStringUTFChars(env, query, text);
+    if (result == NULL) return NULL;
+    jstring answer = (*env)->NewStringUTF(env, result);
+    free(result);
+    return answer;
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_dmshlabs_dictshelf_GoBridge_nativeArticleFindNavigation(JNIEnv *env, jclass owner, jstring query) {
+    (void)owner;
+    if (query == NULL) return NULL;
+    const char *text = (*env)->GetStringUTFChars(env, query, NULL);
+    if (text == NULL) return NULL;
+    char *result = WudictGoBridgeArticleFindNavigation((char *)text);
     (*env)->ReleaseStringUTFChars(env, query, text);
     if (result == NULL) return NULL;
     jstring answer = (*env)->NewStringUTF(env, result);

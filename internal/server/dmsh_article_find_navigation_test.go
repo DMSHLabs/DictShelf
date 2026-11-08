@@ -85,6 +85,15 @@ func TestArticleFindNavigationUsesServerSearchAndHighlights(t *testing.T) {
 		dictionaryIDs[filepath.Base(entry.Path)] = entry.ID
 	}
 	server := New(registry)
+	bridgeResult, err := server.DesktopJSONContext(context.Background(), "", "articleFindNavigation",
+		"cacheAction=navStart&cacheID=abcdef0123456789&dict="+dictionaryIDs["first.dsl"]+"&q=%D0%B4%D0%B6%D0%B0%D0%B7%D0%BE%D0%B2%D1%8B%D0%B9+%D0%BA%D0%BB%D0%B0%D1%80%D0%BD%D0%B5%D1%82%D0%B8%D1%81%D1%82&mode=phrase&pageSize=1&firstSize=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bridge := bridgeResult.(map[string]any)
+	if bridge["status"] != 200 || bridge["body"].(map[string]any)["found"] != true {
+		t.Fatalf("desktop navigation bridge = %+v; want first phrase match", bridge)
+	}
 	session := &articleFindNavigationSession{query: "джазовый кларнетист", mode: "phrase", resultQuery: "джазовый кларнетист", resultMode: "phrase",
 		dictionaries: []string{dictionaryIDs["first.dsl"], dictionaryIDs["second.dsl"]},
 		pageSize:     1, firstSize: 1, pages: []map[int]articleFindNavigationPage{{}, {}}}

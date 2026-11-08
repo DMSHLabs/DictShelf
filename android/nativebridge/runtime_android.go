@@ -124,6 +124,29 @@ func WudictGoBridgeBrowseFindPage(query *C.char) *C.char {
 	return C.CString(string(data))
 }
 
+//export WudictGoBridgeArticleFindNavigation
+func WudictGoBridgeArticleFindNavigation(query *C.char) *C.char {
+	if query == nil {
+		return nil
+	}
+	nativeRuntime.Lock()
+	app := nativeRuntime.app
+	nativeRuntime.Unlock()
+	if app == nil {
+		return C.CString(`{"status":503,"body":{"error":"Go runtime is unavailable"}}`)
+	}
+	value, err := app.Server.DesktopJSON("", "articleFindNavigation", C.GoString(query))
+	if err != nil {
+		data, _ := json.Marshal(map[string]any{"status": 500, "body": map[string]string{"error": err.Error()}})
+		return C.CString(string(data))
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return C.CString(`{"status":500,"body":{"error":"could not encode article navigation"}}`)
+	}
+	return C.CString(string(data))
+}
+
 //export WudictGoBridgeBrowseDiagnostic
 func WudictGoBridgeBrowseDiagnostic(payload *C.char) *C.char {
 	if payload == nil {

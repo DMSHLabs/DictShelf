@@ -62,6 +62,7 @@ final class GoBridge {
     private static native String nativePrefsSnapshot();
     private static native String nativeBrowsePage(String query);
     private static native String nativeBrowseFindPage(String query);
+    private static native String nativeArticleFindNavigation(String query);
     private static native String nativeBrowseDiagnostic(String payload);
     private static native String nativeAbout(String origin, String dictionary);
     private static native String nativeOrphans(String action, String body);
@@ -169,6 +170,13 @@ final class GoBridge {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         String result = nativeBrowseFindPage(or(query));
         if (result == null) throw new IllegalStateException("Browse results are unavailable");
+        return result;
+    }
+
+    static String articleFindNavigation(String query) {
+        if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
+        String result = nativeArticleFindNavigation(or(query));
+        if (result == null) throw noAnswer("articleFindNavigation");
         return result;
     }
 

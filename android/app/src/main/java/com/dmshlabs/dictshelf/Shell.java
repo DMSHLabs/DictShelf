@@ -457,6 +457,10 @@ final class Shell {
             return GoBridge.browseFindPage(query);
         }
 
+        @JavascriptInterface public String articleFindNavigation(String query) {
+            return GoBridge.articleFindNavigation(query);
+        }
+
         @JavascriptInterface public String browseDiagnostic(String payload) {
             return GoBridge.browseDiagnostic(payload);
         }
