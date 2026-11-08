@@ -188,9 +188,17 @@ func TestArticleFindNavigationUsesServerSearchAndHighlights(t *testing.T) {
 	if err != nil || len(page.Counts) != 1 || page.Counts[0] != 1 || len(page.Occurrences[0]) != 1 {
 		t.Fatalf("server-side literal article matches = %+v, err=%v; want one match", page, err)
 	}
+	// The page addresses its matches the way the PAGE can resolve them: a path to
+	// a text node and UTF-16 offsets inside that node. Never a block index - that
+	// is the server's own model, and making the page reproduce it is what drifted.
+	occurrence := page.Occurrences[0][0]
+	if len(occurrence.Spans) != 1 || len(occurrence.Spans[0].Path) == 0 ||
+		occurrence.Spans[0].End-occurrence.Spans[0].Start != 10 || occurrence.Text != "кларнетист" {
+		t.Fatalf("literal match = %+v; want one node span of 10 UTF-16 units for кларнетист", occurrence)
+	}
 	literalTarget := articleSession.target(0, 0, 0, 0)
-	if literalTarget.Group != 0 || literalTarget.Start != page.Occurrences[0][0].Start || literalTarget.End-literalTarget.Start != 10 {
-		t.Fatalf("literal match target = %+v; want the server's UTF-16 range for кларнетист", literalTarget)
+	if len(literalTarget.Occurrences) != 1 || literalTarget.Occurrences[0].Text != occurrence.Text {
+		t.Fatalf("literal match target = %+v; want the page's own occurrence", literalTarget)
 	}
 }
 

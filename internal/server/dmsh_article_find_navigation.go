@@ -26,19 +26,19 @@ const (
 )
 
 type articleFindNavigationTarget struct {
-	Dictionary      string                  `json:"dict"`
-	DictionaryIndex int                     `json:"dictionaryIndex"`
-	BlockStart      int                     `json:"blockStart"`
-	ArticleIndex    int                     `json:"articleIndex"`
-	MatchIndex      int                     `json:"matchIndex"`
-	Group           int                     `json:"group,omitempty"`
-	Start           int                     `json:"start,omitempty"`
-	End             int                     `json:"end,omitempty"`
-	Occurrences     []articleFindOccurrence `json:"occurrences,omitempty"`
-	Headword        string                  `json:"headword,omitempty"`
-	EntryID         int64                   `json:"entryId,omitempty"`
-	ExpectedMatches int                     `json:"expectedMatches,omitempty"`
-	Reading         string                  `json:"reading,omitempty"`
+	Dictionary      string                      `json:"dict"`
+	DictionaryIndex int                         `json:"dictionaryIndex"`
+	BlockStart      int                         `json:"blockStart"`
+	ArticleIndex    int                         `json:"articleIndex"`
+	MatchIndex      int                         `json:"matchIndex"`
+	Group           int                         `json:"group,omitempty"`
+	Start           int                         `json:"start,omitempty"`
+	End             int                         `json:"end,omitempty"`
+	Occurrences     []articleFindWireOccurrence `json:"occurrences,omitempty"`
+	Headword        string                      `json:"headword,omitempty"`
+	EntryID         int64                       `json:"entryId,omitempty"`
+	ExpectedMatches int                         `json:"expectedMatches,omitempty"`
+	Reading         string                      `json:"reading,omitempty"`
 }
 
 type articleFindNavigationResponse struct {
@@ -54,7 +54,7 @@ type articleFindNavigationPage struct {
 	Counts      []int
 	Headwords   []string
 	EntryIDs    []int64
-	Occurrences [][]articleFindOccurrence
+	Occurrences [][]articleFindWireOccurrence
 	HasNext     bool
 	Complete    bool
 }
@@ -200,14 +200,14 @@ func (s *Server) handleArticleFindNavigation(w http.ResponseWriter, r *http.Requ
 		var response articleFindNavigationResponse
 		if q.Get("anchorDict") != "" && mode != "fts" {
 			article, articleErr := navigationCoordinate(q.Get("anchorArticle"))
-			group, groupErr := navigationCoordinate(q.Get("anchorGroup"))
+			path, pathErr := navigationPath(q.Get("anchorPath"))
 			offset, offsetErr := navigationCoordinate(q.Get("anchorOffset"))
 			direction, directionErr := strconv.Atoi(q.Get("anchorDirection"))
-			if articleErr != nil || groupErr != nil || offsetErr != nil || directionErr != nil || direction != 1 && direction != -1 {
+			if articleErr != nil || pathErr != nil || offsetErr != nil || directionErr != nil || direction != 1 && direction != -1 {
 				httpErr(w, http.StatusBadRequest, "invalid article find anchor")
 				return
 			}
-			response, err = s.startArticleFindNavigationFromAnchor(r.Context(), session, q.Get("anchorDict"), article, group, offset, direction)
+			response, err = s.startArticleFindNavigationFromAnchor(r.Context(), session, q.Get("anchorDict"), article, path, offset, direction)
 		} else if q.Get("prime") == "0" {
 			response, err = s.peekArticleFindNavigation(r.Context(), session)
 		} else {
@@ -301,6 +301,26 @@ func navigationNumber(value string, fallback, maxValue int) (int, error) {
 	return n, nil
 }
 
+// navigationPath reads the child-index path the page sends for an anchor: the
+// text node of the reader's selection, as indices from the article root. The
+// page knows its own tree and nothing else, so this - not a block offset - is
+// the position it can name.
+func navigationPath(value string) ([]int, error) {
+	if value == "" {
+		return nil, errors.New("missing article navigation path")
+	}
+	parts := strings.Split(value, ",")
+	path := make([]int, len(parts))
+	for i, part := range parts {
+		n, err := strconv.Atoi(part)
+		if err != nil || n < 0 {
+			return nil, errors.New("invalid article navigation path")
+		}
+		path[i] = n
+	}
+	return path, nil
+}
+
 func navigationCoordinate(value string) (int, error) {
 	if value == "" {
 		return 0, errors.New("missing article navigation coordinate")
@@ -387,7 +407,7 @@ func (s *Server) peekArticleFindNavigation(ctx context.Context, session *article
 	return articleFindNavigationResponse{Found: true, Target: target, Position: position, Total: total, Complete: session.complete}, nil
 }
 
-func (s *Server) startArticleFindNavigationFromAnchor(ctx context.Context, session *articleFindNavigationSession, dictionary string, article, group, offset, direction int) (articleFindNavigationResponse, error) {
+func (s *Server) startArticleFindNavigationFromAnchor(ctx context.Context, session *articleFindNavigationSession, dictionary string, article int, path []int, offset, direction int) (articleFindNavigationResponse, error) {
 	dictionaryIndex := -1
 	for i, id := range session.dictionaries {
 		if id == dictionary {
@@ -413,14 +433,14 @@ func (s *Server) startArticleFindNavigationFromAnchor(ctx context.Context, sessi
 	cursorMatch := -1
 	if direction > 0 {
 		for i, match := range occurrences {
-			if match.Group < group || match.Group == group && match.Start < offset {
+			if articleFindBefore(match, path, offset) {
 				cursorMatch = i
 			}
 		}
 	} else {
 		cursorMatch = len(occurrences)
 		for i, match := range occurrences {
-			if match.Group > group || match.Group == group && match.Start >= offset {
+			if !articleFindBefore(match, path, offset) {
 				cursorMatch = i
 				break
 			}
@@ -514,7 +534,7 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 	counts := make([]int, len(results))
 	headwords := make([]string, len(results))
 	entryIDs := make([]int64, len(results))
-	occurrences := make([][]articleFindOccurrence, len(counts))
+	occurrences := make([][]articleFindWireOccurrence, len(counts))
 	options := articleFindMatchOptions{query: session.query, mode: session.mode, matchCase: session.matchCase,
 		examples: session.examples, nearWords: session.nearWords}
 	if session.mode == "wordLemma" && !strings.ContainsAny(session.query, " \t\r\n") && s.Morph.Enabled() {
@@ -545,7 +565,8 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 			counts[i] = countArticleFindHeads(results[i].Body)
 			continue
 		}
-		occurrences[i] = matchArticleFindHTML(results[i].Body, options)
+		groups, matches := articleFindHTMLSpans(results[i].Body, options)
+		occurrences[i] = articleFindWireOccurrences(groups, matches)
 		counts[i] = len(occurrences[i])
 	}
 	matches := 0
@@ -743,9 +764,7 @@ func (session *articleFindNavigationSession) target(dictionaryIndex, blockStart,
 		if page, ok := session.pages[dictionaryIndex][blockStart]; ok {
 			row := articleIndex - blockStart
 			if row >= 0 && row < len(page.Occurrences) && matchIndex >= 0 && matchIndex < len(page.Occurrences[row]) {
-				match := page.Occurrences[row][matchIndex]
-				target.Group, target.Start, target.End = match.Group, match.Start, match.End
-				target.Occurrences = append([]articleFindOccurrence(nil), page.Occurrences[row]...)
+				target.Occurrences = append([]articleFindWireOccurrence(nil), page.Occurrences[row]...)
 			}
 		}
 	}
@@ -770,6 +789,26 @@ func (session *articleFindNavigationSession) target(dictionaryIndex, blockStart,
 // marks. The strip sends mode "fts" for any of the three readings and says
 // which one ran in resultMode; the dialog never sends it, because its literal
 // modes have occurrence lists of their own.
+// articleFindBefore reports whether an occurrence starts before the anchor
+// position, in document order: lexicographic on the child-index path, then the
+// UTF-16 offset inside the node. A node precedes its descendants, so a path that
+// is a prefix sorts first.
+func articleFindBefore(occurrence articleFindWireOccurrence, path []int, offset int) bool {
+	if len(occurrence.Spans) == 0 {
+		return false
+	}
+	start := occurrence.Spans[0]
+	for i := 0; i < len(start.Path) && i < len(path); i++ {
+		if start.Path[i] != path[i] {
+			return start.Path[i] < path[i]
+		}
+	}
+	if len(start.Path) != len(path) {
+		return len(start.Path) < len(path)
+	}
+	return start.Start < offset
+}
+
 func sessionUsesFullTextMarks(session *articleFindNavigationSession) bool {
 	return session.mode == "fts"
 }

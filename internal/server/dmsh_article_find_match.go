@@ -5,6 +5,7 @@
 package server
 
 import (
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf16"
@@ -24,10 +25,35 @@ type articleFindMatchOptions struct {
 	variants  []string
 }
 
+// articleFindOccurrence is one match in the matcher's own coordinates: a block
+// (group) index and UTF-16 offsets into that block's folded text. It is internal
+// - see articleFindWireOccurrence for what the page receives.
 type articleFindOccurrence struct {
-	Group int `json:"group"`
-	Start int `json:"start"`
-	End   int `json:"end"`
+	Group int
+	Start int
+	End   int
+}
+
+// articleFindNodeSpan is one text node's part of a match, addressed the way the
+// PAGE can resolve it: the child-index path from the article root to the node,
+// and UTF-16 offsets inside that node's own text - the units a DOM Range speaks.
+// The page walks the path and builds the Range; it never rebuilds the server's
+// text model, which is the one thing that could (and did) drift.
+type articleFindNodeSpan struct {
+	Path  []int `json:"path"`
+	Start int   `json:"start"`
+	End   int   `json:"end"`
+}
+
+// articleFindWireOccurrence is one match as the page consumes it. Spans are in
+// document order and an occurrence split by markup has several; the page builds
+// one Range from the first span's start to the last span's end. Text is the
+// matched text (whitespace folded), and the page checks the Range against it:
+// a model that disagrees skips the occurrence rather than painting the wrong
+// words.
+type articleFindWireOccurrence struct {
+	Spans []articleFindNodeSpan `json:"spans"`
+	Text  string                `json:"text"`
 }
 
 type articleFindTextGroup struct {
@@ -42,7 +68,8 @@ type articleFindTextGroup struct {
 // articleFindTextSegment is one text node's contribution to its group.
 type articleFindTextSegment struct {
 	node       *html.Node
-	start, end int // rune offsets within the group's text
+	path       []int // child indices from the article root to the node
+	start, end int   // rune offsets within the group's text
 }
 
 var articleFindBlockTags = map[string]bool{
@@ -63,13 +90,21 @@ var articleFindExampleClasses = map[string]bool{
 }
 
 // matchArticleFindHTML returns matches in the text streams that the article
-// reader presents. Offsets are UTF-16 positions within a block, matching DOM
-// Range offsets used by WebView2 and Android WebView.
+// reader presents. Offsets are UTF-16 positions within a block - the matcher's
+// own coordinates; the page receives articleFindWireOccurrence instead.
 func matchArticleFindHTML(source string, options articleFindMatchOptions) []articleFindOccurrence {
+	_, out := articleFindHTMLSpans(source, options)
+	return out
+}
+
+// articleFindHTMLSpans is matchArticleFindHTML with the blocks it matched in, so
+// the offsets can be turned into the page's node addressing without a second
+// parse and a second text model.
+func articleFindHTMLSpans(source string, options articleFindMatchOptions) ([]articleFindTextGroup, []articleFindOccurrence) {
 	groups := articleFindHTMLGroups(source, options.examples)
 	query := articleFindNormalizeQuery(options.query)
 	if query == "" {
-		return nil
+		return groups, nil
 	}
 	var out []articleFindOccurrence
 	for groupIndex, group := range groups {
@@ -84,7 +119,64 @@ func matchArticleFindHTML(source string, options articleFindMatchOptions) []arti
 			out = append(out, articleFindOccurrence{Group: groupIndex, Start: start, End: group.endsUTF[span[1]-1]})
 		}
 	}
+	return groups, out
+}
+
+// articleFindWireOccurrences turns the matcher's block offsets into per-node
+// spans. A block offset is UTF-16 into the block's folded text; a span is UTF-16
+// into one text node's OWN text, so the page needs no folding rule, no block
+// rule and no shared model - it walks the path, sets a Range, and checks it
+// against the text that came with it.
+func articleFindWireOccurrences(groups []articleFindTextGroup, occurrences []articleFindOccurrence) []articleFindWireOccurrence {
+	out := make([]articleFindWireOccurrence, 0, len(occurrences))
+	for _, match := range occurrences {
+		if match.Group < 0 || match.Group >= len(groups) {
+			continue
+		}
+		group := &groups[match.Group]
+		from := articleFindRuneAt(group, match.Start)
+		to := articleFindRuneAt(group, match.End)
+		if to <= from || to > len(group.text) {
+			continue
+		}
+		wire := articleFindWireOccurrence{Text: string(group.text[from:to])}
+		for _, segment := range group.segments {
+			if segment.end <= from || segment.start >= to {
+				continue
+			}
+			start, end, ok := articleFindSegmentRunes(group, segment, max(from, segment.start), min(to, segment.end))
+			if !ok {
+				continue
+			}
+			wire.Spans = append(wire.Spans, articleFindNodeSpan{Path: segment.path,
+				Start: articleFindNodeUTF16(segment.node, start), End: articleFindNodeUTF16(segment.node, end)})
+		}
+		if len(wire.Spans) > 0 {
+			out = append(out, wire)
+		}
+	}
 	return out
+}
+
+// articleFindRuneAt is the rune index a UTF-16 offset in the block falls on.
+func articleFindRuneAt(group *articleFindTextGroup, offset int) int {
+	return sort.Search(len(group.endsUTF), func(i int) bool { return group.endsUTF[i] > offset })
+}
+
+// articleFindNodeUTF16 is the UTF-16 offset of one rune offset inside a text
+// node - the unit a DOM Range speaks.
+func articleFindNodeUTF16(node *html.Node, runeOffset int) int {
+	at := 0
+	for i, r := range []rune(node.Data) {
+		if i >= runeOffset {
+			break
+		}
+		at++
+		if r >= 0x10000 {
+			at++
+		}
+	}
+	return at
 }
 
 func articleFindHTMLGroups(source string, includeExamples bool) []articleFindTextGroup {
@@ -112,8 +204,8 @@ func articleFindGroupNodes(roots []*html.Node, includeExamples bool) []articleFi
 		}
 		current = articleFindTextGroup{}
 	}
-	var walk func(*html.Node)
-	walk = func(node *html.Node) {
+	var walk func(*html.Node, []int)
+	walk = func(node *html.Node, path []int) {
 		if node.Type == html.TextNode {
 			start := len(current.text)
 			for _, r := range node.Data {
@@ -122,13 +214,13 @@ func articleFindGroupNodes(roots []*html.Node, includeExamples bool) []articleFi
 			// Whitespace folding can drop every rune of a node; a segment that
 			// contributed nothing has nothing to paint.
 			if end := len(current.text); end > start {
-				current.segments = append(current.segments, articleFindTextSegment{node: node, start: start, end: end})
+				current.segments = append(current.segments, articleFindTextSegment{node: node, path: path, start: start, end: end})
 			}
 			return
 		}
 		if node.Type != html.ElementNode {
-			for child := node.FirstChild; child != nil; child = child.NextSibling {
-				walk(child)
+			for child, i := node.FirstChild, 0; child != nil; child, i = child.NextSibling, i+1 {
+				walk(child, append(append([]int(nil), path...), i))
 			}
 			return
 		}
@@ -139,9 +231,9 @@ func articleFindGroupNodes(roots []*html.Node, includeExamples bool) []articleFi
 		}
 		if tag == "details" && !articleFindHasAttr(node, "open") {
 			flush()
-			for child := node.FirstChild; child != nil; child = child.NextSibling {
+			for child, i := node.FirstChild, 0; child != nil; child, i = child.NextSibling, i+1 {
 				if child.Type == html.ElementNode && child.Data == "summary" {
-					walk(child)
+					walk(child, append(append([]int(nil), path...), i))
 				}
 			}
 			flush()
@@ -160,15 +252,15 @@ func articleFindGroupNodes(roots []*html.Node, includeExamples bool) []articleFi
 			}
 			return
 		}
-		for child := node.FirstChild; child != nil; child = child.NextSibling {
-			walk(child)
+		for child, i := node.FirstChild, 0; child != nil; child, i = child.NextSibling, i+1 {
+			walk(child, append(append([]int(nil), path...), i))
 		}
 		if isBlock {
 			flush()
 		}
 	}
-	for _, node := range roots {
-		walk(node)
+	for i, node := range roots {
+		walk(node, []int{i})
 	}
 	flush()
 	return groups

@@ -314,7 +314,7 @@ async function startRemoteFind(){
       resultQuery:context.query,resultMode:context.mode,ignoreDiacritics:context.ignore?"1":"0",
       matchCase:options.matchCase?"1":"0",examples:options.examples?"1":"0",nearWords:String(nearWords()),
       pageSize:String(size),firstSize:String(firstSize),prime:"0",groupID:context.groupID,rungs:context.rungs.join(",")};
-    if(anchor){params.anchorDict=anchor.dict;params.anchorArticle=String(anchor.article);params.anchorGroup=String(anchor.group);
+    if(anchor){params.anchorDict=anchor.dict;params.anchorArticle=String(anchor.article);params.anchorPath=anchor.path;
       params.anchorOffset=String(anchor.offset);params.anchorDirection=String(anchor.direction)}
     searchAnchor=null;
     const state=await remoteFindFetch(record,"navStart",params);
@@ -338,56 +338,114 @@ function serverFindPosition(){
   const total=Number(state.total)||0;
   return t("articleFind.position",{current:Number(state.position)||1,total:String(total)+(state.complete?"":"+")});
 }
-function serverFindPoints(root,includeExamples){
-  const doc=root.ownerDocument,win=doc.defaultView;
-  if(!win)return [];
-  const groups=[];let text="",points=[],group=null;
-  const flush=()=>{if(points.length)groups.push(points);text="";points=[]};
-  const walker=doc.createTreeWalker(root,win.NodeFilter.SHOW_TEXT|win.NodeFilter.SHOW_ELEMENT);
-  for(let node;(node=walker.nextNode());){
-    if(node.nodeType===1){
-      if(node.tagName==="BR"&&text&&!text.endsWith(" ")){
-        const last=points[points.length-1];text+=" ";points.push({node:last.endNode,endNode:last.endNode,start:last.end,end:last.end});
-      }
-      continue;
-    }
-    const parent=node.parentElement;
-    if(parent?.closest(skip)){flush();group=null;continue}
-    const nextGroup=parent?.closest(block)||root;
-    if(group!==nextGroup){flush();group=nextGroup}
-    let excluded=false;
-    for(let el=parent;el&&el!==root;el=el.parentElement){
-      const css=win.getComputedStyle(el);
-      if(css.visibility==="hidden"||css.visibility==="collapse"||el.hidden){excluded=true;break}
-      if(css.display==="none"){
-        if(el.matches(".wu-xonly,.wu-sec,.dsl_opt,.wu-exonly,.wu-ex,.dsl_ex")&&includeExamples)continue;
-        excluded=true;break;
-      }
-      if(!includeExamples&&el.matches(".wu-xonly,.wu-sec,.dsl_opt,.wu-exonly,.wu-ex,.dsl_ex")){excluded=true;break}
-      if(el.matches("details:not([open])")&&!el.querySelector(":scope>summary")?.contains(parent)){excluded=true;break}
-    }
-    if(excluded){flush();group=null;continue}
-    for(let i=0;i<node.data.length;i++){
-      const c=/\s/u.test(node.data[i])?" ":node.data[i];
-      if(c===" "&&text.endsWith(" ")){points[points.length-1].endNode=node;points[points.length-1].end=i+1;continue}
-      text+=c;points.push({node,endNode:node,start:i,end:i+1});
-    }
-  }
-  flush();
-  return groups;
+/* The server decided WHAT matched and WHERE, as a path to a text node plus
+   offsets inside it (articleFindNodeSpan). The page resolves that path and sets
+   a Range - it keeps no model of the article's text, because two models of the
+   same article drift, and a drifted one paints the wrong words. Split() no
+   longer decides anything here.
+
+   Two guards, in order: the path must land on a text node whose text at those
+   offsets is the match's own text, and when it does not - a frame's parser can
+   hoist <link>/<style>/<meta> into a head the server never had, which shifts
+   top-level child indices - the match is LOCATED by its text instead, walking
+   the article's text nodes in order behind a cursor, so repeated words still
+   land in the right places. A match neither way is skipped and reported: the
+   reader sees fewer marks, never wrong ones. */
+function foldFindText(value){
+  const collapsed=String(value??"").replace(/\s+/gu," ").trim();
+  return options.matchCase?collapsed:collapsed.toLocaleLowerCase();
 }
-function serverFindRanges(root,occurrences,includeExamples){
-  const doc=root.ownerDocument,groups=serverFindPoints(root,includeExamples);
-  if(!doc.defaultView)return [];
-  const out=[];
-  for(const occurrence of occurrences||[]){
-    const items=groups[Number(occurrence.group)],start=Number(occurrence.start),end=Number(occurrence.end);
-    if(!items||start<0||end<=start||end>items.length)continue;
-    const a=items[start],b=items[end-1],range=doc.createRange();
-    try{range.setStart(a.node,a.start);range.setEnd(b.endNode,b.end)}catch(_){continue}
-    out.push({range,example:a.node.parentElement?.closest(".wu-xonly,.wu-sec,.dsl_opt,.wu-exonly,.wu-ex,.dsl_ex")||null});
+function findTextNodes(root){
+  const doc=root.ownerDocument||root,win=doc.defaultView,nodes=[];
+  if(!win?.NodeFilter)return nodes;
+  const walker=doc.createTreeWalker(root,win.NodeFilter.SHOW_TEXT);
+  while(walker.nextNode()){
+    const node=walker.currentNode,parent=node.parentElement;
+    if(!node.data||!parent)continue;
+    if(parent.closest("script,style,noscript,template,title"))continue;
+    const css=win.getComputedStyle(parent);
+    if(css.display==="none"||css.visibility==="hidden"||css.visibility==="collapse")continue;
+    nodes.push(node);
   }
+  return nodes;
+}
+function resolveNodePath(root,path){
+  let node=root;
+  for(const index of path||[]){
+    node=node?.childNodes?.[index];
+    if(!node)return null;
+  }
+  return node&&node.nodeType===3?node:null;
+}
+function rangeFromNodes(doc,first,firstStart,last,lastEnd){
+  const range=doc.createRange();
+  try{range.setStart(first,firstStart);range.setEnd(last,lastEnd)}catch(_){return null}
+  return range;
+}
+// locateFindText finds one occurrence's text among the article's text nodes,
+// starting at the node cursor: inside a single node first (the common case), then
+// across a run of consecutive ones (a phrase the markup split).
+function locateFindText(nodes,cursor,occurrence,doc){
+  const want=foldFindText(occurrence.text);
+  if(!want)return {range:null,cursor};
+  for(let i=cursor;i<nodes.length;i++){
+    const folded=foldFindText(nodes[i].data),at=folded.indexOf(want);
+    if(at<0)continue;
+    const range=rangeFromNodes(doc,nodes[i],at,nodes[i],at+want.length);
+    if(range)return {range,cursor:i};
+  }
+  for(let i=cursor;i<nodes.length;i++){
+    let joined="",spans=[];
+    for(let j=i;j<nodes.length&&j<i+8;j++){
+      const text=foldFindText(nodes[j].data);
+      const at=joined.length?joined.length+1:0;
+      joined=joined?joined+" "+text:text;
+      spans.push({node:nodes[j],from:at,to:at+text.length});
+      if(joined.length<want.length)continue;
+      const found=joined.indexOf(want);
+      if(found<0)continue;
+      const end=found+want.length;
+      const first=spans.find(span=>span.to>found),last=spans.find(span=>span.to>=end);
+      if(!first||!last)continue;
+      const range=rangeFromNodes(doc,first.node,found-first.from,last.node,end-last.from);
+      if(range)return {range,cursor:j};
+    }
+  }
+  return {range:null,cursor};
+}
+function serverFindRanges(root,occurrences){
+  const doc=root.ownerDocument||root,win=doc.defaultView;
+  if(!win)return [];
+  const nodes=findTextNodes(root),out=[];
+  let cursor=0,missed=0;
+  for(const occurrence of occurrences||[]){
+    const spans=occurrence?.spans||[];
+    if(!spans.length){missed++;continue}
+    const first=resolveNodePath(root,spans[0].path),last=resolveNodePath(root,spans[spans.length-1].path);
+    let range=first&&last?rangeFromNodes(doc,first,spans[0].start,last,spans[spans.length-1].end):null;
+    if(range&&foldFindText(range.toString())!==foldFindText(occurrence.text))range=null;
+    if(!range){
+      const located=locateFindText(nodes,cursor,occurrence,doc);
+      range=located.range;cursor=located.cursor;
+    }
+    if(!range){missed++;continue}
+    for(let i=cursor;i<nodes.length;i++){if(nodes[i]===range.startContainer||range.intersectsNode?.(nodes[i])){cursor=i;break}}
+    out.push({range,example:range.startContainer.parentElement?.closest(".wu-xonly,.wu-sec,.dsl_opt,.wu-exonly,.wu-ex,.dsl_ex")||null});
+  }
+  if(missed)window.wudictArticleFind?.traceEvent?.("navigation_trace_ranges",`occurrences=${(occurrences||[]).length}; painted=${out.length}; missed=${missed}`);
   return out;
+}
+/* The reader's own position, named the way the server addresses the article: a
+   child-index path to the text node, and the offset inside it. The page knows
+   its tree; the server compares that with the occurrences it found. */
+function nodePath(root,node){
+  const path=[];
+  for(let current=node;current&&current!==root;current=current.parentNode){
+    const parent=current.parentNode;
+    if(!parent)return null;
+    path.unshift(Array.prototype.indexOf.call(parent.childNodes,current));
+  }
+  return path.length?path:null;
 }
 function serverFindAnchor(){
   if(!searchAnchor||options.mode==="fts")return null;
@@ -395,24 +453,14 @@ function serverFindAnchor(){
   if(!det||!row)return null;
   const rows=[...det.querySelectorAll(":scope>dl>dd")],articleOffset=rows.indexOf(row);
   if(articleOffset<0)return null;
-  const root=rootFor(host),groups=root&&serverFindPoints(root,options.examples);
-  if(!groups)return null;
-  for(let group=0;group<groups.length;group++){
-    const points=groups[group];
-    for(let i=0;i<points.length;i++){
-      const point=points[i],node=searchAnchor.range.startContainer,offset=searchAnchor.range.startOffset;
-      if(node===point.node&&offset>=point.start&&offset<=point.end){
-        const within=offset>=point.end?1:0;
-        return {dict:det.dataset.searchDict||"",article:(Number(det.dataset.searchPageStart)||0)+articleOffset,
-          group,offset:i+within,direction:searchAnchor.direction};
-      }
-      if(node===point.endNode&&point.endNode!==point.node&&offset<=point.end){
-        return {dict:det.dataset.searchDict||"",article:(Number(det.dataset.searchPageStart)||0)+articleOffset,
-          group,offset:i+1,direction:searchAnchor.direction};
-      }
-    }
-  }
-  return null;
+  const root=rootFor(host);if(!root)return null;
+  let node=searchAnchor.range.startContainer;
+  while(node&&node.nodeType!==3)node=node.firstChild;
+  if(!node)return null;
+  const path=nodePath(root,node);
+  if(!path)return null;
+  return {dict:det.dataset.searchDict||"",article:(Number(det.dataset.searchPageStart)||0)+articleOffset,
+    path:path.join(","),offset:searchAnchor.range.startOffset,direction:searchAnchor.direction};
 }
 async function showRemoteFindTarget(target,state,token){
   if(!target)return false;
@@ -437,7 +485,7 @@ async function showRemoteFindTarget(target,state,token){
   let found=[];
   for(let attempt=0;attempt<50;attempt++){
     const root=rootFor(host);
-    if(root)found=serverFindRanges(root,target.occurrences,options.examples);
+    if(root)found=serverFindRanges(root,target.occurrences);
     if(found.length||token!==remoteFindToken)break;
     await new Promise(resolve=>setTimeout(resolve,100));
   }
@@ -782,7 +830,7 @@ if(window.visualViewport){window.visualViewport.addEventListener("resize",()=>{i
 $("sbarExamples").addEventListener("click",schedule);
 $("examplesRow")?.addEventListener("click",schedule);
 window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation,
-  serverRanges:(root,occurrences,includeExamples)=>serverFindRanges(root,occurrences,includeExamples),
+  serverRanges:(root,occurrences)=>serverFindRanges(root,occurrences),
   saveTraceArticle:(dict,article,html)=>{
   if(!remoteFindTraceActive)return Promise.resolve(false);
   if(!html){
