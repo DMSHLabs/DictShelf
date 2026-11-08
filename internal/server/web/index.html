@@ -11211,14 +11211,18 @@ function navSettleCurrent(cur){
       stable=0;
       if(++attempts>30)return stop();
       if(!laidOut){
-        // Still no box: an OPEN dictionary's list is content-visibility:auto
-        // (app.css), so a section the reader has left behind - the wrap back to
-        // the first block of the first dictionary is exactly that - has no
-        // coordinates to reveal, and `hostRect` is zero as well. Asking the mark
-        // itself to come into view is what makes the browser lay that part out;
-        // the next turn aligns it below the bar for real. The dialog's settle has
-        // always done this for the same reason.
-        cur.el.scrollIntoView({block:"center",behavior:"instant"});
+        /* The mark has no box. An OPEN dictionary's list is
+           content-visibility:auto (app.css), and WebView2 defers laying out a
+           subtree that is not on screen - the wrap back to the first block of
+           the first dictionary is exactly that, and `hostRect` is zero with it,
+           which is why revealing it did nothing. The SECTION always has a box
+           (its summary plus the intrinsic placeholder), so it is the safe target
+           - the same fallback `topOf` uses in article-find.js for the same
+           WebView2 behaviour. Bringing the section in makes the browser lay its
+           subtree out, and the next turn aligns the mark below the bar. */
+        const section=(cur.host.closest("details.dict")||cur.det).getBoundingClientRect();
+        if(section.height)revealAt(section.top,cur.det,moved);
+        else cur.el.scrollIntoView({block:"center",behavior:"instant"});
       }else{
         revealAt(top,cur.det,moved||Math.abs(top)>innerHeight*2);
       }
