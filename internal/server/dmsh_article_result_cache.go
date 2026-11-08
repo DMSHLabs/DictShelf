@@ -195,7 +195,7 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 				return emit(SearchEvent{T: "cache", Dict: e.ID, CacheID: request.CacheID, Total: total, Complete: done})
 			})
 			logx.SystemDiagnosticIf(request.SearchDiagnostics,
-				"search stage=article_id_index_done dict=%q mode=%q query=%q elapsed_ms=%d error=%q", e.ID, request.Mode, query, time.Since(started).Milliseconds(), err)
+				"search stage=article_id_index_done dict=%q mode=%q query=%q elapsed_ms=%d error=%v", e.ID, request.Mode, query, time.Since(started).Milliseconds(), err)
 			return err
 		}(); err != nil {
 			logx.SystemDiagnostic("search_complete_list stage=failed dict=%q name=%q mode=%q rung=%q query=%q cache_id=%q error=%q",
