@@ -1455,11 +1455,11 @@ function cancelArticleResultCaches(){
   }
   maskTaskFinish("search-results");
 }
-function articleCacheURL(state,action,start=0,size=0){
+function articleCacheURL(state,action,start=0,size=0,marks=hlOn){
   return "/api/search?"+new URLSearchParams({cacheAction:action,cacheID:state.id,dict:state.dict,
     cacheCount:String(state.count),cacheOrder:String(state.order),
     q:state.query,mode:state.mode,rung:state.rung,ignoreDiacritics:state.ignore?"1":"0",
-    hl:hlOn?"1":"0",start:String(start),size:String(size),pageCacheDiagnostics:articlePageCacheDiagnosticsEnabled()?"1":"0",searchDiagnostics:searchArticleDiagnosticsEnabled()?"1":"0"});
+    hl:marks?"1":"0",start:String(start),size:String(size),pageCacheDiagnostics:articlePageCacheDiagnosticsEnabled()?"1":"0",searchDiagnostics:searchArticleDiagnosticsEnabled()?"1":"0"});
 }
 function updateArticleCacheCard(state){
   const det=[...document.querySelectorAll("details.dict")].find(node=>
@@ -2564,10 +2564,11 @@ function applyFW(w,save){
    every 2px gap between the three buttons — had to be cancelled or it folded
    the drawer's old details. The row is a plain div now, with nothing to cancel.
    Action on the buttons, and only there. */
-/* Full-text match marking (?hl=). Server-side: the words you searched for come
-   back already wrapped in <mark class="wu-hl">, so nothing walks the article
-   here — no mark.js, no DOM pass, no work at all on the phone that has to
-   render it.
+/* Full-text match marking (?hl=). Server-side: the answer comes back with its
+   occurrences already painted - wu-hl on each one's first fragment, wu-hl-ex on
+   the rest, wu-hl-ex2 between a near window's words, and data-wu-match="N" on
+   every fragment. Nothing walks the article here: the strip's arrows select
+   occurrence N and paint the cursor.
 
    Sent on every search and read only in full-text mode, which is why there is
    no mode branch here: in the other three modes the match IS the headword you
@@ -10601,6 +10602,9 @@ async function fetchSearchPortion(det,start,options={}){
   if(!det?.isConnected)return;
   const openAfter=options.openAfter??true;
   const shouldOpen=()=>typeof openAfter==="function"?!!openAfter():!!openAfter;
+  // marks: this fetch is for the match walk, which paints what it walks to.
+  // The Highlight setting governs the answer's own paint, not the walk.
+  const marks=options.marks??hlOn;
   const box=det.parentElement,mode=det.dataset.searchMode||"prefix",query=det.dataset.searchQuery||"",id=det.dataset.searchDict||"";
   const initial=Number(det.dataset.searchInitial)||5;
   const configuredSize=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
@@ -10625,7 +10629,7 @@ async function fetchSearchPortion(det,start,options={}){
     buttons.forEach(button=>button.disabled=true);
     try{
       if(!cached.started)pumpArticleResultCaches();
-      await fetchStream(articleCacheURL(cached,"page",start,size),msg=>{
+      await fetchStream(articleCacheURL(cached,"page",start,size,marks),msg=>{
         if(msg.t==="error")throw new Error(msg.error||"result page unavailable");
         if(msg.t!=="hit"||msg.dict!==id)return;
         cached.total=msg.total||0;cached.done=!!msg.complete;
@@ -10649,7 +10653,7 @@ async function fetchSearchPortion(det,start,options={}){
   const priority=det.querySelector(":scope>summary .priority-index"),actions=[...det.querySelectorAll(":scope>summary .result-page-action")];
   if(priority)priority.disabled=true;
   actions.forEach(button=>button.disabled=true);
-  const url="/api/search?q="+encodeURIComponent(query)+"&mode="+encodeURIComponent(mode)+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(id)+"&n="+requested+"&cacheID="+encodeURIComponent(articleCacheGroupID)+"&pageCacheDiagnostics="+(articlePageCacheDiagnosticsEnabled()?"1":"0")+"&searchDiagnostics="+(searchArticleDiagnosticsEnabled()?"1":"0");
+  const url="/api/search?q="+encodeURIComponent(query)+"&mode="+encodeURIComponent(mode)+"&hl="+(marks?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(id)+"&n="+requested+"&cacheID="+encodeURIComponent(articleCacheGroupID)+"&pageCacheDiagnostics="+(articlePageCacheDiagnosticsEnabled()?"1":"0")+"&searchDiagnostics="+(searchArticleDiagnosticsEnabled()?"1":"0");
   let received=false,loaded=null;
   try{
     await fetchStream(url,msg=>{
@@ -10942,6 +10946,7 @@ function navAttach(det,startWalk=true){
 }
 function navDetach(){
   navOpToken++;
+  for(const old of navCurrent?.els||[])old.classList.remove("wu-cur");
   navScrollSettle?.();clearTimeout(navTimer);navDet=null;navCurrent=null;
   navServerState=null;navPending=false;
   const previous=navSessionID;navSessionID="";
@@ -11000,7 +11005,9 @@ async function navStart(det){
     const state=await navRequest("navStart",{dict:orders.map(index=>searchNavDictionaries[index]).join(","),
       cacheCount:String(articleCacheGroupCount),cacheOrders:orders.join(","),
       ignoreDiacritics:findContext.ignoreDiacritics?"1":"0",q:det.dataset.searchQuery||lastQuery,
-      mode:det.dataset.searchMode||lastSearchMode,nearWords:String(findContext.nearWords||10),pageSize:String(size),firstSize:String(firstSize),
+      // "fts" here is the walk itself: the session reads the marks the answer
+      // was painted with, and resultMode says which reading ran.
+      mode:"fts",resultMode:det.dataset.searchMode||lastSearchMode,nearWords:String(findContext.nearWords||10),pageSize:String(size),firstSize:String(firstSize),
       groupID:findContext.groupID||"",rungs:orders.map(index=>(findContext.rungs||[])[index]||"").join(",")});
     if(!state||operation!==navOpToken||navDet!==det||navSuppressed)return;
     navServerState=state;navPos();await navShowTarget(state.target,state);
@@ -11053,56 +11060,39 @@ async function navShowTarget(target,state){
   if(!det.open)det.open=true;
   navDet=det;
   const articleOffset=Number(target.articleIndex)-start;
-  const row=det.querySelectorAll(":scope>dl>dd")[articleOffset];
-  const host=row?.querySelector(".article");
-  if(!host)return;
-  const displayedHeadword=row.previousElementSibling?.textContent?.trim()||"";
+  const index=String(Number(target.matchIndex)||0);
   const markStarted=performance.now();
-  let mark=null,activeMarks=[],activeBridges=[];
-  let frameMissing=0,markScans=0,actualMarks=0;
+  let mark=null,activeMarks=[];
+  let frameMissing=0,markScans=0,actualMarks=0,reloaded=false,row=null,host=null;
   for(let attempt=0;attempt<50;attempt++){
+    row=det.querySelectorAll(":scope>dl>dd")[articleOffset];
+    host=row?.querySelector(".article");
+    if(!host)return;
     const root=host.shadowRoot||host.contentDocument;
     if(!root)frameMissing++;
     else {
       markScans++;
-      for(const old of root.querySelectorAll(".wu-hl-ex2"))old.replaceWith(...old.childNodes);
-      if(target.occurrences?.length&&(target.reading==="phrase"||target.reading==="near")){
-        let marks=[...root.querySelectorAll(".wu-hl,.wu-hl-ex")];
-        for(const item of marks){item.classList.remove("wu-hl","wu-cur");item.classList.add("wu-hl-ex")}
-        for(let occurrenceIndex=0;occurrenceIndex<target.occurrences.length;occurrenceIndex++){
-          const occurrence=(window.wudictArticleFind?.serverRanges?.(root,target.occurrences,false)||[])[occurrenceIndex];
-          if(!occurrence)continue;
-          const parts=[...root.querySelectorAll(".wu-hl,.wu-hl-ex")].filter(item=>{try{return occurrence.range.intersectsNode(item)}catch(_){return false}});
-          if(!parts.length)window.wudictArticleFind?.wrapRangeText?.(root,occurrence.range,["wu-hl","wu-hl-ex"]);
-        }
-        const occurrenceRanges=target.occurrences.map((_,occurrenceIndex)=>(window.wudictArticleFind?.serverRanges?.(root,target.occurrences,false)||[])[occurrenceIndex]||null);
-        marks=[...root.querySelectorAll(".wu-hl,.wu-hl-ex")];
-        const phraseMarks=[],phraseBridges=[];
-        for(let occurrenceIndex=0;occurrenceIndex<target.occurrences.length;occurrenceIndex++){
-          const occurrence=occurrenceRanges[occurrenceIndex];
-          if(!occurrence){phraseMarks.push([]);phraseBridges.push([]);continue}
-          const parts=marks.filter(item=>{try{return occurrence.range.intersectsNode(item)}catch(_){return false}});
-          if(parts.length){parts[0].classList.remove("wu-hl-ex");parts[0].classList.add("wu-hl")}
-          phraseMarks.push(parts);
-          phraseBridges.push(target.reading==="near"?
-            window.wudictArticleFind?.wrapRangeText?.(root,occurrence.range,"wu-hl-ex2")||[]:[]);
-        }
-        const phraseParts=new Set(phraseMarks.flat());
-        for(const item of marks)if(!phraseParts.has(item))item.replaceWith(...item.childNodes);
-        actualMarks=root.querySelectorAll(".wu-hl").length;
-        activeMarks=phraseMarks[Number(target.matchIndex)]||[];
-        activeBridges=phraseBridges[Number(target.matchIndex)]||[];
-        mark=activeMarks[0]||null;
-      }else{
-        for(const item of root.querySelectorAll(".wu-hl-ex")){item.classList.remove("wu-hl-ex");item.classList.add("wu-hl")}
-        const marks=root.querySelectorAll(".wu-hl");actualMarks=marks.length;
-        mark=marks[Number(target.matchIndex)]||null;activeMarks=mark?[mark]:[];activeBridges=[];
+      // The server painted every occurrence and numbered it; the walk only
+      // selects one. No class juggling here: what the answer says is final.
+      activeMarks=[...root.querySelectorAll('[data-wu-match="'+index+'"]')];
+      actualMarks=root.querySelectorAll(".wu-hl").length;
+      mark=activeMarks[0]||null;
+      if(!mark&&!reloaded&&!root.querySelector("[data-wu-match]")){
+        // The answer was rendered with "Highlight matches" off. The arrows are
+        // navigation, not highlighting, so ask for this block once more with
+        // the marks the walk needs.
+        reloaded=true;
+        const replacement=await window.wudictRestoreArticleBlock?.(det,start,true);
+        if(!replacement||token!==searchSeq)return;
+        det=replacement;if(!det.open)det.open=true;navDet=det;
+        continue;
       }
     }
     if(mark)break;
     if(token!==searchSeq||navSuppressed)return;
     await new Promise(resolve=>setTimeout(resolve,100));
   }
+  const displayedHeadword=row?.previousElementSibling?.textContent?.trim()||"";
   window.wudictArticleFind?.traceEvent?.("navigation_trace_mark",`dict=${dict}; article=${target.articleIndex}; entry_id=${target.entryId||0}; headword=${encodeURIComponent(target.headword||"")}; displayed_headword=${encodeURIComponent(displayedHeadword)}; block=${start}; expected_matches=${target.expectedMatches||0}; anchor_marks=${actualMarks}; phrase_marks=${activeMarks.length}; found=${!!mark}; frame_missing=${frameMissing}; scans=${markScans}; match_index=${target.matchIndex}`,Math.round(performance.now()-markStarted));
   if(!mark){
     const root=host.shadowRoot||host.contentDocument;
@@ -11113,8 +11103,7 @@ async function navShowTarget(target,state){
     return;
   }
   for(const item of activeMarks)item.classList.add("wu-cur");
-  for(const item of activeBridges)item.classList.add("wu-cur");
-  navCurrent={det,host,el:mark,els:[...activeMarks,...activeBridges]};navServerState=state;
+  navCurrent={det,host,el:mark,els:activeMarks};navServerState=state;
   window.wudictArticleFind?.traceEvent?.("navigation_trace_display",`dict=${dict}; article=${target.articleIndex}; block=${start}; mark_ready=true`,Math.round(performance.now()-displayStarted));
   navSettleCurrent(navCurrent);navPos();
 }
@@ -11164,11 +11153,11 @@ async function requestArticleBlock(det,direction){
 }
 window.wudictRequestArticleBlock=(source,direction)=>requestArticleBlock(
   source?.matches?.("details.dict")?source:source?.closest?.("details.dict"),direction);
-window.wudictRestoreArticleBlock=(det,start)=>{
+window.wudictRestoreArticleBlock=(det,start,marks=false)=>{
   if(!det?.isConnected)return null;
   const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
   const firstPageSize=Math.max(0,Number(det.dataset.searchFirstPageSize)||0);
-  return fetchSearchPortion(det,start,{openAfter:true,size:start===0&&firstPageSize?firstPageSize:size,pageSize:size,firstPageSize});
+  return fetchSearchPortion(det,start,{openAfter:true,size:start===0&&firstPageSize?firstPageSize:size,pageSize:size,firstPageSize,marks});
 };
 window.wudictArticleBlockHasMore=(det,direction)=>{
   if(!det?.isConnected)return false;

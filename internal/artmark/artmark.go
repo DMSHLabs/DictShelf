@@ -56,10 +56,17 @@
 //	wu-xref  a link that leaves this dictionary (DSL [ref dict="..."]);
 //	         data-dict / title carry the target dictionary's own name
 //	wu-sub   an article section pulled in beside a link (written by the UI)
-//	wu-hl    a full-text match, marked at response time (internal/hilite)
-//	wu-hl-ex a visual continuation of a phrase match, not a navigation stop
-//	wu-hl-ex2 words between terms in a near match
+//	wu-hl    a full-text match's FIRST fragment - the navigation stop
+//	wu-hl-ex a later fragment of the same match: painted alike, not a stop
+//	wu-hl-ex2 words between a near window's terms: painted, not a match
 //	wu-cur   the occurrence being walked to (written by the UI, not ingested)
+//
+// The three wu-hl* classes are written at response time by the server - the
+// words reading by internal/hilite, phrase and near by internal/server's
+// occurrence painter - and every fragment also carries data-wu-match="N", the
+// occurrence's number in the article. The article navigation selects fragment
+// N and paints wu-cur on it; nothing else in the client decides what matched.
+//
 //	wu-xonly a line whose whole content is examples (written by the UI, web/examples.js)
 //
 // DefaultCSS is served once per page into both article surfaces (the shadow
@@ -120,9 +127,10 @@ const DefaultCSS = `
 .wu-hl.wu-hl{background:var(--wd-hl,#ffe066)!important;color:inherit!important;border-radius:2px}
 .wu-hl-ex.wu-hl-ex{background:var(--wd-hl,#ffe066)!important;color:inherit!important;border-radius:2px}
 .wu-hl-ex2.wu-hl-ex2{background:rgba(255,224,102,.32)!important;background:color-mix(in srgb,var(--wd-hl,#ffe066) 32%,transparent)!important;border-radius:2px}
-/* The first phrase fragment is the navigation anchor; following fragments
-   share its current tint but are not separate stops. These classes are
-   written by the UI, never ingested, so no Version bump is needed. */
+/* The first fragment of a match is the navigation stop; the rest of its
+   fragments share the tint but are not separate stops. All three classes are
+   written at RESPONSE time - never ingested - so a change to them needs no
+   Version bump; only wu-cur is added by the reader's client. */
 .wu-hl.wu-hl.wu-cur{background:var(--wd-hl-cur,#ffab40)!important;box-shadow:0 0 0 2px var(--wd-hl-cur,#ffab40)}
 .wu-hl-ex.wu-hl-ex.wu-cur{background:var(--wd-hl-cur,#ffab40)!important;box-shadow:0 0 0 2px var(--wd-hl-cur,#ffab40)}
 .wu-hl-ex2.wu-hl-ex2.wu-cur{background:rgba(255,171,64,.48)!important;background:color-mix(in srgb,var(--wd-hl-cur,#ffab40) 48%,transparent)!important}

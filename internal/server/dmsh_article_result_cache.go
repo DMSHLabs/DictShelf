@@ -273,7 +273,7 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 		if err != nil {
 			return err
 		}
-		marks := marker(request.Highlight && fullTextReadingMode(request.Mode))(query, request.Rung)
+		hl, marking := marker(request.Highlight && fullTextReadingMode(request.Mode))(query, request.Rung)
 		var assetTokens func(int64, string) (string, bool)
 		if len(results) > 0 {
 			if d, openErr := e.open(); openErr == nil {
@@ -287,9 +287,12 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 		for i := range results {
 			s.decorateFavourite(e.ID, &results[i])
 			if s.isFavouriteDictionaryID(e.ID) && len(results[i].ResourceMap) > 0 {
-				results[i].Body = RewriteFavouriteHTMLMarked(results[i].Body, e.ID, results[i].ResourceMap, marks)
+				results[i].Body = RewriteFavouriteHTMLMarked(results[i].Body, e.ID, results[i].ResourceMap, hl)
 			} else {
-				results[i].Body = rewriteEntryHTMLFor(results[i].Body, e.ID, results[i].EntryID, marks, assetTokens)
+				results[i].Body = rewriteEntryHTMLFor(results[i].Body, e.ID, results[i].EntryID, hl, assetTokens)
+			}
+			if marking != nil {
+				results[i].Body = markArticleFindHTML(results[i].Body, *marking)
 			}
 		}
 		var styles htmlref.Styles

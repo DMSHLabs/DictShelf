@@ -339,7 +339,7 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 		if h.NeedsIndex {
 			reading = "words"
 		}
-		hl := marks(h.Term, reading)
+		hl, marking := marks(h.Term, reading)
 		var assetTokens func(int64, string) (string, bool)
 		if len(h.Results) > 0 {
 			if d, err := entries[i].open(); err == nil {
@@ -356,6 +356,9 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 				h.Results[j].Body = RewriteFavouriteHTMLMarked(h.Results[j].Body, id, h.Results[j].ResourceMap, hl)
 			} else {
 				h.Results[j].Body = rewriteEntryHTMLFor(h.Results[j].Body, id, h.Results[j].EntryID, hl, assetTokens)
+			}
+			if marking != nil {
+				h.Results[j].Body = markArticleFindHTML(h.Results[j].Body, *marking)
 			}
 		}
 		// `clean` and `text` need this dictionary's own CSS to know which of

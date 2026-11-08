@@ -1555,31 +1555,52 @@ func queryFlag(q url.Values, name string) (on, sent bool) {
 // its emit callbacks, so there is never a second goroutine here. It is
 // bounded by the query's full-text relaxation rungs.
 //
-// on=false returns a function that always yields nil, which every caller may
-// pass straight to Mark: an API client that did not ask for marks gets the
+// on=false returns a function that always yields nothing, which every caller
+// may pass straight through: an API client that did not ask for marks gets the
 // article's own bytes, unchanged.
-func marker(on bool) func(term, rung string) *hilite.Terms {
+//
+// The answer comes back as one of two shapes, exactly one non-nil:
+//
+//   - a words or explicit-expression answer is marked per query TERM by
+//     internal/hilite, riding the rewriter's text-node hook;
+//   - a phrase or near answer is marked per OCCURRENCE by markArticleFindHTML,
+//     because the occurrence can span markup and a hook that sees one text node
+//     cannot see it. Navigation counts the same occurrences, so the marks and
+//     the arrows come from one computation.
+func marker(on bool) func(term, rung string) (*hilite.Terms, *articleFindMarking) {
 	if !on {
-		return func(string, string) *hilite.Terms { return nil }
+		return func(string, string) (*hilite.Terms, *articleFindMarking) { return nil, nil }
 	}
-	cache := map[string]*hilite.Terms{}
-	return func(term, rung string) *hilite.Terms {
+	type compiled struct {
+		terms   *hilite.Terms
+		marking *articleFindMarking
+	}
+	cache := map[string]compiled{}
+	return func(term, rung string) (*hilite.Terms, *articleFindMarking) {
 		if rung == "" {
-			return nil
+			return nil, nil
 		}
 		key := rung + "\x00" + term
-		if t, ok := cache[key]; ok {
-			return t
+		if c, ok := cache[key]; ok {
+			return c.terms, c.marking
 		}
-		var t *hilite.Terms
-		for _, r := range ftsq.Parse(term).Rungs() {
-			if r.Name == rung {
-				t = hilite.NewPhrases(r.Marks).WithWordFallback()
-				break
+		var c compiled
+		for _, r := range ftsq.Parse(term).RungsWith(search.NearWords()) {
+			if r.Name != rung {
+				continue
 			}
+			if rung == "phrase" || rung == "near" {
+				// The rung's own phrases carry the prefix flags and the order of
+				// the expression that matched; the near window is the reader's
+				// setting, read here as the rung itself read it.
+				c.marking = &articleFindMarking{phrases: r.Marks, near: rung == "near", nearWords: search.NearWords()}
+			} else {
+				c.terms = hilite.NewPhrases(r.Marks).WithWordFallback()
+			}
+			break
 		}
-		cache[key] = t
-		return t
+		cache[key] = c
+		return c.terms, c.marking
 	}
 }
 
@@ -1751,7 +1772,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		if h.NeedsIndex {
 			reading = "words"
 		}
-		hl := marks(h.Term, reading)
+		hl, marking := marks(h.Term, reading)
 		var assetTokens func(int64, string) (string, bool)
 		if len(h.Results) > 0 {
 			if d, err := entries[i].open(); err == nil {
@@ -1768,6 +1789,9 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 				h.Results[j].Body = RewriteFavouriteHTMLMarked(h.Results[j].Body, id, h.Results[j].ResourceMap, hl)
 			} else {
 				h.Results[j].Body = rewriteEntryHTMLFor(h.Results[j].Body, id, h.Results[j].EntryID, hl, assetTokens)
+			}
+			if marking != nil {
+				h.Results[j].Body = markArticleFindHTML(h.Results[j].Body, *marking)
 			}
 		}
 		// `clean` and `text` need this dictionary's own CSS to know which of

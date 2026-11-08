@@ -321,7 +321,7 @@ type prefsFile struct {
 	ImportTarget   string            `json:"importTarget,omitempty"`   // last writable configured dictionary folder used for imports
 	DesktopHotkeys desktopHotkeys    `json:"desktopHotkeys,omitempty"`
 	DesktopWindow  desktopWindowSize `json:"desktopWindow,omitempty"`
-	SystemLog       systemLogOptions `json:"systemLog,omitempty"`
+	SystemLog      systemLogOptions  `json:"systemLog,omitempty"`
 
 	Groups  []DictionaryGroup `json:"groups,omitempty"`
 	Version int               `json:"version"`

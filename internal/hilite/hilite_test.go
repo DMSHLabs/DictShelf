@@ -5,14 +5,56 @@
 package hilite
 
 import (
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
 
 const (
+	// o is the mark's shape with the occurrence attribute removed: what the span
+	// tables below compare. Numbering is a separate property, checked by marked.
 	o = `<mark class="wu-hl">`
 	c = `</mark>`
 )
+
+// occurrenceAttr is the identity every mark carries: the navigation walks by
+// these numbers, so the client never has to re-derive where a match is.
+var occurrenceAttr = regexp.MustCompile(` data-wu-match="(\d+)"`)
+
+// marked marks one article and returns the output with the occurrence
+// attribute stripped, after checking that the numbers are 0, 1, 2 ... in
+// document order - a skip or a repeat would send the arrows to the wrong mark.
+func marked(t *testing.T, terms *Terms, in string) string {
+	t.Helper()
+	out := terms.Cursor().Mark(in)
+	for i, m := range occurrenceAttr.FindAllStringSubmatch(out, -1) {
+		if want := strconv.Itoa(i); m[1] != want {
+			t.Fatalf("occurrence %d carries number %q, want %q\nin %q\nout %q", i, m[1], want, in, out)
+		}
+	}
+	return occurrenceAttr.ReplaceAllString(out, "")
+}
+
+// stripMarks removes the marks wholesale, attribute included: the text must
+// come back exactly.
+func stripMarks(s string) string {
+	s = occurrenceAttr.ReplaceAllString(s, "")
+	s = strings.ReplaceAll(s, `<mark class="wu-hl">`, "")
+	return strings.ReplaceAll(s, "</mark>", "")
+}
+
+func TestMarkCarriesOccurrenceNumber(t *testing.T) {
+	got := Compile("ax").Cursor().Mark("ax ax")
+	want := `<mark class="wu-hl" data-wu-match="0">ax</mark> <mark class="wu-hl" data-wu-match="1">ax</mark>`
+	if got != want {
+		t.Fatalf("Mark = %q, want %q", got, want)
+	}
+	// A cursor is one article: the next body starts again at zero.
+	if got := Compile("ax").Cursor().Mark("ax"); got != `<mark class="wu-hl" data-wu-match="0">ax</mark>` {
+		t.Fatalf("a fresh cursor = %q", got)
+	}
+}
 
 func TestMark(t *testing.T) {
 	for _, tc := range []struct {
@@ -53,7 +95,7 @@ func TestMark(t *testing.T) {
 		{"a one-character han term still marks", "\u4e2d", "\u4e2d\u6587", o + "\u4e2d\u6587" + c},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := Compile(tc.query).Mark(tc.in)
+			got := marked(t, Compile(tc.query), tc.in)
 			if got != tc.want {
 				t.Errorf("Mark(%q) with %q\n got %q\nwant %q", tc.in, tc.query, got, tc.want)
 			}
@@ -118,7 +160,7 @@ func TestMarkPhrase(t *testing.T) {
 			"un cuento de miedoso", "un cuento de miedoso"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := NewPhrases(tc.phrases).Mark(tc.in); got != tc.want {
+			if got := marked(t, NewPhrases(tc.phrases), tc.in); got != tc.want {
 				t.Errorf("Mark(%q)\n got %q\nwant %q", tc.in, got, tc.want)
 			}
 		})
@@ -126,11 +168,15 @@ func TestMarkPhrase(t *testing.T) {
 }
 
 func TestWordFallbackMarksPhraseAcrossHTMLTextNodes(t *testing.T) {
-	terms := NewPhrases([]Phrase{ph("джазовый", "кларнетист")}).WithWordFallback()
-	if got, want := terms.Mark("джазовый "), o+"джазовый"+c+" "; got != want {
+	// One cursor, two text nodes: the fallback marks each node's word, and the
+	// cursor numbers them as the two separate stops they are. This is the
+	// explicit-expression rung; the readings are painted per occurrence by the
+	// server instead.
+	cursor := NewPhrases([]Phrase{ph("джазовый", "кларнетист")}).WithWordFallback().Cursor()
+	if got, want := cursor.Mark("джазовый "), `<mark class="wu-hl" data-wu-match="0">джазовый</mark> `; got != want {
 		t.Fatalf("left text node = %q, want %q", got, want)
 	}
-	if got, want := terms.Mark("кларнетист"), o+"кларнетист"+c; got != want {
+	if got, want := cursor.Mark("кларнетист"), `<mark class="wu-hl" data-wu-match="1">кларнетист</mark>`; got != want {
 		t.Fatalf("right text node = %q, want %q", got, want)
 	}
 }
@@ -142,7 +188,7 @@ func TestNewPhrasesDropsEmpty(t *testing.T) {
 	if got := NewPhrases([]Phrase{ph("!!!", "???")}); got != nil {
 		t.Errorf("NewPhrases(punctuation only) = %v, want nil", got)
 	}
-	if got := NewPhrases([]Phrase{ph("red", "!!!", "fox*")}).Mark("red fox"); got != o+"red fox"+c {
+	if got := marked(t, NewPhrases([]Phrase{ph("red", "!!!", "fox*")}), "red fox"); got != o+"red fox"+c {
 		t.Errorf("a dropped middle term voided the phrase: %q", got)
 	}
 }
@@ -158,7 +204,10 @@ func TestNilTermsIsIdentity(t *testing.T) {
 			t.Errorf("Compile(%q) = %v, want nil", q, got)
 		}
 	}
-	if got := (*Terms)(nil).Mark("untouched"); got != "untouched" {
+	if got := (*Terms)(nil).Cursor().Mark("untouched"); got != "untouched" {
+		t.Errorf("nil Terms.Cursor().Mark = %q", got)
+	}
+	if got := (*Cursor)(nil).Mark("untouched"); got != "untouched" {
 		t.Errorf("nil.Mark = %q", got)
 	}
 }
@@ -169,8 +218,8 @@ func TestNilTermsIsIdentity(t *testing.T) {
 func TestMarkPreservesText(t *testing.T) {
 	in := "Der Fuchs läuft; café & co. 中文 한국어 &amp; <not a tag> 42"
 	for _, q := range []string{"der", "fuchs", "lauft", "cafe", "co", "42", "中", "한"} {
-		got := Compile(q).Mark(in)
-		stripped := strings.ReplaceAll(strings.ReplaceAll(got, o, ""), c, "")
+		got := marked(t, Compile(q), in)
+		stripped := stripMarks(got)
 		if stripped != in {
 			t.Errorf("query %q: stripping the marks did not restore the text\n got %q\nwant %q", q, stripped, in)
 		}
@@ -179,13 +228,13 @@ func TestMarkPreservesText(t *testing.T) {
 
 func TestMaxMarks(t *testing.T) {
 	in := strings.TrimSpace(strings.Repeat("ax ", MaxMarks+50))
-	got := Compile("ax").Mark(in)
-	if n := strings.Count(got, o); n != MaxMarks {
+	got := Compile("ax").Cursor().Mark(in)
+	if n := len(occurrenceAttr.FindAllString(got, -1)); n != MaxMarks {
 		t.Errorf("marks = %d, want %d", n, MaxMarks)
 	}
 	// Past the cap the article is still whole, which is the point of capping
 	// rather than truncating.
-	if stripped := strings.ReplaceAll(strings.ReplaceAll(got, o, ""), c, ""); stripped != in {
+	if stripped := stripMarks(got); stripped != in {
 		t.Error("text past the mark cap was lost")
 	}
 }
@@ -213,7 +262,7 @@ func BenchmarkMark(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = t.Mark(text)
+		_ = t.Cursor().Mark(text)
 	}
 }
 
@@ -224,6 +273,6 @@ func BenchmarkMarkNoMatch(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = t.Mark(text)
+		_ = t.Cursor().Mark(text)
 	}
 }

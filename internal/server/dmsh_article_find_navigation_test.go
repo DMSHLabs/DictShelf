@@ -122,6 +122,22 @@ func TestArticleFindNavigationUsesServerSearchAndHighlights(t *testing.T) {
 	if bridge["status"] != 200 || bridge["body"].(map[string]any)["found"] != true {
 		t.Fatalf("desktop navigation bridge = %+v; want first phrase match", bridge)
 	}
+	// The strip's own session: "fts" is the walk, resultMode is the reading.
+	stripParams := url.Values{"cacheAction": {"navStart"}, "cacheID": {"abcdef0123456789"},
+		"dict": {dictionaryIDs["first.dsl"]}, "q": {"джазовый кларнетист"}, "mode": {"fts"},
+		"resultMode": {"phrase"}, "groupID": {cacheID}, "cacheCount": {"2"}, "cacheOrders": {"0"},
+		"ignoreDiacritics": {"1"}, "rungs": {"phrase"}, "pageSize": {"1"}, "firstSize": {"1"}}
+	stripResult, err := server.DesktopJSONContext(context.Background(), "", "articleFindNavigation", stripParams.Encode())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stripBody := stripResult.(map[string]any)["body"].(map[string]any)
+	if stripBody["found"] != true {
+		t.Fatalf("the strip's full-text session found nothing: %+v", stripBody)
+	}
+	if target, _ := stripBody["target"].(map[string]any); target == nil || target["reading"] != "phrase" {
+		t.Fatalf("the strip's target = %+v; want the phrase reading", target)
+	}
 	session := &articleFindNavigationSession{query: "джазовый кларнетист", mode: "phrase", resultQuery: "джазовый кларнетист", resultMode: "phrase",
 		dictionaries: []string{dictionaryIDs["first.dsl"], dictionaryIDs["second.dsl"]},
 		pageSize:     1, firstSize: 1, pages: []map[int]articleFindNavigationPage{{}, {}}}
@@ -143,13 +159,19 @@ func TestArticleFindNavigationUsesServerSearchAndHighlights(t *testing.T) {
 		}
 		session.current = target
 	}
+	// The strip's shape: "fts" is the walk, resultMode is the reading that ran.
 	fullTextSession := &articleFindNavigationSession{query: "джазовый кларнетист", mode: "fts",
-		resultQuery: "джазовый кларнетист", resultMode: "fts", rungs: []string{"phrase"},
+		resultQuery: "джазовый кларнетист", resultMode: "phrase", rungs: []string{"phrase"},
 		dictionaries: []string{dictionaryIDs["first.dsl"]},
 		pageSize:     1, firstSize: 1, pages: []map[int]articleFindNavigationPage{make(map[int]articleFindNavigationPage)}}
 	phrasePage, err := server.loadArticleFindNavigationPage(context.Background(), fullTextSession, 0, 0)
-	if err != nil || len(phrasePage.Counts) != 1 || phrasePage.Counts[0] != 1 || len(phrasePage.Occurrences[0]) != 1 {
-		t.Fatalf("full-text phrase page = %+v, err=%v; want one phrase occurrence", phrasePage, err)
+	if err != nil || len(phrasePage.Counts) != 1 || phrasePage.Counts[0] != 1 {
+		t.Fatalf("full-text phrase page = %+v, err=%v; want one painted phrase", phrasePage, err)
+	}
+	// A full-text page counts the heads the answer was painted with; it ships no
+	// ranges, because the client no longer paints them.
+	if len(phrasePage.Occurrences[0]) != 0 {
+		t.Fatalf("full-text phrase page carries occurrences: %+v", phrasePage.Occurrences[0])
 	}
 	target, wrapped, err := session.move(context.Background(), 1, load)
 	if err != nil || target == nil || target.DictionaryIndex != 0 || target.BlockStart != 0 || target.ArticleIndex != 0 || !wrapped {
@@ -178,18 +200,21 @@ func sameArticleFindTarget(actual, expected *articleFindNavigationTarget) bool {
 		actual.ArticleIndex == expected.ArticleIndex && actual.MatchIndex == expected.MatchIndex
 }
 
-func TestArticleFindFullTextTargetKeepsPhraseOccurrences(t *testing.T) {
-	occurrences := []articleFindOccurrence{{Group: 0, Start: 0, End: 21}, {Group: 0, Start: 24, End: 45}}
+// A full-text target names its occurrence by number, not by range: the answer
+// is already painted, and the number indexes the heads the page counted. The
+// strip's session says "fts" - the walk itself - and the reading travels in
+// resultMode, so the dialog's literal trymodes of the same names are untouched.
+func TestArticleFindFullTextTargetCarriesOccurrenceNumbers(t *testing.T) {
 	session := &articleFindNavigationSession{
 		mode: "fts", resultMode: "fts", rungs: []string{"phrase"}, dictionaries: []string{"dict"},
-		pages: []map[int]articleFindNavigationPage{{0: {
-			Counts: []int{len(occurrences)}, Occurrences: [][]articleFindOccurrence{occurrences},
-		}}},
+		pages: []map[int]articleFindNavigationPage{{0: {Counts: []int{2}}}},
 	}
 	target := session.target(0, 0, 0, 1)
-	if target.ExpectedMatches != 2 || target.MatchIndex != 1 || target.Reading != "phrase" || len(target.Occurrences) != 2 ||
-		target.Occurrences[1] != occurrences[1] {
-		t.Fatalf("full-text target = %+v; want the second complete phrase occurrence", target)
+	if target.ExpectedMatches != 2 || target.MatchIndex != 1 || target.Reading != "phrase" {
+		t.Fatalf("full-text target = %+v; want the second occurrence of two", target)
+	}
+	if len(target.Occurrences) != 0 {
+		t.Fatalf("full-text target ships ranges: %+v", target.Occurrences)
 	}
 	session.rungs[0] = "near"
 	if nearTarget := session.target(0, 0, 0, 0); nearTarget.Reading != "near" {

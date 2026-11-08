@@ -15,7 +15,7 @@ import (
 func TestRewriteFavouriteHTMLMarkedPreservesCopiedMedia(t *testing.T) {
 	hl := hilite.NewPhrases([]hilite.Phrase{{{Text: "джазовый"}, {Text: "кларнетист"}}})
 	got := RewriteFavouriteHTMLMarked(`<p>джазовый кларнетист</p><img src="school.jpg">`, "favourites", map[string]string{"school.jpg": "token"}, hl)
-	if !strings.Contains(got, `<mark class="wu-hl">джазовый кларнетист</mark>`) {
+	if !strings.Contains(got, `<mark class="wu-hl" data-wu-match="0">джазовый кларнетист</mark>`) {
 		t.Fatalf("favourite article is not marked: %s", got)
 	}
 	if !strings.Contains(got, `/res/favourites/token`) {
@@ -23,10 +23,17 @@ func TestRewriteFavouriteHTMLMarkedPreservesCopiedMedia(t *testing.T) {
 	}
 }
 
+// A phrase the markup split is painted as ONE occurrence: the stop on the word
+// the reader meets first, the rest as its continuation. The painter runs over
+// the rewritten body, so the marks land on the bytes that are served.
 func TestFullTextPhraseMarksAcrossInlineHTML(t *testing.T) {
-	terms := marker(true)("джазовый кларнетист", "phrase")
-	got := RewriteEntryHTMLMarked(`текст: джазовый <a rel="mw:WikiLink">кларнетист</a>`, "", terms)
-	want := `текст: <mark class="wu-hl">джазовый</mark> <a rel="mw:WikiLink"><mark class="wu-hl">кларнетист</mark></a>`
+	hl, marking := marker(true)("джазовый кларнетист", "phrase")
+	if marking == nil {
+		t.Fatal("the phrase rung produced no marking")
+	}
+	body := RewriteEntryHTMLMarked(`текст: джазовый <a rel="mw:WikiLink">кларнетист</a>`, "", hl)
+	got := markArticleFindHTML(body, *marking)
+	want := `текст: <mark class="wu-hl" data-wu-match="0">джазовый</mark> <a rel="mw:WikiLink"><mark class="wu-hl-ex" data-wu-match="0">кларнетист</mark></a>`
 	if got != want {
 		t.Fatalf("cross-tag phrase = %q, want %q", got, want)
 	}

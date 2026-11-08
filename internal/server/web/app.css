@@ -269,7 +269,7 @@ html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image
   background-size:100% 100%;background-attachment:fixed}
 #articleFindStrip[hidden]{display:none}
 #articleFindLabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
-#articleFindReading{flex:none;white-space:nowrap;color:var(--fg-soft);padding:0 .25rem}
+#articleFindReading{flex:none;white-space:nowrap;color:var(--label-quiet);padding:0 .25rem}
 #articleFindCount{flex:none;white-space:nowrap;font-size:.85em}
 #articleFindCount:disabled{opacity:.65;cursor:default}
 #articleFindStrip>button:not(#articleFindLabel){flex:none}

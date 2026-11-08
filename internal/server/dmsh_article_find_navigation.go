@@ -517,15 +517,6 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 	occurrences := make([][]articleFindOccurrence, len(counts))
 	options := articleFindMatchOptions{query: session.query, mode: session.mode, matchCase: session.matchCase,
 		examples: session.examples, nearWords: session.nearWords}
-	resultReading := session.resultMode
-	if dictionaryIndex < len(session.rungs) && session.rungs[dictionaryIndex] != "" {
-		resultReading = session.rungs[dictionaryIndex]
-	}
-	if findFullText && (resultReading == "phrase" || resultReading == "near") {
-		// Full-text terms can be marked separately when markup splits a match.
-		// Navigation counts complete phrase or near windows as one occurrence.
-		options.mode = resultReading
-	}
 	if session.mode == "wordLemma" && !strings.ContainsAny(session.query, " \t\r\n") && s.Morph.Enabled() {
 		if session.lemmas == nil {
 			session.lemmas = make(map[string]string)
@@ -547,8 +538,11 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 	}
 	for i := range results {
 		headwords[i], entryIDs[i] = results[i].Headword, results[i].EntryID
-		if findFullText && resultReading != "phrase" && resultReading != "near" {
-			counts[i] = strings.Count(results[i].Body, `<mark class="wu-hl">`)
+		if findFullText {
+			// A reading's answer already carries its marks, and one head is one
+			// occurrence: the number the arrows walk IS the number painted into
+			// the article, so the two cannot disagree.
+			counts[i] = countArticleFindHeads(results[i].Body)
 			continue
 		}
 		occurrences[i] = matchArticleFindHTML(results[i].Body, options)
@@ -772,6 +766,10 @@ func (session *articleFindNavigationSession) target(dictionaryIndex, blockStart,
 	return target
 }
 
+// sessionUsesFullTextMarks reports whether the session walks a reading's
+// marks. The strip sends mode "fts" for any of the three readings and says
+// which one ran in resultMode; the dialog never sends it, because its literal
+// modes have occurrence lists of their own.
 func sessionUsesFullTextMarks(session *articleFindNavigationSession) bool {
 	return session.mode == "fts"
 }

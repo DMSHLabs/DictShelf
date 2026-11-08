@@ -8,9 +8,30 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
+
+// wireMark is one mark as the wire carries it: which words, and with which
+// class. The occurrence number is a separate property and is pinned by the
+// painter's own tests; here what matters is that the right words are painted
+// apart or together.
+type wireMark struct{ class, text string }
+
+// wireMarkRE reads a painted fragment as the wire carries it: a match is a
+// <mark>, the words between a near window's terms are a <span>, and both carry
+// the occurrence number.
+var wireMarkRE = regexp.MustCompile(`<(?:mark|span) class="([^"]*)" data-wu-match="(\d+)">([^<]*)</(?:mark|span)>`)
+
+func hasMark(body string, want wireMark) bool {
+	for _, m := range wireMarkRE.FindAllStringSubmatch(body, -1) {
+		if m[1] == want.class && m[3] == want.text {
+			return true
+		}
+	}
+	return false
+}
 
 // The marking rule lives in three places that can drift independently - the
 // `hl` parameter, the full-text-only gate, and the rewriter hook that actually
@@ -66,14 +87,15 @@ func TestArticleResultCacheMarksStrictReadings(t *testing.T) {
 
 	for _, tc := range []struct {
 		name, q, mode, rung string
-		marks               []string
+		marks               []wireMark
+		exact               string
 	}{
 		{"the phrase mode keeps its one span on a paged result", "vivienda es una", "phrase", "phrase",
-			[]string{`<mark class="wu-hl">vivienda es una</mark>`}},
+			nil, `<mark class="wu-hl" data-wu-match="0">vivienda es una</mark>`},
 		{"the near mode keeps the words apart on a paged result", "casa una", "near", "near",
-			[]string{`<mark class="wu-hl">casa</mark>`, `<mark class="wu-hl">una</mark>`}},
+			[]wireMark{{"wu-hl", "una"}, {"wu-hl-ex", "casa"}, {"wu-hl-ex2", " vivienda es una "}}, ""},
 		{"the words mode marks a paged result too", "vivienda es una", "fts", "words",
-			[]string{`<mark class="wu-hl">vivienda</mark>`, `<mark class="wu-hl">es</mark>`}},
+			[]wireMark{{"wu-hl", "vivienda"}, {"wu-hl", "es"}, {"wu-hl", "una"}}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cacheID := "strict-reading-" + tc.mode + "-0001"
@@ -97,9 +119,12 @@ func TestArticleResultCacheMarksStrictReadings(t *testing.T) {
 			if !strings.Contains(got, "vivienda") {
 				t.Fatalf("the cached page carried no article text - the case would pass vacuously: %+v", page)
 			}
+			if tc.exact != "" && !strings.Contains(got, tc.exact) {
+				t.Errorf("the cached page lost %s: %s", tc.exact, got)
+			}
 			for _, m := range tc.marks {
-				if !strings.Contains(got, m) {
-					t.Errorf("the cached page lost %s: %s", m, got)
+				if !hasMark(got, m) {
+					t.Errorf("the cached page lost the %s mark on %q: %s", m.class, m.text, got)
 				}
 			}
 		})
@@ -120,7 +145,7 @@ func TestSearchHighlight(t *testing.T) {
 	s, id := newHLServer(t)
 
 	got := bodies(searchStream(t, s, "/api/search?q=vivi&mode=fts&hl=1&dict="+id))
-	if !strings.Contains(got, `<mark class="wu-hl">vivienda</mark>`) {
+	if !hasMark(got, wireMark{"wu-hl", "vivienda"}) {
 		t.Errorf("fts&hl=1 did not mark the whole token: %s", got)
 	}
 
@@ -153,16 +178,17 @@ func TestSearchPhraseMarking(t *testing.T) {
 	   moved to the modes that promise them. */
 	for _, tc := range []struct {
 		name, q, mode, rung string
-		marks               []string
+		marks               []wireMark
+		exact               string
 	}{
 		{"the phrase mode marks the words as one span", "vivienda es una", "phrase", "phrase",
-			[]string{`<mark class="wu-hl">vivienda es una</mark>`}},
+			nil, `<mark class="wu-hl" data-wu-match="0">vivienda es una</mark>`},
 		{"the near mode marks the words apart", "casa una", "near", "near",
-			[]string{`<mark class="wu-hl">casa</mark>`, `<mark class="wu-hl">una</mark>`}},
+			[]wireMark{{"wu-hl", "una"}, {"wu-hl-ex", "casa"}}, ""},
 		{"the words mode does not join them either", "vivienda es una", "fts", "words",
-			[]string{`<mark class="wu-hl">vivienda</mark>`, `<mark class="wu-hl">es</mark>`}},
+			[]wireMark{{"wu-hl", "vivienda"}, {"wu-hl", "es"}}, ""},
 		{"one word is one reading", "vivi", "fts", "words",
-			[]string{`<mark class="wu-hl">vivienda</mark>`}},
+			nil, `<mark class="wu-hl" data-wu-match="0">vivienda</mark>`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			hits := searchStream(t, s, "/api/search?q="+url.QueryEscape(tc.q)+"&mode="+tc.mode+"&hl=1&dict="+id)
@@ -176,9 +202,12 @@ func TestSearchPhraseMarking(t *testing.T) {
 				t.Errorf("q=%q in mode %q answered on rung %q, want %q", tc.q, tc.mode, rung, tc.rung)
 			}
 			got := bodies(hits)
+			if tc.exact != "" && !strings.Contains(got, tc.exact) {
+				t.Errorf("q=%q: missing %s in %s", tc.q, tc.exact, got)
+			}
 			for _, m := range tc.marks {
-				if !strings.Contains(got, m) {
-					t.Errorf("q=%q: missing %s in %s", tc.q, m, got)
+				if !hasMark(got, m) {
+					t.Errorf("q=%q: missing the %s mark on %q in %s", tc.q, m.class, m.text, got)
 				}
 			}
 		})

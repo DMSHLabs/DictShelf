@@ -316,18 +316,35 @@ paths:
         - name: hl
           in: query
           description: |
-            Mark the query's words inside each article body, wrapped in
-            `<mark class="wu-hl">`. Read ONLY in `mode=fts`, where the reason a
+            Mark the reading's occurrences inside each article body. Read in the
+            three article readings (`fts`, `phrase`, `near`), where the reason a
             result matched is invisible otherwise; ignored in every other mode,
             where the match is the headword itself.
+
+            Every fragment of a match carries `data-wu-match="N"`, its number in
+            the article: `<mark class="wu-hl" data-wu-match="N">` is the
+            occurrence's first fragment - the stop the article navigation walks
+            - `<mark class="wu-hl-ex" data-wu-match="N">` continues a match the
+            markup split, and `<span class="wu-hl-ex2" data-wu-match="N">`
+            paints the words between a near window's terms, which are not
+            matches themselves. In `mode=phrase` the words standing together in
+            one text node are one span; in `mode=near` each window is one
+            occurrence, stopped on the term that comes first in the article; in
+            `mode=fts` each query term is marked on its own. The number of
+            occurrences is the number of `wu-hl` heads, and that is what a
+            navigation session counts.
 
             Off unless you ask, so an article you fetch is the dictionary's own
             bytes by default. DictShelf's own UI sends `hl=1` from a remembered
             preference, which is why the default here is off and the default
-            there is on. Marking is prefix-based and whole-token, matching what
-            the full-text index matched, and is capped at 500 marks per article
-            - past the cap the article is still returned complete, just no
-            longer marked. `format=text` drops the marks with all other markup.
+            there is on. Marking follows what the full-text index matched:
+            word readings are prefix-based and whole-token, the near window is
+            the reader's setting, and every reading stops at 500 occurrences per
+            article - past the cap the article is still returned complete, just
+            no longer marked. An article whose phrase or near marks were painted
+            comes back re-serialized: its text is unchanged, its markup is
+            canonical (quoted attribute values, spelled-out entities).
+            `format=text` drops the marks with all other markup.
           schema:
             type: boolean
             default: false

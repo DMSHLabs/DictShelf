@@ -157,11 +157,12 @@ func RewriteFavouriteHTMLMarked(html, dictID string, assets map[string]string, h
 		}
 		return RewriteEntryHTML(html, dictID)
 	}
+	// One cursor per body: it numbers this article's occurrences, and those
+	// numbers are what the article navigation walks. Terms itself is shared
+	// across every result and never changes.
+	cursor := hl.Cursor()
 	text := func(value string) string {
-		if hl == nil {
-			return value
-		}
-		return hl.Mark(value)
+		return cursor.Mark(value)
 	}
 	rewriter := htmlref.Rewriter{Text: text}
 	rewriter.URL = func(ref htmlref.Ref) string {
@@ -178,15 +179,19 @@ func RewriteFavouriteHTMLMarked(html, dictID string, assets map[string]string, h
 	return rewriter.Rewrite(html)
 }
 
-// RewriteEntryHTMLMarked is RewriteEntryHTML with full-text matches wrapped in
-// <mark class="wu-hl"> (internal/hilite). hl may be nil, which is plain
-// RewriteEntryHTML.
+// RewriteEntryHTMLMarked is RewriteEntryHTML with full-text terms wrapped in
+// <mark class="wu-hl" data-wu-match="N"> (internal/hilite). hl may be nil,
+// which is plain RewriteEntryHTML.
 //
 // The marking costs no pass of its own: it rides the tokenizer walk this
 // function does anyway, as the Rewriter's Text hook. That fusion is the whole
 // design - a separate highlighting pass would double the parse of every
 // article in a full-text fan-out, and a client-side one would pay for a DOM
 // walk and a layout invalidation per article on top of that.
+//
+// This path paints one query TERM per mark. The phrase and near readings are
+// painted per occurrence by markArticleFindHTML instead, because an occurrence
+// can span markup and a tokenizer hook sees one text node at a time.
 //
 // The one thing marking cannot share is the fast path above. That test asks
 // "has this article any rewritable reference", and an article of pure prose -
@@ -200,20 +205,16 @@ func RewriteEntryHTMLMarked(html, dictID string, hl *hilite.Terms) string {
 	if html == "" {
 		return html
 	}
-	return entryRewriter(dictID, hl.Mark).Rewrite(html)
+	return entryRewriter(dictID, hl.Cursor().Mark).Rewrite(html)
 }
 
 func rewriteEntryHTMLFor(html, dictID string, entryID int64, hl *hilite.Terms, assets func(int64, string) (string, bool)) string {
 	if dictID == "" || html == "" {
 		return html
 	}
-	text := func(s string) string {
-		if hl == nil {
-			return s
-		}
-		return hl.Mark(s)
-	}
-	return entryRewriterFor(dictID, text, entryID, assets).Rewrite(html)
+	// The cursor is per body, so the numbers start at 0 for every article.
+	cursor := hl.Cursor()
+	return entryRewriterFor(dictID, cursor.Mark, entryID, assets).Rewrite(html)
 }
 
 // hasRewritableRef reports whether the article can contain a reference at all.

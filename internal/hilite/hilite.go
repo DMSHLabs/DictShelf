@@ -38,10 +38,18 @@
 // half-marked words read as a rendering fault. Folding is case- and
 // diacritic-insensitive, per rune and without allocating, to approximate the
 // unicode61 remove_diacritics 2 tokenizer the index was built with.
+//
+// A mark also carries its occurrence's number in the article, `data-wu-match`,
+// which is what the article navigation walks by. What is left to the caller is
+// one Cursor per body. The readings that group a match across markup - phrase
+// and near - are not marked here at all: their occurrences are painted whole by
+// internal/server's article marker, which reads a text block instead of one
+// node.
 package hilite
 
 import (
 	"math/bits"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -57,9 +65,10 @@ const (
 
 	// MaxMarks bounds one article's output growth. A one-character term is a
 	// legal prefix query that matches nearly every word, and the reader is no
-	// better served by ten thousand marks than by five hundred. Past the cap
-	// marking stops; the ARTICLE IS STILL EMITTED WHOLE - the tail is copied
-	// verbatim, never truncated.
+	// better served by ten thousand marks than by five hundred. The cap is per
+	// Cursor, which is to say per article; past it marking stops, and the
+	// ARTICLE IS STILL EMITTED WHOLE - the tail is copied verbatim, never
+	// truncated.
 	MaxMarks = 500
 
 	// maxEntity bounds the entity guard's lookahead. "&thickapprox;" is 13
@@ -67,8 +76,12 @@ const (
 	// unbounded scan on a '&' in prose would be quadratic.
 	maxEntity = 14
 
-	openTag  = `<mark class="wu-hl">`
-	closeTag = `</mark>`
+	// openTagPrefix is followed by the occurrence number and `">`. The number
+	// is what the article navigation walks: the client selects the fragments of
+	// occurrence N and paints the current one, without re-deriving where the
+	// matches are. The class stays the navigation stop; the number is identity.
+	openTagPrefix = `<mark class="wu-hl" data-wu-match="`
+	closeTag      = `</mark>`
 )
 
 // Term is one token of a query as the user typed it. Prefix says the token was
@@ -145,8 +158,14 @@ func NewPhrases(ps []Phrase) *Terms {
 
 // WithWordFallback keeps each query word markable when an HTML tag splits a
 // matched phrase across text nodes. The article index strips markup before
-// matching, while the HTML rewriter visits one text node at a time; adding the
+// matching, while the rewriter visits one text node at a time; adding the
 // individual terms lets the rewriter mark both sides without moving tags.
+//
+// The three readings do not need it: phrase and near are painted per
+// occurrence by the server's article marker, which knows the whole text block,
+// and the words reading has no multi-token phrase to split. This remains for
+// an explicit expression (the `query` rung), where a quoted phrase broken by
+// markup is painted as its separate words - and therefore as separate stops.
 func (t *Terms) WithWordFallback() *Terms {
 	if t == nil {
 		return nil
@@ -184,7 +203,38 @@ func Compile(query string) *Terms {
 	return NewPhrases(ps)
 }
 
-// Mark returns s with every matching span wrapped in <mark class="wu-hl">.
+// Cursor numbers the marks of ONE article. Terms is compiled once per request
+// and shared by every result of every dictionary, so it is read-only; the
+// state that cannot be shared - which occurrence a mark belongs to, and how
+// much of MaxMarks is spent - lives here. One body is marked through one
+// cursor, and the numbers it writes are the occurrence indexes the article
+// navigation walks: 0, 1, 2 in document order.
+type Cursor struct {
+	terms *Terms
+	next  int // the number the next mark receives
+	marks int // marks emitted, against MaxMarks
+}
+
+// Cursor starts a fresh article. A nil Terms yields a nil Cursor, and a nil
+// Cursor marks nothing, so a caller may pass hl.Cursor() straight through
+// whether or not the request asked for marks.
+func (t *Terms) Cursor() *Cursor {
+	if t == nil {
+		return nil
+	}
+	return &Cursor{terms: t}
+}
+
+// Count reports how many occurrences this cursor has marked.
+func (c *Cursor) Count() int {
+	if c == nil {
+		return 0
+	}
+	return c.next
+}
+
+// Mark returns s with every matching span wrapped in a mark carrying its
+// occurrence number, `data-wu-match`.
 //
 // s is ONE HTML text node, handed over as the raw source bytes. Everything
 // outside a match is copied byte for byte - entities, encoding and all - so
@@ -192,16 +242,17 @@ func Compile(query string) *Terms {
 // When nothing matches, the input string is returned and nothing is allocated.
 //
 // A phrase is therefore matched WITHIN one text node. A phrase the dictionary
-// broke across markup - `<b>Физика</b> в конспектах` - is not marked, which
-// under-marks rather than mis-marks: the alternative is a <mark> that opens in
-// one element and closes in another, which is not HTML.
-func (t *Terms) Mark(s string) string {
-	if t == nil || s == "" {
+// broke across markup - `<b>Физика</b> в конспектах` - is not marked here,
+// which under-marks rather than mis-marks; the occurrence painter in
+// internal/server marks that shape, with the first fragment as the navigation
+// stop and the rest as continuations of it.
+func (c *Cursor) Mark(s string) string {
+	if c == nil || c.terms == nil || s == "" {
 		return s
 	}
 	var b strings.Builder
-	last, marks, i := 0, 0, 0
-	for i < len(s) && marks < MaxMarks {
+	last, i := 0, 0
+	for i < len(s) && c.marks < MaxMarks {
 		// An entity is never a token and never part of one. Without this,
 		// a query for "n" would emit "&<mark>nbsp</mark>;" - which renders as
 		// the literal text "&nbsp;" and silently corrupts the article.
@@ -217,20 +268,24 @@ func (t *Terms) Mark(s string) string {
 			continue
 		}
 		start := i
-		tokEnd, hit := t.firstToken(s, i)
+		tokEnd, hit := c.terms.firstToken(s, i)
 		i = tokEnd
-		if end := t.longestMatch(s, tokEnd, hit); end > start {
+		if end := c.terms.longestMatch(s, tokEnd, hit); end > start {
 			if b.Cap() == 0 {
 				b.Grow(len(s) + len(s)/8)
 			}
 			b.WriteString(s[last:start])
-			b.WriteString(openTag)
+			b.WriteString(openTagPrefix)
+			b.WriteString(strconv.Itoa(c.next))
+			b.WriteString(`">`)
 			b.WriteString(s[start:end])
 			b.WriteString(closeTag)
-			last, marks, i = end, marks+1, end
+			last, i = end, end
+			c.next++
+			c.marks++
 		}
 	}
-	if marks == 0 {
+	if c.marks == 0 {
 		return s
 	}
 	b.WriteString(s[last:])
