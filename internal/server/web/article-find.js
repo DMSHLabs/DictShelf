@@ -468,11 +468,11 @@ function syncRemoteFindTraceButton(){
   const button=$("articleFindTrace");
   if(!button)return;
   const visible=!!remoteFind?.id&&options.mode!=="fts";
-  button.hidden=!visible;
+  button.hidden=false;
   button.textContent=remoteFindTraceActive?t("articleFind.traceStop"):t("articleFind.traceStart");
   button.setAttribute("aria-label",button.textContent);
   button.title=searchArticleDiagnosticsEnabled()?button.textContent:`${button.textContent} — ${t("articleFind.traceLogDisabled")}`;
-  button.disabled=!remoteFindTraceActive&&(!remoteFind?.state?.found||remoteFindPending);
+  button.disabled=!visible||!remoteFindTraceActive&&(!remoteFind?.state?.found||remoteFindPending);
 }
 function remoteFindDiagnostic(record,stage,fields={}){
   if(!remoteFindTraceEnabled())return Promise.resolve(false);
