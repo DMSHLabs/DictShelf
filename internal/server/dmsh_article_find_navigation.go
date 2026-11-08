@@ -15,20 +15,25 @@ import (
 	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/search"
 )
 
 const (
-	articleFindNavigationMaxSessions = 8
-	articleFindNavigationMaxResults  = 500
-	articleFindNavigationMaxAge      = 30 * time.Minute
+	articleFindNavigationMaxSessions     = 8
+	articleFindNavigationFallbackResults = 500
+	articleFindNavigationMaxAge          = 30 * time.Minute
 )
 
 type articleFindNavigationTarget struct {
-	Dictionary      string `json:"dict"`
-	DictionaryIndex int    `json:"dictionaryIndex"`
-	BlockStart      int    `json:"blockStart"`
-	ArticleIndex    int    `json:"articleIndex"`
-	MatchIndex      int    `json:"matchIndex"`
+	Dictionary      string                  `json:"dict"`
+	DictionaryIndex int                     `json:"dictionaryIndex"`
+	BlockStart      int                     `json:"blockStart"`
+	ArticleIndex    int                     `json:"articleIndex"`
+	MatchIndex      int                     `json:"matchIndex"`
+	Group           int                     `json:"group,omitempty"`
+	Start           int                     `json:"start,omitempty"`
+	End             int                     `json:"end,omitempty"`
+	Occurrences     []articleFindOccurrence `json:"occurrences,omitempty"`
 }
 
 type articleFindNavigationResponse struct {
@@ -40,10 +45,11 @@ type articleFindNavigationResponse struct {
 }
 
 type articleFindNavigationPage struct {
-	Start    int
-	Counts   []int
-	HasNext  bool
-	Complete bool
+	Start       int
+	Counts      []int
+	Occurrences [][]articleFindOccurrence
+	HasNext     bool
+	Complete    bool
 }
 
 type articleFindNavigationSession struct {
@@ -51,6 +57,14 @@ type articleFindNavigationSession struct {
 	id           string
 	query        string
 	mode         string
+	resultQuery  string
+	resultMode   string
+	ignore       bool
+	matchCase    bool
+	examples     bool
+	nearWords    int
+	cacheID      string
+	rungs        []string
 	dictionaries []string
 	pageSize     int
 	firstSize    int
@@ -93,8 +107,8 @@ func (s *Server) handleArticleFindNavigation(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		mode := q.Get("mode")
-		if mode != "fts" && mode != "phrase" && mode != "near" {
-			httpErr(w, http.StatusBadRequest, "invalid full-text mode")
+		if !validArticleFindMode(mode) {
+			httpErr(w, http.StatusBadRequest, "invalid article search mode")
 			return
 		}
 		query := strings.TrimSpace(q.Get("q"))
@@ -102,7 +116,30 @@ func (s *Server) handleArticleFindNavigation(w http.ResponseWriter, r *http.Requ
 			httpErr(w, http.StatusBadRequest, "invalid search query")
 			return
 		}
-		session = &articleFindNavigationSession{id: id, query: query, mode: mode,
+		resultQuery := strings.TrimSpace(q.Get("resultQuery"))
+		if resultQuery == "" {
+			resultQuery = query
+		}
+		if len(resultQuery) > 256 {
+			httpErr(w, http.StatusBadRequest, "invalid source search query")
+			return
+		}
+		resultMode := q.Get("resultMode")
+		if resultMode == "" {
+			resultMode = mode
+		}
+		if _, err := search.ParseMode(resultMode); err != nil {
+			httpErr(w, http.StatusBadRequest, "invalid source search mode")
+			return
+		}
+		nearWords, err := navigationNumber(q.Get("nearWords"), 10, 50)
+		if err != nil {
+			httpErr(w, http.StatusBadRequest, "%v", err)
+			return
+		}
+		session = &articleFindNavigationSession{id: id, query: query, mode: mode, resultQuery: resultQuery, resultMode: resultMode,
+			ignore: q.Get("ignoreDiacritics") == "1", matchCase: q.Get("matchCase") == "1", examples: q.Get("examples") == "1", nearWords: nearWords,
+			cacheID: q.Get("groupID"), rungs: strings.Split(q.Get("rungs"), ","),
 			dictionaries: dictionaries, pageSize: pageSize, firstSize: firstSize,
 			pages: make([]map[int]articleFindNavigationPage, len(dictionaries)), updated: time.Now()}
 		for i := range session.pages {
@@ -115,7 +152,12 @@ func (s *Server) handleArticleFindNavigation(w http.ResponseWriter, r *http.Requ
 		s.articleFindNavigationSessions[id] = session
 		s.pruneArticleFindNavigationLocked(time.Now())
 		s.articleFindNavigationMu.Unlock()
-		response, err := s.moveArticleFindNavigation(r.Context(), session, 1)
+		var response articleFindNavigationResponse
+		if q.Get("prime") == "0" {
+			response, err = s.peekArticleFindNavigation(r.Context(), session)
+		} else {
+			response, err = s.moveArticleFindNavigation(r.Context(), session, 1)
+		}
 		if err != nil {
 			httpErr(w, http.StatusBadRequest, "%v", err)
 			return
@@ -132,7 +174,7 @@ func (s *Server) handleArticleFindNavigation(w http.ResponseWriter, r *http.Requ
 		var response articleFindNavigationResponse
 		var err error
 		if q.Get("cacheAction") == "navGoto" {
-			position, parseErr := navigationNumber(q.Get("position"), 0, articleFindNavigationMaxResults*1000)
+			position, parseErr := navigationNumber(q.Get("position"), 0, int(^uint(0)>>1))
 			if parseErr != nil {
 				httpErr(w, http.StatusBadRequest, "%v", parseErr)
 				return
@@ -168,7 +210,7 @@ func (s *Server) gotoArticleFindNavigation(ctx context.Context, session *article
 	}
 	seen := 0
 	for dictionaryIndex := range session.dictionaries {
-		for start := 0; start < articleFindNavigationMaxResults; start = session.nextBlockStart(start) {
+		for start := 0; ; start = session.nextBlockStart(start) {
 			page, err := s.loadArticleFindNavigationPage(ctx, session, dictionaryIndex, start)
 			if err != nil {
 				return articleFindNavigationResponse{}, err
@@ -259,6 +301,25 @@ func (s *Server) moveArticleFindNavigation(ctx context.Context, session *article
 	return articleFindNavigationResponse{Found: true, Target: target, Position: position, Total: total, Complete: session.complete}, nil
 }
 
+func (s *Server) peekArticleFindNavigation(ctx context.Context, session *articleFindNavigationSession) (articleFindNavigationResponse, error) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	load := func(_ context.Context, dictionaryIndex, blockStart int) (articleFindNavigationPage, error) {
+		return s.loadArticleFindNavigationPage(ctx, session, dictionaryIndex, blockStart)
+	}
+	target, _, err := session.move(ctx, 1, load)
+	if err != nil {
+		return articleFindNavigationResponse{}, err
+	}
+	session.updated = time.Now()
+	if target == nil {
+		session.complete = true
+		return articleFindNavigationResponse{Complete: true, Total: session.total()}, nil
+	}
+	position, total := session.position(target)
+	return articleFindNavigationResponse{Found: true, Target: target, Position: position, Total: total, Complete: session.complete}, nil
+}
+
 func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *articleFindNavigationSession, dictionaryIndex, start int) (articleFindNavigationPage, error) {
 	if dictionaryIndex < 0 || dictionaryIndex >= len(session.dictionaries) || start < 0 {
 		return articleFindNavigationPage{}, errors.New("invalid article result block")
@@ -270,30 +331,70 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 	if start == 0 {
 		blockSize = session.firstSize
 	}
-	if start >= articleFindNavigationMaxResults {
+	if session.cacheID == "" && start >= articleFindNavigationFallbackResults {
 		return articleFindNavigationPage{Start: start, Complete: true}, nil
 	}
-	end := min(start+blockSize, articleFindNavigationMaxResults)
-	limit := min(end+1, articleFindNavigationMaxResults+1)
+	end := start + blockSize
+	limit := min(end+1, articleFindNavigationFallbackResults+1)
 	var results []dict.Result
-	request := SearchRequest{Query: session.query, Mode: session.mode, Dictionary: session.dictionaries[dictionaryIndex],
-		Format: "raw", Limit: limit, Highlight: true}
+	cacheComplete, cacheHasNext := false, false
+	findFullText := sessionUsesFullTextMarks(session)
+	request := SearchRequest{Query: session.resultQuery, Mode: session.resultMode, Dictionary: session.dictionaries[dictionaryIndex],
+		Format: "raw", Limit: limit, Highlight: findFullText, IgnoreDiacritics: session.ignore}
+	if session.cacheID != "" {
+		request.CacheAction = "page"
+		request.CacheID = session.cacheID
+		request.CacheCount = len(session.dictionaries)
+		request.CacheOrder = dictionaryIndex
+		request.Start = start
+		request.Size = blockSize
+		if dictionaryIndex < len(session.rungs) {
+			request.Rung = session.rungs[dictionaryIndex]
+		}
+	} else {
+		request.Limit = limit
+	}
 	if err := s.Search(ctx, request, func(event SearchEvent) error {
 		if event.T == "hit" && event.Dict == request.Dictionary {
 			results = event.Results
+			cacheComplete, cacheHasNext = event.Complete, event.HasNext
 		}
 		return nil
 	}); err != nil {
 		return articleFindNavigationPage{}, err
 	}
-	pageEnd := min(end, len(results))
-	counts := make([]int, max(0, pageEnd-start))
-	for i := start; i < pageEnd; i++ {
-		counts[i-start] = strings.Count(results[i].Body, `<mark class="wu-hl">`)
+	resultCount := len(results)
+	if session.cacheID == "" {
+		end = min(end, len(results))
+		if start >= end {
+			return articleFindNavigationPage{Start: start, Complete: true}, nil
+		}
+		results = results[start:end]
 	}
-	page := articleFindNavigationPage{Start: start, Counts: counts,
-		HasNext:  end < articleFindNavigationMaxResults && len(results) > end,
-		Complete: len(results) <= end}
+	counts := make([]int, len(results))
+	occurrences := make([][]articleFindOccurrence, len(counts))
+	for i := range results {
+		if findFullText {
+			counts[i] = strings.Count(results[i].Body, `<mark class="wu-hl">`)
+			continue
+		}
+		options := articleFindMatchOptions{query: session.query, mode: session.mode, matchCase: session.matchCase,
+			examples: session.examples, nearWords: session.nearWords}
+		if session.mode == "wordLemma" && !strings.ContainsAny(session.query, " \t\r\n") && s.Morph.Enabled() {
+			entry, err := s.reg.get(request.Dictionary)
+			if err == nil {
+				if source, openErr := entry.open(); openErr == nil {
+					lemma := s.headwordLemmaFor(entry, source, session.query)
+					options.variants = []string{session.query, lemma}
+				}
+			}
+		}
+		occurrences[i] = matchArticleFindHTML(results[i].Body, options)
+		counts[i] = len(occurrences[i])
+	}
+	page := articleFindNavigationPage{Start: start, Counts: counts, Occurrences: occurrences,
+		HasNext:  session.cacheID != "" && cacheHasNext || session.cacheID == "" && end < articleFindNavigationFallbackResults && resultCount > end,
+		Complete: session.cacheID != "" && cacheComplete || session.cacheID == "" && resultCount <= end}
 	session.pages[dictionaryIndex][start] = page
 	return page, nil
 }
@@ -469,8 +570,32 @@ func (session *articleFindNavigationSession) blockLength(start int) int {
 }
 
 func (session *articleFindNavigationSession) target(dictionaryIndex, blockStart, articleIndex, matchIndex int) *articleFindNavigationTarget {
-	return &articleFindNavigationTarget{Dictionary: session.dictionaries[dictionaryIndex], DictionaryIndex: dictionaryIndex,
+	target := &articleFindNavigationTarget{Dictionary: session.dictionaries[dictionaryIndex], DictionaryIndex: dictionaryIndex,
 		BlockStart: blockStart, ArticleIndex: articleIndex, MatchIndex: matchIndex}
+	if !sessionUsesFullTextMarks(session) && dictionaryIndex >= 0 && dictionaryIndex < len(session.pages) {
+		if page, ok := session.pages[dictionaryIndex][blockStart]; ok {
+			row := articleIndex - blockStart
+			if row >= 0 && row < len(page.Occurrences) && matchIndex >= 0 && matchIndex < len(page.Occurrences[row]) {
+				match := page.Occurrences[row][matchIndex]
+				target.Group, target.Start, target.End = match.Group, match.Start, match.End
+				target.Occurrences = append([]articleFindOccurrence(nil), page.Occurrences[row]...)
+			}
+		}
+	}
+	return target
+}
+
+func sessionUsesFullTextMarks(session *articleFindNavigationSession) bool {
+	return session.mode == "fts"
+}
+
+func validArticleFindMode(mode string) bool {
+	switch mode {
+	case "fts", "phrase", "near", "prefix", "suffix", "contains", "word", "wordLemma":
+		return true
+	default:
+		return false
+	}
 }
 
 func (session *articleFindNavigationSession) position(target *articleFindNavigationTarget) (int, int) {
@@ -489,4 +614,16 @@ func (session *articleFindNavigationSession) position(target *articleFindNavigat
 		}
 	}
 	return position, total
+}
+
+func (session *articleFindNavigationSession) total() int {
+	total := 0
+	for _, pages := range session.pages {
+		for _, page := range pages {
+			for _, count := range page.Counts {
+				total += count
+			}
+		}
+	}
+	return total
 }

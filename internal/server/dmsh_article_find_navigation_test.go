@@ -37,7 +37,7 @@ func TestArticleFindNavigationWalksDictionaryBlocksAndWraps(t *testing.T) {
 	}
 	for i, expected := range want {
 		target, wrapped, err := session.move(context.Background(), 1, load)
-		if err != nil || target == nil || *target != expected {
+		if err != nil || !sameArticleFindTarget(target, &expected) {
 			t.Fatalf("forward move %d = %+v, %v; want %+v", i+1, target, err, expected)
 		}
 		if wrapped {
@@ -47,13 +47,13 @@ func TestArticleFindNavigationWalksDictionaryBlocksAndWraps(t *testing.T) {
 	}
 	target, wrapped, err := session.move(context.Background(), 1, load)
 	wantFirst := want[0]
-	if err != nil || target == nil || *target != wantFirst || !wrapped {
+	if err != nil || !sameArticleFindTarget(target, &wantFirst) || !wrapped {
 		t.Fatalf("forward wrap = %+v, wrapped=%t, err=%v; want first block %+v", target, wrapped, err, wantFirst)
 	}
 	session.current = target
 	target, wrapped, err = session.move(context.Background(), -1, load)
 	wantLast := want[len(want)-1]
-	if err != nil || target == nil || *target != wantLast || !wrapped {
+	if err != nil || !sameArticleFindTarget(target, &wantLast) || !wrapped {
 		t.Fatalf("backward wrap = %+v, wrapped=%t, err=%v; want last match %+v", target, wrapped, err, wantLast)
 	}
 }
@@ -85,7 +85,7 @@ func TestArticleFindNavigationUsesServerSearchAndHighlights(t *testing.T) {
 		dictionaryIDs[filepath.Base(entry.Path)] = entry.ID
 	}
 	server := New(registry)
-	session := &articleFindNavigationSession{query: "джазовый кларнетист", mode: "phrase",
+	session := &articleFindNavigationSession{query: "джазовый кларнетист", mode: "phrase", resultQuery: "джазовый кларнетист", resultMode: "phrase",
 		dictionaries: []string{dictionaryIDs["first.dsl"], dictionaryIDs["second.dsl"]},
 		pageSize:     1, firstSize: 1, pages: []map[int]articleFindNavigationPage{{}, {}}}
 	for i := range session.pages {
@@ -101,7 +101,7 @@ func TestArticleFindNavigationUsesServerSearchAndHighlights(t *testing.T) {
 		{Dictionary: dictionaryIDs["second.dsl"], DictionaryIndex: 1, BlockStart: 0, ArticleIndex: 0, MatchIndex: 0},
 	} {
 		target, _, err := session.move(context.Background(), 1, load)
-		if err != nil || target == nil || *target != want {
+		if err != nil || !sameArticleFindTarget(target, &want) {
 			t.Fatalf("server search move %d = %+v, %v; want %+v", i+1, target, err, want)
 		}
 		session.current = target
@@ -114,4 +114,21 @@ func TestArticleFindNavigationUsesServerSearchAndHighlights(t *testing.T) {
 	if err != nil || !gotoResult.Found || gotoResult.Target.DictionaryIndex != 1 || gotoResult.Position != 4 {
 		t.Fatalf("server goto = %+v, err=%v; want fourth occurrence in second dictionary", gotoResult, err)
 	}
+	articleSession := &articleFindNavigationSession{query: "кларнетист", mode: "contains", resultQuery: "one", resultMode: "exact",
+		dictionaries: []string{dictionaryIDs["first.dsl"]}, pageSize: 1, firstSize: 1,
+		pages: []map[int]articleFindNavigationPage{make(map[int]articleFindNavigationPage)}}
+	page, err := server.loadArticleFindNavigationPage(context.Background(), articleSession, 0, 0)
+	if err != nil || len(page.Counts) != 1 || page.Counts[0] != 1 || len(page.Occurrences[0]) != 1 {
+		t.Fatalf("server-side literal article matches = %+v, err=%v; want one match", page, err)
+	}
+	literalTarget := articleSession.target(0, 0, 0, 0)
+	if literalTarget.Group != 0 || literalTarget.Start != page.Occurrences[0][0].Start || literalTarget.End-literalTarget.Start != 10 {
+		t.Fatalf("literal match target = %+v; want the server's UTF-16 range for кларнетист", literalTarget)
+	}
+}
+
+func sameArticleFindTarget(actual, expected *articleFindNavigationTarget) bool {
+	return actual != nil && expected != nil && actual.Dictionary == expected.Dictionary &&
+		actual.DictionaryIndex == expected.DictionaryIndex && actual.BlockStart == expected.BlockStart &&
+		actual.ArticleIndex == expected.ArticleIndex && actual.MatchIndex == expected.MatchIndex
 }
