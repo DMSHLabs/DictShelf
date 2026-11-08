@@ -1,4 +1,5 @@
 // Copyright (C) 2026 glowinthedark
+// Copyright (C) 2026 DmShAl (Shepeta Dmitry)
 //
 // Ported from pyglossary's babylon_bgl plugin
 // (https://github.com/ilius/pyglossary), Copyright (C) 2008-2021 Saeed

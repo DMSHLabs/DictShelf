@@ -1,4 +1,5 @@
 // Copyright (C) 2026 glowinthedark
+// Copyright (C) 2026 DmShAl (Shepeta Dmitry)
 //
 // extends the medict-derived MDX parser in this package.
 //
