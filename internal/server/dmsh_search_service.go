@@ -347,7 +347,7 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 		for j := range h.Results {
 			s.decorateFavourite(id, &h.Results[j])
 			if s.isFavouriteDictionaryID(id) && len(h.Results[j].ResourceMap) > 0 {
-				h.Results[j].Body = RewriteFavouriteHTML(h.Results[j].Body, id, h.Results[j].ResourceMap)
+				h.Results[j].Body = RewriteFavouriteHTMLMarked(h.Results[j].Body, id, h.Results[j].ResourceMap, hl)
 			} else {
 				h.Results[j].Body = rewriteEntryHTMLFor(h.Results[j].Body, id, h.Results[j].EntryID, hl, assetTokens)
 			}

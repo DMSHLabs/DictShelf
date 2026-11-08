@@ -203,6 +203,7 @@ function syncControls() {
   }
   $("articleFindStop").disabled = fts && hasFTS;
   $("articleFindQuery").disabled = fts;
+  $("articleFindBlocks").disabled = fts;
   for (const id of ["articleFindCase","articleFindAll","articleFindExamples"]) $(id).disabled = fts;
   $("articleFindHiddenHint").hidden = fts || !options.query || !!matches.length || options.examples || !hiddenExamples;
   if (fts) {

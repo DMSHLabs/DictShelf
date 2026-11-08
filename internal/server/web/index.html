@@ -1421,6 +1421,7 @@ const articleFindPageLoads=new Set();
 let articleCacheQueue=[],articleCacheActive=0,articleCacheAbort=null,articleCacheSeq=0,articleCacheFinished=0,articleCacheTotal=0;
 let articleCacheGroupID="",articleCacheGroupCount=1;
 let articleCacheSearchSettled=false;
+let searchNavDictionaries=[];
 let countAllResultsInBackground=false,activeSearchCountsInBackground=false;
 let suggestionPerDictionary=40,suggestionListLimit=500;
 window.wudictSuggestionPerDictionary=suggestionPerDictionary;
@@ -10270,6 +10271,7 @@ async function doSearch(ev){
   articleCacheGroupID=replayReturnCacheID||newArticleResultCacheID();
   articleCacheGroupCount=Math.max(1,dictParam.split(",").length);
   const out=$("out");
+  searchNavDictionaries=[];
   /* Never blank between two answers (D73/M2). Clearing on `begin` would make
      every keystroke-pause a full → empty → full flash: two motions where one
      will do, and an empty results area reads as a failure followed by a
@@ -10350,6 +10352,7 @@ async function doSearch(ev){
     await fetchStream("/api/search?"+searchParams.toString(),msg=>{
       if(seq!==searchSeq)return; // superseded by a newer search
       if(msg.t==="begin"){
+        searchNavDictionaries=(msg.slots||[]).map(slot=>slot.dict).filter(Boolean);
         if(browseReturnRouteContext)logBrowseReturnRoute("search_stream_begin",{slots:(msg.slots||[]).length});
         beginSearchProgress(seq,(msg.slots||[]).length);
         searchDiagSlots=(msg.slots||[]).map(slot=>({dict:slot.dict,name:slot.name,results:0}));
@@ -10865,151 +10868,115 @@ function anchorTarget(root,frag){
    by adding the frame's own offset - no postMessage round trip, and no reason
    to treat frames as the rare case they are not (a wiki slob renders every
    article that way). */
-/* ── walking the marks ───────────────────────────────────────────────
-   `revealFirstMark` puts you on the first match; this is the rest of them.
-   Scope is the currently expanded answer sections. A collapsed section is not
-   part of the reader's open articles and therefore is not part of this walk.
-
-   Cost. The list is built from the rendered articles (`markList`) and cached,
-   never from a second server round; it is built only after a full-text answer
-   that was actually marked, and rebuilt when expanded results or article
-   frames change - so ordinary searches pay nothing. `checkVisibility`
-   filters the same phantom marks `revealFirstMark` skips (a wiki's own
-   collapsed table of contents), so the count and the walk agree with the eye.
-
-   The shared strip can still report one result (1 of 1), but its arrows and
-   keyboard route stay inactive until there is a second mark. */
-let navDet=null,navList=null,navIdx=0,navTimer=0,markedAnswer=false,navSuppressed=false;
-let navCountGeneration=null;
-const navBlockCounts=new Map();
-function markList(){
-  const out=[];
-  // Full-text results are rendered into every dictionary's current result
-  // page, even while the accordion is collapsed. Include those marks in the
-  // shared counter/navigation so it does not report only the expanded answer.
-  for(const det of document.querySelectorAll("details.dict")){
-    for(const host of det.querySelectorAll(".article")){
-      const root=host.shadowRoot||host.contentDocument;
-      if(!root)continue;
-      for(const m of root.querySelectorAll(".wu-hl"))
-        if(!det.open||!m.checkVisibility||m.checkVisibility())out.push({det,host,el:m});
-    }
-  }
-  return out; // DOM order across the open dictionaries is reading order
-}
+/* ── server-owned full-text match navigation ───────────────────────── */
+let navDet=null,navTimer=0,markedAnswer=false,navSuppressed=false;
+let navServerState=null,navCurrent=null,navSessionID="",navPending=false,navOpToken=0,navMutationFrame=0,navScrollSettle=null;
 function navAttach(det){
-  if(!det.querySelector(":scope>summary"))return navDetach();
-  navSuppressed=false;
-  navDet=det;navIdx=-1;
-  requestAnimationFrame(()=>{if(navDet===det)navRefresh()});
+  if(!det?.querySelector(":scope>summary"))return navDetach();
+  navSuppressed=false;navDet=det;
+  if(!markedAnswer)return;
+  if(!navSessionID)navSessionID=articleCacheGroupID||newArticleResultCacheID();
+  if(!navServerState&&!navPending)requestAnimationFrame(()=>{if(navDet===det)navStart(det)});
+  else navPos();
 }
 function navDetach(){
-  navBlockToken++;navBlockPending=false;
-  navScrollSettle?.();
-  clearTimeout(navTimer);
-  navDet=null;navList=null;navIdx=0;
-  navCountGeneration=null;navBlockCounts.clear();
+  navOpToken++;
+  navScrollSettle?.();clearTimeout(navTimer);navDet=null;navCurrent=null;
+  navServerState=null;navPending=false;
+  const previous=navSessionID;navSessionID="";
+  if(previous)apiFetch("/api/search?"+new URLSearchParams({cacheAction:"navClose",cacheID:previous})).catch(()=>{});
   window.wudictArticleFind?.setFullTextNavigation(null);
 }
-function navRefresh(){
-  if(navCountGeneration!==searchSeq){navCountGeneration=searchSeq;navBlockCounts.clear()}
-  if(navDet&&!navDet.isConnected)navDet=null;
-  const cur=navList&&navList[navIdx]&&navList[navIdx].el;
-  const previousByDet=new Map(),visibleByDet=new Map();
-  for(const item of navList||[]){
-    if(!item.det.isConnected||!item.el.isConnected)continue;
-    if(!previousByDet.has(item.det))previousByDet.set(item.det,[]);
-    previousByDet.get(item.det).push(item);
-  }
-  for(const item of markList()){
-    if(!visibleByDet.has(item.det))visibleByDet.set(item.det,[]);
-    visibleByDet.get(item.det).push(item);
-  }
-  for(const [det,items] of visibleByDet){
-    const key=(det.dataset.searchDict||"")+"\u0000"+(Number(det.dataset.searchPageStart)||0);
-    navBlockCounts.set(key,{count:items.length,dict:det.dataset.searchDict||"",start:Number(det.dataset.searchPageStart)||0});
-  }
-  // Keep marks already collected from a dictionary when it is collapsed,
-  // and include marks in its currently rendered result page. They remain
-  // navigation targets and navGo opens their dictionary when reached.
-  navList=[];
-  for(const det of document.querySelectorAll("details.dict")){
-    if(det.open)navList.push(...visibleByDet.get(det)||[]);
-    else{
-      const kept=previousByDet.get(det)||[],seen=new Set(kept.map(item=>item.el));
-      navList.push(...kept,...(visibleByDet.get(det)||[]).filter(item=>!seen.has(item.el)));
-    }
-  }
-  if(!navDet)navDet=navList[0]?.det||document.querySelector("details.dict[open]");
-  if(!navDet){navPos();return}
-  // A late frame adds marks ABOVE the one you are on; keeping the element
-  // rather than the number is what stops the position from drifting.
-  let at=cur?navList.findIndex(m=>m.el===cur):-1;
-  if(at<0)at=navList.findIndex(m=>m.det===navDet);
-  navIdx=at<0?0:at;
-  if(navList[navIdx])navDet=navList[navIdx].det;
-  navPos();
-}
+function navRefresh(){navPos()}
 function navPos(){
-  const current=navList?.[navIdx];
-  const count=navKnownCount();
-  const position=current?navOccurrence(current):0;
-  const canPrevious=count>=2||!!(current&&window.wudictArticleFind?.searchAcrossBlocks?.()&&window.wudictArticleBlockHasMore?.(current.det,-1));
-  const canNext=count>=2||!!(current&&window.wudictArticleFind?.searchAcrossBlocks?.()&&window.wudictArticleBlockHasMore?.(current.det,1));
-  if(navSuppressed||!navDet||!markedAnswer){
-    window.wudictArticleFind?.setFullTextNavigation(null);
-    return;
-  }
-  const block=count?window.wudictArticleFindBlockRange?.(navList[navIdx]?.det):"";
-  /* The bar counts OCCURRENCES and the plate counts ARTICLES - one article can
-     hold several - so the two numbers are meant to differ. What must not differ
-     silently is the bar's own completeness: while a dictionary still has a
-     result page nobody has loaded, or its count is still running, the marks
-     drawn are short of the truth and the total has to say so. It uses the same
-     "+" the dialog's own scan already puts on its count for the same reason. */
-  const partial=count>0&&!!window.wudictArticleFindHasMore?.();
-  /* `reading` is the mode this answer ran: the dialog offers the two word
-     readings, and opened from a search that ran one of them it is filled from
-     that search's words - its phrase reading from a phrase search, and not from
-     a search that asked for something else (article-find.js, open). */
+  if(navSuppressed||!navDet||!markedAnswer){window.wudictArticleFind?.setFullTextNavigation(null);return}
+  const state=navServerState;
+  if(!state?.found){window.wudictArticleFind?.setFullTextNavigation(null);return}
+  const count=Number(state.total)||0,position=Number(state.position)||0;
+  const block=window.wudictArticleFindBlockRange?.(navDet)||"";
+  const canNavigate=!state.complete||count>1;
   window.wudictArticleFind?.setFullTextNavigation({
-    query:lastQuery,generation:searchSeq,reading:lastSearchMode,position:count?tx("articleFind.position",{current:position,total:count+(partial?"+":"")})+(block?" · "+block:""):tx("articleFind.noMatches"),visible:count>0,canNavigate:canPrevious||canNext,canPrevious,canNext,total:count,current:position,
-    previous:()=>navGo(-1),next:()=>navGo(1),
-    refresh:()=>navPos(),
-    goto:page=>navGoto(page),
-    seekFrom:(host,node,offset,direction)=>navSeekFrom(host,node,offset,direction),
+    query:lastQuery,generation:searchSeq,reading:lastSearchMode,
+    position:count?tx("articleFind.position",{current:position,total:count+(state.complete?"":"+")})+(block?" · "+block:""):tx("articleFind.noMatches"),
+    visible:count>0,canNavigate,canPrevious:canNavigate,canNext:canNavigate,total:count,current:position,
+    previous:()=>navGo(-1),next:()=>navGo(1),refresh:()=>navPos(),goto:page=>navGoto(page),
+    seekFrom:(_host,_node,_offset,direction)=>navGo(direction<0?-1:1),
     close:()=>{navSuppressed=true;navDetach()}
   });
 }
-function navKnownCount(){
-  let count=0;
-  for(const value of navBlockCounts.values())count+=value.count;
-  return count;
-}
-function navOccurrence(current,index=navIdx){
-  const dict=current.det.dataset.searchDict||"",start=Number(current.det.dataset.searchPageStart)||0;
-  const sections=[...document.querySelectorAll("details.dict")],dictOrder=new Map();
-  for(const section of sections){
-    const id=section.dataset.searchDict||"";
-    if(!dictOrder.has(id))dictOrder.set(id,dictOrder.size);
-  }
-  const currentOrder=dictOrder.get(dict)??Number.MAX_SAFE_INTEGER;
-  let before=0;
-  for(const item of navBlockCounts.values()){
-    const {dict:id,start:page,count}=item;
-    const order=dictOrder.get(id);
-    if(order!==undefined&&(order<currentOrder||id===dict&&page<start))before+=count;
-  }
-  before+=navList.slice(0,index+1).filter(item=>item.det===current.det).length;
-  return before;
-}
-/* Keep the control and keyboard route enabled for either another loaded mark
-   or an adjacent result block in the active dictionary. */
 function navWalkable(){
-  const current=navList?.[navIdx];
-  return !!(window.wudictArticleFind?.fullTextModeActive?.()&&navDet&&navDet.isConnected&&markedAnswer&&!navSuppressed&&
-    (navList?.length>=2||current&&window.wudictArticleFind?.searchAcrossBlocks?.()&&
-      (window.wudictArticleBlockHasMore?.(current.det,-1)||window.wudictArticleBlockHasMore?.(current.det,1))));
+  return !!(window.wudictArticleFind?.fullTextModeActive?.()&&navDet?.isConnected&&
+    markedAnswer&&!navSuppressed&&navSessionID);
+}
+async function navRequest(action,extra={}){
+  if(!navSessionID)return null;
+  const params=new URLSearchParams({cacheAction:action,cacheID:navSessionID,...extra});
+  const response=await apiFetch("/api/search?"+params);
+  if(!response.ok)throw new Error("article navigation failed");
+  return response.json();
+}
+async function navStart(det){
+  if(navPending||!navSessionID||!markedAnswer)return;
+  navPending=true;const operation=++navOpToken;
+  try{
+    const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
+    const firstSize=Math.max(1,Number(det.dataset.searchFirstPageSize)||Number(det.dataset.searchInitial)||size);
+    const state=await navRequest("navStart",{dict:searchNavDictionaries.join(","),q:det.dataset.searchQuery||lastQuery,
+      mode:det.dataset.searchMode||lastSearchMode,pageSize:String(size),firstSize:String(firstSize)});
+    if(!state||operation!==navOpToken||navDet!==det||navSuppressed)return;
+    navServerState=state;await navShowTarget(state.target,state);
+  }catch(error){console.warn("Article match navigation unavailable",error)}
+  finally{if(operation===navOpToken){navPending=false;navPos()}}
+}
+async function navGo(step){
+  if(navPending||!navSessionID||![-1,1].includes(step))return;
+  if(!navServerState)return navStart(navDet);
+  navPending=true;const operation=++navOpToken;
+  try{
+    const state=await navRequest(step<0?"navPrevious":"navNext");
+    if(!state||operation!==navOpToken||navSuppressed)return;
+    navServerState=state;await navShowTarget(state.target,state);
+  }catch(error){console.warn("Article match navigation failed",error)}
+  finally{if(operation===navOpToken){navPending=false;navPos()}}
+}
+async function navShowTarget(target,state){
+  if(!target)return;
+  const dict=target.dict||"",start=Number(target.blockStart)||0;
+  let det=[...document.querySelectorAll("details.dict")].find(item=>item.dataset.searchDict===dict);
+  if(!det)return;
+  const token=searchSeq;
+  if((Number(det.dataset.searchPageStart)||0)!==start){
+    const replacement=await window.wudictRestoreArticleBlock?.(det,start);
+    if(!replacement||token!==searchSeq)return;
+    det=replacement;
+  }
+  if(!det.open)det.open=true;
+  navDet=det;
+  const articleOffset=Number(target.articleIndex)-start;
+  const row=det.querySelectorAll(":scope>dl>dd")[articleOffset];
+  const host=row?.querySelector(".article");
+  if(!host)return;
+  let mark=null;
+  for(let attempt=0;attempt<50;attempt++){
+    const root=host.shadowRoot||host.contentDocument;
+    mark=root?.querySelectorAll(".wu-hl")[Number(target.matchIndex)]||null;
+    if(mark)break;
+    if(token!==searchSeq||navSuppressed)return;
+    await new Promise(resolve=>setTimeout(resolve,100));
+  }
+  if(!mark)return;
+  mark.classList.add("wu-cur");
+  navCurrent={det,host,el:mark};navServerState=state;
+  navSettleCurrent(navCurrent);navPos();
+}
+function navGoto(page){
+  if(!Number.isInteger(page)||page<1||!navServerState)return;
+  if(navPending||!navSessionID)return;
+  navPending=true;const operation=++navOpToken;
+  navRequest("navGoto",{position:String(page)}).then(state=>{
+    if(!state?.found||operation!==navOpToken||navSuppressed)return;
+    navServerState=state;return navShowTarget(state.target,state);
+  }).catch(error=>console.warn("Article match navigation failed",error)).finally(()=>{if(operation===navOpToken){navPending=false;navPos()}});
 }
 async function requestArticleBlock(det,direction){
   if(!det?.isConnected||![-1,1].includes(direction))return null;
@@ -11070,155 +11037,6 @@ window.wudictArticleFindBlockRange=det=>{
   if(!Number.isInteger(start)||start<=0||!Number.isInteger(count)||count<=0)return "";
   return tx("articleFind.resultBlock",{start:window.wudictI18n.number(start+1),end:window.wudictI18n.number(start+count)});
 };
-let navBlockPending=false,navBlockToken=0;
-function navSelect(item){
-  if(!item)return;
-  for(const m of navList||[])m.el.classList.remove("wu-cur");
-  navIdx=navList.indexOf(item);navDet=item.det;item.el.classList.add("wu-cur");
-  navSettleCurrent(item);navPos();
-}
-async function navCrossResultBlocks(current,step){
-  if(navBlockPending)return;
-  navBlockPending=true;
-  const token=++navBlockToken,generation=searchSeq;
-  let det=current.det,changed=false;
-  try{
-    for(let page=0;page<100&&det&&window.wudictArticleBlockHasMore?.(det,step);page++){
-      const replacement=await window.wudictRequestArticleBlock?.(det,step);
-      if(token!==navBlockToken||generation!==searchSeq||navSuppressed)return;
-      if(!replacement)break;
-      changed=true;det=replacement;
-      // A newly-rendered block can contain sandboxed article frames. Their
-      // highlights arrive after the outer result list has been replaced, so
-      // give the frame and Article Find time to mark them before advancing to
-      // another page or dictionary.
-      let settled=0;
-      for(let check=0;check<50;check++){
-        await new Promise(resolve=>setTimeout(resolve,100));
-        if(token!==navBlockToken||generation!==searchSeq||navSuppressed||!window.wudictArticleFind?.searchAcrossBlocks?.())return;
-        navDet=det;navRefresh();
-        const found=navList.filter(item=>item.det===det);
-        if(found.length){navSelect(step>0?found[0]:found.at(-1));return}
-        const framesPending=[...det.querySelectorAll("iframe.article")].some(frame=>frame.contentDocument?.readyState!=="complete");
-        settled=framesPending?0:settled+1;
-        if(settled>=3)break;
-      }
-    }
-    if(changed){
-      navDet=det;navRefresh();
-      const dicts=[...$("out").querySelectorAll("details.dict")],at=dicts.indexOf(det);
-      const rows=navList.map(item=>({item,at:dicts.indexOf(item.det)}));
-      const next=step>0?rows.find(row=>row.at>at):rows.slice().reverse().find(row=>row.at<at);
-      navSelect(next?.item||(step>0?rows[0]?.item:rows.at(-1)?.item));
-    }else navMove(step);
-  }finally{if(token===navBlockToken)navBlockPending=false}
-}
-function navMove(step){
-  if(!navDet||!navDet.isConnected)return navDetach();
-  if(!navList||!navList.length||!navList[navIdx].el.isConnected)navRefresh();
-  const n=navList.length;if(n<1)return;
-  navIdx=((navIdx+step)%n+n)%n; // wraps: the list is a ring, not a rail
-  for(const m of navList)m.el.classList.remove("wu-cur");
-  const cur=navList[navIdx];
-  navDet=cur.det;
-  if(!cur.det.open)cur.det.open=true;
-  cur.el.classList.add("wu-cur");
-  navSettleCurrent(cur);
-  navPos();
-}
-function navGo(step){
-  if(navBlockPending)return;
-  if(!navDet||!navDet.isConnected)return navDetach();
-  if(!navList||!navList.length||!navList[navIdx].el.isConnected)navRefresh();
-  const current=navList?.[navIdx];
-  if(step&&current){
-    const boundary=step>0?navList.slice(navIdx+1).every(item=>item.det!==current.det):
-      navList.slice(0,navIdx).every(item=>item.det!==current.det);
-    if(boundary){
-      if(window.wudictArticleFind?.searchAcrossBlocks?.()&&window.wudictArticleBlockHasMore?.(current.det,step)){
-        navCrossResultBlocks(current,step);return;
-      }
-      navAdjacentDictionary(current,step);return;
-    }
-  }
-  navMove(step);
-}
-async function navAdjacentDictionary(current,step){
-  if(navBlockPending)return;
-  navBlockPending=true;
-  const token=++navBlockToken,generation=searchSeq;
-  try{
-    const sections=[...$("out").querySelectorAll("details.dict")],start=sections.indexOf(current.det);
-    if(start<0)return navMove(step);
-    for(let distance=1;distance<=Math.max(1,sections.length-1);distance++){
-      const sectionIndex=(start+step*distance+sections.length)%sections.length;
-      let det=sections[sectionIndex];
-      const wrapped=step>0?start+distance>=sections.length:start-distance<0;
-      // Forward wrap starts a new pass through the result set. Return to the
-      // first result block, even when the first dictionary currently shows a
-      // later block from the pass that just ended.
-      if(wrapped&&step>0&&sectionIndex===0&&(Number(det.dataset.searchPageStart)||0)>0){
-        const first=await window.wudictRestoreArticleBlock?.(det,0);
-        if(token!==navBlockToken||generation!==searchSeq||navSuppressed)return;
-        if(!first)return;
-        det=first;
-      }
-      navDet=det;if(!det.open)det.open=true;
-      for(let attempt=0;attempt<30;attempt++){
-        if(token!==navBlockToken||generation!==searchSeq||navSuppressed)return;
-        navRefresh();
-        const found=navList.filter(item=>item.det===det);
-        if(found.length){navSelect(step>0?found[0]:found.at(-1));return}
-        if(attempt)await new Promise(resolve=>setTimeout(resolve,100));
-      }
-    }
-    if(token===navBlockToken&&generation===searchSeq&&!navSuppressed)navMove(step);
-  }finally{if(token===navBlockToken)navBlockPending=false}
-}
-async function navGoto(page){
-  if(!navList||!navList.length)navRefresh();
-  if(!Number.isInteger(page)||page<1||page>navKnownCount())return;
-  const visible=navList.findIndex((item,index)=>navOccurrence(item,index)===page);
-  if(visible>=0){navSelect(navList[visible]);return}
-  const sections=[...document.querySelectorAll("details.dict")],order=new Map();
-  for(const det of sections){const id=det.dataset.searchDict||"";if(!order.has(id))order.set(id,order.size)}
-  let offset=0,target=null,local=0;
-  for(const block of [...navBlockCounts.values()].sort((a,b)=>(order.get(a.dict)??Number.MAX_SAFE_INTEGER)-(order.get(b.dict)??Number.MAX_SAFE_INTEGER)||a.start-b.start)){
-    if(page<=offset+block.count){target={...block};local=page-offset;break}
-    offset+=block.count;
-  }
-  if(!target)return;
-  const det=sections.find(item=>item.dataset.searchDict===target.dict);
-  if(!det)return;
-  const generation=searchSeq;
-  const replacement=await window.wudictRestoreArticleBlock?.(det,target.start);
-  if(!replacement||generation!==searchSeq)return;
-  for(let attempt=0;attempt<50;attempt++){
-    if(attempt)await new Promise(resolve=>setTimeout(resolve,100));
-    if(generation!==searchSeq||!replacement.isConnected)return;
-    navDet=replacement;navRefresh();
-    const found=navList.filter(item=>item.det===replacement);
-    if(found.length>=local){navSelect(found[local-1]);return}
-  }
-}
-function navSeekFrom(host,node,offset,direction){
-  if(!navList||!navList.length)navRefresh();
-  const doc=node.ownerDocument,anchor=doc.createRange();
-  try{anchor.setStart(node,Math.max(0,Math.min(offset,node.nodeType===Node.TEXT_NODE?node.length:node.childNodes.length)));anchor.collapse(true)}catch(_){return}
-  const hosts=[...$("out").querySelectorAll(".article")],hostIndex=hosts.indexOf(host),dir=direction<0?-1:1;
-  let chosen=-1;
-  for(let i=0;i<navList.length;i++){
-    const item=navList[i],itemHostIndex=hosts.indexOf(item.host);
-    let cmp=itemHostIndex-hostIndex;
-    if(cmp===0){
-      const mark=doc.createRange();try{mark.selectNodeContents(item.el);cmp=mark.compareBoundaryPoints(Range.START_TO_START,anchor)}catch(_){cmp=0}
-    }
-    if(cmp*dir>=0){chosen=i;if(dir<0)continue;break}
-  }
-  if(chosen<0)chosen=dir>0?0:navList.length-1;
-  navSelect(navList[chosen]);
-}
-let navMutationFrame=0,navScrollSettle=null;
 function navSettleCurrent(cur){
   navScrollSettle?.();
   let moved=false,attempts=0,stable=0,timer=0,frame=0,timeout=0,observer=null;
@@ -11229,25 +11047,17 @@ function navSettleCurrent(cur){
     if(navScrollSettle===stop)navScrollSettle=null;
   };
   const align=()=>{
-    if(!markedAnswer||navSuppressed||navList?.[navIdx]!==cur||!cur.el.isConnected)return stop();
+    if(!markedAnswer||navSuppressed||navCurrent!==cur||!cur.el.isConnected)return stop();
     const rect=cur.el.getBoundingClientRect(),hostRect=cur.host.getBoundingClientRect();
     const offset=cur.host.shadowRoot?0:hostRect.top,top=rect.top+offset,bottom=rect.bottom+offset;
     const laidOut=!!(rect.width||rect.height),header=cur.det.querySelector(":scope>summary")?.offsetHeight||0;
     const stripHeight=$("articleFindStrip").hidden?0:$("articleFindStrip").offsetHeight;
     const ceiling=barH()+header,floor=innerHeight-stripHeight-8;
-    if(laidOut&&top>=ceiling&&top<floor&&Math.min(bottom,top+24)<=floor){
-      if(++stable>=8)return stop();
-    }else{
-      stable=0;
-      if(++attempts>30)return stop();
-      revealAt(laidOut?top:hostRect.top,cur.det,moved||Math.abs(top)>innerHeight*2);
-      moved=true;
-    }
+    if(laidOut&&top>=ceiling&&top<floor&&Math.min(bottom,top+24)<=floor){if(++stable>=8)return stop()}
+    else{stable=0;if(++attempts>30)return stop();revealAt(laidOut?top:hostRect.top,cur.det,moved||Math.abs(top)>innerHeight*2);moved=true}
     timer=setTimeout(align,80);
   };
   observer=new ResizeObserver(()=>{stable=0;align()});
-  // Opening a dictionary may shift the target again while other result
-  // sections finish laying out, so observe the full results column too.
   observer.observe($("out"));observer.observe(cur.det);observer.observe(cur.host);
   for(const event of quit)addEventListener(event,stop,{passive:true});
   navScrollSettle=stop;timeout=setTimeout(stop,6500);frame=requestAnimationFrame(align);

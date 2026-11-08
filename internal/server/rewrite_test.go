@@ -5,10 +5,23 @@
 package server
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/hilite"
 )
+
+func TestRewriteFavouriteHTMLMarkedPreservesCopiedMedia(t *testing.T) {
+	hl := hilite.NewPhrases([]hilite.Phrase{{{Text: "джазовый"}, {Text: "кларнетист"}}})
+	got := RewriteFavouriteHTMLMarked(`<p>джазовый кларнетист</p><img src="school.jpg">`, "favourites", map[string]string{"school.jpg": "token"}, hl)
+	if !strings.Contains(got, `<mark class="wu-hl">джазовый кларнетист</mark>`) {
+		t.Fatalf("favourite article is not marked: %s", got)
+	}
+	if !strings.Contains(got, `/res/favourites/token`) {
+		t.Fatalf("copied favourite media was not mapped: %s", got)
+	}
+}
 
 // The cases are whole ELEMENTS, not bare `href="…"` fragments: the rewriter
 // parses a document instead of matching text in it, so an attribute has to be

@@ -197,6 +197,9 @@ type Server struct {
 	searchReturns searchReturnCacheStore
 	articlePages  articlePageCache
 
+	articleFindNavigationMu       sync.Mutex
+	articleFindNavigationSessions map[string]*articleFindNavigationSession
+
 	// dictRows keeps /api/dicts rows between requests (dictrows.go).
 	dictRows rowCache
 
@@ -1588,6 +1591,10 @@ func marker(on bool) func(term, rung string) *hilite.Terms {
 // result line carries its slot index `i` so the client fills the correct
 // preference-ordered position regardless of completion order.
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
+	if action := r.URL.Query().Get("cacheAction"); action == "navStart" || action == "navNext" || action == "navPrevious" || action == "navGoto" || action == "navClose" {
+		s.handleArticleFindNavigation(w, r)
+		return
+	}
 	if r.URL.Query().Get("cacheAction") != "" {
 		st, ok := newStream(w, "application/x-ndjson; charset=utf-8")
 		if !ok {
@@ -1749,7 +1756,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		for j := range h.Results {
 			s.decorateFavourite(id, &h.Results[j])
 			if s.isFavouriteDictionaryID(id) && len(h.Results[j].ResourceMap) > 0 {
-				h.Results[j].Body = RewriteFavouriteHTML(h.Results[j].Body, id, h.Results[j].ResourceMap)
+				h.Results[j].Body = RewriteFavouriteHTMLMarked(h.Results[j].Body, id, h.Results[j].ResourceMap, hl)
 			} else {
 				h.Results[j].Body = rewriteEntryHTMLFor(h.Results[j].Body, id, h.Results[j].EntryID, hl, assetTokens)
 			}

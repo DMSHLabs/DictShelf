@@ -145,21 +145,35 @@ func RewriteEntryHTML(html, dictID string) string {
 // remain unchanged; references without copied bytes stay as their source
 // spelling, matching the snapshot's provenance-only cross references.
 func RewriteFavouriteHTML(html, dictID string, assets map[string]string) string {
+	return RewriteFavouriteHTMLMarked(html, dictID, assets, nil)
+}
+
+// RewriteFavouriteHTMLMarked maps a saved article's copied resources while
+// marking full-text matches in the same tokenizer pass.
+func RewriteFavouriteHTMLMarked(html, dictID string, assets map[string]string, hl *hilite.Terms) string {
 	if html == "" || dictID == "" || len(assets) == 0 {
+		if hl != nil {
+			return RewriteEntryHTMLMarked(html, dictID, hl)
+		}
 		return RewriteEntryHTML(html, dictID)
 	}
-	rewriter := htmlref.Rewriter{
-		URL: func(ref htmlref.Ref) string {
-			name, ok := favouriteResourceName(ref)
-			if !ok {
-				return ref.URL
-			}
-			token, ok := assets[strings.ToLower(name)]
-			if !ok {
-				return ref.URL
-			}
-			return "/res/" + dictID + "/" + token
-		},
+	text := func(value string) string {
+		if hl == nil {
+			return value
+		}
+		return hl.Mark(value)
+	}
+	rewriter := htmlref.Rewriter{Text: text}
+	rewriter.URL = func(ref htmlref.Ref) string {
+		name, ok := favouriteResourceName(ref)
+		if !ok {
+			return ref.URL
+		}
+		token, ok := assets[strings.ToLower(name)]
+		if !ok {
+			return ref.URL
+		}
+		return "/res/" + dictID + "/" + token
 	}
 	return rewriter.Rewrite(html)
 }
