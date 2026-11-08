@@ -82,7 +82,7 @@ final class GoBridge {
     private static native String nativeSavePrefs(String body);
     private static native String nativeSaveLanguage(String body);
     private static native String nativeSystemLogSnapshot();
-    private static native int nativeSystemLogOptions(boolean enabled, boolean baseEvents, boolean webEvents, boolean downloadEvents);
+    private static native int nativeSystemLogOptions(boolean enabled, boolean baseEvents, boolean webEvents, boolean downloadEvents, boolean searchEvents);
     private static native String nativeWebResource(String rawURL, String headers);
     private static native String nativeMediaOpen(String rawURL, String headers);
     private static native int nativeMediaRead(long handle, byte[] dst, int offset, int length);
@@ -319,9 +319,9 @@ final class GoBridge {
         return result;
     }
 
-    static void configureSystemLog(boolean enabled, boolean baseEvents, boolean webEvents, boolean downloadEvents) {
+    static void configureSystemLog(boolean enabled, boolean baseEvents, boolean webEvents, boolean downloadEvents, boolean searchEvents) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        if (nativeSystemLogOptions(enabled, baseEvents, webEvents, downloadEvents) == 0) {
+        if (nativeSystemLogOptions(enabled, baseEvents, webEvents, downloadEvents, searchEvents) == 0) {
             throw new IllegalStateException("Could not configure Go system log");
         }
     }

@@ -794,8 +794,9 @@ func WudictGoBridgeSystemLogSnapshot() *C.char {
 }
 
 //export WudictGoBridgeSystemLogOptions
-func WudictGoBridgeSystemLogOptions(enabled, baseEvents, webEvents, downloadEvents C.int) C.int {
+func WudictGoBridgeSystemLogOptions(enabled, baseEvents, webEvents, downloadEvents, searchEvents C.int) C.int {
 	logx.ConfigureSystemLog(enabled != 0, baseEvents != 0, webEvents != 0, downloadEvents != 0)
+	logx.ConfigureSystemLogSearchEvents(searchEvents != 0)
 	return 1
 }
 

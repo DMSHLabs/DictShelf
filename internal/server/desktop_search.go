@@ -143,6 +143,10 @@ func (s *Server) desktopSearchRequest(ctx context.Context, baseURL string, reque
 		return errors.New("invalid desktop server address")
 	}
 	request.Origin = base.Scheme + "://" + base.Host
+	request.Transport = "native_bridge"
+	if logx.SystemLogSearchEventsEnabled() {
+		logx.SystemDiagnostic("search stage=interface_request transport=native_bridge query=%q mode=%q scope=%q", request.Query, request.Mode, request.Dictionary)
+	}
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
 	encoder.SetEscapeHTML(false)
@@ -260,17 +264,30 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 		}
 		return map[string]bool{"saved": true}, s.reg.prefs.setDesktopWindowSize(value)
 	case "systemLogOptions":
-		var options struct {
-			Enabled        bool `json:"enabled"`
-			BaseEvents     bool `json:"baseEvents"`
-			WebEvents      bool `json:"webEvents"`
-			DownloadEvents bool `json:"downloadEvents"`
-		}
+		var options systemLogOptions
 		if err := json.Unmarshal([]byte(argument), &options); err != nil {
 			return nil, errors.New("invalid system log settings")
 		}
+		if options.Configured {
+			if s.reg == nil || s.reg.prefs == nil {
+				return nil, errors.New("settings file is unavailable")
+			}
+			if err := s.reg.prefs.setSystemLogOptions(options); err != nil {
+				return nil, err
+			}
+			logx.ConfigureSystemLog(options.Enabled, options.BaseEvents, options.WebEvents, options.DownloadEvents)
+			logx.ConfigureSystemLogSearchEvents(options.SearchEvents)
+			return map[string]bool{"saved": true}, nil
+		}
+		if s.reg != nil && s.reg.prefs != nil {
+			saved := s.reg.prefs.systemLogOptions()
+			logx.ConfigureSystemLog(saved.Enabled, saved.BaseEvents, saved.WebEvents, saved.DownloadEvents)
+			logx.ConfigureSystemLogSearchEvents(saved.SearchEvents)
+			return saved, nil
+		}
 		logx.ConfigureSystemLog(options.Enabled, options.BaseEvents, options.WebEvents, options.DownloadEvents)
-		return map[string]bool{"saved": true}, nil
+		logx.ConfigureSystemLogSearchEvents(options.SearchEvents)
+		return options, nil
 	case "storageState":
 		exists, err := s.userStorageExists()
 		return map[string]bool{"exists": exists}, err

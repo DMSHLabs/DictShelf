@@ -28,6 +28,7 @@ var systemLogEnabled = true
 var systemLogBaseEvents = true
 var systemLogWebEvents = true
 var systemLogDownloadEvents bool
+var systemLogSearchEvents bool
 var systemHasErrors bool
 var systemErrorStatusKnown bool
 
@@ -76,6 +77,18 @@ func ConfigureSystemLog(enabled, baseEvents, webEvents, downloadEvents bool) {
 	systemLogDownloadEvents = downloadEvents
 	systemMu.Unlock()
 	SystemDiagnostic("system log options applied enabled=%t base_events=%t web_events=%t download_events=%t", enabled, baseEvents, webEvents, downloadEvents)
+}
+
+func ConfigureSystemLogSearchEvents(enabled bool) {
+	systemMu.Lock()
+	systemLogSearchEvents = enabled
+	systemMu.Unlock()
+}
+
+func SystemLogSearchEventsEnabled() bool {
+	systemMu.Lock()
+	defer systemMu.Unlock()
+	return systemLogSearchEvents
 }
 
 func systemDir() string {
@@ -156,9 +169,11 @@ func writeSystem(isError, diagnostic, download bool, format string, args ...any)
 	systemMu.Lock()
 	defer systemMu.Unlock()
 	errorEvent := isError || isSystemError(message)
-	if !systemLogEnabled || !diagnostic && !errorEvent && (download && !systemLogDownloadEvents ||
-		!download && isWebSystemEvent(message) && !systemLogWebEvents ||
-		!download && !isWebSystemEvent(message) && !systemLogBaseEvents) {
+	searchEvent := isSearchSystemEvent(message)
+	if !systemLogEnabled || !errorEvent && (searchEvent && !systemLogSearchEvents ||
+		!diagnostic && (download && !systemLogDownloadEvents ||
+			!download && isWebSystemEvent(message) && !systemLogWebEvents ||
+			!download && !isWebSystemEvent(message) && !systemLogBaseEvents)) {
 		return
 	}
 	root := systemDir()
@@ -200,6 +215,15 @@ func writeSystem(isError, diagnostic, download bool, format string, args ...any)
 		}
 		_ = f.Sync()
 	}
+}
+
+func isSearchSystemEvent(message string) bool {
+	for _, prefix := range []string{"search ", "search_", "article_page_cache ", "article_find_navigation ", "browse_diag event=search_article"} {
+		if strings.HasPrefix(message, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // SystemHasErrors reports whether any retained log for this library contains

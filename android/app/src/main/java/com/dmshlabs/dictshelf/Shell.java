@@ -275,6 +275,7 @@ final class Shell {
         reply.put("logBaseEvents", SystemLog.baseEvents());
         reply.put("logWebEvents", SystemLog.detailedEvents());
         reply.put("logDownloadEvents", SystemLog.downloadEvents());
+        reply.put("logSearchEvents", SystemLog.searchEvents());
         org.json.JSONArray rows = new org.json.JSONArray();
         for (ShellPrefs.Override o : ShellPrefs.OVERRIDES) {
             org.json.JSONObject row = new org.json.JSONObject();
@@ -924,10 +925,10 @@ final class Shell {
                             if ("log".equals(field)) {
                                 SystemLog.configure(a, request.getBoolean("enabled"),
                                         request.getBoolean("baseEvents"), request.getBoolean("webEvents"),
-                                        request.optBoolean("downloadEvents", false));
+                                        request.optBoolean("downloadEvents", false),request.optBoolean("searchEvents", false));
                                 GoBridge.configureSystemLog(request.getBoolean("enabled"),
                                         request.getBoolean("baseEvents"), request.getBoolean("webEvents"),
-                                        request.optBoolean("downloadEvents", false));
+                                        request.optBoolean("downloadEvents", false),request.optBoolean("searchEvents", false));
                                 if (request.getBoolean("enabled")) ProcessExitDiagnostics.recordRecent(a);
                             } else if ("toolbar".equals(field)) {
                                 ShellPrefs.set(a, ShellPrefs.TOOLBAR, request.getBoolean("value"));

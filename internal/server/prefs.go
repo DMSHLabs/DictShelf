@@ -321,11 +321,34 @@ type prefsFile struct {
 	ImportTarget   string            `json:"importTarget,omitempty"`   // last writable configured dictionary folder used for imports
 	DesktopHotkeys desktopHotkeys    `json:"desktopHotkeys,omitempty"`
 	DesktopWindow  desktopWindowSize `json:"desktopWindow,omitempty"`
+	SystemLog       systemLogOptions `json:"systemLog,omitempty"`
 
 	Groups  []DictionaryGroup `json:"groups,omitempty"`
 	Version int               `json:"version"`
 	UI      *UIPrefs          `json:"ui,omitempty"`
 	Dicts   []DictPref        `json:"dicts"` // array ORDER is the user's order
+}
+
+type systemLogOptions struct {
+	Configured     bool `json:"configured,omitempty"`
+	Enabled        bool `json:"enabled"`
+	BaseEvents     bool `json:"baseEvents"`
+	WebEvents      bool `json:"webEvents"`
+	DownloadEvents bool `json:"downloadEvents"`
+	SearchEvents   bool `json:"searchEvents"`
+}
+
+func (p *Prefs) systemLogOptions() systemLogOptions {
+	f, _ := p.data()
+	if !f.SystemLog.Configured {
+		return systemLogOptions{Configured: true, Enabled: true, BaseEvents: true}
+	}
+	return f.SystemLog
+}
+
+func (p *Prefs) setSystemLogOptions(value systemLogOptions) error {
+	value.Configured = true
+	return p.mutate(func(f *prefsFile) { f.SystemLog = value })
 }
 
 type desktopHotkeys struct {

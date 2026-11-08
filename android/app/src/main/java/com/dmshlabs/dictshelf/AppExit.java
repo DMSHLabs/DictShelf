@@ -26,7 +26,7 @@ public final class AppExit extends Application implements Application.ActivityLi
     @Override public void onCreate() {
         super.onCreate();
         SystemLog.initialize(this);
-        GoBridge.configureSystemLog(SystemLog.enabled(), SystemLog.baseEvents(), SystemLog.detailedEvents(), SystemLog.downloadEvents());
+        GoBridge.configureSystemLog(SystemLog.enabled(), SystemLog.baseEvents(), SystemLog.detailedEvents(), SystemLog.downloadEvents(), SystemLog.searchEvents());
         ProcessExitDiagnostics.recordRecent(this);
         registerActivityLifecycleCallbacks(this);
     }

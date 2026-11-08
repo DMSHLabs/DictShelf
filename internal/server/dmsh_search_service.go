@@ -46,6 +46,7 @@ type SearchRequest struct {
 	Rung                 string `json:"rung,omitempty"`
 	PageCacheDiagnostics bool   `json:"pageCacheDiagnostics,omitempty"`
 	SearchDiagnostics    bool   `json:"searchDiagnostics,omitempty"`
+	Transport            string `json:"-"`
 
 	skipArticlePageCache bool
 }
@@ -130,6 +131,11 @@ type SearchEvent struct {
 func (s *Server) Search(parent context.Context, request SearchRequest, emit func(SearchEvent) error) error {
 	if emit == nil {
 		return searchRequestError(SearchInvalidRequest, "search event callback is required")
+	}
+	request.SearchDiagnostics = request.SearchDiagnostics || logx.SystemLogSearchEventsEnabled()
+	request.PageCacheDiagnostics = request.PageCacheDiagnostics || request.SearchDiagnostics
+	if request.SearchDiagnostics {
+		logx.SystemDiagnostic("search stage=server_received transport=%q query=%q mode=%q scope=%q cache_action=%q", request.Transport, request.Query, request.Mode, request.Dictionary, request.CacheAction)
 	}
 	if !request.skipArticlePageCache && request.ReturnCacheID != "" && request.CacheAction == "" {
 		s.articlePages.resetFor(request.ReturnCacheID, request.PageCacheDiagnostics)
@@ -230,7 +236,7 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 		return searchRequestError(SearchDictionaryNotFound, "dictionary variant unavailable")
 	}
 	if request.SearchDiagnostics {
-		logx.SystemDiagnostic("search start query=%q mode=%q scope=%q dictionaries=%d", q, mode, dictParam, len(entries))
+		logx.SystemDiagnostic("search stage=index_search_start transport=%q query=%q mode=%q scope=%q dictionaries=%d", request.Transport, q, mode, dictParam, len(entries))
 	}
 
 	ctx, stop := context.WithCancel(parent)
@@ -400,6 +406,9 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 		})
 	}
 	writeLine(SearchEvent{T: "end"})
+	if request.SearchDiagnostics {
+		logx.SystemDiagnostic("search stage=server_complete transport=%q query=%q mode=%q scope=%q cancelled=%t", request.Transport, q, mode, dictParam, parent.Err() != nil)
+	}
 	return emitErr
 }
 

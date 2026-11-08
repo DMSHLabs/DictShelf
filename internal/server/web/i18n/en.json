@@ -1268,6 +1268,7 @@
   "system.logBase": "Log basic events",
   "system.logWeb": "Log WebView actions",
   "system.logDownload": "Log dictionary downloads",
+  "system.logSearch": "Log search events",
   "system.logSystemSettings": "Log System Settings diagnostics",
   "system.logSystemSettingsHint": "The log file must be enabled to record opening attempts and loading errors.",
   "system.logHint": "Basic events and errors are recorded separately. Enable Download to record dictionary download steps, reproduce the issue, then save the log file.",

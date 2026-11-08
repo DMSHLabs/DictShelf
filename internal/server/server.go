@@ -1602,6 +1602,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 		request := searchRequestFromQuery(r.URL.Query())
 		request.Origin = originOf(r)
+		request.Transport = "http"
 		if err := s.Search(r.Context(), request, func(event SearchEvent) error { st.line(event); return r.Context().Err() }); err != nil {
 			st.line(SearchEvent{T: "error", Error: err.Error()})
 		}
@@ -1680,15 +1681,23 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	searchDiagnostics, _ := queryFlag(r.URL.Query(), "searchDiagnostics")
+	searchDiagnostics = searchDiagnostics || logx.SystemLogSearchEventsEnabled()
 	if searchDiagnostics {
-		logx.SystemDiagnostic("search start query=%q mode=%q scope=%q dictionaries=%d", q, mode, dictParam, len(entries))
+		logx.SystemDiagnostic("search stage=interface_request transport=http query=%q mode=%q scope=%q", q, mode, dictParam)
+		logx.SystemDiagnostic("search stage=server_index_search_start transport=http query=%q mode=%q scope=%q dictionaries=%d", q, mode, dictParam, len(entries))
 	}
+	searchStarted := time.Now()
 
 	st, ok := newStream(w, "application/x-ndjson; charset=utf-8")
 	if !ok {
 		return
 	}
-	writeLine := func(m streamMsg) { st.line(m) }
+	writeLine := func(m streamMsg) {
+		st.line(m)
+		if searchDiagnostics && m.T == "hit" {
+			logx.SystemDiagnostic("search stage=server_dictionary_result transport=http query=%q mode=%q dictionary=%q results=%d elapsed_ms=%d", q, mode, m.Name, len(m.Results), time.Since(searchStarted).Milliseconds())
+		}
+	}
 
 	// Emit the slot layout FIRST, from cheap entry ids only - no opens on the
 	// request path. The client paints the empty accordion immediately; each
@@ -1804,6 +1813,9 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		writeLine(renderHit(i, h))
 	})
 	writeLine(streamMsg{T: "end"})
+	if searchDiagnostics {
+		logx.SystemDiagnostic("search stage=server_complete transport=http query=%q mode=%q scope=%q elapsed_ms=%d cancelled=%t", q, mode, dictParam, time.Since(searchStarted).Milliseconds(), r.Context().Err() != nil)
+	}
 }
 
 // searchLocationForLog identifies the database and index surface behind one

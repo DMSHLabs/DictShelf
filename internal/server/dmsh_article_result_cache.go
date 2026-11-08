@@ -181,7 +181,10 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 			if request.IgnoreDiacritics {
 				ctx = store.WithIgnoreDiacritics(ctx)
 			}
-			return source.StreamArticleIDs(ctx, query, request.Mode, match, func(ids []int64, total int, done bool) error {
+			started := time.Now()
+			logx.SystemDiagnosticIf(request.SearchDiagnostics,
+				"search stage=article_id_index_read dict=%q mode=%q query=%q source=prepared_sql_index cache=building", e.ID, request.Mode, query)
+			err = source.StreamArticleIDs(ctx, query, request.Mode, match, func(ids []int64, total int, done bool) error {
 				words := make([]string, len(ids))
 				for i, id := range ids {
 					words[i] = strconv.FormatInt(id, 10)
@@ -191,6 +194,9 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 				}
 				return emit(SearchEvent{T: "cache", Dict: e.ID, CacheID: request.CacheID, Total: total, Complete: done})
 			})
+			logx.SystemDiagnosticIf(request.SearchDiagnostics,
+				"search stage=article_id_index_done dict=%q mode=%q query=%q elapsed_ms=%d error=%q", e.ID, request.Mode, query, time.Since(started).Milliseconds(), err)
+			return err
 		}(); err != nil {
 			logx.SystemDiagnostic("search_complete_list stage=failed dict=%q name=%q mode=%q rung=%q query=%q cache_id=%q error=%q",
 				e.ID, e.probeName(), request.Mode, request.Rung, query, request.CacheID, err)
@@ -254,10 +260,15 @@ func (s *Server) searchArticleResultCache(ctx context.Context, request SearchReq
 				ids = append(ids, id)
 			}
 		}
+		logx.SystemDiagnosticIf(request.SearchDiagnostics,
+			"search stage=article_id_cache_read dict=%q result=hit start=%d ids=%d total=%d", e.ID, request.Start, len(ids), total)
+		started := time.Now()
 		results, err := source.ArticlesByIDs(ctx, ids)
 		if err != nil {
 			return err
 		}
+		logx.SystemDiagnosticIf(request.SearchDiagnostics,
+			"search stage=article_sql_read dict=%q source=prepared_sql_articles ids=%d elapsed_ms=%d", e.ID, len(ids), time.Since(started).Milliseconds())
 		format, err := parseFormat(request.Format)
 		if err != nil {
 			return err
