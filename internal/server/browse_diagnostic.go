@@ -270,7 +270,7 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 	}
 	if d.Event == "search_article" {
 		switch d.Stage {
-		case "search_start", "search_empty_group", "search_stream_begin", "dictionary_response", "article_open", "return_target_open", "return_target_after_paint", "return_target_search_end", "return_target_after_search_paint", "first_article_painted", "search_end", "search_aborted", "search_error", "navigation_request", "navigation_response", "navigation_target_painted", "navigation_trace_start", "navigation_trace_step", "navigation_trace_end", "navigation_trace_stop", "navigation_trace_error", "navigation_trace_display", "navigation_trace_block", "navigation_trace_mark", "navigation_trace_settle", "navigation_trace_article_saved", "navigation_trace_article_save_failed":
+		case "search_start", "search_empty_group", "search_stream_begin", "dictionary_response", "article_open", "return_target_open", "return_target_after_paint", "return_target_search_end", "search_aborted", "search_error", "return_target_after_search_paint", "first_article_painted", "search_end", "navigation_request", "navigation_response", "navigation_target_painted", "navigation_trace_start", "navigation_trace_step", "navigation_trace_end", "navigation_trace_stop", "navigation_trace_error", "navigation_trace_display", "navigation_trace_block", "navigation_trace_mark", "navigation_trace_settle", "navigation_trace_article_saved", "navigation_trace_article_save_failed", "navigation_trace_article_save_attempt", "navigation_trace_article_save_result":
 		default:
 			return errors.New("invalid diagnostic")
 		}

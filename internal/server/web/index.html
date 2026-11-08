@@ -11053,7 +11053,9 @@ async function navShowTarget(target,state){
   if(!mark){
     const root=host.shadowRoot||host.contentDocument;
     const html=root?.documentElement?.outerHTML||root?.innerHTML||"";
-    await window.wudictArticleFind?.saveTraceArticle?.(dict,target.articleIndex,html);
+    window.wudictArticleFind?.traceEvent?.("navigation_trace_article_save_attempt",`dict=${dict}; article=${target.articleIndex}; root=${root?.nodeName||"none"}; html_chars=${html.length}`);
+    const saved=await window.wudictArticleFind?.saveTraceArticle?.(dict,target.articleIndex,html);
+    window.wudictArticleFind?.traceEvent?.("navigation_trace_article_save_result",`dict=${dict}; article=${target.articleIndex}; saved=${!!saved}`);
     return;
   }
   mark.classList.add("wu-cur");
