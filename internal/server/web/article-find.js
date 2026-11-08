@@ -228,6 +228,8 @@ function syncControls() {
     $("articleFindDialogPrev").disabled = !canStep(-1);
     $("articleFindDialogNext").disabled = !canStep(1);
   }
+  $("articleFindScrollToMatch").disabled = fts ? !fullTextNavigation?.canRestore :
+    remoteFind ? remoteFindPending || !remoteFind.target : !matches.length || index < 0;
   window.wudictThemedSelects?.articleFindMode?.sync();
 }
 function canStep(step){
@@ -308,7 +310,7 @@ function paint() {
     $("articleFindNext").disabled=remoteFindPending||!serverFindCanStep();
     $("articleFindDialogPrev").disabled=remoteFindPending||!serverFindCanStep();
     $("articleFindDialogNext").disabled=remoteFindPending||!serverFindCanStep();
-    $("articleFindScrollToMatch").disabled=true;
+    $("articleFindScrollToMatch").disabled=remoteFindPending||!remoteFind.target;
     return;
   }
   const position=countedPosition();
@@ -333,7 +335,7 @@ function paint() {
   $("articleFindNext").disabled = !canStep(1);
   $("articleFindDialogPrev").disabled = !canStep(-1);
   $("articleFindDialogNext").disabled = !canStep(1);
-  $("articleFindScrollToMatch").disabled = options.mode === "fts" || !matches.length || index < 0;
+  $("articleFindScrollToMatch").disabled = options.mode === "fts" ? !fullTextNavigation?.canRestore : !matches.length || index < 0;
 }
 let hiddenExamples = false;
 // Build a text stream per paragraph, retaining offsets across inline formatting.
@@ -650,6 +652,14 @@ async function moveRemoteFind(step){
     else record.state={...record.state,...state};
   }catch(error){record.error=String(error?.message||error)}
   finally{if(request===remoteFindRequestSeq&&token===remoteFindToken){remoteFindPending=false;paint()}}
+}
+async function restoreRemoteFindTarget(){
+  if(!remoteFind?.target||remoteFindPending)return;
+  const record=remoteFind,token=remoteFindToken,target=record.target,state=record.state;
+  remoteFindPending=true;paint();
+  try{record.error=await showRemoteFindTarget(target,state,token)?"":t("search.fullListUnavailable")}
+  catch(error){record.error=String(error?.message||error)}
+  finally{if(token===remoteFindToken&&remoteFind===record){remoteFindPending=false;paint()}}
 }
 async function gotoRemoteFind(page){
   if(!remoteFind?.id||remoteFindPending||!Number.isInteger(page)||page<1)return;
@@ -990,7 +1000,9 @@ $("articleFindStop").onclick = stop;
 $("articleFindPrev").onclick = () => fullTextNavigation && options.mode === "fts" ? fullTextNavigation.previous?.() : go(-1);
 $("articleFindNext").onclick = () => fullTextNavigation && options.mode === "fts" ? fullTextNavigation.next?.() : go(1);
 $("articleFindScrollToMatch").onclick = () => {
-  if(options.mode === "fts" || !matches.length)return;
+  if(options.mode === "fts"){fullTextNavigation?.restore?.();return}
+  if(remoteFind){void restoreRemoteFindTarget();return}
+  if(!matches.length)return;
   if(index<0)index=0;
   revealCurrent();
 };

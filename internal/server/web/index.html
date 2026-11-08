@@ -10369,7 +10369,7 @@ async function doSearch(ev){
         if(browseArticleDiagContext&&browseArticleDiagContext.searchStartedAt)
           logBrowseArticleTransition("search_stream_begin",performance.now()-browseArticleDiagContext.searchStartedAt);
         navDetach(); // the section it was walking is about to be replaced
-        markedAnswer=fullTextReading(mode)&&hlOn; // only the readings whose answer carries marks can be navigated
+        markedAnswer=fullTextReading(mode); // article readings have a server match walk even when highlighting is off
         navSuppressed=false;
         stale=[...out.childNodes];
         boxes=(msg.slots||[]).map(()=>{const b=document.createElement("div");out.appendChild(b);return b});
@@ -10438,7 +10438,14 @@ async function doSearch(ev){
            They still RESOLVE the slot, though, which is what lets a prefix of
            dead ends fall through instantly instead of holding the screen. */
         resolved[msg.i]=true;
-        if(res.results&&!ready[msg.i])ready[msg.i]=box.querySelector("details.dict");
+        if(res.results&&!ready[msg.i]){
+          ready[msg.i]=box.querySelector("details.dict");
+          // Body searches have a server-owned match walk even while their
+          // result sections are still collapsed. Attach it as soon as the
+          // first answer exists so the navigation strip is available for the
+          // phrase results; navStart opens the article containing its target.
+          if(markedAnswer&&!navDet&&ready[msg.i])navAttach(ready[msg.i]);
+        }
         if(msg.i===preferredSlot)preferredDone=true;
         settle();
       }else if(msg.t==="morph"){
@@ -10511,6 +10518,12 @@ async function doSearch(ev){
           return;                 // NOT swapped: the old answer holds the
         }                         // screen until the re-run has something
         swap();                   // nothing came, or everything did: commit
+        if(markedAnswer&&navDet&&!navServerState?.found&&!navPending){
+          const det=navDet;
+          requestAnimationFrame(()=>{
+            if(seq===searchSeq&&navDet===det&&!navServerState?.found&&!navPending)navStart(det);
+          });
+        }
         // (the empty-state innerHTML below also clears the boxes — they are empty)
         /* "No results" is a statement about the dictionaries that were
            actually searched. If every slot lacked the index, none was, and the
@@ -10883,7 +10896,7 @@ function navAttach(det){
   navSuppressed=false;navDet=det;
   if(!markedAnswer)return;
   if(!navSessionID)navSessionID=articleCacheGroupID||newArticleResultCacheID();
-  if(!navServerState&&!navPending)requestAnimationFrame(()=>{if(navDet===det)navStart(det)});
+  if(!navServerState?.found&&!navPending)requestAnimationFrame(()=>{if(navDet===det)navStart(det)});
   else navPos();
 }
 function navDetach(){
@@ -10907,6 +10920,7 @@ function navPos(){
     position:count?tx("articleFind.position",{current:position,total:count+(state.complete?"":"+")})+(block?" · "+block:""):tx("articleFind.noMatches"),
     visible:count>0,canNavigate,canPrevious:canNavigate,canNext:canNavigate,total:count,current:position,
     previous:()=>navGo(-1),next:()=>navGo(1),refresh:()=>navPos(),goto:page=>navGoto(page),
+    canRestore:!!navServerState?.found,restore:()=>navRestoreCurrent(),
     seekFrom:(_host,_node,_offset,direction)=>navGo(direction<0?-1:1),
     close:()=>{navSuppressed=true;navDetach()}
   });
@@ -10933,7 +10947,7 @@ async function navStart(det){
       mode:det.dataset.searchMode||lastSearchMode,pageSize:String(size),firstSize:String(firstSize),
       groupID:findContext.groupID||"",rungs:(findContext.rungs||[]).join(",")});
     if(!state||operation!==navOpToken||navDet!==det||navSuppressed)return;
-    navServerState=state;await navShowTarget(state.target,state);
+    navServerState=state;navPos();await navShowTarget(state.target,state);
   }catch(error){console.warn("Article match navigation unavailable",error)}
   finally{if(operation===navOpToken){navPending=false;navPos()}}
 }
@@ -10944,7 +10958,7 @@ async function navGo(step){
   try{
     const state=await navRequest(step<0?"navPrevious":"navNext");
     if(!state||operation!==navOpToken||navSuppressed)return;
-    navServerState=state;await navShowTarget(state.target,state);
+    navServerState=state;navPos();await navShowTarget(state.target,state);
   }catch(error){console.warn("Article match navigation failed",error)}
   finally{if(operation===navOpToken){navPending=false;navPos()}}
 }
@@ -10984,8 +10998,16 @@ function navGoto(page){
   navPending=true;const operation=++navOpToken;
   navRequest("navGoto",{position:String(page)}).then(state=>{
     if(!state?.found||operation!==navOpToken||navSuppressed)return;
-    navServerState=state;return navShowTarget(state.target,state);
+    navServerState=state;navPos();return navShowTarget(state.target,state);
   }).catch(error=>console.warn("Article match navigation failed",error)).finally(()=>{if(operation===navOpToken){navPending=false;navPos()}});
+}
+async function navRestoreCurrent(){
+  if(navPending||!navSessionID||!navServerState?.found)return;
+  navPending=true;const operation=++navOpToken;
+  try{
+    await navShowTarget(navServerState.target,navServerState);
+  }catch(error){console.warn("Article match restore failed",error)}
+  finally{if(operation===navOpToken){navPending=false;navPos()}}
 }
 async function requestArticleBlock(det,direction){
   if(!det?.isConnected||![-1,1].includes(direction))return null;
