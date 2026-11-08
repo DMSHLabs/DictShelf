@@ -11067,11 +11067,19 @@ async function navShowTarget(target,state){
       markScans++;
       for(const old of root.querySelectorAll(".wu-hl-ex2"))old.replaceWith(...old.childNodes);
       if(target.occurrences?.length&&(target.reading==="phrase"||target.reading==="near")){
-        const marks=[...root.querySelectorAll(".wu-hl,.wu-hl-ex")];
+        let marks=[...root.querySelectorAll(".wu-hl,.wu-hl-ex")];
         for(const item of marks){item.classList.remove("wu-hl","wu-cur");item.classList.add("wu-hl-ex")}
-        const phraseMarks=[],phraseBridges=[];
         for(let occurrenceIndex=0;occurrenceIndex<target.occurrences.length;occurrenceIndex++){
           const occurrence=(window.wudictArticleFind?.serverRanges?.(root,target.occurrences,false)||[])[occurrenceIndex];
+          if(!occurrence)continue;
+          const parts=[...root.querySelectorAll(".wu-hl,.wu-hl-ex")].filter(item=>{try{return occurrence.range.intersectsNode(item)}catch(_){return false}});
+          if(!parts.length)window.wudictArticleFind?.wrapRangeText?.(root,occurrence.range,["wu-hl","wu-hl-ex"]);
+        }
+        const occurrenceRanges=target.occurrences.map((_,occurrenceIndex)=>(window.wudictArticleFind?.serverRanges?.(root,target.occurrences,false)||[])[occurrenceIndex]||null);
+        marks=[...root.querySelectorAll(".wu-hl,.wu-hl-ex")];
+        const phraseMarks=[],phraseBridges=[];
+        for(let occurrenceIndex=0;occurrenceIndex<target.occurrences.length;occurrenceIndex++){
+          const occurrence=occurrenceRanges[occurrenceIndex];
           if(!occurrence){phraseMarks.push([]);phraseBridges.push([]);continue}
           const parts=marks.filter(item=>{try{return occurrence.range.intersectsNode(item)}catch(_){return false}});
           if(parts.length){parts[0].classList.remove("wu-hl-ex");parts[0].classList.add("wu-hl")}

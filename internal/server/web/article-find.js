@@ -626,11 +626,13 @@ function wrapRangeText(root,range,className){
     if(end>start)nodes.push({node,start,end});
   }
   const wrapped=[];
-  for(const {node,start,end} of nodes){
+  for(let i=0;i<nodes.length;i++){
+    const {node,start,end}=nodes[i];
     if(!node.parentNode||!node.data.slice(start,end).trim())continue;
-    const fragment=doc.createDocumentFragment(),span=doc.createElement("span");
+    const fragment=doc.createDocumentFragment(),tag=Array.isArray(className)||/^(wu-hl|wu-hl-ex)$/u.test(className)?"mark":"span",span=doc.createElement(tag);
     if(start)fragment.append(doc.createTextNode(node.data.slice(0,start)));
-    span.className=className;span.textContent=node.data.slice(start,end);fragment.append(span);
+    span.className=Array.isArray(className)?(className[i]||className[className.length-1]):className;
+    span.textContent=node.data.slice(start,end);fragment.append(span);
     if(end<node.data.length)fragment.append(doc.createTextNode(node.data.slice(end)));
     node.replaceWith(fragment);wrapped.push(span);
   }
