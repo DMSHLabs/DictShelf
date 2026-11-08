@@ -11185,6 +11185,11 @@ window.wudictArticleFindBlockRange=det=>{
 };
 function navSettleCurrent(cur){
   navScrollSettle?.();
+  // The jump to the answer's first mark is armed by a search and keeps
+  // re-aligning for up to six seconds. A navigation step owns the scroll from
+  // here: two align loops scroll to two places, and the one armed first wins
+  // whichever way it was written.
+  markSettle?.();
   const settleStarted=performance.now();
   let moved=false,attempts=0,stable=0,timer=0,frame=0,timeout=0,observer=null;
   const quit=["wheel","touchstart","pointerdown","keydown"];
@@ -11202,7 +11207,23 @@ function navSettleCurrent(cur){
     const stripHeight=$("articleFindStrip").hidden?0:$("articleFindStrip").offsetHeight;
     const ceiling=barH()+header,floor=innerHeight-stripHeight-8;
     if(laidOut&&top>=ceiling&&top<floor&&Math.min(bottom,top+24)<=floor){if(++stable>=8)return stop()}
-    else{stable=0;if(++attempts>30)return stop();revealAt(laidOut?top:hostRect.top,cur.det,moved||Math.abs(top)>innerHeight*2);moved=true}
+    else{
+      stable=0;
+      if(++attempts>30)return stop();
+      if(!laidOut){
+        // Still no box: an OPEN dictionary's list is content-visibility:auto
+        // (app.css), so a section the reader has left behind - the wrap back to
+        // the first block of the first dictionary is exactly that - has no
+        // coordinates to reveal, and `hostRect` is zero as well. Asking the mark
+        // itself to come into view is what makes the browser lay that part out;
+        // the next turn aligns it below the bar for real. The dialog's settle has
+        // always done this for the same reason.
+        cur.el.scrollIntoView({block:"center",behavior:"instant"});
+      }else{
+        revealAt(top,cur.det,moved||Math.abs(top)>innerHeight*2);
+      }
+      moved=true;
+    }
     timer=setTimeout(align,80);
   };
   observer=new ResizeObserver(()=>{stable=0;align()});
