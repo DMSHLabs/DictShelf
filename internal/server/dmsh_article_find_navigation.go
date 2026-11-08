@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
-	"github.com/DMSHLabs/DictShelf/internal/hilite"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 	"github.com/DMSHLabs/DictShelf/internal/logx"
 	"github.com/DMSHLabs/DictShelf/internal/search"
 )
@@ -563,11 +563,11 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 			continue
 		}
 		groups, matches := articleFindHTMLSpans(results[i].Body, options)
-		if len(matches) > hilite.MaxMarks {
+		if len(matches) > indexconst.ArticleMarkLimit {
 			// The literal list is bounded the way the marks are: an article that
 			// matches a short needle thousands of times would otherwise travel
 			// whole and be painted whole, and no reader steps through that.
-			matches = matches[:hilite.MaxMarks]
+			matches = matches[:indexconst.ArticleMarkLimit]
 			session.markCapped(request.Dictionary, results[i].EntryID, session.mode)
 		}
 		occurrences[i] = articleFindWireOccurrences(groups, matches)
@@ -885,7 +885,7 @@ func articleFindBefore(occurrence articleFindWireOccurrence, path []int, offset 
 	return start.Start < offset
 }
 
-// markCapped records that one article's marks were cut at hilite.MaxMarks, and
+// markCapped records that one article's marks were cut at indexconst.ArticleMarkLimit, and
 // names the article once in the system log. From then on the session's total is
 // a lower bound, and every response says so - the reader must not be told that an
 // exact number of matches exists when the tail was never painted.
@@ -895,7 +895,7 @@ func (session *articleFindNavigationSession) markCapped(dict string, entryID int
 	}
 	session.capped = true
 	logx.SystemDiagnosticIf(logx.SystemLogSearchEventsEnabled(),
-		"article_find stage=capped dict=%q entry_id=%d reading=%q marks=%d", dict, entryID, reading, hilite.MaxMarks)
+		"article_find stage=capped dict=%q entry_id=%d reading=%q marks=%d", dict, entryID, reading, indexconst.ArticleMarkLimit)
 }
 
 // completeAnswer is what a response may claim: the scan finished AND no article

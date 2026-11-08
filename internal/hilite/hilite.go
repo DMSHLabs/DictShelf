@@ -55,6 +55,8 @@ import (
 	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
+
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 )
 
 const (
@@ -63,15 +65,9 @@ const (
 	// rather than allowed to cost a second word of state per text node.
 	maxPhrases = 64
 
-	// MaxMarks bounds one article's output growth. A one-character term is a
-	// legal prefix query that matches nearly every word, and the reader is no
-	// better served by ten thousand marks than by five hundred. The cap is per
-	// Cursor, which is to say per article; past it marking stops, and the
-	// ARTICLE IS STILL EMITTED WHOLE - the tail is copied verbatim, never
-	// truncated. A body cut here is a LOWER BOUND on the article's matches, and
-	// the navigation that counts its marks says so (server's completeAnswer):
-	// the reader is never told an exact number that is not one.
-	MaxMarks = 500
+	// The cap itself lives with the other shared bounds, in
+	// indexconst.ArticleMarkLimit: one number for the readings, the article
+	// find and anything else that paints marks into a body.
 
 	// maxEntity bounds the entity guard's lookahead. "&thickapprox;" is 13
 	// bytes; anything longer is not an entity worth protecting, and an
@@ -208,13 +204,13 @@ func Compile(query string) *Terms {
 // Cursor numbers the marks of ONE article. Terms is compiled once per request
 // and shared by every result of every dictionary, so it is read-only; the
 // state that cannot be shared - which occurrence a mark belongs to, and how
-// much of MaxMarks is spent - lives here. One body is marked through one
+// much of indexconst.ArticleMarkLimit is spent - lives here. One body is marked through one
 // cursor, and the numbers it writes are the occurrence indexes the article
 // navigation walks: 0, 1, 2 in document order.
 type Cursor struct {
 	terms *Terms
 	next  int // the number the next mark receives
-	marks int // marks emitted, against MaxMarks
+	marks int // marks emitted, against indexconst.ArticleMarkLimit
 }
 
 // Cursor starts a fresh article. A nil Terms yields a nil Cursor, and a nil
@@ -254,7 +250,7 @@ func (c *Cursor) Mark(s string) string {
 	}
 	var b strings.Builder
 	last, i := 0, 0
-	for i < len(s) && c.marks < MaxMarks {
+	for i < len(s) && c.marks < indexconst.ArticleMarkLimit {
 		// An entity is never a token and never part of one. Without this,
 		// a query for "n" would emit "&<mark>nbsp</mark>;" - which renders as
 		// the literal text "&nbsp;" and silently corrupts the article.

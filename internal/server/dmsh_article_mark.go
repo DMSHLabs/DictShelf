@@ -14,6 +14,7 @@ import (
 	"golang.org/x/net/html/atom"
 
 	"github.com/DMSHLabs/DictShelf/internal/hilite"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 )
 
 // The phrase and near readings are painted HERE, from the rung's own phrases.
@@ -145,7 +146,7 @@ func articleFindPhraseTerms(p hilite.Phrase) []articleFindTerm {
 
 // articleFindPlan finds the occurrences of every set in every text block and
 // turns them into per-node paint ranges, numbered in document order - the
-// order the navigation walks. It stops at hilite.MaxMarks occurrences and never
+// order the navigation walks. It stops at indexconst.ArticleMarkLimit occurrences and never
 // splits one: the number is put on all of an occurrence's fragments or on none.
 func articleFindPlan(groups []articleFindTextGroup, sets []articleFindMarkSet, near bool) map[*html.Node][]articleFindPaint {
 	paints := map[*html.Node][]articleFindPaint{}
@@ -168,7 +169,7 @@ func articleFindPlan(groups []articleFindTextGroup, sets []articleFindMarkSet, n
 			})
 		}
 		for _, match := range matches {
-			if occurrence >= hilite.MaxMarks {
+			if occurrence >= indexconst.ArticleMarkLimit {
 				return paints
 			}
 			for ri, run := range articleFindRuns(group, match.fragments, !near) {
@@ -357,7 +358,7 @@ func articleFindTextNode(text string) *html.Node {
 // from the same markup the reader sees.
 //
 // The second value says the count MAY BE a lower bound: the marker stops at
-// hilite.MaxMarks per article, so a body holding exactly that many heads may
+// indexconst.ArticleMarkLimit per article, so a body holding exactly that many heads may
 // have been cut there. The count is still what the arrows walk; the CALLER must
 // not report it as exact (the session keeps its total marked provisional).
 func countArticleFindHeads(body string) (int, bool) {
@@ -366,7 +367,7 @@ func countArticleFindHeads(body string) (int, bool) {
 	for {
 		switch z.Next() {
 		case html.ErrorToken:
-			return count, count >= hilite.MaxMarks
+			return count, count >= indexconst.ArticleMarkLimit
 		case html.StartTagToken:
 		default:
 			continue

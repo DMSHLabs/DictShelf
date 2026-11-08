@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DMSHLabs/DictShelf/internal/hilite"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 )
 
 func TestArticleFindNavigationWalksDictionaryBlocksAndWraps(t *testing.T) {
@@ -299,13 +299,13 @@ func TestArticleFindAnchorLocatesItsSnippet(t *testing.T) {
 
 // The literal list is bounded the way the marks are, and a bounded list makes the
 // total a LOWER BOUND: an article that matches a short needle more times than
-// hilite.MaxMarks paints and counts the first MaxMarks, records that it did, and
+// indexconst.ArticleMarkLimit paints and counts the first that many, records that it did, and
 // from then on reports its total as provisional - "Complete" false, which is the
 // page's "+". A reader may see fewer matches than exist; being told an exact
 // number that is not one would be worse.
 func TestArticleFindCapBoundsALiteralList(t *testing.T) {
 	dir := t.TempDir()
-	source := "#NAME \"Cap\"\n\nbig\n\t" + strings.Repeat("a ", hilite.MaxMarks+50) + "\n"
+	source := "#NAME \"Cap\"\n\nbig\n\t" + strings.Repeat("a ", indexconst.ArticleMarkLimit+50) + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "cap.dsl"), []byte(source), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -336,9 +336,9 @@ func TestArticleFindCapBoundsALiteralList(t *testing.T) {
 	if err != nil || len(page.Counts) != 1 {
 		t.Fatalf("page = %+v, err=%v; want one article", page, err)
 	}
-	if page.Counts[0] != hilite.MaxMarks || len(page.Occurrences[0]) != hilite.MaxMarks {
+	if page.Counts[0] != indexconst.ArticleMarkLimit || len(page.Occurrences[0]) != indexconst.ArticleMarkLimit {
 		t.Fatalf("count = %d, occurrences = %d; want the cap %d",
-			page.Counts[0], len(page.Occurrences[0]), hilite.MaxMarks)
+			page.Counts[0], len(page.Occurrences[0]), indexconst.ArticleMarkLimit)
 	}
 	if !session.capped {
 		t.Fatal("the session did not record that an article was cut")

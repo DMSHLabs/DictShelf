@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/DMSHLabs/DictShelf/internal/hilite"
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 )
 
 // phraseMarking is the rung's shape for a phrase reading: one Phrase of the
@@ -130,16 +131,16 @@ func TestOccurrencesAreNumberedInDocumentOrder(t *testing.T) {
 
 // The cap stops marking, never splits an occurrence, and never loses text.
 func TestMarkMaxMarksNeverSplitsAnOccurrence(t *testing.T) {
-	body := strings.Repeat(`<p>джазовый кларнетист</p>`, hilite.MaxMarks+20)
+	body := strings.Repeat(`<p>джазовый кларнетист</p>`, indexconst.ArticleMarkLimit+20)
 	got := mark(t, body, phraseMarking("джазовый", "кларнетист"))
-	if n := strings.Count(got, `class="wu-hl"`); n != hilite.MaxMarks {
-		t.Errorf("occurrences = %d, want %d", n, hilite.MaxMarks)
+	if n := strings.Count(got, `class="wu-hl"`); n != indexconst.ArticleMarkLimit {
+		t.Errorf("occurrences = %d, want %d", n, indexconst.ArticleMarkLimit)
 	}
 	if n := strings.Count(got, `class="wu-hl-ex"`); n != 0 {
 		t.Errorf("continuations without a head: %d", n)
 	}
-	if n := strings.Count(got, `</mark>`); n != hilite.MaxMarks {
-		t.Errorf("marks = %d, want %d", n, hilite.MaxMarks)
+	if n := strings.Count(got, `</mark>`); n != indexconst.ArticleMarkLimit {
+		t.Errorf("marks = %d, want %d", n, indexconst.ArticleMarkLimit)
 	}
 }
 
@@ -207,13 +208,13 @@ func TestCountArticleFindHeads(t *testing.T) {
 	}
 	// The cap is a lower bound, and the count admits it: a body holding the cap's
 	// worth of heads may have been cut there, so its total must stay provisional.
-	full := markArticleFindHTML(strings.Repeat(`<p>ax</p>`, hilite.MaxMarks+1), articleFindMarking{phrases: []hilite.Phrase{{{Text: "ax", Prefix: true}}}})
-	if n, capped := countArticleFindHeads(full); n != hilite.MaxMarks || !capped {
-		t.Errorf("capped body = %d heads (capped %t), want %d and capped", n, capped, hilite.MaxMarks)
+	full := markArticleFindHTML(strings.Repeat(`<p>ax</p>`, indexconst.ArticleMarkLimit+1), articleFindMarking{phrases: []hilite.Phrase{{{Text: "ax", Prefix: true}}}})
+	if n, capped := countArticleFindHeads(full); n != indexconst.ArticleMarkLimit || !capped {
+		t.Errorf("capped body = %d heads (capped %t), want %d and capped", n, capped, indexconst.ArticleMarkLimit)
 	}
-	exact := markArticleFindHTML(strings.Repeat(`<p>ax</p>`, hilite.MaxMarks-1), articleFindMarking{phrases: []hilite.Phrase{{{Text: "ax", Prefix: true}}}})
-	if n, capped := countArticleFindHeads(exact); n != hilite.MaxMarks-1 || capped {
-		t.Errorf("short body = %d heads (capped %t), want %d and exact", n, capped, hilite.MaxMarks-1)
+	exact := markArticleFindHTML(strings.Repeat(`<p>ax</p>`, indexconst.ArticleMarkLimit-1), articleFindMarking{phrases: []hilite.Phrase{{{Text: "ax", Prefix: true}}}})
+	if n, capped := countArticleFindHeads(exact); n != indexconst.ArticleMarkLimit-1 || capped {
+		t.Errorf("short body = %d heads (capped %t), want %d and exact", n, capped, indexconst.ArticleMarkLimit-1)
 	}
 }
 

@@ -35,6 +35,14 @@ const (
 	BrowseStripExactWidthCount = 200
 	// IngestBatchSize is the number of entries written per ingest batch.
 	IngestBatchSize = 5000
+	// ArticleMarkLimit bounds the marks painted into ONE article - the full-text
+	// readings and the article find's occurrences alike. A one-character term is
+	// a legal prefix query that matches nearly every word, and the reader is no
+	// better served by ten thousand marks than by five hundred. Past the limit
+	// marking stops, the ARTICLE IS STILL RETURNED WHOLE, and anything that
+	// counts the marks must treat its total as a LOWER BOUND: the navigation
+	// keeps it provisional rather than claim an exact number.
+	ArticleMarkLimit = 500
 )
 
 // There are no search clocks. A search ends when the reader stops it or asks

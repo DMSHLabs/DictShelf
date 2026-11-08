@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 )
 
 const (
@@ -227,10 +229,10 @@ func TestMarkPreservesText(t *testing.T) {
 }
 
 func TestMaxMarks(t *testing.T) {
-	in := strings.TrimSpace(strings.Repeat("ax ", MaxMarks+50))
+	in := strings.TrimSpace(strings.Repeat("ax ", indexconst.ArticleMarkLimit+50))
 	got := Compile("ax").Cursor().Mark(in)
-	if n := len(occurrenceAttr.FindAllString(got, -1)); n != MaxMarks {
-		t.Errorf("marks = %d, want %d", n, MaxMarks)
+	if n := len(occurrenceAttr.FindAllString(got, -1)); n != indexconst.ArticleMarkLimit {
+		t.Errorf("marks = %d, want %d", n, indexconst.ArticleMarkLimit)
 	}
 	// Past the cap the article is still whole, which is the point of capping
 	// rather than truncating.
