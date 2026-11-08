@@ -952,6 +952,9 @@ function setFullTextNavigation(state) {
   const newSearch = !!state && state.generation !== fullTextGeneration;
   if (state && state.generation !== undefined) fullTextGeneration = state.generation;
   fullTextNavigation = state || null;
+  const reading = $("articleFindReading");
+  reading.hidden = !fullTextNavigation;
+  if (fullTextNavigation) reading.textContent = {phrase:"[A B]",near:"[A ↔ B]",fts:"[A … B]"}[fullTextNavigation.reading] || "";
   if (!fullTextNavigation) {
     $("articleFindMode").querySelector('option[value="fts"]').disabled = true;
     if (!active && !dialog.open) strip.hidden = true;

@@ -973,6 +973,7 @@ window.wudictFontScale=(function(){
 <div id="articleFindStrip" lang="{{T:locale}}" role="group" aria-label="{{T:articleFind.title}}" hidden>
   <button type="button" class="btn" id="articleFindStop" aria-label="{{T:articleFind.finish}}" title="{{T:articleFind.finish}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
   <button type="button" class="btn" id="articleFindLabel" aria-label="{{T:articleFind.settings}}"></button>
+  <span id="articleFindReading" hidden></span>
   <button type="button" class="btn" id="articleFindCount" aria-live="polite" aria-haspopup="dialog" aria-controls="maskGotoDialog" disabled></button>
   <button type="button" class="btn" id="articleFindPrev" aria-label="{{T:articleFind.previous}}" title="{{T:articleFind.previous}}">↑</button>
   <button type="button" class="btn" id="articleFindNext" aria-label="{{T:articleFind.next}}" title="{{T:articleFind.next}}">↓</button>
@@ -1421,6 +1422,7 @@ let articleCacheQueue=[],articleCacheActive=0,articleCacheAbort=null,articleCach
 let articleCacheGroupID="",articleCacheGroupCount=1;
 let articleCacheSearchSettled=false;
 let searchNavDictionaries=[];
+let searchNavHitOrders=[];
 let countAllResultsInBackground=false,activeSearchCountsInBackground=false;
 let suggestionPerDictionary=40,suggestionListLimit=500;
 window.wudictSuggestionPerDictionary=suggestionPerDictionary;
@@ -10374,6 +10376,7 @@ async function doSearch(ev){
       if(seq!==searchSeq)return; // superseded by a newer search
       if(msg.t==="begin"){
         searchNavDictionaries=(msg.slots||[]).map(slot=>slot.dict).filter(Boolean);
+        searchNavHitOrders=[];
         if(browseReturnRouteContext)logBrowseReturnRoute("search_stream_begin",{slots:(msg.slots||[]).length});
         beginSearchProgress(seq,(msg.slots||[]).length);
         searchDiagSlots=(msg.slots||[]).map(slot=>({dict:slot.dict,name:slot.name,results:0}));
@@ -10454,6 +10457,10 @@ async function doSearch(ev){
         resolved[msg.i]=true;
         if(res.results&&!ready[msg.i]){
           ready[msg.i]=box.querySelector("details.dict");
+          // Start the article walk when the first answer arrives. A search
+          // across many dictionaries can keep streaming long after results
+          // are already visible.
+          if(markedAnswer&&!navDet&&ready[msg.i])navAttach(ready[msg.i],false);
         }
         if(msg.i===preferredSlot)preferredDone=true;
         settle();
@@ -10528,6 +10535,7 @@ async function doSearch(ev){
         }                         // screen until the re-run has something
         swap();                   // nothing came, or everything did: commit
         if(markedAnswer&&anyResults&&!navSuppressed){
+          searchNavHitOrders=ready.flatMap((item,index)=>item?.isConnected?[index]:[]);
           const det=navDet?.isConnected?navDet:ready.find(item=>item?.isConnected);
           if(det)navAttach(det);
         }
@@ -10898,13 +10906,13 @@ function anchorTarget(root,frag){
 /* ── server-owned full-text match navigation ───────────────────────── */
 let navDet=null,navTimer=0,markedAnswer=false,navSuppressed=false;
 let navServerState=null,navCurrent=null,navSessionID="",navPending=false,navOpToken=0,navMutationFrame=0,navScrollSettle=null;
-function navAttach(det){
+function navAttach(det,startWalk=true){
   if(!det?.querySelector(":scope>summary"))return navDetach();
   navSuppressed=false;navDet=det;
   if(!markedAnswer)return;
   if(!navSessionID)navSessionID=articleCacheGroupID||newArticleResultCacheID();
-  if(!navServerState?.found&&!navPending)requestAnimationFrame(()=>{if(navDet===det)navStart(det)});
-  else navPos();
+  if(startWalk&&!navServerState?.found&&!navPending)requestAnimationFrame(()=>{if(navDet===det)navStart(det)});
+  navPos();
 }
 function navDetach(){
   navOpToken++;
@@ -10918,7 +10926,16 @@ function navRefresh(){navPos()}
 function navPos(){
   if(navSuppressed||!navDet||!markedAnswer){window.wudictArticleFind?.setFullTextNavigation(null);return}
   const state=navServerState;
-  if(!state?.found){window.wudictArticleFind?.setFullTextNavigation(null);return}
+  if(!state?.found){
+    if(state?.complete){window.wudictArticleFind?.setFullTextNavigation(null);return}
+    window.wudictArticleFind?.setFullTextNavigation({
+      query:lastQuery,generation:searchSeq,reading:lastSearchMode,
+      position:"…",visible:true,total:0,current:0,
+      canPrevious:false,canNext:false,canRestore:false,
+      previous:()=>navGo(-1),next:()=>navGo(1),close:()=>{navSuppressed=true;navDetach()}
+    });
+    return;
+  }
   const count=Number(state.total)||0,position=Number(state.position)||0;
   const block=window.wudictArticleFindBlockRange?.(navDet)||"";
   const canNavigate=!state.complete||count>1;
@@ -10940,7 +10957,7 @@ async function navRequest(action,extra={}){
   if(!navSessionID)return null;
   const params=new URLSearchParams({cacheAction:action,cacheID:navSessionID,...extra});
   const response=await apiFetch("/api/search?"+params);
-  if(!response.ok)throw new Error("article navigation failed");
+  if(!response.ok){const failure=await response.json();throw new Error(failure.error||"article navigation failed")}
   return response.json();
 }
 async function navStart(det){
@@ -10950,9 +10967,12 @@ async function navStart(det){
     const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
     const firstSize=Math.max(1,Number(det.dataset.searchFirstPageSize)||Number(det.dataset.searchInitial)||size);
     const findContext=window.wudictArticleFindContext?.()||{};
-    const state=await navRequest("navStart",{dict:searchNavDictionaries.join(","),q:det.dataset.searchQuery||lastQuery,
+    const orders=searchNavHitOrders.length?searchNavHitOrders:searchNavDictionaries.map((_,index)=>index);
+    const state=await navRequest("navStart",{dict:orders.map(index=>searchNavDictionaries[index]).join(","),
+      cacheCount:String(articleCacheGroupCount),cacheOrders:orders.join(","),
+      ignoreDiacritics:findContext.ignoreDiacritics?"1":"0",q:det.dataset.searchQuery||lastQuery,
       mode:det.dataset.searchMode||lastSearchMode,pageSize:String(size),firstSize:String(firstSize),
-      groupID:findContext.groupID||"",rungs:(findContext.rungs||[]).join(",")});
+      groupID:findContext.groupID||"",rungs:orders.map(index=>(findContext.rungs||[])[index]||"").join(",")});
     if(!state||operation!==navOpToken||navDet!==det||navSuppressed)return;
     navServerState=state;navPos();await navShowTarget(state.target,state);
   }catch(error){console.warn("Article match navigation unavailable",error)}

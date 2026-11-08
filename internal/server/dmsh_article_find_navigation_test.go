@@ -5,6 +5,7 @@ package server
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -85,6 +86,33 @@ func TestArticleFindNavigationUsesServerSearchAndHighlights(t *testing.T) {
 		dictionaryIDs[filepath.Base(entry.Path)] = entry.ID
 	}
 	server := New(registry)
+	server.User = UserDir(t.TempDir())
+	server.wildcardPages.init(server.wildcardCacheDir())
+	t.Cleanup(func() {
+		server.wildcardPages.mu.Lock()
+		defer server.wildcardPages.mu.Unlock()
+		for _, cached := range server.wildcardPages.entries {
+			_ = cached.db.Close()
+		}
+	})
+	const cacheID = "article-find-phrase-0001"
+	for order, name := range []string{"first.dsl", "second.dsl"} {
+		collectLookup(t, server, SearchRequest{Query: "джазовый кларнетист", Mode: "phrase",
+			Dictionary: dictionaryIDs[name], CacheAction: "build", CacheID: cacheID,
+			CacheCount: 2, CacheOrder: order, IgnoreDiacritics: true, Rung: "phrase"})
+	}
+	params := url.Values{"cacheAction": {"navStart"}, "cacheID": {"abcdef0123456789"},
+		"dict": {dictionaryIDs["second.dsl"]}, "q": {"джазовый кларнетист"}, "mode": {"phrase"},
+		"groupID": {cacheID}, "cacheCount": {"2"}, "cacheOrders": {"1"},
+		"ignoreDiacritics": {"1"}, "rungs": {"phrase"}, "pageSize": {"1"}, "firstSize": {"1"}}
+	fromCache, err := server.DesktopJSONContext(context.Background(), "", "articleFindNavigation", params.Encode())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cachedBridge := fromCache.(map[string]any)
+	if cachedBridge["status"] != 200 || cachedBridge["body"].(map[string]any)["found"] != true {
+		t.Fatalf("article find cache bridge = %+v; want phrase match in second dictionary", cachedBridge)
+	}
 	bridgeResult, err := server.DesktopJSONContext(context.Background(), "", "articleFindNavigation",
 		"cacheAction=navStart&cacheID=abcdef0123456789&dict="+dictionaryIDs["first.dsl"]+"&q=%D0%B4%D0%B6%D0%B0%D0%B7%D0%BE%D0%B2%D1%8B%D0%B9+%D0%BA%D0%BB%D0%B0%D1%80%D0%BD%D0%B5%D1%82%D0%B8%D1%81%D1%82&mode=phrase&pageSize=1&firstSize=1")
 	if err != nil {

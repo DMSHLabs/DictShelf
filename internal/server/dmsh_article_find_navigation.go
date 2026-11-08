@@ -64,6 +64,8 @@ type articleFindNavigationSession struct {
 	examples     bool
 	nearWords    int
 	cacheID      string
+	cacheCount   int
+	cacheOrders  []int
 	rungs        []string
 	dictionaries []string
 	pageSize     int
@@ -95,6 +97,30 @@ func (s *Server) handleArticleFindNavigation(w http.ResponseWriter, r *http.Requ
 			if dictionaries[i] == "" {
 				httpErr(w, http.StatusBadRequest, "invalid dictionary order")
 				return
+			}
+		}
+		cacheCount, err := navigationNumber(q.Get("cacheCount"), len(dictionaries), 1000)
+		if err != nil || cacheCount < len(dictionaries) {
+			httpErr(w, http.StatusBadRequest, "invalid dictionary cache count")
+			return
+		}
+		cacheOrders := make([]int, len(dictionaries))
+		for i := range cacheOrders {
+			cacheOrders[i] = i
+		}
+		if raw := q.Get("cacheOrders"); raw != "" {
+			parts := strings.Split(raw, ",")
+			if len(parts) != len(dictionaries) {
+				httpErr(w, http.StatusBadRequest, "invalid dictionary cache order")
+				return
+			}
+			for i, part := range parts {
+				order, parseErr := strconv.Atoi(part)
+				if parseErr != nil || order < 0 || order >= cacheCount {
+					httpErr(w, http.StatusBadRequest, "invalid dictionary cache order")
+					return
+				}
+				cacheOrders[i] = order
 			}
 		}
 		pageSize, err := navigationNumber(q.Get("pageSize"), 20, 500)
@@ -140,7 +166,7 @@ func (s *Server) handleArticleFindNavigation(w http.ResponseWriter, r *http.Requ
 		}
 		session = &articleFindNavigationSession{id: id, query: query, mode: mode, resultQuery: resultQuery, resultMode: resultMode,
 			ignore: q.Get("ignoreDiacritics") == "1", matchCase: q.Get("matchCase") == "1", examples: q.Get("examples") == "1", nearWords: nearWords,
-			cacheID: q.Get("groupID"), rungs: strings.Split(q.Get("rungs"), ","),
+			cacheID: q.Get("groupID"), cacheCount: cacheCount, cacheOrders: cacheOrders, rungs: strings.Split(q.Get("rungs"), ","),
 			dictionaries: dictionaries, pageSize: pageSize, firstSize: firstSize,
 			pages: make([]map[int]articleFindNavigationPage, len(dictionaries)), updated: time.Now()}
 		for i := range session.pages {
@@ -312,7 +338,8 @@ func (s *Server) moveArticleFindNavigation(ctx context.Context, session *article
 		return articleFindNavigationResponse{}, err
 	}
 	if target == nil {
-		return articleFindNavigationResponse{}, nil
+		session.complete = true
+		return articleFindNavigationResponse{Complete: true}, nil
 	}
 	session.current = target
 	if wrapped && direction > 0 {
@@ -426,8 +453,11 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 	if session.cacheID != "" {
 		request.CacheAction = "page"
 		request.CacheID = session.cacheID
-		request.CacheCount = len(session.dictionaries)
+		request.CacheCount = max(len(session.dictionaries), session.cacheCount)
 		request.CacheOrder = dictionaryIndex
+		if dictionaryIndex < len(session.cacheOrders) {
+			request.CacheOrder = session.cacheOrders[dictionaryIndex]
+		}
 		request.Start = start
 		request.Size = blockSize
 		if dictionaryIndex < len(session.rungs) {
