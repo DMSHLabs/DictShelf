@@ -993,7 +993,6 @@ window.wudictFontScale=(function(){
   <label><input type="checkbox" id="articleFindCase">{{T:articleFind.case}}</label>
   <label><input type="checkbox" id="articleFindAll" checked>{{T:articleFind.all}}</label>
   <label><input type="checkbox" id="articleFindExamples">{{T:articleFind.examples}}</label>
-  <label><input type="checkbox" id="articleFindBlocks" checked>{{T:articleFind.blocks}}</label>
   <p id="articleFindHiddenHint" hidden>{{T:articleFind.hiddenHint}}</p>
   <p id="articleFindStatus" role="status"></p>
   <div class="article-find-actions"><button type="button" class="btn" id="articleFindDialogPrev">{{T:articleFind.previous}}</button><button type="button" class="btn" id="articleFindDialogNext">{{T:articleFind.next}}</button></div>
@@ -1431,6 +1430,10 @@ function newArticleResultCacheID(){
   try{crypto.getRandomValues(bytes)}catch(_){for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256)}
   return [...bytes].map(value=>value.toString(16).padStart(2,"0")).join("");
 }
+window.wudictArticleFindContext=()=>({dictionaries:searchNavDictionaries.slice(),query:lastQuery,
+  mode:lastSearchMode,ignoreDiacritics,groupID:articleCacheGroupID,
+  rungs:searchNavDictionaries.map(id=>[...document.querySelectorAll("details.dict[data-searchDict]")]
+    .find(det=>det.dataset.searchDict===id)?.dataset.searchRung||"")});
 function stopArticleResultCaches(){
   articleCacheSeq++;articleCacheAbort?.abort();articleCacheAbort=null;
   for(const state of articleResultCaches.values())clearTimeout(state.indexTimer);
@@ -8306,6 +8309,7 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
   })():"";
   det.dataset.searchMode=mode;det.dataset.searchQuery=q;det.dataset.searchDict=h.dict;
   det.dataset.searchInitial=String(perDict);det.dataset.searchPageSize=String(pageSize);
+  det.dataset.searchRung=h.rung||"";
   det.dataset.searchFirstPageSize=String(paging?.firstPageSize||0);det.dataset.searchGroup=String(!!group);
   if(paging){det.dataset.searchPageStart=String(paging.start||0);det.dataset.searchPageCount=String(h.results.length);det.dataset.searchHasNext=String(!!paging.hasNext);det.dataset.searchExact=String(!!paging.exact);det.dataset.searchTotal=String(paging.total||0);det.dataset.searchLowerBound=String(paging.lowerBound||0)}
   /* Each full-text mode asks for ONE reading and answers with it, so no rung is
@@ -10921,8 +10925,10 @@ async function navStart(det){
   try{
     const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
     const firstSize=Math.max(1,Number(det.dataset.searchFirstPageSize)||Number(det.dataset.searchInitial)||size);
+    const findContext=window.wudictArticleFindContext?.()||{};
     const state=await navRequest("navStart",{dict:searchNavDictionaries.join(","),q:det.dataset.searchQuery||lastQuery,
-      mode:det.dataset.searchMode||lastSearchMode,pageSize:String(size),firstSize:String(firstSize)});
+      mode:det.dataset.searchMode||lastSearchMode,pageSize:String(size),firstSize:String(firstSize),
+      groupID:findContext.groupID||"",rungs:(findContext.rungs||[]).join(",")});
     if(!state||operation!==navOpToken||navDet!==det||navSuppressed)return;
     navServerState=state;await navShowTarget(state.target,state);
   }catch(error){console.warn("Article match navigation unavailable",error)}

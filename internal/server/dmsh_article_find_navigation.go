@@ -70,6 +70,7 @@ type articleFindNavigationSession struct {
 	firstSize    int
 	current      *articleFindNavigationTarget
 	pages        []map[int]articleFindNavigationPage
+	lemmas       map[string]string
 	complete     bool
 	updated      time.Time
 }
@@ -373,21 +374,31 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 	}
 	counts := make([]int, len(results))
 	occurrences := make([][]articleFindOccurrence, len(counts))
+	options := articleFindMatchOptions{query: session.query, mode: session.mode, matchCase: session.matchCase,
+		examples: session.examples, nearWords: session.nearWords}
+	if session.mode == "wordLemma" && !strings.ContainsAny(session.query, " \t\r\n") && s.Morph.Enabled() {
+		if session.lemmas == nil {
+			session.lemmas = make(map[string]string)
+		}
+		id := request.Dictionary
+		lemma, ok := session.lemmas[id]
+		if !ok {
+			lemma = session.query
+			if entry, err := s.reg.get(id); err == nil {
+				if source, openErr := entry.open(); openErr == nil {
+					if candidate := s.headwordLemmaFor(entry, source, session.query); candidate != "" {
+						lemma = candidate
+					}
+				}
+			}
+			session.lemmas[id] = lemma
+		}
+		options.variants = []string{session.query, lemma}
+	}
 	for i := range results {
 		if findFullText {
 			counts[i] = strings.Count(results[i].Body, `<mark class="wu-hl">`)
 			continue
-		}
-		options := articleFindMatchOptions{query: session.query, mode: session.mode, matchCase: session.matchCase,
-			examples: session.examples, nearWords: session.nearWords}
-		if session.mode == "wordLemma" && !strings.ContainsAny(session.query, " \t\r\n") && s.Morph.Enabled() {
-			entry, err := s.reg.get(request.Dictionary)
-			if err == nil {
-				if source, openErr := entry.open(); openErr == nil {
-					lemma := s.headwordLemmaFor(entry, source, session.query)
-					options.variants = []string{session.query, lemma}
-				}
-			}
 		}
 		occurrences[i] = matchArticleFindHTML(results[i].Body, options)
 		counts[i] = len(occurrences[i])

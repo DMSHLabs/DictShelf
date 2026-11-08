@@ -232,11 +232,55 @@ paths:
 
         A search runs until it finishes or the reader stops it: there is no
         clock on it.
+
+        `cacheAction=navStart|navNext|navPrevious|navGoto|navClose` is a UI
+        navigation protocol on the same path and returns one JSON cursor state,
+        not the NDJSON search stream.
       parameters:
+        - name: cacheAction
+          in: query
+          description: |
+            The UI also uses `navStart`, `navNext`, `navPrevious`, `navGoto` and
+            `navClose` to walk article-text matches on the server. `navStart`
+            takes the ordered `dict` list, article-text `q` and `mode`, the main
+            result's `resultQuery` and `resultMode`, `groupID` and optional
+            comma-separated `rungs`; `prime=0` reports the first match without
+            selecting it. `matchCase`, `examples`, `nearWords`, `ignoreDiacritics`,
+            `pageSize` and `firstSize` preserve the Find settings and displayed
+            result-block sizes. `navGoto` also takes a one-based `position`.
+          schema: { type: string }
+        - name: cacheID
+          in: query
+          description: Session id for the article-match navigation actions.
+          schema: { type: string }
+        - name: resultQuery
+          in: query
+          description: Main search query whose article results Find in articles scans.
+          schema: { type: string }
+        - name: resultMode
+          in: query
+          description: Main search mode whose article results Find in articles scans.
+          schema: { type: string }
+        - name: groupID
+          in: query
+          description: Main search's temporary result-cache id used to load later article blocks.
+          schema: { type: string }
+        - name: rungs
+          in: query
+          description: Comma-separated full-text reading names, in dictionary order.
+          schema: { type: string }
+        - name: prime
+          in: query
+          description: Set to 0 to inspect the first match without advancing the cursor.
+          schema: { type: string, enum: ['0'] }
+        - name: position
+          in: query
+          description: One-based match position for `cacheAction=navGoto`.
+          schema: { type: integer, minimum: 1 }
         - name: q
           in: query
-          required: true
-          description: The search text. Blank is a 400.
+          required: false
+          description: Required for normal search and `cacheAction=navStart`; blank is a 400.
           schema: { type: string }
           example: flight
         - name: mode

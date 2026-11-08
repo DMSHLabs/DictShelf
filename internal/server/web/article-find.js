@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-// Find in loaded articles, or navigate the exact full-text result marks.
+// Find in article results with a server-owned cursor; the client displays targets.
 (function () {
 "use strict";
 const $ = id => document.getElementById(id), t = window.wudictI18n.t;
@@ -12,8 +12,9 @@ const wordChar = /[\p{L}\p{M}\p{N}_]/u;
 const findHistoryKey = "wudict_article_find_history_v1";
 const skip = "script,style,noscript,template,button,input,select,textarea,audio,video,svg";
 const block = "p,div,li,dt,dd,td,th,h1,h2,h3,h4,h5,h6,blockquote,pre,.wu-m";
-let options = {query:"", mode:"contains", matchCase:false, all:true, examples:false, blocks:true};
+let options = {query:"", mode:"contains", matchCase:false, all:true, examples:false};
 try { Object.assign(options, JSON.parse(localStorage.getItem("wudict_article_find") || "{}")); } catch (_) {}
+delete options.blocks; // Retire the former loaded-block-only preference.
 function findHistoryLimit(){
   try { const raw=localStorage.getItem("wudict_history_length"); if(raw===null)return 20; const n=Number(raw); return Number.isInteger(n)&&n>=0&&n<=1000?n:20; }
   catch (_) { return 20; }
@@ -33,6 +34,7 @@ function loadFindHistory(){
 }
 let findHistory=loadFindHistory(),suppressFindHistoryFocus=false;
 let matches = [], index = -1, active = false, restored = [], docs = new Set(), timer, fullTextNavigation = null, fullTextGeneration = null, searchAnchor = null;
+let remoteFind = null, remoteFindToken = 0, remoteFindRequestSeq = 0, remoteFindPending = false;
 const examinedBlocks = new Map();
 function resetCounts(){examinedBlocks.clear()}
 function blockPages(det){
@@ -160,7 +162,7 @@ function readOptions() {
   const previous=options;
   options = {query:$("articleFindQuery").value.trim(), mode:$("articleFindMode").value,
     matchCase:$("articleFindCase").checked, all:$("articleFindAll").checked,
-    examples:$("articleFindExamples").checked, blocks:$("articleFindBlocks").checked};
+    examples:$("articleFindExamples").checked};
   if(previous.query!==options.query||previous.mode!==options.mode||previous.matchCase!==options.matchCase||previous.examples!==options.examples)resetCounts();
   save();
 }
@@ -172,8 +174,6 @@ function fillOptions() {
   $("articleFindCase").checked = options.matchCase;
   $("articleFindAll").checked = options.all;
   $("articleFindExamples").checked = options.examples;
-  $("articleFindBlocks").checked = options.blocks !== false;
-  syncControls();
 }
 function open(preserveAnchor=false) {
   if (!preserveAnchor) searchAnchor = null;
@@ -203,7 +203,6 @@ function syncControls() {
   }
   $("articleFindStop").disabled = fts && hasFTS;
   $("articleFindQuery").disabled = fts;
-  $("articleFindBlocks").disabled = fts;
   for (const id of ["articleFindCase","articleFindAll","articleFindExamples"]) $(id).disabled = fts;
   $("articleFindHiddenHint").hidden = fts || !options.query || !!matches.length || options.examples || !hiddenExamples;
   if (fts) {
@@ -217,6 +216,14 @@ function syncControls() {
     $("articleFindCount").disabled = !(Number(fullTextNavigation?.total)>0);
     $("articleFindDialogPrev").disabled = !fullTextNavigation?.canPrevious;
     $("articleFindDialogNext").disabled = !fullTextNavigation?.canNext;
+  } else if(remoteFind){
+    const state=remoteFind.state,position=serverFindPosition();
+    const display=remoteFind.error?"⚠ "+t("search.fullListUnavailable"):position;
+    $("articleFindStatus").textContent=display;
+    $("articleFindCount").textContent=display;
+    $("articleFindCount").disabled=!state?.found;
+    $("articleFindDialogPrev").disabled=remoteFindPending||!serverFindCanStep();
+    $("articleFindDialogNext").disabled=remoteFindPending||!serverFindCanStep();
   } else {
     $("articleFindDialogPrev").disabled = !canStep(-1);
     $("articleFindDialogNext").disabled = !canStep(1);
@@ -225,6 +232,7 @@ function syncControls() {
 }
 function canStep(step){
   if(options.mode==="fts")return !!(step<0?fullTextNavigation?.canPrevious:fullTextNavigation?.canNext);
+  if(remoteFind)return !remoteFindPending&&serverFindCanStep();
   if(matches.length>=2)return true;
   if(!matches.length)return countedPosition().counted>0 || options.blocks!==false &&
     [...$("out").querySelectorAll("details.dict")].some(det=>window.wudictArticleBlockHasMore?.(det,step));
@@ -288,6 +296,20 @@ function paint() {
     if (index >= 0 && matches[index]?.range.startContainer.ownerDocument === doc) current.add(matches[index].range);
     win.CSS.highlights.set("wudict-find-all", all);
     win.CSS.highlights.set("wudict-find-current", current);
+  }
+  if(remoteFind&&options.mode!=="fts"){
+    const display=remoteFind.error?"⚠ "+t("search.fullListUnavailable"):serverFindPosition();
+    $("articleFindCount").textContent=display;
+    $("articleFindCount").disabled=!remoteFind.state?.found;
+    $("articleFindStatus").textContent=display;
+    $("articleFindLabel").textContent=options.query;
+    $("articleFindLabel").title=options.query;
+    $("articleFindPrev").disabled=remoteFindPending||!serverFindCanStep();
+    $("articleFindNext").disabled=remoteFindPending||!serverFindCanStep();
+    $("articleFindDialogPrev").disabled=remoteFindPending||!serverFindCanStep();
+    $("articleFindDialogNext").disabled=remoteFindPending||!serverFindCanStep();
+    $("articleFindScrollToMatch").disabled=true;
+    return;
   }
   const position=countedPosition();
   const partial = [...$("out").querySelectorAll("details.dict")].some(det=>{
@@ -425,31 +447,184 @@ function scan(host, root, finder) {
   }
   flush();
 }
-function rebuild() {
-  if (options.mode === "fts") { syncControls(); return; }
-  const previous = matches[index];
-  restoreExamples(); clearPaint(); matches = []; docs = new Set(); hiddenExamples = false;
-  if (!options.query) { strip.hidden = true; measure(); }
-  if (options.query) {
-    let query = options.query;
-    if (query.length > 1 && query.startsWith('"') && query.endsWith('"')) query = query.slice(1,-1);
-    query = query.replace(/\s+/gu," ");
-    if (query) {
-      for (const host of $("out").querySelectorAll(".article")) {
-        const root = rootFor(host); if (root) scan(host,root,matcherFor(host,query));
+function closeRemoteFind(){
+  remoteFindToken++;remoteFindRequestSeq++;remoteFindPending=false;
+  const previous=remoteFind;remoteFind=null;
+  if(previous?.id)apiFetch("/api/search?"+new URLSearchParams({cacheAction:"navClose",cacheID:previous.id})).catch(()=>{});
+}
+function remoteFindID(){
+  const bytes=new Uint8Array(16);
+  try{crypto.getRandomValues(bytes)}catch(_){for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256)}
+  return [...bytes].map(value=>value.toString(16).padStart(2,"0")).join("");
+}
+function remoteFindContext(){
+  const source=window.wudictArticleFindContext?.()||{};
+  const details=[...$("out").querySelectorAll("details.dict[data-searchDict]")];
+  const dictionaries=source.dictionaries?.length?source.dictionaries:details.map(det=>det.dataset.searchDict).filter(Boolean);
+  const first=details[0];
+  return {dictionaries,query:source.query??first?.dataset.searchQuery??"",mode:source.mode??first?.dataset.searchMode??"",
+    ignore:!!source.ignoreDiacritics,firstSize:Number(first?.dataset.searchInitial)||5,
+    pageSize:Number(first?.dataset.searchPageSize)||20,groupID:source.groupID||"",
+    rungs:source.rungs?.length?source.rungs:details.map(det=>det.dataset.searchRung||"")};
+}
+function remoteFindSignature(context){
+  return JSON.stringify([context.groupID,context.dictionaries,context.query,context.mode,options.query,options.mode,
+    context.ignore,context.rungs,options.matchCase,options.examples,nearWords()]);
+}
+function remoteFindURL(record,action,extra={}){
+  return "/api/search?"+new URLSearchParams({cacheAction:action,cacheID:record.id,...extra});
+}
+async function remoteFindFetch(record,action,extra={}){
+  const response=await apiFetch(remoteFindURL(record,action,extra));
+  if(!response.ok)throw new Error(await response.text()||"article search failed");
+  return response.json();
+}
+async function startRemoteFind(){
+  if(options.mode==="fts")return;
+  if(!options.query){closeRemoteFind();matches=[];index=-1;docs.clear();restoreExamples();clearPaint();syncControls();return}
+  const context=remoteFindContext(),signature=remoteFindSignature(context);
+  if(remoteFind?.signature===signature){paint();return}
+  closeRemoteFind();
+  if(!context.dictionaries.length||!context.query||!context.mode){remoteFind={signature,state:{complete:true,total:0,found:false}};paint();return}
+  const record={id:remoteFindID(),signature,state:null,pending:true,error:""};
+  remoteFind=record;remoteFindPending=true;
+  const token=++remoteFindToken;
+  matches=[];index=-1;docs.clear();restoreExamples();clearPaint();paint();
+  try{
+    const size=Math.max(1,Math.min(500,context.pageSize)),firstSize=Math.max(1,Math.min(500,context.firstSize));
+    const state=await remoteFindFetch(record,"navStart",{dict:context.dictionaries.join(","),q:options.query,mode:options.mode,
+      resultQuery:context.query,resultMode:context.mode,ignoreDiacritics:context.ignore?"1":"0",
+      matchCase:options.matchCase?"1":"0",examples:options.examples?"1":"0",nearWords:String(nearWords()),
+      pageSize:String(size),firstSize:String(firstSize),prime:"0",groupID:context.groupID,rungs:context.rungs.join(",")});
+    if(token!==remoteFindToken||remoteFind!==record)return;
+    record.state=state;record.pending=false;record.error="";
+  }catch(error){
+    if(token!==remoteFindToken||remoteFind!==record)return;
+    record.state={complete:true,total:0,found:false};record.pending=false;record.error=String(error?.message||error);
+  }finally{
+    if(token===remoteFindToken&&remoteFind===record){remoteFindPending=false;paint()}
+  }
+}
+function serverFindCanStep(){
+  const state=remoteFind?.state;
+  return !!(state&&(!state.complete||Number(state.total)>1));
+}
+function serverFindPosition(){
+  const state=remoteFind?.state;
+  if(!state?.found)return state?.complete?t("articleFind.noMatches"):"";
+  const total=Number(state.total)||0;
+  return t("articleFind.position",{current:Number(state.position)||1,total:String(total)+(state.complete?"":"+")});
+}
+function serverFindRanges(root,occurrences,includeExamples){
+  const doc=root.ownerDocument,win=doc.defaultView;
+  if(!win)return [];
+  const groups=[];let text="",points=[],group=null;
+  const flush=()=>{if(points.length)groups.push(points);text="";points=[]};
+  const walker=doc.createTreeWalker(root,win.NodeFilter.SHOW_TEXT|win.NodeFilter.SHOW_ELEMENT);
+  for(let node;(node=walker.nextNode());){
+    if(node.nodeType===1){
+      if(node.tagName==="BR"&&text&&!text.endsWith(" ")){
+        const last=points[points.length-1];text+=" ";points.push({node:last.endNode,endNode:last.endNode,start:last.end,end:last.end});
       }
+      continue;
+    }
+    const parent=node.parentElement;
+    if(parent?.closest(skip)){flush();group=null;continue}
+    const nextGroup=parent?.closest(block)||root;
+    if(group!==nextGroup){flush();group=nextGroup}
+    let excluded=false;
+    for(let el=parent;el&&el!==root;el=el.parentElement){
+      const css=win.getComputedStyle(el);
+      if(css.visibility==="hidden"||css.visibility==="collapse"||el.hidden){excluded=true;break}
+      if(css.display==="none"){
+        if(el.matches(".wu-xonly,.wu-sec,.dsl_opt,.wu-exonly,.wu-ex,.dsl_ex")&&includeExamples)continue;
+        excluded=true;break;
+      }
+      if(!includeExamples&&el.matches(".wu-xonly,.wu-sec,.dsl_opt,.wu-exonly,.wu-ex,.dsl_ex")){excluded=true;break}
+      if(el.matches("details:not([open])")&&!el.querySelector(":scope>summary")?.contains(parent)){excluded=true;break}
+    }
+    if(excluded){flush();group=null;continue}
+    for(let i=0;i<node.data.length;i++){
+      const c=/\s/u.test(node.data[i])?" ":node.data[i];
+      if(c===" "&&text.endsWith(" ")){points[points.length-1].endNode=node;points[points.length-1].end=i+1;continue}
+      text+=c;points.push({node,endNode:node,start:i,end:i+1});
     }
   }
-  index = previous ? matches.findIndex(hit => hit.range.startContainer === previous.range.startContainer && hit.range.startOffset === previous.range.startOffset) : -1;
-  recordCounts();
-  if (index < 0 && !window.wudictNativeShell) forceLayout(null);
-  if (index >= 0) showExample(matches[index]);
-  paint();
-  if (index >= 0 && active && !strip.hidden && !dialog.open && !window.wudictNativeShell) {
-    const det = matches[index].host.closest("details.dict");
-    forceLayout(det);
-    settleOn(matches[index],det);
+  flush();
+  const out=[];
+  for(const occurrence of occurrences||[]){
+    const items=groups[Number(occurrence.group)],start=Number(occurrence.start),end=Number(occurrence.end);
+    if(!items||start<0||end<=start||end>items.length)continue;
+    const a=items[start],b=items[end-1],range=doc.createRange();
+    try{range.setStart(a.node,a.start);range.setEnd(b.endNode,b.end)}catch(_){continue}
+    out.push({range,example:a.node.parentElement?.closest(".wu-xonly,.wu-sec,.dsl_opt,.wu-exonly,.wu-ex,.dsl_ex")||null});
   }
+  return out;
+}
+async function showRemoteFindTarget(target,state,token){
+  if(!target)return false;
+  let det=null;
+  for(let attempt=0;attempt<50;attempt++){
+    det=[...$("out").querySelectorAll("details.dict")].find(node=>node.dataset.searchDict===target.dict);
+    if(det)break;
+    if(token!==remoteFindToken)return false;
+    await new Promise(resolve=>setTimeout(resolve,100));
+  }
+  if(!det)return false;
+  const blockStart=Number(target.blockStart)||0;
+  if((Number(det.dataset.searchPageStart)||0)!==blockStart){
+    const replacement=await window.wudictRestoreArticleBlock?.(det,blockStart);
+    if(!replacement||token!==remoteFindToken)return false;
+    det=replacement;
+  }
+  det.open=true;
+  const row=det.querySelectorAll(":scope>dl>dd")[Number(target.articleIndex)-blockStart];
+  const host=row?.querySelector(".article");
+  if(!host)return false;
+  let found=[];
+  for(let attempt=0;attempt<50;attempt++){
+    const root=rootFor(host);
+    if(root)found=serverFindRanges(root,target.occurrences,options.examples);
+    if(found.length||token!==remoteFindToken)break;
+    await new Promise(resolve=>setTimeout(resolve,100));
+  }
+  if(!found.length||token!==remoteFindToken)return false;
+  matches=found.map(item=>({host,range:item.range,example:item.example}));
+  docs=new Set(matches.map(item=>item.range.startContainer.ownerDocument));
+  index=Math.max(0,Math.min(Number(target.matchIndex)||0,matches.length-1));
+  remoteFind.state=state;remoteFind.target=target;
+  dialog.close();strip.hidden=false;measure();
+  restoreExamples();showExample(matches[index]);paint();
+  settleOn(matches[index],det);
+  return true;
+}
+async function moveRemoteFind(step){
+  if(!remoteFind?.id||remoteFindPending)return;
+  remoteFindPending=true;const record=remoteFind,token=remoteFindToken,request=++remoteFindRequestSeq;
+  try{
+    const state=await remoteFindFetch(record,step<0?"navPrevious":"navNext");
+    if(request!==remoteFindRequestSeq||token!==remoteFindToken||remoteFind!==record)return;
+    if(state.found){record.state=state;record.error=await showRemoteFindTarget(state.target,state,token)?"":t("search.fullListUnavailable")}
+    else record.state={...record.state,...state};
+  }catch(error){record.error=String(error?.message||error)}
+  finally{if(request===remoteFindRequestSeq&&token===remoteFindToken){remoteFindPending=false;paint()}}
+}
+async function gotoRemoteFind(page){
+  if(!remoteFind?.id||remoteFindPending||!Number.isInteger(page)||page<1)return;
+  remoteFindPending=true;const record=remoteFind,token=remoteFindToken,request=++remoteFindRequestSeq;
+  try{
+    const state=await remoteFindFetch(record,"navGoto",{position:String(page)});
+    if(request!==remoteFindRequestSeq||token!==remoteFindToken||remoteFind!==record)return;
+    if(state.found){record.state=state;record.error=await showRemoteFindTarget(state.target,state,token)?"":t("search.fullListUnavailable")}
+    else record.state={...record.state,total:state.total,complete:state.complete};
+  }catch(error){record.error=String(error?.message||error)}
+  finally{if(request===remoteFindRequestSeq&&token===remoteFindToken){remoteFindPending=false;paint()}}
+}
+function rebuild() {
+  if (options.mode === "fts") { closeRemoteFind();syncControls(); return; }
+  active=!!options.query;
+  if(!active){closeRemoteFind();matches=[];index=-1;docs.clear();restoreExamples();clearPaint();syncControls();return}
+  void startRemoteFind();
 }
 function compareToAnchor(hit) {
   if (hit.host !== searchAnchor.host) {
@@ -608,6 +783,8 @@ function go(step) {
       fullTextNavigation[step < 0 ? "previous" : "next"]?.();
     return;
   }
+  if(remoteFind){void moveRemoteFind(step);return}
+  if(active){void startRemoteFind();return}
   if (dialog.open || !active) { clearTimeout(timer); readOptions(); active = !!options.query; rebuild(); }
   if(options.mode!=="fts")recordFindHistory(options.query);
   if (!active) return;
@@ -651,6 +828,8 @@ function go(step) {
 }
 function goto(page) {
   if ($("articleFindMode").value === "fts") { fullTextNavigation?.goto?.(page); return true; }
+  if(remoteFind){void gotoRemoteFind(page);return true}
+  if(active){void startRemoteFind();return true}
   if (dialog.open || !active) { clearTimeout(timer); readOptions(); active = !!options.query; rebuild(); }
   /* Go to match reaches the matches the dialog has counted, so it is bounded by
      that number and not by the floored total: a dictionary's own count can name
@@ -697,13 +876,15 @@ function searchFrom(host,node,offset,direction) {
 }
 function gotoOpen() {
   const isFTS = $("articleFindMode").value === "fts" && !!fullTextNavigation;
+  const isRemote=options.mode!=="fts"&&!!remoteFind;
   const position=countedPosition();
-  const total=isFTS ? Number(fullTextNavigation.total)||0 : (active ? position.counted : 0);
-  const current=isFTS ? Number(fullTextNavigation.current)||1 : Math.max(1,position.current);
+  const total=isFTS ? Number(fullTextNavigation.total)||0 : isRemote?Number(remoteFind.state?.total)||0:(active ? position.counted : 0);
+  const current=isFTS ? Number(fullTextNavigation.current)||1 : isRemote?Number(remoteFind.state?.position)||1:Math.max(1,position.current);
   if (total) window.wudictOpenArticleFindGoto?.(total,current);
 }
 function stop() {
   blockNavigationToken++;blockNavigationPending=false;
+  closeRemoteFind();
   resetCounts();
   const navigation = fullTextNavigation;
   fullTextNavigation = null;
@@ -726,7 +907,11 @@ function setFullTextNavigation(state) {
     measure();
     return;
   }
-  if (newSearch && !dialog.open) options = {...options, query:fullTextNavigation.query || "", mode:"fts"};
+  if (newSearch && !dialog.open) {
+    options = {...options, query:fullTextNavigation.query || "", mode:"fts"};
+    closeRemoteFind();
+    active=false;matches=[];index=-1;docs.clear();restoreExamples();clearPaint();
+  }
   if (active && dialog.open && $("articleFindMode").value === "fts") {
     active = false; clearTimeout(timer); restoreExamples(); clearPaint(); matches = []; index = -1; docs.clear();
   }
@@ -772,6 +957,7 @@ $("articleFindDialogNext").onclick = () => go(1);
 $("articleFindMode").onchange = () => {
   if ($("articleFindMode").value === "fts") {
     if (!fullTextNavigation) { $("articleFindMode").value = options.mode = "contains"; syncControls(); return; }
+    closeRemoteFind();
     options = {...options, query:fullTextNavigation.query || "", mode:"fts"};
     $("articleFindQuery").value = options.query;
     active = false; clearTimeout(timer); restoreExamples(); clearPaint(); matches = []; index = -1; docs.clear();
@@ -781,7 +967,6 @@ $("articleFindMode").onchange = () => {
   readOptions(); index = -1; active = !!options.query; rebuild(); syncControls();
 };
 for (const id of ["articleFindCase","articleFindAll","articleFindExamples"]) $(id).onchange = () => { readOptions(); index = -1; active = !!options.query; rebuild(); };
-$("articleFindBlocks").onchange=()=>{readOptions();if(options.mode!=="fts"){index=-1;active=!!options.query;rebuild()}else{fullTextNavigation?.refresh?.();syncControls()}};
 $("articleFindQuery").onfocus = () => { if(!suppressFindHistoryFocus)renderFindHistory(); };
 $("articleFindQuery").oninput = () => { if ($("articleFindMode").value === "fts") { hideFindHistory(); return; } readOptions(); renderFindHistory(); index = -1; active = !!options.query; schedule(); };
  dialog.addEventListener("keydown", e => {
@@ -816,5 +1001,5 @@ window.addEventListener("resize",()=>{if(!$("articleFindHistory").hidden)sizeFin
 if(window.visualViewport){window.visualViewport.addEventListener("resize",()=>{if(!$("articleFindHistory").hidden)sizeFindHistory()});window.visualViewport.addEventListener("scroll",()=>{if(!$("articleFindHistory").hidden)sizeFindHistory()})}
 $("sbarExamples").addEventListener("click",schedule);
 $("examplesRow")?.addEventListener("click",schedule);
-window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation, setHistoryLimit:n=>{findHistory=findHistory.slice(0,Math.max(0,Math.min(1000,Number(n)||0)));saveFindHistory();renderFindHistory()}, fullTextModeActive:()=>options.mode === "fts", isActive:()=>active&&!!options.query, searchAcrossBlocks:()=>options.blocks!==false, searchFrom, goto};
+window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation, setHistoryLimit:n=>{findHistory=findHistory.slice(0,Math.max(0,Math.min(1000,Number(n)||0)));saveFindHistory();renderFindHistory()}, fullTextModeActive:()=>options.mode === "fts", isActive:()=>active&&!!options.query, searchAcrossBlocks:()=>true, searchFrom, goto};
 })();
