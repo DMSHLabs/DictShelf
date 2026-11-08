@@ -35,6 +35,9 @@ type articleFindNavigationTarget struct {
 	Start           int                     `json:"start,omitempty"`
 	End             int                     `json:"end,omitempty"`
 	Occurrences     []articleFindOccurrence `json:"occurrences,omitempty"`
+	Headword        string                  `json:"headword,omitempty"`
+	EntryID         int64                   `json:"entryId,omitempty"`
+	ExpectedMarks   int                     `json:"expectedMarks,omitempty"`
 }
 
 type articleFindNavigationResponse struct {
@@ -48,6 +51,8 @@ type articleFindNavigationResponse struct {
 type articleFindNavigationPage struct {
 	Start       int
 	Counts      []int
+	Headwords   []string
+	EntryIDs    []int64
 	Occurrences [][]articleFindOccurrence
 	HasNext     bool
 	Complete    bool
@@ -506,6 +511,8 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 		results = results[start:end]
 	}
 	counts := make([]int, len(results))
+	headwords := make([]string, len(results))
+	entryIDs := make([]int64, len(results))
 	occurrences := make([][]articleFindOccurrence, len(counts))
 	options := articleFindMatchOptions{query: session.query, mode: session.mode, matchCase: session.matchCase,
 		examples: session.examples, nearWords: session.nearWords}
@@ -529,6 +536,7 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 		options.variants = []string{session.query, lemma}
 	}
 	for i := range results {
+		headwords[i], entryIDs[i] = results[i].Headword, results[i].EntryID
 		if findFullText {
 			counts[i] = strings.Count(results[i].Body, `<mark class="wu-hl">`)
 			continue
@@ -543,7 +551,7 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 	logx.SystemDiagnosticIf(logx.SystemLogSearchEventsEnabled(),
 		"article_find_navigation stage=page_scan_done id=%q dict=%q start=%d articles=%d matches=%d elapsed_ms=%d",
 		session.id, request.Dictionary, start, len(results), matches, time.Since(resultsReady).Milliseconds())
-	page := articleFindNavigationPage{Start: start, Counts: counts, Occurrences: occurrences,
+	page := articleFindNavigationPage{Start: start, Counts: counts, Headwords: headwords, EntryIDs: entryIDs, Occurrences: occurrences,
 		HasNext:  session.cacheID != "" && cacheHasNext || session.cacheID == "" && end < articleFindNavigationFallbackResults && resultCount > end,
 		Complete: session.cacheID != "" && cacheComplete || session.cacheID == "" && resultCount <= end}
 	session.pages[dictionaryIndex][start] = page
@@ -730,6 +738,20 @@ func (session *articleFindNavigationSession) target(dictionaryIndex, blockStart,
 				match := page.Occurrences[row][matchIndex]
 				target.Group, target.Start, target.End = match.Group, match.Start, match.End
 				target.Occurrences = append([]articleFindOccurrence(nil), page.Occurrences[row]...)
+			}
+		}
+	}
+	if dictionaryIndex >= 0 && dictionaryIndex < len(session.pages) {
+		if page, ok := session.pages[dictionaryIndex][blockStart]; ok {
+			row := articleIndex - blockStart
+			if row >= 0 && row < len(page.Counts) {
+				target.ExpectedMarks = page.Counts[row]
+				if row < len(page.Headwords) {
+					target.Headword = page.Headwords[row]
+				}
+				if row < len(page.EntryIDs) {
+					target.EntryID = page.EntryIDs[row]
+				}
 			}
 		}
 	}

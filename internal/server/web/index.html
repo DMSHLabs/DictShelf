@@ -11038,18 +11038,19 @@ async function navShowTarget(target,state){
   const row=det.querySelectorAll(":scope>dl>dd")[articleOffset];
   const host=row?.querySelector(".article");
   if(!host)return;
+  const displayedHeadword=row.previousElementSibling?.textContent?.trim()||"";
   const markStarted=performance.now();
   let mark=null;
-  let frameMissing=0,markScans=0;
+  let frameMissing=0,markScans=0,actualMarks=0;
   for(let attempt=0;attempt<50;attempt++){
     const root=host.shadowRoot||host.contentDocument;
     if(!root)frameMissing++;
-    else {markScans++;mark=root.querySelectorAll(".wu-hl")[Number(target.matchIndex)]||null}
+    else {markScans++;const marks=root.querySelectorAll(".wu-hl");actualMarks=marks.length;mark=marks[Number(target.matchIndex)]||null}
     if(mark)break;
     if(token!==searchSeq||navSuppressed)return;
     await new Promise(resolve=>setTimeout(resolve,100));
   }
-  window.wudictArticleFind?.traceEvent?.("navigation_trace_mark",`dict=${dict}; article=${target.articleIndex}; block=${start}; found=${!!mark}; frame_missing=${frameMissing}; scans=${markScans}; match_index=${target.matchIndex}`,Math.round(performance.now()-markStarted));
+  window.wudictArticleFind?.traceEvent?.("navigation_trace_mark",`dict=${dict}; article=${target.articleIndex}; entry_id=${target.entryId||0}; headword=${encodeURIComponent(target.headword||"")}; displayed_headword=${encodeURIComponent(displayedHeadword)}; block=${start}; expected_marks=${target.expectedMarks||0}; actual_marks=${actualMarks}; found=${!!mark}; frame_missing=${frameMissing}; scans=${markScans}; match_index=${target.matchIndex}`,Math.round(performance.now()-markStarted));
   if(!mark){
     const root=host.shadowRoot||host.contentDocument;
     const html=root?.documentElement?.outerHTML||root?.innerHTML||"";
