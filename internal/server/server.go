@@ -1574,7 +1574,7 @@ func marker(on bool) func(term, rung string) *hilite.Terms {
 		var t *hilite.Terms
 		for _, r := range ftsq.Parse(term).Rungs() {
 			if r.Name == rung {
-				t = hilite.NewPhrases(r.Marks)
+				t = hilite.NewPhrases(r.Marks).WithWordFallback()
 				break
 			}
 		}

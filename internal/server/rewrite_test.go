@@ -23,6 +23,15 @@ func TestRewriteFavouriteHTMLMarkedPreservesCopiedMedia(t *testing.T) {
 	}
 }
 
+func TestFullTextPhraseMarksAcrossInlineHTML(t *testing.T) {
+	terms := marker(true)("джазовый кларнетист", "phrase")
+	got := RewriteEntryHTMLMarked(`текст: джазовый <a rel="mw:WikiLink">кларнетист</a>`, "", terms)
+	want := `текст: <mark class="wu-hl">джазовый</mark> <a rel="mw:WikiLink"><mark class="wu-hl">кларнетист</mark></a>`
+	if got != want {
+		t.Fatalf("cross-tag phrase = %q, want %q", got, want)
+	}
+}
+
 // The cases are whole ELEMENTS, not bare `href="…"` fragments: the rewriter
 // parses a document instead of matching text in it, so an attribute has to be
 // attached to something. A pattern that matches `href="…"` anywhere would also

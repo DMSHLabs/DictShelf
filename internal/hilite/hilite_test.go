@@ -125,6 +125,16 @@ func TestMarkPhrase(t *testing.T) {
 	}
 }
 
+func TestWordFallbackMarksPhraseAcrossHTMLTextNodes(t *testing.T) {
+	terms := NewPhrases([]Phrase{ph("джазовый", "кларнетист")}).WithWordFallback()
+	if got, want := terms.Mark("джазовый "), o+"джазовый"+c+" "; got != want {
+		t.Fatalf("left text node = %q, want %q", got, want)
+	}
+	if got, want := terms.Mark("кларнетист"), o+"кларнетист"+c; got != want {
+		t.Fatalf("right text node = %q, want %q", got, want)
+	}
+}
+
 // A phrase made only of terms that fold to nothing has nothing to mark; one
 // that keeps at least one token is not voided by the others, because the
 // tokenizer that built the index dropped them too.

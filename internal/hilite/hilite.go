@@ -143,6 +143,36 @@ func NewPhrases(ps []Phrase) *Terms {
 	return &t
 }
 
+// WithWordFallback keeps each query word markable when an HTML tag splits a
+// matched phrase across text nodes. The article index strips markup before
+// matching, while the HTML rewriter visits one text node at a time; adding the
+// individual terms lets the rewriter mark both sides without moving tags.
+func (t *Terms) WithWordFallback() *Terms {
+	if t == nil {
+		return nil
+	}
+	out := &Terms{phrases: make([][]pat, 0, len(t.phrases)*2)}
+	for _, phrase := range t.phrases {
+		out.phrases = append(out.phrases, phrase)
+	}
+	for _, phrase := range t.phrases {
+		for _, word := range phrase {
+			candidate := []pat{word}
+			if !containsPhrase(out.phrases, candidate) {
+				out.phrases = append(out.phrases, candidate)
+			}
+			if len(out.phrases) == maxPhrases {
+				break
+			}
+		}
+		if len(out.phrases) == maxPhrases {
+			break
+		}
+	}
+	out.full = ^uint64(0) >> (maxPhrases - len(out.phrases))
+	return out
+}
+
 // Compile folds a bare word sequence into independent prefix terms - the
 // bag-of-words reading of a query, and the shape of the ladder's last rung.
 func Compile(query string) *Terms {
