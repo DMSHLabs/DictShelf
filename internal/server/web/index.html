@@ -10875,6 +10875,8 @@ function anchorTarget(root,frag){
    The shared strip can still report one result (1 of 1), but its arrows and
    keyboard route stay inactive until there is a second mark. */
 let navDet=null,navList=null,navIdx=0,navTimer=0,markedAnswer=false,navSuppressed=false;
+let navCountGeneration=null;
+const navBlockCounts=new Map();
 function markList(){
   const out=[];
   // Full-text results are rendered into every dictionary's current result
@@ -10901,9 +10903,11 @@ function navDetach(){
   navScrollSettle?.();
   clearTimeout(navTimer);
   navDet=null;navList=null;navIdx=0;
+  navCountGeneration=null;navBlockCounts.clear();
   window.wudictArticleFind?.setFullTextNavigation(null);
 }
 function navRefresh(){
+  if(navCountGeneration!==searchSeq){navCountGeneration=searchSeq;navBlockCounts.clear()}
   if(navDet&&!navDet.isConnected)navDet=null;
   const cur=navList&&navList[navIdx]&&navList[navIdx].el;
   const previousByDet=new Map(),visibleByDet=new Map();
@@ -10915,6 +10919,10 @@ function navRefresh(){
   for(const item of markList()){
     if(!visibleByDet.has(item.det))visibleByDet.set(item.det,[]);
     visibleByDet.get(item.det).push(item);
+  }
+  for(const [det,items] of visibleByDet){
+    const key=(det.dataset.searchDict||"")+"\u0000"+(Number(det.dataset.searchPageStart)||0);
+    navBlockCounts.set(key,{count:items.length,dict:det.dataset.searchDict||"",start:Number(det.dataset.searchPageStart)||0});
   }
   // Keep marks already collected from a dictionary when it is collapsed,
   // and include marks in its currently rendered result page. They remain
@@ -10938,8 +10946,9 @@ function navRefresh(){
   navPos();
 }
 function navPos(){
-  const count=navList?.length||0;
   const current=navList?.[navIdx];
+  const count=navKnownCount();
+  const position=current?navOccurrence(current):0;
   const canPrevious=count>=2||!!(current&&window.wudictArticleFind?.searchAcrossBlocks?.()&&window.wudictArticleBlockHasMore?.(current.det,-1));
   const canNext=count>=2||!!(current&&window.wudictArticleFind?.searchAcrossBlocks?.()&&window.wudictArticleBlockHasMore?.(current.det,1));
   if(navSuppressed||!navDet||!markedAnswer){
@@ -10959,13 +10968,35 @@ function navPos(){
      that search's words - its phrase reading from a phrase search, and not from
      a search that asked for something else (article-find.js, open). */
   window.wudictArticleFind?.setFullTextNavigation({
-    query:lastQuery,generation:searchSeq,reading:lastSearchMode,position:count?tx("articleFind.position",{current:navIdx+1,total:count+(partial?"+":"")})+(block?" · "+block:""):tx("articleFind.noMatches"),visible:count>0,canNavigate:canPrevious||canNext,canPrevious,canNext,total:count,current:navIdx+1,
+    query:lastQuery,generation:searchSeq,reading:lastSearchMode,position:count?tx("articleFind.position",{current:position,total:count+(partial?"+":"")})+(block?" · "+block:""):tx("articleFind.noMatches"),visible:count>0,canNavigate:canPrevious||canNext,canPrevious,canNext,total:count,current:position,
     previous:()=>navGo(-1),next:()=>navGo(1),
     refresh:()=>navPos(),
     goto:page=>navGoto(page),
     seekFrom:(host,node,offset,direction)=>navSeekFrom(host,node,offset,direction),
     close:()=>{navSuppressed=true;navDetach()}
   });
+}
+function navKnownCount(){
+  let count=0;
+  for(const value of navBlockCounts.values())count+=value.count;
+  return count;
+}
+function navOccurrence(current,index=navIdx){
+  const dict=current.det.dataset.searchDict||"",start=Number(current.det.dataset.searchPageStart)||0;
+  const sections=[...document.querySelectorAll("details.dict")],dictOrder=new Map();
+  for(const section of sections){
+    const id=section.dataset.searchDict||"";
+    if(!dictOrder.has(id))dictOrder.set(id,dictOrder.size);
+  }
+  const currentOrder=dictOrder.get(dict)??Number.MAX_SAFE_INTEGER;
+  let before=0;
+  for(const item of navBlockCounts.values()){
+    const {dict:id,start:page,count}=item;
+    const order=dictOrder.get(id);
+    if(order!==undefined&&(order<currentOrder||id===dict&&page<start))before+=count;
+  }
+  before+=navList.slice(0,index+1).filter(item=>item.det===current.det).length;
+  return before;
 }
 /* Keep the control and keyboard route enabled for either another loaded mark
    or an adjacent result block in the active dictionary. */
@@ -11052,12 +11083,20 @@ async function navCrossResultBlocks(current,step){
       if(token!==navBlockToken||generation!==searchSeq||navSuppressed)return;
       if(!replacement)break;
       changed=true;det=replacement;
-      for(let check=0;check<10;check++){
+      // A newly-rendered block can contain sandboxed article frames. Their
+      // highlights arrive after the outer result list has been replaced, so
+      // give the frame and Article Find time to mark them before advancing to
+      // another page or dictionary.
+      let settled=0;
+      for(let check=0;check<50;check++){
         await new Promise(resolve=>setTimeout(resolve,100));
         if(token!==navBlockToken||generation!==searchSeq||navSuppressed||!window.wudictArticleFind?.searchAcrossBlocks?.())return;
         navDet=det;navRefresh();
         const found=navList.filter(item=>item.det===det);
         if(found.length){navSelect(step>0?found[0]:found.at(-1));return}
+        const framesPending=[...det.querySelectorAll("iframe.article")].some(frame=>frame.contentDocument?.readyState!=="complete");
+        settled=framesPending?0:settled+1;
+        if(settled>=3)break;
       }
     }
     if(changed){
@@ -11096,10 +11135,31 @@ function navGo(step){
   }
   navMove(step);
 }
-function navGoto(page){
+async function navGoto(page){
   if(!navList||!navList.length)navRefresh();
-  if(!Number.isInteger(page)||page<1||page>navList.length)return;
-  navIdx=page-1;navGo(0);
+  if(!Number.isInteger(page)||page<1||page>navKnownCount())return;
+  const visible=navList.findIndex((item,index)=>navOccurrence(item,index)===page);
+  if(visible>=0){navSelect(navList[visible]);return}
+  const sections=[...document.querySelectorAll("details.dict")],order=new Map();
+  for(const det of sections){const id=det.dataset.searchDict||"";if(!order.has(id))order.set(id,order.size)}
+  let offset=0,target=null,local=0;
+  for(const block of [...navBlockCounts.values()].sort((a,b)=>(order.get(a.dict)??Number.MAX_SAFE_INTEGER)-(order.get(b.dict)??Number.MAX_SAFE_INTEGER)||a.start-b.start)){
+    if(page<=offset+block.count){target={...block};local=page-offset;break}
+    offset+=block.count;
+  }
+  if(!target)return;
+  const det=sections.find(item=>item.dataset.searchDict===target.dict);
+  if(!det)return;
+  const generation=searchSeq;
+  const replacement=await window.wudictRestoreArticleBlock?.(det,target.start);
+  if(!replacement||generation!==searchSeq)return;
+  for(let attempt=0;attempt<50;attempt++){
+    if(attempt)await new Promise(resolve=>setTimeout(resolve,100));
+    if(generation!==searchSeq||!replacement.isConnected)return;
+    navDet=replacement;navRefresh();
+    const found=navList.filter(item=>item.det===replacement);
+    if(found.length>=local){navSelect(found[local-1]);return}
+  }
 }
 function navSeekFrom(host,node,offset,direction){
   if(!navList||!navList.length)navRefresh();
@@ -11116,7 +11176,7 @@ function navSeekFrom(host,node,offset,direction){
     if(cmp*dir>=0){chosen=i;if(dir<0)continue;break}
   }
   if(chosen<0)chosen=dir>0?0:navList.length-1;
-  navGoto(chosen+1);
+  navSelect(navList[chosen]);
 }
 let navMutationFrame=0,navScrollSettle=null;
 function navSettleCurrent(cur){
