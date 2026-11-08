@@ -248,8 +248,14 @@ paths:
             selecting it. `matchCase`, `examples`, `nearWords`, `ignoreDiacritics`,
             `pageSize` and `firstSize` preserve the Find settings and displayed
             result-block sizes. `navGoto` also takes a one-based `position`.
-            `navStart` may take `anchorDict`, `anchorArticle`, `anchorGroup`,
-            `anchorOffset` and `anchorDirection` to begin around a text position.
+            `navStart` may take `anchorDict`, `anchorArticle`, `anchorPath`,
+            `anchorOffset` and `anchorDirection` to begin around a text position:
+            the path is the reader's selection as child indices from the article
+            root to its text node, and the offset is inside that node. A literal
+            target answers with `occurrences`, each a list of `spans` - a path,
+            UTF-16 offsets inside the node, and the matched `text` beside them -
+            so the page resolves a match against its own DOM without a second
+            text model of the article.
           schema: { type: string }
         - name: cacheID
           in: query
