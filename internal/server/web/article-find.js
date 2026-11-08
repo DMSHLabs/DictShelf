@@ -467,12 +467,13 @@ function remoteFindTraceEnabled(){return searchArticleDiagnosticsEnabled()||remo
 function syncRemoteFindTraceButton(){
   const button=$("articleFindTrace");
   if(!button)return;
-  const visible=!!remoteFind?.id&&options.mode!=="fts";
+  const fullText=options.mode==="fts"&&!!fullTextNavigation;
+  const visible=fullText||!!remoteFind?.id&&options.mode!=="fts";
   button.hidden=false;
   button.textContent=remoteFindTraceActive?t("articleFind.traceStop"):t("articleFind.traceStart");
   button.setAttribute("aria-label",button.textContent);
   button.title=searchArticleDiagnosticsEnabled()?button.textContent:`${button.textContent} — ${t("articleFind.traceLogDisabled")}`;
-  button.disabled=!visible||!remoteFindTraceActive&&(!remoteFind?.state?.found||remoteFindPending);
+  button.disabled=!visible||!remoteFindTraceActive&&(fullText?!fullTextNavigation?.canNext:!remoteFind?.state?.found||remoteFindPending);
 }
 function remoteFindDiagnostic(record,stage,fields={}){
   if(!remoteFindTraceEnabled())return Promise.resolve(false);
@@ -728,6 +729,39 @@ async function runRemoteFindTrace(){
   finally{
     await remoteFindDiagnostic(record,reason==="stopped"?"navigation_trace_stop":"navigation_trace_end",{completed:Math.min(100000,steps),total:Math.min(100000,record.state?.total||0),detail:`trace=${record.traceRun}; reason=${reason}; steps=${steps}; elapsed_ms=${Math.round(performance.now()-started)}; position=${record.state?.position||0}`});
     remoteFindTraceActive=false;remoteFindTraceStop=false;syncRemoteFindTraceButton();paint();
+  }
+}
+async function runFullTextTrace(){
+  const navigation=fullTextNavigation,generation=navigation?.generation;
+  if(remoteFindTraceActive||options.mode!=="fts"||!navigation?.canNext)return;
+  remoteFindTraceActive=true;remoteFindTraceStop=false;
+  const record={diagnosticRun:++remoteFindDiagnosticRun,diagnosticStarted:performance.now(),traceRun:++remoteFindTraceRun};
+  let steps=0,reason="last_match",previous=Number(navigation.current)||0;
+  syncRemoteFindTraceButton();
+  await remoteFindDiagnostic(record,"navigation_trace_start",{detail:`trace=${record.traceRun}; source=full_text; position=${previous}; total=${navigation.total||0}`});
+  try{
+    while(!remoteFindTraceStop&&fullTextNavigation?.generation===generation&&steps<100000){
+      const current=fullTextNavigation;
+      if(current.complete&&current.current>=current.total)break;
+      const started=performance.now(),from=Number(current.current)||0;
+      await remoteFindDiagnostic(record,"navigation_request",{detail:`trace=${record.traceRun}; source=full_text; action=navNext; from=${from}`});
+      await current.next();
+      const next=fullTextNavigation;
+      if(!next||next.generation!==generation){reason="search_changed";break}
+      const position=Number(next.current)||0;
+      steps++;
+      await remoteFindDiagnostic(record,"navigation_trace_step",{completed:steps,total:Math.min(100000,next.total||0),detail:`trace=${record.traceRun}; source=full_text; step=${steps}; from=${from}; to=${position}; complete=${!!next.complete}; step_ms=${Math.round(performance.now()-started)}`});
+      if(!position||position===from){reason="no_next_match";break}
+      if(next.complete&&position<=previous){await next.previous();break}
+      previous=position;
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    }
+    if(steps>=100000)reason="limit";
+    if(remoteFindTraceStop)reason="stopped";
+  }catch(error){reason="error";await remoteFindDiagnostic(record,"navigation_trace_error",{detail:`trace=${record.traceRun}; source=full_text; error=${String(error?.message||error).slice(0,700)}`})}
+  finally{
+    await remoteFindDiagnostic(record,reason==="stopped"?"navigation_trace_stop":"navigation_trace_end",{completed:steps,total:Math.min(100000,fullTextNavigation?.total||0),detail:`trace=${record.traceRun}; source=full_text; reason=${reason}; position=${fullTextNavigation?.current||0}`});
+    remoteFindTraceActive=false;remoteFindTraceStop=false;syncRemoteFindTraceButton();
   }
 }
 async function restoreRemoteFindTarget(){
@@ -1089,6 +1123,7 @@ $("articleFindScrollToMatch").onclick = () => {
 };
 $("articleFindTrace").onclick = () => {
   if(remoteFindTraceActive){remoteFindTraceStop=true;return}
+  if(options.mode==="fts"){void runFullTextTrace();return}
   void runRemoteFindTrace();
 };
 $("sysLogSearch")?.addEventListener("change",syncRemoteFindTraceButton);

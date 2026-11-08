@@ -10968,7 +10968,7 @@ function navPos(){
   window.wudictArticleFind?.setFullTextNavigation({
     query:lastQuery,generation:searchSeq,reading:lastSearchMode,
     position:count?tx("articleFind.position",{current:position,total:count+(state.complete?"":"+")})+(block?" · "+block:""):tx("articleFind.noMatches"),
-    visible:count>0,canNavigate,canPrevious:canNavigate,canNext:canNavigate,total:count,current:position,
+      visible:count>0,canNavigate,canPrevious:canNavigate,canNext:canNavigate,total:count,current:position,complete:!!state.complete,
     previous:()=>navGo(-1),next:()=>navGo(1),refresh:()=>navPos(),goto:page=>navGoto(page),
     canRestore:!!navServerState?.found,restore:()=>navRestoreCurrent(),
     seekFrom:(_host,_node,_offset,direction)=>navGo(direction<0?-1:1),
