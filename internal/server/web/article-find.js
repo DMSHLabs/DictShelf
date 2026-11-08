@@ -314,8 +314,8 @@ async function startRemoteFind(){
       resultQuery:context.query,resultMode:context.mode,ignoreDiacritics:context.ignore?"1":"0",
       matchCase:options.matchCase?"1":"0",examples:options.examples?"1":"0",nearWords:String(nearWords()),
       pageSize:String(size),firstSize:String(firstSize),prime:"0",groupID:context.groupID,rungs:context.rungs.join(",")};
-    if(anchor){params.anchorDict=anchor.dict;params.anchorArticle=String(anchor.article);params.anchorPath=anchor.path;
-      params.anchorOffset=String(anchor.offset);params.anchorDirection=String(anchor.direction)}
+    if(anchor){params.anchorDict=anchor.dict;params.anchorArticle=String(anchor.article);params.anchorText=anchor.text;
+      params.anchorDirection=String(anchor.direction)}
     searchAnchor=null;
     const state=await remoteFindFetch(record,"navStart",params);
     if(token!==remoteFindToken||remoteFind!==record)return;
@@ -435,32 +435,27 @@ function serverFindRanges(root,occurrences){
   if(missed)window.wudictArticleFind?.traceEvent?.("navigation_trace_ranges",`occurrences=${(occurrences||[]).length}; painted=${out.length}; missed=${missed}`);
   return out;
 }
-/* The reader's own position, named the way the server addresses the article: a
-   child-index path to the text node, and the offset inside it. The page knows
-   its tree; the server compares that with the occurrences it found. */
-function nodePath(root,node){
-  const path=[];
-  for(let current=node;current&&current!==root;current=current.parentNode){
-    const parent=current.parentNode;
-    if(!parent)return null;
-    path.unshift(Array.prototype.indexOf.call(parent.childNodes,current));
-  }
-  return path.length?path:null;
-}
+/* The reader's own position, named the way the page CAN name it: a snippet of
+   the article's text taken from the selection. The server finds that snippet in
+   its own model of the same article, so the gesture does not depend on the two
+   trees having the same node indices - a frame's parser moves <link>/<style>
+   into a head the server never had, and every top-level index shifts with them.
+   The snippet is folded the way the server folds it, so whitespace cannot part
+   the two. */
 function serverFindAnchor(){
   if(!searchAnchor||options.mode==="fts")return null;
   const host=searchAnchor.host,det=host?.closest("details.dict"),row=host?.closest("dd");
   if(!det||!row)return null;
   const rows=[...det.querySelectorAll(":scope>dl>dd")],articleOffset=rows.indexOf(row);
   if(articleOffset<0)return null;
-  const root=rootFor(host);if(!root)return null;
-  let node=searchAnchor.range.startContainer;
+  const range=searchAnchor.range;
+  let node=range.startContainer;
   while(node&&node.nodeType!==3)node=node.firstChild;
   if(!node)return null;
-  const path=nodePath(root,node);
-  if(!path)return null;
+  const text=foldFindText(node.data.slice(range.startOffset)).slice(0,64);
+  if(!text)return null;
   return {dict:det.dataset.searchDict||"",article:(Number(det.dataset.searchPageStart)||0)+articleOffset,
-    path:path.join(","),offset:searchAnchor.range.startOffset,direction:searchAnchor.direction};
+    text,direction:searchAnchor.direction};
 }
 async function showRemoteFindTarget(target,state,token){
   if(!target)return false;

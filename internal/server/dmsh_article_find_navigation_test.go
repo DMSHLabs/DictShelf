@@ -229,3 +229,67 @@ func TestArticleFindFullTextTargetCarriesOccurrenceNumbers(t *testing.T) {
 		t.Fatalf("full-text near target reading = %q; want the reading answered by the dictionary", nearTarget.Reading)
 	}
 }
+
+// The reader's position travels as a SNIPPET of the article's text, and the
+// server finds it in its own model of the same article - so the gesture does not
+// depend on the page's tree having the server's node indices (a frame's parser
+// moves head content, and every top-level index shifts). The snippet also
+// decides which occurrence is next: the first after it for Next, the last before
+// it for Previous, and a snippet the search cannot find starts at the ends.
+func TestArticleFindAnchorLocatesItsSnippet(t *testing.T) {
+	dir := t.TempDir()
+	source := "#NAME \"Anchor\"\n\nalpha\n\talpha beta alpha gamma alpha\n"
+	if err := os.WriteFile(filepath.Join(dir, "anchor.dsl"), []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	isolatedDBDir(t)
+	registry, err := NewRegistry([]string{dir}, false, WithComparisons(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitNewDictionaryIndexing(t, registry)
+	closeBackends(t, registry)
+	entries := registry.all()
+	if len(entries) != 1 {
+		t.Fatalf("entries = %d, want one", len(entries))
+	}
+	if err := entries[0].setFeatures(features{FullText: true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	server := New(registry)
+	server.User = UserDir(t.TempDir())
+	server.wildcardPages.init(server.wildcardCacheDir())
+	t.Cleanup(func() {
+		server.wildcardPages.mu.Lock()
+		defer server.wildcardPages.mu.Unlock()
+		for _, cached := range server.wildcardPages.entries {
+			_ = cached.db.Close()
+		}
+	})
+	id := entries[0].ID
+	session := &articleFindNavigationSession{query: "alpha", mode: "contains",
+		resultQuery: "alpha", resultMode: "exact", dictionaries: []string{id},
+		pageSize: 1, firstSize: 1, pages: []map[int]articleFindNavigationPage{make(map[int]articleFindNavigationPage)}}
+	page, err := server.loadArticleFindNavigationPage(context.Background(), session, 0, 0)
+	if err != nil || len(page.Counts) != 1 || page.Counts[0] != 3 {
+		t.Fatalf("page = %+v, err=%v; want three matches in the one article", page, err)
+	}
+	for _, tc := range []struct {
+		name, anchor string
+		direction    int
+		position     int
+	}{
+		{"next lands after the anchor", "gamma alpha", 1, 3},
+		{"previous lands before the anchor", "gamma alpha", -1, 2},
+		{"an unfindable anchor starts Next at the top", "no such text", 1, 1},
+		{"an unfindable anchor starts Previous at the end", "no such text", -1, 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			session.current = nil
+			response, err := server.startArticleFindNavigationFromAnchor(context.Background(), session, id, 0, tc.anchor, tc.direction)
+			if err != nil || !response.Found || response.Position != tc.position {
+				t.Fatalf("anchor %q (%d) = %+v, err=%v; want position %d", tc.anchor, tc.direction, response, err, tc.position)
+			}
+		})
+	}
+}

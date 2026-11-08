@@ -200,14 +200,13 @@ func (s *Server) handleArticleFindNavigation(w http.ResponseWriter, r *http.Requ
 		var response articleFindNavigationResponse
 		if q.Get("anchorDict") != "" && mode != "fts" {
 			article, articleErr := navigationCoordinate(q.Get("anchorArticle"))
-			path, pathErr := navigationPath(q.Get("anchorPath"))
-			offset, offsetErr := navigationCoordinate(q.Get("anchorOffset"))
+			anchorText := q.Get("anchorText")
 			direction, directionErr := strconv.Atoi(q.Get("anchorDirection"))
-			if articleErr != nil || pathErr != nil || offsetErr != nil || directionErr != nil || direction != 1 && direction != -1 {
+			if articleErr != nil || len(anchorText) > 512 || directionErr != nil || direction != 1 && direction != -1 {
 				httpErr(w, http.StatusBadRequest, "invalid article find anchor")
 				return
 			}
-			response, err = s.startArticleFindNavigationFromAnchor(r.Context(), session, q.Get("anchorDict"), article, path, offset, direction)
+			response, err = s.startArticleFindNavigationFromAnchor(r.Context(), session, q.Get("anchorDict"), article, anchorText, direction)
 		} else if q.Get("prime") == "0" {
 			response, err = s.peekArticleFindNavigation(r.Context(), session)
 		} else {
@@ -301,26 +300,6 @@ func navigationNumber(value string, fallback, maxValue int) (int, error) {
 	return n, nil
 }
 
-// navigationPath reads the child-index path the page sends for an anchor: the
-// text node of the reader's selection, as indices from the article root. The
-// page knows its own tree and nothing else, so this - not a block offset - is
-// the position it can name.
-func navigationPath(value string) ([]int, error) {
-	if value == "" {
-		return nil, errors.New("missing article navigation path")
-	}
-	parts := strings.Split(value, ",")
-	path := make([]int, len(parts))
-	for i, part := range parts {
-		n, err := strconv.Atoi(part)
-		if err != nil || n < 0 {
-			return nil, errors.New("invalid article navigation path")
-		}
-		path[i] = n
-	}
-	return path, nil
-}
-
 func navigationCoordinate(value string) (int, error) {
 	if value == "" {
 		return 0, errors.New("missing article navigation coordinate")
@@ -407,7 +386,7 @@ func (s *Server) peekArticleFindNavigation(ctx context.Context, session *article
 	return articleFindNavigationResponse{Found: true, Target: target, Position: position, Total: total, Complete: session.complete}, nil
 }
 
-func (s *Server) startArticleFindNavigationFromAnchor(ctx context.Context, session *articleFindNavigationSession, dictionary string, article int, path []int, offset, direction int) (articleFindNavigationResponse, error) {
+func (s *Server) startArticleFindNavigationFromAnchor(ctx context.Context, session *articleFindNavigationSession, dictionary string, article int, anchorText string, direction int) (articleFindNavigationResponse, error) {
 	dictionaryIndex := -1
 	for i, id := range session.dictionaries {
 		if id == dictionary {
@@ -430,21 +409,33 @@ func (s *Server) startArticleFindNavigationFromAnchor(ctx context.Context, sessi
 		return articleFindNavigationResponse{}, errors.New("article find anchor is outside the result set")
 	}
 	occurrences := page.Occurrences[row]
+	// The reader's position travels as a SNIPPET of the article's text, taken
+	// from the selection. The server finds it in its own model of the same
+	// article, which is exact even when the page's tree and the server's differ
+	// (a frame's parser moves head content, and every top-level index shifts with
+	// it) - a position the page can name without sharing our text model.
+	path, offset := s.articleFindAnchorPosition(ctx, session, dictionaryIndex, page.EntryIDs[row], anchorText)
 	cursorMatch := -1
-	if direction > 0 {
-		for i, match := range occurrences {
-			if articleFindBefore(match, path, offset) {
-				cursorMatch = i
+	if path != nil {
+		if direction > 0 {
+			for i, match := range occurrences {
+				if articleFindBefore(match, path, offset) {
+					cursorMatch = i
+				}
+			}
+		} else {
+			cursorMatch = len(occurrences)
+			for i, match := range occurrences {
+				if !articleFindBefore(match, path, offset) {
+					cursorMatch = i
+					break
+				}
 			}
 		}
-	} else {
+	} else if direction < 0 {
+		// The snippet is not in the text the search reads (a selection inside a
+		// dropped example, or an empty one): the walk starts at the article's end.
 		cursorMatch = len(occurrences)
-		for i, match := range occurrences {
-			if !articleFindBefore(match, path, offset) {
-				cursorMatch = i
-				break
-			}
-		}
 	}
 	session.current = session.target(dictionaryIndex, blockStart, article, cursorMatch)
 	load := func(_ context.Context, index, start int) (articleFindNavigationPage, error) {
@@ -789,6 +780,78 @@ func (session *articleFindNavigationSession) target(dictionaryIndex, blockStart,
 // marks. The strip sends mode "fts" for any of the three readings and says
 // which one ran in resultMode; the dialog never sends it, because its literal
 // modes have occurrence lists of their own.
+// articleFindAnchorPosition locates the reader's snippet in the server's model of
+// one article and returns the position an occurrence can be compared with: the
+// child-index path to the text node the snippet starts in, and the UTF-16 offset
+// inside it. It returns nil when the snippet is not in the text the search reads.
+//
+// This re-reads ONE article's body and folds it the way the matcher does; the
+// gesture is rare and a page of results is not, so it stays out of the page
+// cache rather than keeping every body alive to answer it.
+func (s *Server) articleFindAnchorPosition(ctx context.Context, session *articleFindNavigationSession, dictionaryIndex int, entryID int64, anchorText string) ([]int, int) {
+	needle := []rune(strings.TrimSpace(anchorText))
+	if len(needle) == 0 || entryID == 0 || dictionaryIndex < 0 || dictionaryIndex >= len(session.dictionaries) {
+		return nil, 0
+	}
+	entry, err := s.reg.get(session.dictionaries[dictionaryIndex])
+	if err != nil {
+		return nil, 0
+	}
+	d, err := entry.open()
+	if err != nil {
+		return nil, 0
+	}
+	source, ok := d.(interface {
+		ArticlesByIDs(context.Context, []int64) ([]dict.Result, error)
+	})
+	if !ok {
+		return nil, 0
+	}
+	results, err := source.ArticlesByIDs(ctx, []int64{entryID})
+	if err != nil || len(results) == 0 {
+		return nil, 0
+	}
+	groups := articleFindHTMLGroups(results[0].Body, session.examples)
+	for gi := range groups {
+		group := &groups[gi]
+		at := articleFindRuneIndex(group.text, needle)
+		if at < 0 {
+			continue
+		}
+		for _, segment := range group.segments {
+			if at < segment.start || at >= segment.end {
+				continue
+			}
+			start, _, ok := articleFindSegmentRunes(group, segment, at, at+1)
+			if !ok {
+				continue
+			}
+			return segment.path, articleFindNodeUTF16(segment.node, start)
+		}
+	}
+	return nil, 0
+}
+
+// articleFindRuneIndex is the first rune index where needle appears in text.
+func articleFindRuneIndex(text, needle []rune) int {
+	if len(needle) == 0 || len(needle) > len(text) {
+		return -1
+	}
+	for i := 0; i+len(needle) <= len(text); i++ {
+		match := true
+		for j := range needle {
+			if text[i+j] != needle[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return i
+		}
+	}
+	return -1
+}
+
 // articleFindBefore reports whether an occurrence starts before the anchor
 // position, in document order: lexicographic on the child-index path, then the
 // UTF-16 offset inside the node. A node precedes its descendants, so a path that
