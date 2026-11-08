@@ -35,68 +35,8 @@ function loadFindHistory(){
 let findHistory=loadFindHistory(),suppressFindHistoryFocus=false;
 let matches = [], index = -1, active = false, restored = [], docs = new Set(), timer, fullTextNavigation = null, fullTextGeneration = null, searchAnchor = null;
 let remoteFind = null, remoteFindToken = 0, remoteFindRequestSeq = 0, remoteFindPending = false;
-const examinedBlocks = new Map();
-function resetCounts(){examinedBlocks.clear()}
-function blockPages(det){
-  return [...(examinedBlocks.get(det.dataset.searchDict||"")||new Map())]
-    .map(([start,count])=>({start,count})).sort((a,b)=>a.start-b.start);
-}
-function recordCounts(){
-  const counts=new Map();
-  for(const hit of matches){
-    const det=hit.host.closest("details.dict");
-    if(det)counts.set(det,(counts.get(det)||0)+1);
-  }
-  for(const det of $("out").querySelectorAll("details.dict")){
-    const hosts=[...det.querySelectorAll(".article")];
-    if(!hosts.length||hosts.some(host=>!rootFor(host))||
-       hosts.some(host=>host.matches("iframe")&&host.contentDocument?.readyState!=="complete"))continue;
-    if(options.mode==="wordLemma"&&hosts.some(host=>lemmaLookups.get(host.dataset.dict+"\u0000"+options.query)?.value===null))continue;
-    const id=det.dataset.searchDict||"";
-    if(!examinedBlocks.has(id))examinedBlocks.set(id,new Map());
-    examinedBlocks.get(id).set(Number(det.dataset.searchPageStart)||0,counts.get(det)||0);
-  }
-}
-/* The dictionary's own result count, from the same place the plate reads it:
-   dataset.searchTotal is the result cache's running total - the background
-   counting pass raises it - and dataset.searchExact is the flag that closes it,
-   the one that makes the plate's number exact. Until it closes, the stored
-   number is the plate's own lower bound. */
-function dictionaryCount(det){
-  const total=Number(det.dataset.searchTotal)||0;
-  return det.dataset.searchExact==="true"?total:Math.max(total,Number(det.dataset.searchLowerBound)||0);
-}
-/* Two numbers, because the dialog counts matches and the plate counts articles.
-   COUNTED is the matches of the blocks the dialog examined: the rank it walks,
-   and what Go to match can reach. The displayed total is that floored by the
-   dictionary's count - every article the dictionary matched holds at least one
-   match of the query, so the answer cannot hold fewer matches than the
-   dictionary says - and the dialog's own number overtakes the floor as its
-   blocks are examined. The floor belongs only to a dictionary the dialog
-   counted; one it skipped (a lemma it could not get, articles not ready)
-   contributes nothing, or the two sides would count different dictionaries. */
-function countedPosition(){
-  const det=matches[index]?.host.closest("details.dict");
-  const dictionaries=[...$("out").querySelectorAll("details.dict")];
-  let counted=0,current=0,shown=0;
-  for(const section of dictionaries){
-    const start=Number(section.dataset.searchPageStart)||0,id=section.dataset.searchDict||"";
-    let here=0;
-    for(const page of blockPages(section)){
-      if(section===det&&page.start===start){
-        current=counted+matches.slice(0,index+1).filter(hit=>hit.host.closest("details.dict")===det).length;
-      }
-      counted+=page.count;here+=page.count;
-    }
-    shown+=Math.max(here,examinedBlocks.has(id)?dictionaryCount(section):0);
-  }
-  return {current,counted,total:shown};
-}
 let settle = null;
-let laidOutList = null;
 const fallbackSelections = new Map();
-const watched = new WeakSet();
-const lemmaLookups = new Map();
 const highlightCSS = "::highlight(wudict-find-all){background:#ffe082;color:#171717}::highlight(wudict-find-current){background:#ff9800;color:#171717;text-decoration:underline}";
 
 function restoreExamples() {
@@ -159,11 +99,9 @@ function renderFindHistory(filter=$("articleFindQuery").value){
   $("articleFindQuery").setAttribute("aria-expanded",String(!list.hidden));
 }
 function readOptions() {
-  const previous=options;
   options = {query:$("articleFindQuery").value.trim(), mode:$("articleFindMode").value,
     matchCase:$("articleFindCase").checked, all:$("articleFindAll").checked,
     examples:$("articleFindExamples").checked};
-  if(previous.query!==options.query||previous.mode!==options.mode||previous.matchCase!==options.matchCase||previous.examples!==options.examples)resetCounts();
   save();
 }
 function fillOptions() {
@@ -205,7 +143,6 @@ function syncControls() {
   $("articleFindStop").disabled = fts && hasFTS;
   $("articleFindQuery").disabled = fts;
   for (const id of ["articleFindCase","articleFindAll","articleFindExamples"]) $(id).disabled = fts;
-  $("articleFindHiddenHint").hidden = fts || !options.query || !!matches.length || options.examples || !hiddenExamples;
   if (fts) {
     if (fullTextNavigation) {
       options.query = fullTextNavigation.query || "";
@@ -236,37 +173,8 @@ function syncControls() {
 function canStep(step){
   if(options.mode==="fts")return !!(step<0?fullTextNavigation?.canPrevious:fullTextNavigation?.canNext);
   if(remoteFind)return !remoteFindPending&&serverFindCanStep();
-  if(matches.length>=2)return true;
-  if(!matches.length)return countedPosition().counted>0 || options.blocks!==false &&
-    [...$("out").querySelectorAll("details.dict")].some(det=>window.wudictArticleBlockHasMore?.(det,step));
-  const hit=matches[index>=0?index:0];
-  return !!(options.query&&hit&&options.blocks!==false&&window.wudictArticleBlockHasMore?.(hit.host.closest("details.dict"),step));
+  return false;
 }
-function lemmaFor(host,query){
-  if(options.mode!=="wordLemma"||/\s/u.test(query))return query;
-  const id=host.dataset.dict;
-  if(!id)return query;
-  const key=id+"\u0000"+query;
-  let record=lemmaLookups.get(key);
-  if(!record){
-    record={value:null};lemmaLookups.set(key,record);
-    if(lemmaLookups.size>500)lemmaLookups.delete(lemmaLookups.keys().next().value);
-    record.pending=fetch("/api/article-find/lemma?"+new URLSearchParams({dict:id,q:query}))
-      .then(response=>response.ok?response.json():null)
-      .then(data=>{
-        record.value=typeof data?.lemma==="string"&&data.lemma?data.lemma:query;
-        examinedBlocks.delete(id);
-        if(active&&options.mode==="wordLemma"&&options.query===query)schedule();
-      }).catch(()=>{record.value=query});
-  }
-  return record.value||query;
-}
-function escapeRE(value){return value.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}
-/* Phrase and near are not one pattern but a rule over the WORDS of the query -
-   [A B] the words adjacent and in this order, [A ↔ B] the words within the
-   window and in any order - so they are matched on the words of the block
-   instead of by a regular expression. */
-const wordRun=/[\p{L}\p{M}\p{N}_]+/gu;
 /* The window near counts with is the reader's setting (Settings → Results, 1…50,
    ten by default), and the page mirrors the resolved number for anything outside
    its own scope as window.wudictNearWords. That mirror is what this reads: the
@@ -280,18 +188,19 @@ function nearWords(){
   const quoted=String(t("search.modeHintNear")).match(/\d+/u);
   return quoted?Number(quoted[0]):1;
 }
-function wordKey(word){return options.matchCase?word:word.toLowerCase()}
-function wordReading(){return options.mode==="phrase"||options.mode==="near"}
-function matcherFor(host,query){
-  if(wordReading())return {words:(query.match(wordRun)||[]).map(wordKey),bound:options.mode==="near"?nearWords():0};
-  const alternatives=[query];
-  if(options.mode==="wordLemma"&&/^\S+$/u.test(query))alternatives.push(lemmaFor(host,query));
-  const unique=[...new Set(alternatives)].sort((a,b)=>b.length-a.length);
-  return {regex:new RegExp(unique.map(escapeRE).join("|"),options.matchCase?"gu":"giu")};
+function ensureFindStyle(root) {
+  if (!root || root.querySelector("style[data-wudict-find]")) return;
+  const doc = root.ownerDocument || root;
+  const style = doc.createElement("style"); style.dataset.wudictFind = "";
+  style.textContent = highlightCSS; root.appendChild(style);
 }
 function paint() {
   syncRemoteFindTraceButton();
   clearPaint();
+  // The ranges are painted by CSS Custom Highlight, whose rules must live in the
+  // tree that carries the text: a shadow root, or a frame's body. The old client
+  // scan injected them; it is gone, so the one live painter does it here.
+  for (const hit of matches) ensureFindStyle(rootFor(hit.host));
   for (const doc of docs) {
     const win = doc.defaultView;
     if (!win?.CSS?.highlights || !win.Highlight) continue;
@@ -315,141 +224,6 @@ function paint() {
     $("articleFindScrollToMatch").disabled=remoteFindPending||!remoteFind.target;
     return;
   }
-  const position=countedPosition();
-  const partial = [...$("out").querySelectorAll("details.dict")].some(det=>{
-    if(det.dataset.searchExact!=="true")return true;
-    const total=Number(det.dataset.searchTotal)||0;
-    const size=Number(det.dataset.searchPageSize)||20,first=Number(det.dataset.searchFirstPageSize)||size;
-    const expected=total>0?1+Math.ceil(Math.max(0,total-first)/size):0;
-    return (examinedBlocks.get(det.dataset.searchDict||"")?.size||0)<expected;
-  });
-  const total = String(position.total)+(partial?"+":"");
-  const block = index >= 0 ? window.wudictArticleFindBlockRange?.(matches[index]?.host.closest("details.dict")) : "";
-  const count = position.counted ? t("articleFind.position", {current:position.current, total})+(block?" · "+block:"") : t("articleFind.noMatches");
-  if(blockNavigationPending)return;
-  $("articleFindCount").textContent = count;
-  $("articleFindCount").disabled = !position.counted;
-  $("articleFindStatus").textContent = options.query ? count : "";
-  $("articleFindHiddenHint").hidden = !options.query || !!matches.length || options.examples || !hiddenExamples;
-  $("articleFindLabel").textContent = options.query;
-  $("articleFindLabel").title = options.query;
-  $("articleFindPrev").disabled = !canStep(-1);
-  $("articleFindNext").disabled = !canStep(1);
-  $("articleFindDialogPrev").disabled = !canStep(-1);
-  $("articleFindDialogNext").disabled = !canStep(1);
-  $("articleFindScrollToMatch").disabled = options.mode === "fts" ? !fullTextNavigation?.canRestore : !matches.length || index < 0;
-}
-let hiddenExamples = false;
-// Build a text stream per paragraph, retaining offsets across inline formatting.
-// Whitespace is folded so phrases also match line breaks and nonbreaking spaces.
-function scan(host, root, finder) {
-  const doc = root.ownerDocument, win = doc.defaultView;
-  if (!win) return;
-  const regex = finder.regex, words = finder.words, bound = finder.bound;
-  docs.add(doc);
-  if (!root.querySelector("style[data-wudict-find]")) {
-    const style = doc.createElement("style"); style.dataset.wudictFind = "";
-    style.textContent = highlightCSS; root.appendChild(style);
-  }
-  if (!watched.has(root)) {
-    watched.add(root);
-    root.addEventListener("load",schedule,true);
-    new MutationObserver(() => { if (active) schedule(); }).observe(root, {childList:true, subtree:true, characterData:true});
-  }
-  const walker = doc.createTreeWalker(root, win.NodeFilter.SHOW_TEXT | win.NodeFilter.SHOW_ELEMENT);
-  let text = "", points = [], group = null;
-  function addMatch(start,end) {
-    const a = points[start], b = points[end-1];
-    if (!a || !b) return;
-    const range = doc.createRange(); range.setStart(a.node,a.start); range.setEnd(b.endNode,b.end);
-    matches.push({host,range,example:a.node.parentElement?.closest(".wu-xonly,.wu-sec,.dsl_opt,.wu-exonly,.wu-ex,.dsl_ex") || null});
-  }
-  function flush() {
-    if (words) flushWords(); else flushPattern();
-    text = ""; points = [];
-  }
-  function flushPattern() {
-    regex.lastIndex = 0;
-    for (let found; (found = regex.exec(text)); ) {
-      const start = found.index, end = start+found[0].length;
-      const before = Array.from(text.slice(0,start)).pop() || "", after = Array.from(text.slice(end))[0] || "";
-      if (["prefix","word","wordLemma"].includes(options.mode) && wordChar.test(before)) continue;
-      if (["suffix","word","wordLemma"].includes(options.mode) && wordChar.test(after)) continue;
-      addMatch(start,end);
-    }
-  }
-  /* The two word readings, over the words of this block. A word is a run of word
-     characters, so whatever stands between two of them - a space, a line break,
-     a comma - separates them without joining them, and a mark covers the span
-     from the first word of the match to the last: the phrase as it was typed,
-     or the window `near` counts. */
-  function flushWords() {
-    if (!words.length) return;
-    const tokens = [];
-    wordRun.lastIndex = 0;
-    for (let found; (found = wordRun.exec(text)); ) tokens.push({start:found.index,end:found.index+found[0].length,key:wordKey(found[0])});
-    if (options.mode === "phrase") {
-      for (let i = 0; i + words.length <= tokens.length; i++) {
-        let joined = true;
-        for (let j = 0; joined && j < words.length; j++) joined = tokens[i+j].key === words[j];
-        if (!joined) continue;
-        addMatch(tokens[i].start,tokens[i+words.length-1].end);
-        i += words.length-1;
-      }
-      return;
-    }
-    /* near: every word of the query, with the multiplicity it was typed with,
-       inside one window no wider than the bound - measured from the first word
-       of the window to the word that completes it, the way the hint counts. */
-    const need = new Map();
-    for (const word of words) need.set(word,(need.get(word)||0)+1);
-    for (let i = 0; i < tokens.length; i++) {
-      if (!need.has(tokens[i].key)) continue;
-      const held = new Map([[tokens[i].key,1]]);
-      let left = words.length-1, last = i;
-      for (let j = i+1; left && j < tokens.length && j-i <= bound+1; j++) {
-        const key = tokens[j].key, have = held.get(key)||0;
-        if (have >= (need.get(key)||0)) continue;
-        held.set(key,have+1); left--; last = j;
-      }
-      if (left) continue;
-      addMatch(tokens[i].start,tokens[last].end);
-      i = last;
-    }
-  }
-  for (let node; (node = walker.nextNode()); ) {
-    if (node.nodeType === 1) {
-      if (node.tagName === "BR" && text && !text.endsWith(" ")) {
-        const last = points[points.length-1];
-        text += " "; points.push({node:last.endNode,endNode:last.endNode,start:last.end,end:last.end});
-      }
-      continue;
-    }
-    const parent = node.parentElement;
-    if (parent?.closest(skip)) { flush(); group = null; continue; }
-    const nextGroup = parent?.closest(block) || root;
-    if (group !== nextGroup) { flush(); group = nextGroup; }
-    let excluded = false;
-    for (let el = parent; el && el !== root; el = el.parentElement) {
-      const css = win.getComputedStyle(el);
-      if (css.visibility === "hidden" || css.visibility === "collapse" || el.hidden) { excluded = true; break; }
-      if (css.display === "none") {
-        if (el.matches(".wu-xonly,.wu-sec,.dsl_opt,.wu-exonly,.wu-ex,.dsl_ex")) {
-          hiddenExamples = true;
-          if (options.examples) continue;
-        }
-        excluded = true; break;
-      }
-      if (el.matches("details:not([open])") && !el.querySelector(":scope>summary")?.contains(parent)) { excluded = true; break; }
-    }
-    if (excluded) { flush(); group = null; continue; }
-    for (let i = 0; i < node.data.length; i++) {
-      const c = /\s/u.test(node.data[i]) ? " " : node.data[i];
-      if (c === " " && text.endsWith(" ")) { points[points.length-1].endNode = node; points[points.length-1].end = i+1; continue; }
-      text += c; points.push({node,endNode:node,start:i,end:i+1});
-    }
-  }
-  flush();
 }
 function closeRemoteFind(){
   remoteFindToken++;remoteFindRequestSeq++;remoteFindPending=false;
@@ -488,13 +262,15 @@ function remoteFindContext(){
   const details=[...$("out").querySelectorAll("details.dict[data-search-dict]")];
   const dictionaries=source.dictionaries?.length?source.dictionaries:details.map(det=>det.dataset.searchDict).filter(Boolean);
   const first=details[0];
-  return {dictionaries,query:source.query??first?.dataset.searchQuery??"",mode:source.mode??first?.dataset.searchMode??"",
+  const orders=source.orders?.length?source.orders:details.map((_,index)=>index);
+  return {dictionaries,orders,cacheCount:Number(source.cacheCount)||dictionaries.length,
+    query:source.query??first?.dataset.searchQuery??"",mode:source.mode??first?.dataset.searchMode??"",
     ignore:!!source.ignoreDiacritics,firstSize:Number(first?.dataset.searchInitial)||5,
     pageSize:Number(first?.dataset.searchPageSize)||20,groupID:source.groupID||"",
     rungs:source.rungs?.length?source.rungs:details.map(det=>det.dataset.searchRung||"")};
 }
 function remoteFindSignature(context){
-  return JSON.stringify([context.groupID,context.dictionaries,context.query,context.mode,options.query,options.mode,
+  return JSON.stringify([context.groupID,context.dictionaries,context.orders,context.cacheCount,context.query,context.mode,options.query,options.mode,
     context.ignore,context.rungs,options.matchCase,options.examples,nearWords()]);
 }
 function remoteFindURL(record,action,extra={}){
@@ -533,7 +309,8 @@ async function startRemoteFind(){
   matches=[];index=-1;docs.clear();restoreExamples();clearPaint();paint();
   try{
     const size=Math.max(1,Math.min(500,context.pageSize)),firstSize=Math.max(1,Math.min(500,context.firstSize));
-    const params={dict:context.dictionaries.join(","),q:options.query,mode:options.mode,
+    const params={dict:context.dictionaries.join(","),cacheCount:String(context.cacheCount),
+      cacheOrders:context.orders.join(","),q:options.query,mode:options.mode,
       resultQuery:context.query,resultMode:context.mode,ignoreDiacritics:context.ignore?"1":"0",
       matchCase:options.matchCase?"1":"0",examples:options.examples?"1":"0",nearWords:String(nearWords()),
       pageSize:String(size),firstSize:String(firstSize),prime:"0",groupID:context.groupID,rungs:context.rungs.join(",")};
@@ -790,26 +567,6 @@ function rebuild() {
   if(!active){closeRemoteFind();matches=[];index=-1;docs.clear();restoreExamples();clearPaint();syncControls();return}
   void startRemoteFind();
 }
-function compareToAnchor(hit) {
-  if (hit.host !== searchAnchor.host) {
-    const hosts = [...$("out").querySelectorAll(".article")];
-    return (hosts.indexOf(hit.host) - hosts.indexOf(searchAnchor.host)) * searchAnchor.direction;
-  }
-  try { return hit.range.compareBoundaryPoints(Range.START_TO_START, searchAnchor.range) * searchAnchor.direction; }
-  catch (_) { return 0; }
-}
-function forceLayout(det) {
-  const dl = det?.querySelector(":scope>dl") || null;
-  if (laidOutList?.element === dl) return;
-  if (laidOutList) {
-    const {element,value,priority} = laidOutList;
-    value ? element.style.setProperty("content-visibility",value,priority) : element.style.removeProperty("content-visibility");
-    laidOutList = null;
-  }
-  if (!dl) return;
-  laidOutList = {element:dl,value:dl.style.getPropertyValue("content-visibility"),priority:dl.style.getPropertyPriority("content-visibility")};
-  dl.style.setProperty("content-visibility","visible");
-}
 function showExample(hit) {
   for (let el = hit.example; el; el = el.parentElement?.closest(".wu-xonly,.wu-sec,.dsl_opt,.wu-exonly,.wu-ex,.dsl_ex")) {
     if (el.ownerDocument.defaultView.getComputedStyle(el).display !== "none") continue;
@@ -866,82 +623,7 @@ function settleOn(hit, det) {
   settle = stopSettle;
   frame = requestAnimationFrame(align);
 }
-function revealCurrent(wrapped=false,step=1) {
-  if (!active || !matches.length || index < 0) { paint(); return; }
-  dialog.close(); strip.hidden = false; measure();
-  restoreExamples();
-  const hit = matches[index], det = hit.host.closest("details.dict");
-  if (det) det.open = true;
-  if (!window.wudictNativeShell) forceLayout(det);
-  showExample(hit); paint();
-  if (wrapped) $("articleFindCount").textContent += " · " + t(step > 0 ? "articleFind.fromStart" : "articleFind.fromEnd");
-  if (!hit.range.startContainer.ownerDocument.defaultView.CSS?.highlights) {
-    const doc = hit.range.startContainer.ownerDocument;
-    const selection = doc.getSelection(); selection.removeAllRanges(); selection.addRange(hit.range);
-    fallbackSelections.set(doc,hit.range);
-  }
-  freezeBar();
-  if (window.wudictNativeShell) {
-    settleOn(hit,det);
-    return;
-  }
-  // Bring the opened dictionary into view first so WebView2 lays out its
-  // article before the Range supplies the match's final coordinates.
-  if (det) revealAt(det.getBoundingClientRect().top,det,true);
-  settleOn(hit,det);
-}
-let blockNavigationPending=false,blockNavigationToken=0;
-function advanceLoaded(step){
-  const next=index+step,wrapped=next<0||next>=matches.length;
-  index=(next+matches.length)%matches.length;
-  revealCurrent(wrapped,step);
-}
-function selectAfterBlock(det,step){
-  const list=[...$("out").querySelectorAll("details.dict")],at=list.indexOf(det);
-  const rows=matches.map((hit,i)=>({hit,i,at:list.indexOf(hit.host.closest("details.dict"))}));
-  let row=step>0?rows.find(item=>item.at>at):rows.slice().reverse().find(item=>item.at<at);
-  if(!row)row=step>0?rows[0]:rows.at(-1);
-  if(!row){index=-1;paint();return false}
-  index=row.i;revealCurrent();return true;
-}
-async function crossResultBlocks(current,step){
-  if(blockNavigationPending)return;
-  blockNavigationPending=true;
-  const token=++blockNavigationToken,query=options.query,mode=options.mode;
-  let det=current.matches?.("details.dict")?current:current.host.closest("details.dict"),changed=false;
-  const originStart=Number(det?.dataset.searchPageStart)||0;
-  try{
-    const visited=new Set();
-    while(det&&window.wudictArticleBlockHasMore?.(det,step)){
-      const start=Number(det.dataset.searchPageStart)||0;
-      if(visited.has(start))break;
-      visited.add(start);
-      const replacement=await window.wudictRequestArticleBlock?.(det,step);
-      if(token!==blockNavigationToken||!active||options.query!==query||options.mode!==mode||options.blocks===false)return;
-      if(!replacement)break;
-      changed=true;det=replacement;index=-1;
-      for(let check=0;check<10;check++){
-        if(check)await new Promise(resolve=>setTimeout(resolve,100));
-        if(token!==blockNavigationToken||!active||options.query!==query||options.mode!==mode||options.blocks===false)return;
-        rebuild();
-        const found=matches.map((hit,i)=>({hit,i})).filter(row=>row.hit.host.closest("details.dict")===det);
-        if(found.length){index=step>0?found[0].i:found.at(-1).i;blockNavigationPending=false;revealCurrent();return}
-        const frames=[...det.querySelectorAll("iframe.article")];
-        if(frames.every(frame=>frame.contentDocument?.readyState==="complete"))break;
-      }
-    }
-    if(changed){
-      const restored=await window.wudictRestoreArticleBlock?.(det,originStart);
-      if(token!==blockNavigationToken||!active||options.query!==query||options.mode!==mode||options.blocks===false)return;
-      if(restored)det=restored;
-      rebuild();blockNavigationPending=false;selectAfterBlock(det,step);
-    }else{blockNavigationPending=false;if(matches.length)advanceLoaded(step);else paint()}
-  }finally{
-    if(token===blockNavigationToken)blockNavigationPending=false;
-  }
-}
 function go(step) {
-  if(blockNavigationPending)return;
   if ($("articleFindMode").value === "fts") {
     if (step<0?fullTextNavigation?.canPrevious:fullTextNavigation?.canNext)
       fullTextNavigation[step < 0 ? "previous" : "next"]?.();
@@ -950,81 +632,11 @@ function go(step) {
   if(remoteFind){void moveRemoteFind(step);return}
   if(active){void startRemoteFind();return}
   if (dialog.open || !active) { clearTimeout(timer); readOptions(); active = !!options.query; rebuild(); }
-  if(options.mode!=="fts")recordFindHistory(options.query);
-  if (!active) return;
-  if (!matches.length) {
-    const sections=[...$("out").querySelectorAll("details.dict")];
-    const candidates=step>0?sections:sections.reverse();
-    const det=options.blocks!==false&&candidates.find(section=>window.wudictArticleBlockHasMore?.(section,step));
-    if(det){crossResultBlocks(det,step);return}
-    const {counted}=countedPosition();
-    if(counted){goto(step>0?1:counted);return}
-    paint();return;
-  }
-  let wrapped = false;
-  if (index < 0) {
-    if (searchAnchor) {
-      const candidates = matches.map((hit,i) => ({hit,i})).filter(({hit}) => compareToAnchor(hit) >= 0);
-      const chosen = searchAnchor.direction > 0 ? candidates[0] : candidates.at(-1);
-      wrapped = !chosen;
-      index = chosen ? chosen.i : searchAnchor.direction > 0 ? 0 : matches.length-1;
-      searchAnchor = null;
-    }
-    else {
-      // The first jump starts at the reading position, ignoring collapsed sections.
-      const candidates = matches.map((hit,i) => ({hit,i})).filter(({hit}) => hit.host.closest("details.dict")?.open && (!hit.example || hit.example.ownerDocument.defaultView.getComputedStyle(hit.example).display !== "none"));
-      const found = step > 0 ? candidates.find(({hit}) => topOf(hit) >= barH()) : candidates.reverse().find(({hit}) => topOf(hit) < innerHeight/2);
-      index = found ? found.i : step > 0 ? 0 : matches.length-1;
-    }
-  } else {
-    const current = matches[index];
-    const following = matches[index+step];
-    const currentDet=current?.host.closest("details.dict");
-    const boundary=step>0?(!following||following.host.closest("details.dict")!==currentDet):
-      (!matches[index-1]||matches[index-1].host.closest("details.dict")!==currentDet);
-    if(options.blocks!==false&&current&&boundary&&window.wudictArticleBlockHasMore?.(currentDet,step)){
-      crossResultBlocks(current,step);return;
-    }
-    const next = index+step; wrapped = next < 0 || next >= matches.length;
-    index = (next+matches.length)%matches.length;
-  }
-  revealCurrent(wrapped,step);
 }
 function goto(page) {
   if ($("articleFindMode").value === "fts") { fullTextNavigation?.goto?.(page); return true; }
   if(remoteFind){void gotoRemoteFind(page);return true}
   if(active){void startRemoteFind();return true}
-  if (dialog.open || !active) { clearTimeout(timer); readOptions(); active = !!options.query; rebuild(); }
-  /* Go to match reaches the matches the dialog has counted, so it is bounded by
-     that number and not by the floored total: a dictionary's own count can name
-     a match beyond the blocks examined, and a jump nobody can make would read
-     as a dead control. */
-  const {counted}=countedPosition();
-  if (!Number.isInteger(page) || page < 1 || page > counted) return false;
-  let offset=0;
-  for(const det of $("out").querySelectorAll("details.dict")){
-    for(const entry of blockPages(det)){
-      if(page>offset+entry.count){offset+=entry.count;continue}
-      const local=page-offset-1;
-      if((Number(det.dataset.searchPageStart)||0)===entry.start){
-        const hits=matches.map((hit,i)=>({hit,i})).filter(row=>row.hit.host.closest("details.dict")===det);
-        if(!hits[local])return false;
-        index=hits[local].i;revealCurrent();return true;
-      }
-      const token=blockNavigationToken,query=options.query;
-      window.wudictRestoreArticleBlock?.(det,entry.start)?.then(async replacement=>{
-        if(!replacement||!active||token!==blockNavigationToken||query!==options.query)return;
-        for(let attempt=0;attempt<10;attempt++){
-          if(attempt)await new Promise(resolve=>setTimeout(resolve,100));
-          if(!active||token!==blockNavigationToken||query!==options.query)return;
-          rebuild();
-          const hits=matches.map((hit,i)=>({hit,i})).filter(row=>row.hit.host.closest("details.dict")===replacement);
-          if(hits[local]){index=hits[local].i;revealCurrent();return}
-        }
-      });
-      return true;
-    }
-  }
   return false;
 }
 function searchFrom(host,node,offset,direction) {
@@ -1040,20 +652,16 @@ function searchFrom(host,node,offset,direction) {
 }
 function gotoOpen() {
   const isFTS = $("articleFindMode").value === "fts" && !!fullTextNavigation;
-  const isRemote=options.mode!=="fts"&&!!remoteFind;
-  const position=countedPosition();
-  const total=isFTS ? Number(fullTextNavigation.total)||0 : isRemote?Number(remoteFind.state?.total)||0:(active ? position.counted : 0);
-  const current=isFTS ? Number(fullTextNavigation.current)||1 : isRemote?Number(remoteFind.state?.position)||1:Math.max(1,position.current);
+  const isRemote = options.mode !== "fts" && !!remoteFind;
+  const total = isFTS ? Number(fullTextNavigation.total)||0 : isRemote ? Number(remoteFind.state?.total)||0 : 0;
+  const current = isFTS ? Number(fullTextNavigation.current)||1 : isRemote ? Number(remoteFind.state?.position)||1 : 1;
   if (total) window.wudictOpenArticleFindGoto?.(total,current);
 }
 function stop() {
-  blockNavigationToken++;blockNavigationPending=false;
   closeRemoteFind();
-  resetCounts();
   const navigation = fullTextNavigation;
   fullTextNavigation = null;
   if (settle) settle();
-  forceLayout(null);
   active = false; clearTimeout(timer); restoreExamples(); clearPaint(); matches = []; index = -1;
   docs.clear();
   if (dialog.open) dialog.close();
@@ -1117,9 +725,6 @@ $("articleFindNext").onclick = () => fullTextNavigation && options.mode === "fts
 $("articleFindScrollToMatch").onclick = () => {
   if(options.mode === "fts"){fullTextNavigation?.restore?.();return}
   if(remoteFind){void restoreRemoteFindTarget();return}
-  if(!matches.length)return;
-  if(index<0)index=0;
-  revealCurrent();
 };
 $("articleFindTrace").onclick = () => {
   if(remoteFindTraceActive){remoteFindTraceStop=true;return}

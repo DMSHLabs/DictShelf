@@ -1434,10 +1434,20 @@ function newArticleResultCacheID(){
   try{crypto.getRandomValues(bytes)}catch(_){for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256)}
   return [...bytes].map(value=>value.toString(16).padStart(2,"0")).join("");
 }
-window.wudictArticleFindContext=()=>({dictionaries:searchNavDictionaries.slice(),query:lastQuery,
-  mode:lastSearchMode,ignoreDiacritics,nearWords:window.wudictNearWords,groupID:articleCacheGroupID,
-  rungs:searchNavDictionaries.map(id=>[...document.querySelectorAll("details.dict[data-search-dict]")]
-    .find(det=>det.dataset.searchDict===id)?.dataset.searchRung||"")});
+/* The dictionaries Find in articles may walk: the ones that ANSWERED, in the
+   order the result list shows them, with the cache order each one was built
+   under - not every slot. A slot with no results has no cache block (its build
+   writes none), and a session that starts with it waits for a block that will
+   never come. cacheCount is the GROUP's size, not this list's: it is part of the
+   cache signature, so a filtered walk still has to name the whole group. */
+window.wudictArticleFindContext=()=>{
+  const orders=searchNavHitOrders.length?searchNavHitOrders:searchNavDictionaries.map((_,index)=>index);
+  const dictionaries=orders.map(index=>searchNavDictionaries[index]).filter(Boolean);
+  return {dictionaries,orders,cacheCount:articleCacheGroupCount,query:lastQuery,
+    mode:lastSearchMode,ignoreDiacritics,nearWords:window.wudictNearWords,groupID:articleCacheGroupID,
+    rungs:dictionaries.map(id=>[...document.querySelectorAll("details.dict[data-search-dict]")]
+      .find(det=>det.dataset.searchDict===id)?.dataset.searchRung||"")};
+};
 function stopArticleResultCaches(){
   articleCacheSeq++;articleCacheAbort?.abort();articleCacheAbort=null;
   for(const state of articleResultCaches.values())clearTimeout(state.indexTimer);
