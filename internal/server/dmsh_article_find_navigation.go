@@ -59,6 +59,10 @@ type articleFindNavigationPage struct {
 	Occurrences [][]articleFindWireOccurrence
 	HasNext     bool
 	Complete    bool
+	// Results is how many articles this dictionary's answer holds - the number
+	// that turns "the last block" into arithmetic instead of a walk through
+	// every block.
+	Results int
 }
 
 type articleFindNavigationSession struct {
@@ -509,7 +513,7 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 	end := start + blockSize
 	limit := min(end+1, articleFindNavigationFallbackResults+1)
 	var results []dict.Result
-	cacheComplete, cacheHasNext := false, false
+	cacheComplete, cacheHasNext, resultTotal := false, false, 0
 	findFullText := sessionUsesFullTextMarks(session)
 	request := SearchRequest{Query: session.resultQuery, Mode: session.resultMode, Dictionary: session.dictionaries[dictionaryIndex],
 		Format: "raw", Limit: limit, Highlight: findFullText, IgnoreDiacritics: session.ignore, Transport: "article_find_navigation",
@@ -533,7 +537,7 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 	if err := s.Search(ctx, request, func(event SearchEvent) error {
 		if event.T == "hit" && event.Dict == request.Dictionary {
 			results = event.Results
-			cacheComplete, cacheHasNext = event.Complete, event.HasNext
+			cacheComplete, cacheHasNext, resultTotal = event.Complete, event.HasNext, event.Total
 		}
 		return nil
 	}); err != nil {
@@ -610,7 +614,7 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 	logx.SystemDiagnosticIf(logx.SystemLogSearchEventsEnabled(),
 		"article_find_navigation stage=page_scan_done id=%q dict=%q start=%d articles=%d matches=%d elapsed_ms=%d",
 		session.id, request.Dictionary, start, len(results), matches, time.Since(resultsReady).Milliseconds())
-	page := articleFindNavigationPage{Start: start, Counts: counts, Headwords: headwords, EntryIDs: entryIDs, Occurrences: occurrences,
+	page := articleFindNavigationPage{Start: start, Results: resultTotal, Counts: counts, Headwords: headwords, EntryIDs: entryIDs, Occurrences: occurrences,
 		HasNext:  session.cacheID != "" && cacheHasNext || session.cacheID == "" && end < articleFindNavigationFallbackResults && resultCount > end,
 		Complete: session.cacheID != "" && cacheComplete || session.cacheID == "" && resultCount <= end}
 	session.pages[dictionaryIndex][start] = page
@@ -749,6 +753,22 @@ func (session *articleFindNavigationSession) lastArticleIndex(ctx context.Contex
 }
 
 func (session *articleFindNavigationSession) lastBlockStart(ctx context.Context, dictionaryIndex int, load articleFindNavigationPageLoader) (int, error) {
+	// The answer already says how many articles it found: the last of them is
+	// in the last block, so no walk through the blocks is needed. The walk below
+	// is only for a session that has not seen the answer's count yet.
+	if dictionaryIndex < 0 || dictionaryIndex >= len(session.pages) {
+		return 0, nil
+	}
+	if results, ok := session.anyPageWithResults(dictionaryIndex); ok {
+		return session.blockStart(results - 1), nil
+	}
+	page, err := load(ctx, dictionaryIndex, 0)
+	if err != nil {
+		return 0, err
+	}
+	if page.Results > 0 {
+		return session.blockStart(page.Results - 1), nil
+	}
 	start := 0
 	for {
 		page, err := load(ctx, dictionaryIndex, start)
@@ -757,6 +777,17 @@ func (session *articleFindNavigationSession) lastBlockStart(ctx context.Context,
 		}
 		start = session.nextBlockStart(start)
 	}
+}
+
+// anyPageWithResults finds a page already loaded for this dictionary and returns
+// how many articles its answer holds.
+func (session *articleFindNavigationSession) anyPageWithResults(dictionaryIndex int) (int, bool) {
+	for _, page := range session.pages[dictionaryIndex] {
+		if page.Results > 0 {
+			return page.Results, true
+		}
+	}
+	return 0, false
 }
 
 func (session *articleFindNavigationSession) blockStart(articleIndex int) int {

@@ -370,3 +370,28 @@ func TestNavigationOriginIsThePagesOwnSpelling(t *testing.T) {
 		}
 	}
 }
+
+// The last block is arithmetic on the answer's article count, not a walk
+// through every block: the count is what the session already has.
+func TestLastBlockStartUsesTheAnswerCount(t *testing.T) {
+	session := &articleFindNavigationSession{dictionaries: []string{"d"}, pageSize: 20, firstSize: 5,
+		pages: []map[int]articleFindNavigationPage{{0: {Start: 0, Results: 45}}}}
+	start, err := session.lastBlockStart(context.Background(), 0, func(context.Context, int, int) (articleFindNavigationPage, error) {
+		t.Fatal("scanned the blocks instead of using the count")
+		return articleFindNavigationPage{}, nil
+	})
+	if err != nil || start != 25 {
+		t.Fatalf("start = %d, err = %v; want 25", start, err)
+	}
+	// Without a loaded page the count comes from the first block, once.
+	cold := &articleFindNavigationSession{dictionaries: []string{"d"}, pageSize: 20, firstSize: 5,
+		pages: []map[int]articleFindNavigationPage{{}}}
+	loads := 0
+	start, err = cold.lastBlockStart(context.Background(), 0, func(_ context.Context, _ int, blockStart int) (articleFindNavigationPage, error) {
+		loads++
+		return articleFindNavigationPage{Start: blockStart, Results: 45}, nil
+	})
+	if err != nil || start != 25 || loads != 1 {
+		t.Fatalf("start = %d, loads = %d, err = %v; want 25 from one page", start, loads, err)
+	}
+}
