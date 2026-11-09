@@ -523,6 +523,15 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(page)
 		return
 	}
+	if acceptsGzip(r) {
+		if compressed := gzippedPage(etag, page); compressed != nil {
+			w.Header().Set("Content-Encoding", "gzip")
+			w.Header().Add("Vary", "Accept-Encoding")
+			w.Header().Set("ETag", gzipPageETag(etag))
+			http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(compressed))
+			return
+		}
+	}
 	w.Header().Set("ETag", etag)
 	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(page))
 }
@@ -1142,10 +1151,18 @@ type dictMsg struct {
 func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 	var stream *respStream
 	unavailable := errors.New("streaming unsupported")
+	// The stream is opened lazily, and a 304 must not carry Content-Encoding:
+	// compression is installed exactly when the first row is about to be sent.
+	finishStream := func() {}
+	openStream := func() (*respStream, bool) {
+		w, finishStream = compressStream(w, r)
+		return newStream(w, "application/x-ndjson; charset=utf-8")
+	}
+	defer func() { finishStream() }()
 	result, err := s.listDictionaries(r.Context(), r.Header.Get("If-None-Match"), func(message dictMsg) error {
 		if stream == nil {
 			var ok bool
-			stream, ok = newStream(w, "application/x-ndjson; charset=utf-8")
+			stream, ok = openStream()
 			if !ok {
 				return unavailable
 			}
@@ -1159,7 +1176,7 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if stream == nil {
-		stream, _ = newStream(w, "application/x-ndjson; charset=utf-8")
+		stream, _ = openStream()
 	}
 	if err != nil && !errors.Is(err, unavailable) && stream == nil {
 		httpErr(w, http.StatusInternalServerError, "%v", err)
@@ -1621,6 +1638,8 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Query().Get("cacheAction") != "" {
+		w, finish := compressStream(w, r)
+		defer finish()
 		st, ok := newStream(w, "application/x-ndjson; charset=utf-8")
 		if !ok {
 			return
@@ -1713,6 +1732,8 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	searchStarted := time.Now()
 
+	w, finish := compressStream(w, r)
+	defer finish()
 	st, ok := newStream(w, "application/x-ndjson; charset=utf-8")
 	if !ok {
 		return

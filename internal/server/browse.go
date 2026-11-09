@@ -450,6 +450,8 @@ func (s *Server) prepareBrowseFindStream(ctx context.Context, q url.Values) (bro
 
 func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("merged") == "1" {
+		w, finish := compressStream(w, r)
+		defer finish()
 		st, ok := newStream(w, "application/x-ndjson")
 		if !ok {
 			return
@@ -473,6 +475,8 @@ func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) 
 		}
 		return
 	}
+	w, finish := compressStream(w, r)
+	defer finish()
 	st, ok := newStream(w, "application/x-ndjson")
 	if !ok {
 		return
@@ -1533,6 +1537,8 @@ func (s *Server) handleBrowseStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	phase.Store(2)
+	w, finish := compressStream(w, r)
+	defer finish()
 	st, ok := newStream(w, "application/x-ndjson")
 	if !ok {
 		return
