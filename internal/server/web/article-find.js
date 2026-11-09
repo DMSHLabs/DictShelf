@@ -345,7 +345,13 @@ function serverFindPosition(){
   const state=remoteFind?.state;
   if(!state?.found)return state?.complete?t("articleFind.noMatches"):"";
   const total=Number(state.total)||0;
-  return t("articleFind.position",{current:Number(state.position)||1,total:String(total)+(state.complete?"":"+")});
+  // Same reading as the answer's layer: while the count is still provisional
+  // the number counts from the edge the reader came from, and a small arrow says
+  // which way they are travelling.
+  const fromEnd=Number(state.target?.fromEnd)||0;
+  const shown=fromEnd>0?fromEnd:Number(state.position)||1;
+  const direction=total&&!state.complete?(fromEnd>0?"↑ ":"↓ "):"";
+  return t("articleFind.position",{current:direction+shown,total:String(total)+(state.complete?"":"+")});
 }
 /* The server decided WHAT matched and WHERE, as a path to a text node plus
    offsets inside it (articleFindNodeSpan). The page resolves that path and sets
