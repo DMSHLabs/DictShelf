@@ -979,7 +979,7 @@ window.wudictFontScale=(function(){
   <button type="button" class="btn" id="articleFindNext" aria-label="{{T:articleFind.next}}" title="{{T:articleFind.next}}">↓</button>
   <button type="button" class="btn" id="articleFindScrollToMatch" aria-label="{{T:articleFind.scrollToMatch}}" title="{{T:articleFind.scrollToMatch}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="2"/></svg></button>
   <button type="button" class="btn" id="articleFindTrace" aria-label="{{T:articleFind.traceStart}}" title="{{T:articleFind.traceStart}}">{{T:articleFind.traceStart}}</button>
-  <select id="articleFindTraceRun" aria-label="{{T:articleFind.traceMore}}" title="{{T:articleFind.traceMore}}">
+  <select id="articleFindTraceRun" class="btn" aria-label="{{T:articleFind.traceMore}}" title="{{T:articleFind.traceMore}}">
     <option value="" selected>▾</option>
     <option value="backward">{{T:articleFind.traceBackward}}</option>
     <option value="seeks">{{T:articleFind.traceSeeks}}</option>
@@ -13425,7 +13425,6 @@ function themedSelectCreate(select){
 window.wudictThemedSelects={
   mode:themedSelect($("mode"),$("modeMenuBtn"),$("modeMenu")),
   articleFindMode:themedSelectCreate($("articleFindMode")),
-  articleFindTraceRun:themedSelectCreate($("articleFindTraceRun")),
   pickerGroup:themedSelect($("webPickerGroup"),$("webPickerGroupBtn"),$("webPickerGroupMenu"))
 };
 $("webDictionaryPicker").addEventListener("close",()=>window.wudictThemedSelects.pickerGroup.hide());
