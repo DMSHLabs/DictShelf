@@ -1454,6 +1454,7 @@ function stopArticleResultCaches(){
   articleCacheQueue=[];articleCacheActive=0;articleCacheFinished=0;articleCacheTotal=0;
   articleCacheGroupID="";articleCacheGroupCount=1;
   prefetchedBlocks.clear();
+  prefetchedPages.clear();
   articleCacheSearchSettled=false;
   articleResultCaches.clear();maskTaskFinish("search-results");
 }
@@ -7494,7 +7495,15 @@ const pendingArticleHeights=new Map();
    must not strand the first block's placeholders. A list that is replaced is
    stopped by the same token when the next restore schedules its own fill. */
 const articleFillRuns=new WeakMap();
+/* The prefetched page itself, not just the fact that it was asked for. The
+   walk's restore would otherwise request the same block again and parse the
+   same megabytes a second time - and over the desktop's in-process transport it
+   could not even read the server copy, because the resource handler presents a
+   loopback Host while the native bridge names the virtual origin, and the page
+   cache keys on the origin. Two entries is all a walk can use: the block it is
+   about to enter, and the one it just left. */
 const prefetchedBlocks=new Set();
+const prefetchedPages=new Map();
 
 function pendingArticleHeight(dict){
   const known=pendingArticleHeights.get(dict);
@@ -10690,7 +10699,8 @@ async function fetchSearchPortion(det,start,options={}){
     buttons.forEach(button=>button.disabled=true);
     try{
       if(!cached.started)pumpArticleResultCaches();
-      await fetchStream(articleCacheURL(cached,"page",start,size,marks),msg=>{
+      const pageURL=articleCacheURL(cached,"page",start,size,marks);
+      const onPage=msg=>{
         if(msg.t==="error")throw new Error(msg.error||"result page unavailable");
         if(msg.t!=="hit"||msg.dict!==id)return;
         cached.total=msg.total||0;cached.done=!!msg.complete;
@@ -10703,7 +10713,16 @@ async function fetchSearchPortion(det,start,options={}){
         loaded=box.querySelector(":scope>details.dict");
         if(loaded)loaded.open=shouldOpen();
         window.wudictArticleFind?.refresh();
-      },articleCacheAbort?.signal);
+      };
+      const ready=prefetchedPages.get(pageURL);
+      if(ready){
+        // The block is already here: the walk warmed it while the reader was
+        // reading. Consume it, so the next visit asks the server again.
+        prefetchedPages.delete(pageURL);prefetchedBlocks.delete(pageURL);
+        onPage(ready);
+      }else{
+        await fetchStream(pageURL,onPage,articleCacheAbort?.signal);
+      }
     }catch(error){
       if(error.name!=="AbortError")setStatus("⚠ "+esc(error.message));
       if(det.isConnected)restoreButtons();
@@ -11228,10 +11247,10 @@ window.wudictRestoreArticleBlock=(det,start,marks=false,deferAfter=-1)=>{
 };
 
 /* Warm the NEXT block while the reader reads this one. The walk crosses blocks
-   one after another, and this request fills the server's page cache, so the
-   restore that follows is a cache read instead of a render - 4.5-7.8 MB and
-   half a second of server work saved per block. It runs only when the current
-   block is nearly spent, and only once per block. */
+   one after another, so this request runs when the current block is nearly
+   spent, once per block, and keeps the parsed page: the restore that follows
+   renders it instead of asking the server again - no second render, no second
+   transfer and no second parse of 4.5-7.8 MB. */
 window.wudictPrefetchArticleBlock=(det,start)=>{
   if(!det?.isConnected||det.dataset.searchHasNext!=="true")return;
   const id=det.dataset.searchDict||"",cached=articleResultCaches.get(id);
@@ -11242,7 +11261,15 @@ window.wudictPrefetchArticleBlock=(det,start)=>{
   const url=articleCacheURL(cached,"page",start,want,true);
   if(prefetchedBlocks.has(url))return;
   prefetchedBlocks.add(url);
-  apiFetch(url).then(response=>response.arrayBuffer()).catch(()=>{});
+  // Through the walk's own stream, not apiFetch: the desktop's in-process
+  // resource handler answers with a loopback Host while the native bridge names
+  // the virtual origin, and the server's page cache keys on the origin. Keep the
+  // parsed page, so the restore neither asks again nor parses it again.
+  fetchStream(url,msg=>{
+    if(msg.t!=="hit"||msg.dict!==id)return;
+    prefetchedPages.set(url,msg);
+    while(prefetchedPages.size>2)prefetchedPages.delete(prefetchedPages.keys().next().value);
+  }).catch(()=>prefetchedBlocks.delete(url));
 };
 window.wudictArticleBlockHasMore=(det,direction)=>{
   if(!det?.isConnected)return false;
