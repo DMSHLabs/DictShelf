@@ -43,6 +43,7 @@ function loadFindHistory(){
 let findHistory=loadFindHistory(),suppressFindHistoryFocus=false;
 let matches = [], index = -1, active = false, restored = [], docs = new Set(), timer, fullTextNavigation = null, fullTextGeneration = null, searchAnchor = null;
 let remoteFind = null, remoteFindToken = 0, remoteFindRequestSeq = 0, remoteFindPending = false;
+let remoteFindSpot = "";
 let settle = null;
 const fallbackSelections = new Map();
 const highlightCSS = "::highlight(wudict-find-all){background:#ffe082;color:#171717}::highlight(wudict-find-current){background:#ff9800;color:#171717;text-decoration:underline}";
@@ -477,7 +478,12 @@ function serverFindRanges(root,occurrences){
       range=located.range;cursor=located.cursor;offset=located.offset;
     }
     if(!range){missed++;continue}
-    out.push({range,example:range.startContainer.parentElement?.closest(".wu-xonly,.wu-sec,.dsl_opt,.wu-exonly,.wu-ex,.dsl_ex")||null});
+    // Where this range sits in the article's own text order: two positions that
+    // paint the same range are the same place on screen, whatever the counter
+    // says, and that is exactly the bug worth catching.
+    const nodeAt=nodes.indexOf(range.startContainer);
+    const spot=nodeAt>=0?`${nodeAt}:${range.startOffset}-${range.endOffset}`:"";
+    out.push({range,spot,example:range.startContainer.parentElement?.closest(".wu-xonly,.wu-sec,.dsl_opt,.wu-exonly,.wu-ex,.dsl_ex")||null});
   }
   if(missed)window.wudictArticleFind?.traceEvent?.("navigation_trace_ranges",`occurrences=${(occurrences||[]).length}; painted=${out.length}; missed=${missed}`);
   return out;
@@ -510,9 +516,10 @@ async function showRemoteFindTarget(target,state,token){
     await new Promise(resolve=>setTimeout(resolve,100));
   }
   if(!found.length||token!==remoteFindToken)return false;
-  matches=found.map(item=>({host,range:item.range,example:item.example}));
+  matches=found.map(item=>({host,range:item.range,spot:item.spot,example:item.example}));
   docs=new Set(matches.map(item=>item.range.startContainer.ownerDocument));
   index=Math.max(0,Math.min(Number(target.matchIndex)||0,matches.length-1));
+  remoteFindSpot=matches[index]?.spot?`${target.dict}:${target.articleIndex}:${matches[index].spot}`:"";
   remoteFind.state=state;remoteFind.target=target;
   dialog.close();strip.hidden=false;measure();
   restoreExamples();showExample(matches[index]);paint();
@@ -554,6 +561,7 @@ async function runRemoteFindTrace(mode){
   remoteFindTraceActive=true;remoteFindTraceStop=false;record.traceRun=++remoteFindTraceRun;
   record.traceStarted=performance.now();
   const origin=Number(record.state.position)||0;
+  record.spotRuns={};
   syncRemoteFindTraceButton();
   const summaries=[];
   await remoteFindDiagnostic(record,"navigation_trace_start",{detail:`trace=${record.traceRun}; source=found_articles; run=${run}; position=${origin}; total=${record.state.total||0}`});
@@ -577,11 +585,15 @@ async function runRemoteFindTrace(mode){
       }
       const agreement=divergence<0&&left.length===right.length?"same":
         divergence<0?"prefix":"at "+(divergence+1)+": "+left[divergence]+"≠"+right[divergence];
-      let retargeted=0;
+      let retargeted=0,repainted=0;
       for(const [position,at] of Object.entries(forward.atOf)){
         if(backward.atOf[position]&&backward.atOf[position]!==at)retargeted++;
       }
-      await remoteFindDiagnostic(record,"navigation_trace_compare",{detail:`trace=${record.traceRun}; source=found_articles; suite=${run}; forward=${left.length}; backward=${right.length}; agreement=${agreement}; retargeted=${retargeted}`});
+      const forwardSpots=record.spotRuns?.forward||{},backwardSpots=record.spotRuns?.backward||{};
+      for(const [position,spot] of Object.entries(forwardSpots)){
+        if(backwardSpots[position]&&backwardSpots[position]!==spot)repainted++;
+      }
+      await remoteFindDiagnostic(record,"navigation_trace_compare",{detail:`trace=${record.traceRun}; source=found_articles; suite=${run}; forward=${left.length}; backward=${right.length}; agreement=${agreement}; retargeted=${retargeted}; repainted=${repainted}`});
     }
     const totals=summaries.map(summary=>`${summary.run}: steps=${summary.steps} p50=${summary.p50} p90=${summary.p90} max=${summary.max} elapsed_ms=${summary.elapsed} reason=${summary.reason}`).join(" | ");
     const position=Number(record.state?.position)||0;
@@ -603,7 +615,7 @@ async function runFoundTraceRun(record,run){
       await (run==="forward"?remoteFindEdge(1):remoteFindEdge(-1));
       if(remoteFind!==record){reason="search_changed"}
       let previous=Number(record.state?.position)||0;
-      if(previous)visited.push({p:previous,at:remoteFindTargetAt()});
+      if(previous)visited.push({p:previous,at:remoteFindTargetAt(),spot:remoteFindSpot});
       const direction=run==="forward"?1:-1;
       while(!remoteFindTraceStop&&remoteFind===record&&steps<100000){
         const state=record.state||{},position=Number(state.position)||0,total=Number(state.total)||0;
@@ -619,8 +631,8 @@ async function runFoundTraceRun(record,run){
         // began is the walk finding the end and is kept out of the record.
         if(direction>0&&record.state?.complete&&next<=previous){reason="end";break}
         steps++;timings.push(performance.now()-stepStarted);
-        visited.push({p:next,at:remoteFindTargetAt()});
-        await remoteFindDiagnostic(record,"navigation_trace_step",{completed:Math.min(100000,steps),total:Math.min(100000,total),detail:`trace=${record.traceRun}; source=found_articles; run=${run}; step=${steps}; from=${position}; to=${next}; complete=${!!record.state?.complete}; at=${remoteFindTargetAt()}; step_ms=${Math.round(performance.now()-stepStarted)}`});
+        visited.push({p:next,at:remoteFindTargetAt(),spot:remoteFindSpot});
+        await remoteFindDiagnostic(record,"navigation_trace_step",{completed:Math.min(100000,steps),total:Math.min(100000,total),detail:`trace=${record.traceRun}; source=found_articles; run=${run}; step=${steps}; from=${position}; to=${next}; complete=${!!record.state?.complete}; at=${remoteFindTargetAt()}; spot=${remoteFindSpot}; step_ms=${Math.round(performance.now()-stepStarted)}`});
         previous=next;
         await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
       }
@@ -633,7 +645,7 @@ async function runFoundTraceRun(record,run){
         await action?.();
         const position=Number(record.state?.position)||0;
         steps++;timings.push(performance.now()-stepStarted);
-        visited.push({p:position,at:remoteFindTargetAt()});
+        visited.push({p:position,at:remoteFindTargetAt(),spot:remoteFindSpot});
         landed[label]=position;
         await remoteFindDiagnostic(record,"navigation_trace_step",{completed:Math.min(100000,steps),total:Math.min(100000,total),detail:`trace=${record.traceRun}; source=found_articles; run=jumps; step=${steps}; ${label}; to=${position}; at=${remoteFindTargetAt()}; step_ms=${Math.round(performance.now()-stepStarted)}`});
       };
@@ -661,10 +673,19 @@ async function runFoundTraceRun(record,run){
     else seen.set(visit.p,visit.at);
   }
   const sequence=visited.map(visit=>visit.p);
+  const spots=visited.filter(visit=>visit.spot).map(visit=>visit.spot);
+  // "stuck" is the counter moving while the mark does not: two positions in a
+  // row painted on the very same range.
+  let stuck=0;
+  for(let index=1;index<visited.length;index++){
+    if(visited[index].spot&&visited[index].spot===visited[index-1].spot)stuck++;
+  }
   const ordered=run==="backward"?sequence.every((p,index)=>!index||p<sequence[index-1]):
     run==="forward"?sequence.every((p,index)=>!index||p>sequence[index-1]):true;
   const digest=sequence.length<=40?sequence.join(","):sequence.slice(0,10).join(",")+",…,"+sequence.slice(-10).join(",");
-  await remoteFindDiagnostic(record,"navigation_trace_positions",{completed:Math.min(100000,steps),total:Math.min(100000,record.state?.total||0),detail:`trace=${record.traceRun}; source=found_articles; run=${run}; count=${sequence.length}; ordered=${ordered}; revisited=${revisited}; mismatched=${mismatched}; ${run==="seeks"?(landed.edges||"edges=none")+"; ":""}seq=${digest}`});
+  await remoteFindDiagnostic(record,"navigation_trace_positions",{completed:Math.min(100000,steps),total:Math.min(100000,record.state?.total||0),detail:`trace=${record.traceRun}; source=found_articles; run=${run}; count=${sequence.length}; ordered=${ordered}; revisited=${revisited}; mismatched=${mismatched}; spots=${new Set(spots).size}; stuck=${stuck}; ${run==="seeks"?(landed.edges||"edges=none")+"; ":""}seq=${digest}`});
+  record.spotRuns=record.spotRuns||{};
+  record.spotRuns[run]=Object.fromEntries(visited.filter(visit=>visit.spot).map(visit=>[visit.p,visit.spot]));
   const summary={run,steps,elapsed:Math.round(performance.now()-started),reason,
     p50:Math.round(tracePercentile(timings,.5)),p90:Math.round(tracePercentile(timings,.9)),
     max:Math.round(timings.length?Math.max(...timings):0),
@@ -777,10 +798,17 @@ async function runTraceRun(record,run){
     else seen.set(visit.p,visit.at);
   }
   const sequence=visited.map(visit=>visit.p);
+  // Two positions in a row on the same target: the counter moved and the mark
+  // did not. The target here carries the match's own index, so this catches a
+  // repeated mark as well as a repeated article.
+  let stuck=0;
+  for(let i=1;i<visited.length;i++){
+    if(visited[i].at&&visited[i].at===visited[i-1].at)stuck++;
+  }
   const ordered=run==="backward"?sequence.every((p,i)=>!i||p<sequence[i-1]):
     run==="forward"?sequence.every((p,i)=>!i||p>sequence[i-1]):true;
   const digest=sequence.length<=40?sequence.join(","):sequence.slice(0,10).join(",")+",…,"+sequence.slice(-10).join(",");
-  await remoteFindDiagnostic(record,"navigation_trace_positions",{completed:steps,total:Math.min(100000,fullTextNavigation?.total||0),detail:`trace=${record.traceRun}; run=${run}; count=${sequence.length}; ordered=${ordered}; revisited=${revisited}; mismatched=${mismatched}; ${run==="seeks"?(landed.edges||"edges=none")+"; ":""}seq=${digest}`});
+  await remoteFindDiagnostic(record,"navigation_trace_positions",{completed:steps,total:Math.min(100000,fullTextNavigation?.total||0),detail:`trace=${record.traceRun}; run=${run}; count=${sequence.length}; ordered=${ordered}; revisited=${revisited}; mismatched=${mismatched}; stuck=${stuck}; ${run==="seeks"?(landed.edges||"edges=none")+"; ":""}seq=${digest}`});
   const summary={run,steps,elapsed:Math.round(performance.now()-started),reason,
     p50:Math.round(tracePercentile(timings,.5)),p90:Math.round(tracePercentile(timings,.9)),
     max:Math.round(timings.length?Math.max(...timings):0),
