@@ -128,7 +128,6 @@ function open(preserveAnchor=false) {
      reader asked to search from a selection. */
   if (!preserveAnchor) options = {...options, query:""};
   fillOptions();
-  moveStripIntoDialog();
   if (!dialog.open) dialog.showModal();
   if (fullTextNavigation) showAnswerLayer();
   renderFindHistory();
@@ -312,7 +311,7 @@ async function startRemoteFind(){
   if(remoteFind?.signature===signature){paint();return}
   closeRemoteFind();
   if(!context.dictionaries.length||!context.query||!context.mode){remoteFind={signature,state:{complete:true,total:0,found:false}};stripLayer="found";paint();return}
-  const record={id:remoteFindID(),signature,state:null,pending:true,error:"",diagnosticRun:++remoteFindDiagnosticRun,diagnosticStarted:performance.now()};
+  const record={id:remoteFindID(),signature,query:options.query,state:null,pending:true,error:"",diagnosticRun:++remoteFindDiagnosticRun,diagnosticStarted:performance.now()};
   remoteFind=record;remoteFindPending=true;stripLayer="found";
   const token=++remoteFindToken;
   matches=[];index=-1;docs.clear();restoreExamples();clearPaint();paint();
@@ -831,7 +830,9 @@ function settleOn(hit, det) {
   frame = requestAnimationFrame(align);
 }
 function go(step) {
-  if(remoteFind){void moveRemoteFind(step);return}
+  // A step belongs to the search the strip is showing. A different query in the
+  // field is another search - the session that is alive answered the old one.
+  if(remoteFind&&remoteFind.query===options.query){void moveRemoteFind(step);return}
   readOptions();active=!!options.query;rebuild();
 }
 function goto(page) {
@@ -910,17 +911,8 @@ function setFullTextNavigation(state) {
 }
 function schedule() { clearTimeout(timer); timer = setTimeout(() => { if (active) rebuild(); },100); }
 function measure() {
-  // Inside the dialog the strip is not the page's bottom bar: the page keeps its
-  // full height and the strip scrolls with the dialog.
-  document.documentElement.style.setProperty("--article-find-height", strip.hidden||dialog.open ? "0px" : strip.offsetHeight+"px");
+  document.documentElement.style.setProperty("--article-find-height", strip.hidden ? "0px" : strip.offsetHeight+"px");
 }
-/* A modal dialog puts its backdrop over the page, so a strip left in the page
-   could not be clicked while the dialog is open. It travels into the dialog for
-   the duration and comes back to its place afterwards. */
-const stripHome = document.createComment("articleFindStrip");
-strip.parentNode.insertBefore(stripHome, strip);
-function moveStripIntoDialog(){ const actions=dialog.querySelector(".article-find-actions"); if(strip.parentElement!==dialog) dialog.insertBefore(strip,actions||null); }
-function restoreStripHome(){ if(strip.parentElement===dialog) stripHome.parentNode.insertBefore(strip,stripHome.nextSibling); }
 $("sbarFind").onclick = open;
 $("articleFindLabel").onclick = () => { if(!dialog.open) open(); };
 $("articleFindCount").onclick = gotoOpen;
@@ -949,8 +941,10 @@ $("articleFindTraceRun").addEventListener("change",()=>{
   void runFullTextTrace(run);
 });
 $("sysLogSearch")?.addEventListener("change",syncRemoteFindTraceButton);
-$("articleFindDialogPrev").onclick = () => go(-1);
-$("articleFindDialogNext").onclick = () => go(1);
+// The dialog's own two buttons hand the search to the strip: they run the step
+// and close the dialog, and the strip underneath is the control from there.
+$("articleFindDialogPrev").onclick = () => { go(-1); dialog.close(); };
+$("articleFindDialogNext").onclick = () => { go(1); dialog.close(); };
 $("articleFindWholeWords").onchange = () => {
   readOptions(); syncControls(); save();
   if (dialog.open) { active = !!options.query; if (active) rebuild(); }
@@ -971,7 +965,6 @@ $("articleFindQuery").oninput = () => { readOptions(); renderFindHistory(); inde
 dialog.addEventListener("cancel",e=>{if(!$("articleFindHistory").hidden){e.preventDefault();hideFindHistory();$("articleFindQuery").focus()}});
 document.addEventListener("pointerdown",e=>{if(!$("articleFindQueryBox").contains(e.target))hideFindHistory()});
 dialog.addEventListener("close", () => {
-  restoreStripHome();
   readOptions();
   if(options.query)recordFindHistory(options.query);
   // An empty field means no search layer: the strip goes back to the answer's

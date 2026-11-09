@@ -268,9 +268,6 @@ html:is([data-shell-sepia],[data-shell-image]) #articleFindStrip{background:var(
 html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image);
   background-size:100% 100%;background-attachment:fixed}
 #articleFindStrip[hidden]{display:none}
-/* Inside the dialog the strip is a row of the dialog, not the page tree bottom bar:
-   it sits in the flow, wraps when narrow, and stays clickable above the backdrop. */
-#articleFindDialog>#articleFindStrip{position:static;flex-wrap:wrap;border-top:1px solid var(--line);background:transparent;backdrop-filter:none;padding:var(--sp-1) 0 0;margin-top:var(--sp-1)}
 #articleFindLabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
 #articleFindReading{flex:none;white-space:nowrap;color:var(--label-quiet);padding:0 .25rem}
 #articleFindCount{flex:none;white-space:nowrap;font-size:.85em}
