@@ -180,18 +180,19 @@ function renderStrip(){
   syncControls();
 }
 function syncControls() {
-  const found=remoteFind;
-  const step=!!found?.id&&!pending&&serverFindCanStep();
+  const found=remoteFind,pending=remoteFindPending;
+  // The dialog's two buttons are how the search starts as well as how it steps:
+  // they are live as soon as there is a query, not only once a session answers.
+  // A session that is already at its end keeps them live - the strip reports the
+  // end, the dialog simply hands over.
+  const ready=!!options.query&&!pending;
   const display=found?(found.error?"⚠ "+t("search.fullListUnavailable"):serverFindPosition()):"";
   // The strip's own count and crosshair belong to its layer renderer; the
   // dialog mirrors the search in the status line and its two buttons.
   $("articleFindStatus").textContent=display||t("articleFind.scope");
-  $("articleFindDialogPrev").disabled=!step;
-  $("articleFindDialogNext").disabled=!step;
+  $("articleFindDialogPrev").disabled=!ready;
+  $("articleFindDialogNext").disabled=!ready;
   syncRemoteFindTraceButton();
-}
-function canStep(step){
-  return !!remoteFind&&!remoteFindPending&&serverFindCanStep();
 }
 /* The window near counts with is the reader's setting (Settings → Results, 1…50,
    ten by default), and the page mirrors the resolved number for anything outside
@@ -951,7 +952,12 @@ $("articleFindWholeWords").onchange = () => {
 };
 for (const id of ["articleFindCase","articleFindAll","articleFindExamples"]) $(id).onchange = () => { readOptions(); index = -1; active = !!options.query; rebuild(); };
 $("articleFindQuery").onfocus = () => { if(!suppressFindHistoryFocus)renderFindHistory(); };
-$("articleFindQuery").oninput = () => { readOptions(); renderFindHistory(); index = -1; active = !!options.query; if(active)schedule(); else rebuild(); };
+$("articleFindQuery").oninput = () => {
+  readOptions(); renderFindHistory(); index=-1; active=!!options.query;
+  // The two buttons follow the field: a query is something to find from here.
+  syncControls();
+  if(active)schedule(); else rebuild();
+};
  dialog.addEventListener("keydown", e => {
   const list=$("articleFindHistory"),input=$("articleFindQuery");
   if(e.key==="Escape"&&!list.hidden){e.preventDefault();e.stopPropagation();hideFindHistory();input.focus();return}
