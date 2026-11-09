@@ -192,6 +192,10 @@ function syncControls() {
   // dialog mirrors the search in the status line and its two buttons.
   $("articleFindStatus").textContent=display||t("articleFind.scope");
   $("articleFindGo").disabled=!ready;
+  // While the search runs the dialog says so, and offers to stop it.
+  $("articleFindSearching").hidden=!pending;
+  $("articleFindStopFind").hidden=!pending;
+  $("articleFindGo").hidden=pending;
   syncRemoteFindTraceButton();
 }
 /* The window near counts with is the reader's setting (Settings → Results, 1…50,
@@ -305,6 +309,18 @@ function findProgressEnd(){
   findProgressOn=false;
   if(typeof maskTaskFinish==="function")try{maskTaskFinish("article-find")}catch(_){}
 }
+/* Where the reader is standing right now: the answer's current match, or the
+   spot a selection pointed at. The dialog searches from here - down first, then
+   up - so a word above the reader is not missed for being behind them. */
+function findAnchor(){
+  const fromSelection=serverFindAnchor();
+  if(fromSelection)return fromSelection;
+  const at=String(fullTextNavigation?.at||"").split(":");
+  if(at.length>=2&&at[0]&&Number.isFinite(Number(at[1]))){
+    return {dict:at[0],article:Number(at[1]),text:"",direction:1};
+  }
+  return null;
+}
 function remoteFindURL(record,action,extra={}){
   return "/api/search?"+new URLSearchParams({cacheAction:action,cacheID:record.id,origin:location.origin,...extra});
 }
@@ -330,16 +346,26 @@ async function remoteFindFetch(record,action,extra={}){
     detail:`action=${action}; found=${!!state.found}; complete=${!!state.complete}; position=${state.position||0}/${state.total||0}; dict=${state.target?.dict||""}; article=${state.target?.articleIndex??""}; block=${state.target?.blockStart??""}; occurrences=${state.target?.occurrences?.length||0}; diagnostic_request_ms=${requestLogMs}`});
   return state;
 }
-async function startRemoteFind(){
+async function startRemoteFind(jump=false){
   if(!options.query){
     closeRemoteFind();matches=[];index=-1;docs.clear();restoreExamples();clearPaint();
     stripLayer="answer";renderStrip();
     return;
   }
-  const context=remoteFindContext(),anchor=serverFindAnchor(),signature=remoteFindSignature(context)+JSON.stringify(anchor);
-  if(remoteFind?.signature===signature){stripLayer="found";paint();return}
+  const context=remoteFindContext(),selection=serverFindAnchor();
+  // A dialog search starts where the reader is; a search from a selection starts
+  // at the selection. Both remember it, because a miss downward is retried upward
+  // from the same place rather than from the top of the answer.
+  const anchor=jump?selection||findAnchor():selection;
+  const signature=remoteFindSignature(context)+JSON.stringify(anchor)+(jump?"|jump":"");
+  if(remoteFind?.signature===signature){
+    stripLayer="found";
+    if(jump&&remoteFind.state?.found)await showRemoteFindTarget(remoteFind.state.target,remoteFind.state,remoteFindToken);
+    paint();
+    return remoteFind.state||null;
+  }
   closeRemoteFind();
-  if(!context.dictionaries.length||!context.query||!context.mode){remoteFind={signature,state:{complete:true,total:0,found:false}};stripLayer="found";paint();return}
+  if(!context.dictionaries.length||!context.query||!context.mode){remoteFind={signature,state:{complete:true,total:0,found:false}};stripLayer="found";paint();return null}
   const record={id:remoteFindID(),signature,query:options.query,state:null,pending:true,error:"",diagnosticRun:++remoteFindDiagnosticRun,diagnosticStarted:performance.now()};
   remoteFind=record;remoteFindPending=true;stripLayer="found";
   const token=++remoteFindToken;
@@ -351,19 +377,36 @@ async function startRemoteFind(){
       resultQuery:context.query,resultMode:context.mode,ignoreDiacritics:context.ignore?"1":"0",
       matchCase:options.matchCase?"1":"0",examples:options.examples?"1":"0",nearWords:String(nearWords()),
       pageSize:String(size),firstSize:String(firstSize),prime:"0",groupID:context.groupID,rungs:context.rungs.join(",")};
-    if(anchor){params.anchorDict=anchor.dict;params.anchorArticle=String(anchor.article);params.anchorText=anchor.text;
-      params.anchorDirection=String(anchor.direction)}
-    searchAnchor=null;
-    const state=await remoteFindFetch(record,"navStart",params);
-    if(token!==remoteFindToken||remoteFind!==record)return;
-    record.state=state;record.pendingTarget=anchor&&state.found?state:null;record.anchorDirection=anchor?.direction||0;
+    // Down from the reader's place, then up from it: a word above them is not
+    // missed for being behind them. Only a miss in both directions is "no such
+    // expression", and that is answered by an empty answer, not by an error.
+    const first=anchor?.direction||1;
+    const passes=jump&&anchor?[first,-first]:[first];
+    let state=null;
+    for(const direction of passes){
+      const request={...params};
+      if(anchor){request.anchorDict=anchor.dict;request.anchorArticle=String(anchor.article);request.anchorText=anchor.text;
+        request.anchorDirection=String(direction)}
+      searchAnchor=null;
+      state=await remoteFindFetch(record,"navStart",request);
+      if(token!==remoteFindToken||remoteFind!==record)return null;
+      if(state.found||!anchor)break;
+    }
+    record.state=state;record.pendingTarget=!jump&&anchor&&state.found?state:null;record.anchorDirection=anchor?.direction||0;
     record.pending=false;record.error="";
+    if(jump&&state?.found){
+      // The reader asked to be taken there, so the first match is painted now;
+      // the strip steps from it.
+      remoteFindSpot="";
+      if(!await showRemoteFindTarget(state.target,state,token))record.error=t("search.fullListUnavailable");
+    }
   }catch(error){
-    if(token!==remoteFindToken||remoteFind!==record)return;
+    if(token!==remoteFindToken||remoteFind!==record)return null;
     record.state={complete:true,total:0,found:false};record.pending=false;record.error=String(error?.message||error);
   }finally{
     if(token===remoteFindToken&&remoteFind===record){remoteFindPending=false;paint()}
   }
+  return record.state;
 }
 function serverFindCanStep(){
   const state=remoteFind?.state;
@@ -1079,7 +1122,17 @@ $("sysLogSearch")?.addEventListener("change",syncRemoteFindTraceButton);
 // One action: the dialog finds, then hands the search to the strip - the arrows
 // there step, jump to the ends and close it. A second pair of arrows in a window
 // that closes on use was one set too many.
-$("articleFindGo").onclick = () => { readOptions(); active=!!options.query; if(active)go(1); dialog.close(); };
+$("articleFindGo").onclick = async () => {
+  readOptions(); active=!!options.query;
+  if(!active){dialog.close();return}
+  const state=await startRemoteFind(true);
+  // Found: the dialog has done its job. Not found: it stays, says so, and the
+  // reader can correct the word without reopening it.
+  if(state?.found)dialog.close();
+};
+$("articleFindStopFind").onclick = () => {
+  closeRemoteFind();stripLayer="answer";renderStrip();syncControls();
+};
 $("articleFindWholeWords").onchange = () => {
   readOptions(); syncControls(); save();
   if (dialog.open) { active = !!options.query; if (active) rebuild(); }
@@ -1102,7 +1155,12 @@ $("articleFindQuery").oninput = () => {
   }
   // Enter is the Find button: Shift+Enter still steps backwards when the
   // reader knows they overshot.
-  if (e.key === "Enter" && e.target.tagName !== "BUTTON") { e.preventDefault(); readOptions(); active=!!options.query; if(active)go(e.shiftKey ? -1 : 1); dialog.close(); }
+  // Enter is the Find button; Shift+Enter steps the search that is already live.
+  if (e.key === "Enter" && e.target.tagName !== "BUTTON") {
+    e.preventDefault();
+    if (e.shiftKey) { readOptions(); active=!!options.query; if (active) go(-1); dialog.close(); return; }
+    $("articleFindGo").click();
+  }
 });
 dialog.addEventListener("cancel",e=>{if(!$("articleFindHistory").hidden){e.preventDefault();hideFindHistory();$("articleFindQuery").focus()}});
 document.addEventListener("pointerdown",e=>{if(!$("articleFindQueryBox").contains(e.target))hideFindHistory()});
