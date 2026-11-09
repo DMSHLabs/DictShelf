@@ -1356,6 +1356,8 @@
   "articleFind.traceBackward": "Назад",
   "articleFind.traceSeeks": "С случайных мест",
   "articleFind.traceFull": "Полный прогон",
+  "articleFind.wordInArticle": "Слово в статье",
+  "articleFind.wholeWords": "Только целые слова",
   "articleFind.traceStop": "Остановить проход",
   "articleFind.traceLogDisabled": "журналирование поиска выключено",
   "articleFind.position": "{current} из {total}",

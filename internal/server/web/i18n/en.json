@@ -1338,6 +1338,8 @@
   "articleFind.traceBackward": "Backward",
   "articleFind.traceSeeks": "From random places",
   "articleFind.traceFull": "Full run",
+  "articleFind.wordInArticle": "Word in article",
+  "articleFind.wholeWords": "Whole words only",
   "articleFind.traceStop": "Stop trace",
   "articleFind.traceLogDisabled": "search event logging is off",
   "articleFind.position": "{current} of {total}",

@@ -996,8 +996,9 @@ window.wudictFontScale=(function(){
        navigation of the marks the server's answer carries, and joins the list
        only while such an answer is on screen. -->
   <label class="article-find-mode" for="articleFindMode">{{T:articleFind.mode}}<select id="articleFindMode" aria-label="{{T:articleFind.mode}}">
-    <option value="prefix">{{T:search.prefix}}</option><option value="suffix">{{T:search.suffix}}</option><option value="contains" selected>{{T:dictUI.contains}}</option><option value="word">{{T:browse.findModeWord}}</option><option value="wordLemma">{{T:browse.findModeWordLemma}}</option><option value="phrase">{{T:articleFind.phrase}}</option><option value="near">{{T:articleFind.near}}</option><option value="fts" hidden>{{T:articleFind.fullText}}</option>
+    <option value="contains" selected>{{T:articleFind.wordInArticle}}</option><option value="word" hidden>{{T:articleFind.wordInArticle}}</option><option value="fts" hidden>{{T:articleFind.fullText}}</option>
   </select></label>
+  <label><input type="checkbox" id="articleFindWholeWords">{{T:articleFind.wholeWords}}</label>
   <label><input type="checkbox" id="articleFindCase">{{T:articleFind.case}}</label>
   <label><input type="checkbox" id="articleFindAll" checked>{{T:articleFind.all}}</label>
   <label><input type="checkbox" id="articleFindExamples">{{T:articleFind.examples}}</label>

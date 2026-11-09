@@ -106,9 +106,12 @@ function readOptions() {
 }
 function fillOptions() {
   $("articleFindQuery").value = options.query;
-  if(options.mode==="exact")options.mode="word"; // saved by the earlier article-search picker
-  options.mode = ["prefix","suffix","contains","word","wordLemma","phrase","near"].includes(options.mode) || options.mode === "fts" && fullTextNavigation ? options.mode : "contains";
+  // The article-text search is one of two things: a word anywhere (as a
+  // substring or, with the checkbox, as whole tokens) or the live full-text
+  // answer. Older saved modes collapse to the word reading.
+  options.mode = options.mode === "word" ? "word" : options.mode === "fts" && fullTextNavigation ? "fts" : "contains";
   $("articleFindMode").value = options.mode;
+  $("articleFindWholeWords").checked = options.mode === "word";
   $("articleFindCase").checked = options.matchCase;
   $("articleFindAll").checked = options.all;
   $("articleFindExamples").checked = options.examples;
@@ -872,6 +875,14 @@ $("articleFindTraceRun").addEventListener("change",()=>{
 $("sysLogSearch")?.addEventListener("change",syncRemoteFindTraceButton);
 $("articleFindDialogPrev").onclick = () => go(-1);
 $("articleFindDialogNext").onclick = () => go(1);
+$("articleFindWholeWords").onchange = () => {
+  const select = $("articleFindMode");
+  if (select.value === "fts") return;
+  select.value = $("articleFindWholeWords").checked ? "word" : "contains";
+  options = {...options, mode: select.value, wholeWords: $("articleFindWholeWords").checked};
+  syncControls(); save();
+  if (dialog.open) { active = !!options.query; if (active) rebuild(); }
+};
 $("articleFindMode").onchange = () => {
   if ($("articleFindMode").value === "fts") {
     if (!fullTextNavigation) { $("articleFindMode").value = options.mode = "contains"; syncControls(); return; }
