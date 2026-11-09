@@ -1453,6 +1453,7 @@ function stopArticleResultCaches(){
   for(const state of articleResultCaches.values())clearTimeout(state.indexTimer);
   articleCacheQueue=[];articleCacheActive=0;articleCacheFinished=0;articleCacheTotal=0;
   articleCacheGroupID="";articleCacheGroupCount=1;
+  prefetchedBlocks.clear();
   articleCacheSearchSettled=false;
   articleResultCaches.clear();maskTaskFinish("search-results");
 }
@@ -7481,6 +7482,47 @@ function renderArticle(dd,body,dictID,frag){
   return root;
 }
 
+/* A block restored by the match walk holds up to twenty heavy articles and the
+   reader needs ONE of them now. The rows after the target are left as height
+   placeholders and rendered one per idle callback, in reading order: the target
+   and everything above it are real, so its scroll position is exact, and the
+   rest lands while the reader reads. Ordinary paging and the first answer never
+   defer anything (deferAfter = -1). */
+const pendingArticleHeights=new Map();
+/* One fill per dictionary list, not one for the page: the walk can leave a
+   half-filled block of one dictionary and restore a block of another, and that
+   must not strand the first block's placeholders. A list that is replaced is
+   stopped by the same token when the next restore schedules its own fill. */
+const articleFillRuns=new WeakMap();
+const prefetchedBlocks=new Set();
+
+function pendingArticleHeight(dict){
+  const known=pendingArticleHeights.get(dict);
+  return Math.round(known||420);
+}
+function noteArticleHeight(dict,height){
+  if(!(height>60))return;
+  const known=pendingArticleHeights.get(dict);
+  pendingArticleHeights.set(dict,known?known*0.7+height*0.3:height);
+}
+function scheduleArticleFill(det,rows){
+  const run=(articleFillRuns.get(det)||0)+1;
+  articleFillRuns.set(det,run);
+  const state={rows,at:0,last:null};
+  const step=()=>{
+    if(articleFillRuns.get(det)!==run||!det.isConnected)return;
+    if(state.last)noteArticleHeight(state.last.dict,state.last.dd.getBoundingClientRect().height);
+    const row=state.rows[state.at++];
+    if(!row)return;
+    const placeholder=row.dd.querySelector(":scope>.article-pending");
+    if(placeholder)placeholder.remove();
+    renderArticle(row.dd,row.body,row.dict,row.frag);
+    state.last=row;
+    if(window.requestIdleCallback)requestIdleCallback(step,{timeout:300});else setTimeout(step,32);
+  };
+  if(window.requestIdleCallback)requestIdleCallback(step,{timeout:300});else setTimeout(step,32);
+}
+
 let frameSeq=0;
 function renderFrame(dd,body,dictID,frag){
   const fid="f"+(++frameSeq);
@@ -8310,7 +8352,7 @@ function favouriteSource(dd,source){
   dd.append(details);
 }
 
-function renderSlot(box,h,mode,q,perDict,group,paging=null){
+function renderSlot(box,h,mode,q,perDict,group,paging=null,deferAfter=-1){
   box.innerHTML="";
   if(h.error){
     box.innerHTML=`<details class="dict" data-dict="${escAttr(h.dict)}"><summary>${dictIconHTML(h.dict)}<span class="dict-info-name" data-dict="${escAttr(h.dict)}">${esc(hitName(h))}</span><span class="count">⚠ ${esc(window.wudictI18n.errorText(h.error))}</span></summary></details>`;
@@ -8377,15 +8419,23 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
     :`<span class="count">${esc(tx("search.results",{count:h.results.length,number:window.wudictI18n.number(h.results.length)}))}</span>`;
   const dictionary=dicts.find(item=>item.id===h.dict),displayName=dictionary?dictLabel(dictionary):h.name;
   det.innerHTML=`<summary class="search-result-summary"><span class="search-dict-identity">${dictIconHTML(h.dict)}<span class="search-dict-name dict-info-name" data-dict="${escAttr(h.dict)}">${esc(displayName)}</span></span><span class="search-dict-controls">${pageControls}${countLabel}${browse}</span></summary>`;
-  const dl=document.createElement("dl"),roots=[];
-  for(const r of h.results){
+  const dl=document.createElement("dl"),roots=[],pendingRows=[];
+  for(let resultIndex=0;resultIndex<h.results.length;resultIndex++){
+    const r=h.results[resultIndex];
     const dt=document.createElement("dt");
     dt.innerHTML=mode==="wildcards"?highlightMaskHeadword(r.Headword,q):esc(r.Headword);
     const dd=document.createElement("dd");dd.dataset.dict=h.dict;
     const favourite=favouriteControl(r,h.dict,dt,dd);if(favourite)dt.append(favourite);
     if(h.dict==="favourites")favouriteSource(dd,r.favoriteSource);
-    roots.push(renderArticle(dd,r.Body,h.dict,
-      anchorOnce&&anchorOnce.dict===h.dict&&r===h.results[0]?anchorOnce.frag:""));
+    const frag=anchorOnce&&anchorOnce.dict===h.dict&&r===h.results[0]?anchorOnce.frag:"";
+    if(deferAfter>=0&&resultIndex>deferAfter){
+      const placeholder=document.createElement("div");
+      placeholder.className="article-pending";placeholder.style.height=pendingArticleHeight(h.dict)+"px";
+      dd.appendChild(placeholder);
+      pendingRows.push({dd,body:r.Body,dict:h.dict,frag});
+    }else{
+      roots.push(renderArticle(dd,r.Body,h.dict,frag));
+    }
     dl.appendChild(dt);dl.appendChild(dd);
   }
   /* A dictionary that declined the reading: it could answer only by reading
@@ -8403,6 +8453,7 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
   }
   det.open=expandAll;
   det.appendChild(dl);box.appendChild(det);
+  if(pendingRows.length)scheduleArticleFill(det,pendingRows);
   observeSearchDictName(det.querySelector(":scope>summary .search-dict-name"));
   // An `entry://Word#frag` link: now that the article is in the document, put
   // the fragment on screen. Shadow-DOM articles can be measured immediately
@@ -10648,7 +10699,7 @@ async function fetchSearchPortion(det,start,options={}){
         const page={start:msg.start||0,size:pageSize,firstPageSize,total:cached.total,lowerBound:cached.total,
           exact:cached.done,hasNext:!!msg.hasNext};
         renderSlot(box,{...msg,name:cached.name,results:visible},
-          mode,query,initial,det.dataset.searchGroup==="true",page);
+          mode,query,initial,det.dataset.searchGroup==="true",page,options.deferAfter??-1);
         loaded=box.querySelector(":scope>details.dict");
         if(loaded)loaded.open=shouldOpen();
         window.wudictArticleFind?.refresh();
@@ -10679,13 +10730,13 @@ async function fetchSearchPortion(det,start,options={}){
       if(!visible.length){
         if(all.length<=start){
           const fallbackStart=Math.max(0,all.length-size),fallback=all.slice(fallbackStart);
-          renderSlot(box,{...msg,results:fallback},mode,query,initial,det.dataset.searchGroup==="true",{...page,start:fallbackStart});
+          renderSlot(box,{...msg,results:fallback},mode,query,initial,det.dataset.searchGroup==="true",{...page,start:fallbackStart},options.deferAfter??-1);
           loaded=box.querySelector(":scope>details.dict");if(loaded)loaded.open=shouldOpen();
           window.wudictArticleFind?.refresh();
         }
         return;
       }
-      renderSlot(box,{...msg,results:visible},mode,query,initial,det.dataset.searchGroup==="true",page);
+      renderSlot(box,{...msg,results:visible},mode,query,initial,det.dataset.searchGroup==="true",page,options.deferAfter??-1);
       loaded=box.querySelector(":scope>details.dict");if(loaded)loaded.open=shouldOpen();
       window.wudictArticleFind?.refresh();
     });
@@ -11060,16 +11111,20 @@ async function navShowTarget(target,state){
   let det=[...document.querySelectorAll("details.dict")].find(item=>item.dataset.searchDict===dict);
   if(!det)return;
   const token=searchSeq;
+  const articleOffset=Number(target.articleIndex)-start;
   if((Number(det.dataset.searchPageStart)||0)!==start){
     const blockStarted=performance.now();
-    const replacement=await window.wudictRestoreArticleBlock?.(det,start);
+    /* With the marks, not without: the walk selects [data-wu-match] in this
+       block, so an unmarked restore is immediately reloaded - two full passes
+       over the same twenty articles, and the prefetched copy (which carries
+       the marks) misses on the first one. */
+    const replacement=await window.wudictRestoreArticleBlock?.(det,start,true,articleOffset);
     window.wudictArticleFind?.traceEvent?.("navigation_trace_block",`dict=${dict}; block=${start}; loaded=${!!replacement}`,Math.round(performance.now()-blockStarted));
     if(!replacement||token!==searchSeq)return;
     det=replacement;
   }
   if(!det.open)det.open=true;
   navDet=det;
-  const articleOffset=Number(target.articleIndex)-start;
   const index=String(Number(target.matchIndex)||0);
   const markStarted=performance.now();
   let mark=null,activeMarks=[];
@@ -11092,7 +11147,7 @@ async function navShowTarget(target,state){
         // navigation, not highlighting, so ask for this block once more with
         // the marks the walk needs.
         reloaded=true;
-        const replacement=await window.wudictRestoreArticleBlock?.(det,start,true);
+        const replacement=await window.wudictRestoreArticleBlock?.(det,start,true,articleOffset);
         if(!replacement||token!==searchSeq)return;
         det=replacement;if(!det.open)det.open=true;navDet=det;
         continue;
@@ -11114,6 +11169,8 @@ async function navShowTarget(target,state){
   }
   for(const item of activeMarks)item.classList.add("wu-cur");
   navCurrent={det,host,el:mark,els:activeMarks};navServerState=state;
+  const rows=det.querySelectorAll(":scope>dl>dd").length;
+  if(rows>0&&articleOffset>=rows-4)window.wudictPrefetchArticleBlock?.(det,start+rows);
   window.wudictArticleFind?.traceEvent?.("navigation_trace_display",`dict=${dict}; article=${target.articleIndex}; block=${start}; mark_ready=true`,Math.round(performance.now()-displayStarted));
   navSettleCurrent(navCurrent);navPos();
 }
@@ -11163,11 +11220,29 @@ async function requestArticleBlock(det,direction){
 }
 window.wudictRequestArticleBlock=(source,direction)=>requestArticleBlock(
   source?.matches?.("details.dict")?source:source?.closest?.("details.dict"),direction);
-window.wudictRestoreArticleBlock=(det,start,marks=false)=>{
+window.wudictRestoreArticleBlock=(det,start,marks=false,deferAfter=-1)=>{
   if(!det?.isConnected)return null;
   const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
   const firstPageSize=Math.max(0,Number(det.dataset.searchFirstPageSize)||0);
-  return fetchSearchPortion(det,start,{openAfter:true,size:start===0&&firstPageSize?firstPageSize:size,pageSize:size,firstPageSize,marks});
+  return fetchSearchPortion(det,start,{openAfter:true,size:start===0&&firstPageSize?firstPageSize:size,pageSize:size,firstPageSize,marks,deferAfter});
+};
+
+/* Warm the NEXT block while the reader reads this one. The walk crosses blocks
+   one after another, and this request fills the server's page cache, so the
+   restore that follows is a cache read instead of a render - 4.5-7.8 MB and
+   half a second of server work saved per block. It runs only when the current
+   block is nearly spent, and only once per block. */
+window.wudictPrefetchArticleBlock=(det,start)=>{
+  if(!det?.isConnected||det.dataset.searchHasNext!=="true")return;
+  const id=det.dataset.searchDict||"",cached=articleResultCaches.get(id);
+  if(!cached||cached.displayQuery!==(det.dataset.searchQuery||"")||cached.mode!==(det.dataset.searchMode||""))return;
+  const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
+  const firstPageSize=Math.max(0,Number(det.dataset.searchFirstPageSize)||0);
+  const want=start===0&&firstPageSize?firstPageSize:size;
+  const url=articleCacheURL(cached,"page",start,want,true);
+  if(prefetchedBlocks.has(url))return;
+  prefetchedBlocks.add(url);
+  apiFetch(url).then(response=>response.arrayBuffer()).catch(()=>{});
 };
 window.wudictArticleBlockHasMore=(det,direction)=>{
   if(!det?.isConnected)return false;
