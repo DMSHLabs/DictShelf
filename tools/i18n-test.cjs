@@ -208,12 +208,13 @@ for (const language of ['en', 'ru']) {
     esc:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),
     escAttr:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'),
     expandAll:false, anchorOnce:null, hitName:h=>h.name,dictIconHTML:()=>'',observeSearchDictName(){},searchPortionSize:()=>5,articleCacheGroupID:'',
+    dicts:[{id:'original-id',name:'<Dictionary>'}],dictLabel:d=>d.name,
     favouriteCollections:[],selectedFavourite:'',favouriteCollectionLabel:()=>'',
     renderArticle:(dd,body,id)=>{articles.push({body,id});return null}};
   vm.runInNewContext(main.match(/^const FEAT_NAME=.*;$/m)[0] + '\n' +
     main.match(/^const fullTextReading=.*;$/m)[0] + '\n' +
     main.match(/function favouriteControl\(result,dictID,dt,dd\)\{[\s\S]*?\n}/)[0] + '\n' +
-    main.match(/function renderSlot\(box,h,mode,q,perDict,group,paging=null\)\{[\s\S]*?\n}/)[0], resultContext);
+    main.match(/function renderSlot\(box,h,mode,q,perDict,group,paging=null,deferAfter=-1\)\{[\s\S]*?\n}/)[0], resultContext);
   const box=node(), body='<p lang="en">word {query}</p>', headword='<word> {number}';
   resultContext.renderSlot(box,{dict:'original-id',name:'<Dictionary>',results:[{Headword:headword,Body:body}]},'prefix','word',1,false);
   assert.match(box.children[0].innerHTML, /&lt;Dictionary&gt;/);
@@ -271,7 +272,7 @@ for (const language of ['en', 'ru']) {
     favouriteCollections:[], favouriteCollectionLabel:()=>'',
     $:()=>panel, document:{createElement:()=>({dataset:{}}),querySelectorAll:()=>[]},
     orderedDicts:()=>[{id:'unchanged-id',name,source:'sample.dsl',format:'dsl',entries:22,caps:{},dbSize:0}],
-    dictLabel:d=>d.name, dictIconHTML:()=>'', browseOriginQuery:()=>'', mb:n=>`${n} B`, baseIndexBytes:()=>100,
+    dictLabel:d=>d.name, dictBaseLabel:d=>d.name, dictHasCustomLabel:()=>false, dictIconHTML:()=>'', browseOriginQuery:()=>'', mb:n=>`${n} B`, baseIndexBytes:()=>100,
     esc:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'),
     escAttr:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'),
     provenance:()=>'', traits:()=>'', renderReindex:()=>{}};
