@@ -268,10 +268,14 @@ html:is([data-shell-sepia],[data-shell-image]) #articleFindStrip{background:var(
 html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image);
   background-size:100% 100%;background-attachment:fixed}
 #articleFindStrip[hidden]{display:none}
+/* Inside the dialog the strip is a row of the dialog, not the page tree bottom bar:
+   it sits in the flow, wraps when narrow, and stays clickable above the backdrop. */
+#articleFindDialog>#articleFindStrip{position:static;flex-wrap:wrap;border-top:1px solid var(--line);background:transparent;backdrop-filter:none;padding:var(--sp-1) 0 0;margin-top:var(--sp-1)}
 #articleFindLabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
 #articleFindReading{flex:none;white-space:nowrap;color:var(--label-quiet);padding:0 .25rem}
 #articleFindCount{flex:none;white-space:nowrap;font-size:.85em}
 #articleFindCount:disabled{opacity:.65;cursor:default}
+#articleFindStrip>button[hidden]{display:none}
 #articleFindStrip>button:not(#articleFindLabel){flex:none}
 #articleFindPrev,#articleFindNext,#articleFindFirst,#articleFindLast{min-width:44px;min-height:44px}
 #articleFindPrev,#articleFindNext,#articleFindFirst,#articleFindLast{display:grid;place-items:center}
@@ -285,8 +289,6 @@ html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image
 #articleFindTraceRun:disabled{opacity:.45}
 #articleFindNext{margin-left:var(--sp-2)}
 .article-find-query-row,.article-find-mode{display:grid;grid-template-columns:max-content minmax(0,1fr);align-items:center;gap:calc(var(--ui-control-gap) * 1em)}
-.article-find-kind{display:flex;flex-wrap:wrap;align-items:center;gap:.35em 1.2em}
-.article-find-kind label{display:flex;align-items:center;gap:.4em;white-space:nowrap}
 .article-find-query-row input,.article-find-mode select{width:100%;min-width:0}
 /* Gaps scale with the viewport and button height; fixed end gutters keep
    the controls clear of the screen edges. The dictionary label gives up

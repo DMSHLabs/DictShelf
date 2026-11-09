@@ -1337,6 +1337,7 @@
   "panel.presetFailed": "Не удалось переключить слой оформления: {error}",
   "articleFind.title": "Поиск в статьях",
   "articleFind.query": "Слово или фраза",
+  "articleFind.scope": "Поиск по найденным статьям",
   "articleFind.mode": "Режим поиска",
   "articleFind.phrase": "Фраза в статье",
   "articleFind.near": "Рядом в статье",

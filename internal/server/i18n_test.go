@@ -122,7 +122,7 @@ func TestI18nPagesAndCache(t *testing.T) {
 			t.Fatal("partial UI translation changed article segmentation fallback")
 		}
 		if path == "/" {
-			for _, text := range []string{`placeholder="Поиск…"`, `<option value="contains" selected>Слово в статье</option>`, `<option value="exact">=</option>`, `"browse.findModeExact":"Точное совпадение"`} {
+			for _, text := range []string{`placeholder="Поиск…"`, `id="articleFindWholeWords">Только целые слова</label>`, `<option value="exact">=</option>`, `"browse.findModeExact":"Точное совпадение"`} {
 				if !strings.Contains(body, text) {
 					t.Errorf("search UI missing %q", text)
 				}

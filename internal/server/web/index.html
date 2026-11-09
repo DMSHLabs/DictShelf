@@ -997,13 +997,9 @@ window.wudictFontScale=(function(){
        while the "full text" reading below them is not matching at all but
        navigation of the marks the server's answer carries, and joins the list
        only while such an answer is on screen. -->
-  <div class="article-find-kind" role="radiogroup" aria-label="{{T:articleFind.mode}}">
-    <label id="articleFindKindWalkLabel"><input type="radio" name="articleFindKind" id="articleFindKindWalk" value="walk">{{T:articleFind.kindWalk}}</label>
-    <label><input type="radio" name="articleFindKind" id="articleFindKindSearch" value="search" checked>{{T:articleFind.kindSearch}}</label>
-    <select id="articleFindMode" hidden aria-hidden="true">
-      <option value="contains" selected>{{T:articleFind.wordInArticle}}</option><option value="word" hidden>{{T:articleFind.wordInArticle}}</option><option value="fts" hidden>{{T:articleFind.fullText}}</option>
-    </select>
-  </div>
+  <!-- One dialog everywhere: the field, the switches and the history. There is
+       no mode here - the search is always inside the articles the answer found,
+       and the bottom strip says which of its two layers is on screen. -->
   <label><input type="checkbox" id="articleFindWholeWords">{{T:articleFind.wholeWords}}</label>
   <label><input type="checkbox" id="articleFindCase">{{T:articleFind.case}}</label>
   <label><input type="checkbox" id="articleFindAll" checked>{{T:articleFind.all}}</label>

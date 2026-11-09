@@ -12,9 +12,17 @@ const wordChar = /[\p{L}\p{M}\p{N}_]/u;
 const findHistoryKey = "wudict_article_find_history_v1";
 const skip = "script,style,noscript,template,button,input,select,textarea,audio,video,svg";
 const block = "p,div,li,dt,dd,td,th,h1,h2,h3,h4,h5,h6,blockquote,pre,.wu-m";
-let options = {query:"", mode:"contains", matchCase:false, all:true, examples:false};
-try { Object.assign(options, JSON.parse(localStorage.getItem("wudict_article_find") || "{}")); } catch (_) {}
+let options = {query:"", wholeWords:false, matchCase:false, all:true, examples:false};
+try {
+  const saved = JSON.parse(localStorage.getItem("wudict_article_find") || "{}");
+  Object.assign(options, saved);
+  // The dialog used to carry a mode of its own; it does not any more. The
+  // whole-words switch is the only choice, and an old "word" reading is it.
+  if (saved.mode === "word") options.wholeWords = true;
+} catch (_) {}
 delete options.blocks; // Retire the former loaded-block-only preference.
+delete options.mode;
+function searchMode() { return options.wholeWords ? "word" : "contains"; }
 function findHistoryLimit(){
   try { const raw=localStorage.getItem("wudict_history_length"); if(raw===null)return 20; const n=Number(raw); return Number.isInteger(n)&&n>=0&&n<=1000?n:20; }
   catch (_) { return 20; }
@@ -85,7 +93,7 @@ function sizeFindHistory(){
 function renderFindHistory(filter=$("articleFindQuery").value){
   const list=$("articleFindHistory"),query=String(filter||"").trim().normalize("NFC").toLocaleLowerCase();
   list.replaceChildren();
-  if(!dialog.open||$("articleFindMode").value==="fts"||!findHistoryLimit()){hideFindHistory();return}
+  if(!dialog.open||!findHistoryLimit()){hideFindHistory();return}
   const rows=findHistory.slice(0,findHistoryLimit()).filter(value=>!query||value.normalize("NFC").toLocaleLowerCase().includes(query));
   for(const value of rows){
     const button=document.createElement("button");button.type="button";button.setAttribute("role","option");button.textContent=value;
@@ -99,97 +107,92 @@ function renderFindHistory(filter=$("articleFindQuery").value){
   $("articleFindQuery").setAttribute("aria-expanded",String(!list.hidden));
 }
 function readOptions() {
-  options = {query:$("articleFindQuery").value.trim(), mode:$("articleFindMode").value,
+  options = {query:$("articleFindQuery").value.trim(), wholeWords:$("articleFindWholeWords").checked,
     matchCase:$("articleFindCase").checked, all:$("articleFindAll").checked,
     examples:$("articleFindExamples").checked};
   save();
 }
 function fillOptions() {
   $("articleFindQuery").value = options.query;
-  // The article-text search is one of two things: a word anywhere (as a
-  // substring or, with the checkbox, as whole tokens) or the live full-text
-  // answer. Older saved modes collapse to the word reading.
-  options.mode = options.mode === "word" ? "word" : options.mode === "fts" && fullTextNavigation ? "fts" : "contains";
-  $("articleFindMode").value = options.mode;
-  $("articleFindWholeWords").checked = options.mode === "word";
+  $("articleFindWholeWords").checked = !!options.wholeWords;
   $("articleFindCase").checked = options.matchCase;
   $("articleFindAll").checked = options.all;
   $("articleFindExamples").checked = options.examples;
 }
 function open(preserveAnchor=false) {
   if (!preserveAnchor) searchAnchor = null;
-  /* The strip is the live answer, and the dialog opens on the reading it shows:
-     [A B] and [A ↔ B] are the dialog's own phrase and near readings, and the
-     words reading is the walk itself. Filling the query but not starting a new
-     search - the reader asked to see the mode, not to run it again. */
-  let adopted = false;
-  if (fullTextNavigation && !preserveAnchor) {
-    const reading = fullTextNavigation.reading;
-    const mode = reading === "phrase" || reading === "near" ? reading : "fts";
-    options = {...options, mode, query: fullTextNavigation.query || options.query};
-    adopted = true;
-  }
+  /* The dialog is one thing everywhere: a search inside the articles the
+     current answer found. It opens empty, with its own history under the field,
+     and it does not touch the answer - the walk keeps its cursor and the strip
+     keeps showing it on its base layer. The field is filled only when the
+     reader asked to search from a selection. */
+  if (!preserveAnchor) options = {...options, query:""};
   fillOptions();
+  moveStripIntoDialog();
+  if (!dialog.open) dialog.showModal();
+  if (fullTextNavigation) showAnswerLayer();
+  renderFindHistory();
   syncControls();
-  active = options.mode !== "fts" && !!options.query;
-  if (active && !searchAnchor && !adopted) rebuild();
-  dialog.showModal();
-  strip.hidden = true; measure();
-  if (options.mode === "fts") $("articleFindKindWalk").focus();
-  else { $("articleFindQuery").focus(); $("articleFindQuery").select(); }
+  $("articleFindQuery").focus();
+  $("articleFindQuery").select();
 }
-function syncFindKind(fts) {
-  const walk = !!fullTextNavigation;
-  $("articleFindKindWalkLabel").hidden = !walk;
-  $("articleFindKindWalk").checked = !!fts && walk;
-  $("articleFindKindSearch").checked = !(!!fts && walk);
+/* The strip is one set of controls over two searches. The base layer is the
+   answer's walk - it is not ours to close, so it carries no close button. The
+   top layer is the dialog's search inside those articles, and it does. Layers
+   switch without re-running anything: both cursors are kept. */
+let stripLayer = "answer";
+function showAnswerLayer(){ stripLayer="answer"; renderStrip(); }
+function renderStrip(){
+  const answer=stripLayer==="answer"?fullTextNavigation:null;
+  const found=stripLayer==="found"?remoteFind:null;
+  if(!answer&&!found){ strip.hidden=true; measure(); syncControls(); return; }
+  strip.hidden=false;
+  $("articleFindStop").hidden=!found;
+  const reading=$("articleFindReading");
+  reading.hidden=!answer;
+  if(answer){
+    reading.textContent={phrase:"[A B]",near:"[A ↔ B]",fts:"[A … B]"}[answer.reading]||"";
+    $("articleFindLabel").textContent=answer.query||"";
+    $("articleFindLabel").title=answer.query||"";
+    $("articleFindCount").textContent=answer.position||"";
+    $("articleFindCount").disabled=!(Number(answer.total)>0);
+    $("articleFindFirst").disabled=!answer.canFirst;
+    $("articleFindPrev").disabled=!answer.canPrevious;
+    $("articleFindNext").disabled=!answer.canNext;
+    $("articleFindLast").disabled=!answer.canLast;
+    $("articleFindScrollToMatch").disabled=!answer.canRestore;
+  }else{
+    const state=found?.state||{};
+    const position=Number(state.position)||0,total=Number(state.total)||0;
+    const pending=!!found?.pending;
+    const atStart=!!state.found&&position<=1;
+    const atEnd=!!state.found&&!!state.complete&&total>0&&position>=total;
+    $("articleFindLabel").textContent=options.query;
+    $("articleFindLabel").title=options.query;
+    $("articleFindCount").textContent=serverFindPosition();
+    $("articleFindCount").disabled=!state.found;
+    $("articleFindFirst").disabled=pending||atStart;
+    $("articleFindPrev").disabled=pending||atStart;
+    $("articleFindNext").disabled=pending||atEnd;
+    $("articleFindLast").disabled=pending||atEnd;
+    $("articleFindScrollToMatch").disabled=pending||!found?.target;
+  }
+  measure();
+  syncControls();
 }
 function syncControls() {
+  const found=remoteFind;
+  const step=!!found?.id&&!pending&&serverFindCanStep();
+  const display=found?(found.error?"⚠ "+t("search.fullListUnavailable"):serverFindPosition()):"";
+  // The strip's own count and crosshair belong to its layer renderer; the
+  // dialog mirrors the search in the status line and its two buttons.
+  $("articleFindStatus").textContent=display||t("articleFind.scope");
+  $("articleFindDialogPrev").disabled=!step;
+  $("articleFindDialogNext").disabled=!step;
   syncRemoteFindTraceButton();
-  const select = $("articleFindMode"), hasFTS = !!fullTextNavigation;
-  const ftsOption=select.querySelector('option[value="fts"]');
-  ftsOption.disabled=!hasFTS;ftsOption.hidden=!hasFTS;
-  let fts = select.value === "fts";
-  if(fts)hideFindHistory();
-  if(fts&&!hasFTS){
-    options={...options,mode:"contains"};select.value="contains";fts=false;save();
-    if(dialog.open){active=!!options.query;if(active)rebuild()}
-  }
-  syncFindKind(fts);
-  $("articleFindStop").disabled = fts && hasFTS;
-  $("articleFindQuery").disabled = fts;
-  for (const id of ["articleFindCase","articleFindAll","articleFindExamples","articleFindWholeWords"]) $(id).disabled = fts;
-  if (fts) {
-    if (fullTextNavigation) {
-      options.query = fullTextNavigation.query || "";
-      $("articleFindQuery").value = options.query;
-    }
-    const position = fullTextNavigation?.position || t("articleFind.noMatches");
-    $("articleFindStatus").textContent = position;
-    $("articleFindCount").textContent = position;
-    $("articleFindCount").disabled = !(Number(fullTextNavigation?.total)>0);
-    $("articleFindDialogPrev").disabled = !fullTextNavigation?.canPrevious;
-    $("articleFindDialogNext").disabled = !fullTextNavigation?.canNext;
-  } else if(remoteFind){
-    const state=remoteFind.state,position=serverFindPosition();
-    const display=remoteFind.error?"⚠ "+t("search.fullListUnavailable"):position;
-    $("articleFindStatus").textContent=display;
-    $("articleFindCount").textContent=display;
-    $("articleFindCount").disabled=!state?.found;
-    $("articleFindDialogPrev").disabled=remoteFindPending||!serverFindCanStep();
-    $("articleFindDialogNext").disabled=remoteFindPending||!serverFindCanStep();
-  } else {
-    $("articleFindDialogPrev").disabled = !canStep(-1);
-    $("articleFindDialogNext").disabled = !canStep(1);
-  }
-  $("articleFindScrollToMatch").disabled = fts ? !fullTextNavigation?.canRestore :
-    remoteFind ? remoteFindPending || !remoteFind.target : !matches.length || index < 0;
-  window.wudictThemedSelects?.articleFindMode?.sync();
 }
 function canStep(step){
-  if(options.mode==="fts")return !!(step<0?fullTextNavigation?.canPrevious:fullTextNavigation?.canNext);
-  if(remoteFind)return !remoteFindPending&&serverFindCanStep();
-  return false;
+  return !!remoteFind&&!remoteFindPending&&serverFindCanStep();
 }
 /* The window near counts with is the reader's setting (Settings → Results, 1…50,
    ten by default), and the page mirrors the resolved number for anything outside
@@ -226,20 +229,7 @@ function paint() {
     win.CSS.highlights.set("wudict-find-all", all);
     win.CSS.highlights.set("wudict-find-current", current);
   }
-  if(remoteFind&&options.mode!=="fts"){
-    const display=remoteFind.error?"⚠ "+t("search.fullListUnavailable"):serverFindPosition();
-    $("articleFindCount").textContent=display;
-    $("articleFindCount").disabled=!remoteFind.state?.found;
-    $("articleFindStatus").textContent=display;
-    $("articleFindLabel").textContent=options.query;
-    $("articleFindLabel").title=options.query;
-    $("articleFindPrev").disabled=remoteFindPending||!serverFindCanStep();
-    $("articleFindNext").disabled=remoteFindPending||!serverFindCanStep();
-    $("articleFindDialogPrev").disabled=remoteFindPending||!serverFindCanStep();
-    $("articleFindDialogNext").disabled=remoteFindPending||!serverFindCanStep();
-    $("articleFindScrollToMatch").disabled=remoteFindPending||!remoteFind.target;
-    return;
-  }
+  renderStrip();
 }
 function closeRemoteFind(){
   remoteFindToken++;remoteFindRequestSeq++;remoteFindPending=false;
@@ -257,8 +247,8 @@ function remoteFindTraceEnabled(){return searchArticleDiagnosticsEnabled()||remo
 function syncRemoteFindTraceButton(){
   const button=$("articleFindTrace");
   if(!button)return;
-  const fullText=options.mode==="fts"&&!!fullTextNavigation;
-  const visible=fullText||!!remoteFind?.id&&options.mode!=="fts";
+  const fullText=stripLayer==="answer"&&!!fullTextNavigation;
+  const visible=fullText||stripLayer==="found"&&!!remoteFind?.id;
   button.hidden=false;
   button.textContent=remoteFindTraceActive?t("articleFind.traceStop"):t("articleFind.traceStart");
   button.setAttribute("aria-label",button.textContent);
@@ -268,7 +258,7 @@ function syncRemoteFindTraceButton(){
 function remoteFindDiagnostic(record,stage,fields={}){
   if(!remoteFindTraceEnabled())return Promise.resolve(false);
   const payload={event:"search_article",stage,runId:record?.diagnosticRun||remoteFindDiagnosticRun,
-    query:String(options.query||"").replace(/[\r\n]/g," ").slice(0,1024),mode:options.mode,
+    query:String(options.query||"").replace(/[\r\n]/g," ").slice(0,1024),mode:searchMode(),
     elapsedMs:Math.max(0,Math.round(performance.now()-(record?.diagnosticStarted||performance.now()))),...fields};
   remoteFindDiagnosticTail=remoteFindDiagnosticTail.then(()=>sendBrowseDiagnostic(payload)).catch(()=>false);
   return remoteFindDiagnosticTail;
@@ -286,7 +276,7 @@ function remoteFindContext(){
     rungs:source.rungs?.length?source.rungs:details.map(det=>det.dataset.searchRung||"")};
 }
 function remoteFindSignature(context){
-  return JSON.stringify([context.groupID,context.dictionaries,context.orders,context.cacheCount,context.query,context.mode,options.query,options.mode,
+  return JSON.stringify([context.groupID,context.dictionaries,context.orders,context.cacheCount,context.query,context.mode,options.query,searchMode(),
     context.ignore,context.rungs,options.matchCase,options.examples,nearWords()]);
 }
 function remoteFindURL(record,action,extra={}){
@@ -313,20 +303,23 @@ async function remoteFindFetch(record,action,extra={}){
   return state;
 }
 async function startRemoteFind(){
-  if(options.mode==="fts")return;
-  if(!options.query){closeRemoteFind();matches=[];index=-1;docs.clear();restoreExamples();clearPaint();syncControls();return}
+  if(!options.query){
+    closeRemoteFind();matches=[];index=-1;docs.clear();restoreExamples();clearPaint();
+    stripLayer="answer";renderStrip();
+    return;
+  }
   const context=remoteFindContext(),anchor=serverFindAnchor(),signature=remoteFindSignature(context)+JSON.stringify(anchor);
   if(remoteFind?.signature===signature){paint();return}
   closeRemoteFind();
-  if(!context.dictionaries.length||!context.query||!context.mode){remoteFind={signature,state:{complete:true,total:0,found:false}};paint();return}
+  if(!context.dictionaries.length||!context.query||!context.mode){remoteFind={signature,state:{complete:true,total:0,found:false}};stripLayer="found";paint();return}
   const record={id:remoteFindID(),signature,state:null,pending:true,error:"",diagnosticRun:++remoteFindDiagnosticRun,diagnosticStarted:performance.now()};
-  remoteFind=record;remoteFindPending=true;
+  remoteFind=record;remoteFindPending=true;stripLayer="found";
   const token=++remoteFindToken;
   matches=[];index=-1;docs.clear();restoreExamples();clearPaint();paint();
   try{
     const size=Math.max(1,Math.min(500,context.pageSize)),firstSize=Math.max(1,Math.min(500,context.firstSize));
     const params={dict:context.dictionaries.join(","),cacheCount:String(context.cacheCount),
-      cacheOrders:context.orders.join(","),q:options.query,mode:options.mode,
+      cacheOrders:context.orders.join(","),q:options.query,mode:searchMode(),
       resultQuery:context.query,resultMode:context.mode,ignoreDiacritics:context.ignore?"1":"0",
       matchCase:options.matchCase?"1":"0",examples:options.examples?"1":"0",nearWords:String(nearWords()),
       pageSize:String(size),firstSize:String(firstSize),prime:"0",groupID:context.groupID,rungs:context.rungs.join(",")};
@@ -459,7 +452,7 @@ function serverFindRanges(root,occurrences){
    The snippet is folded the way the server folds it, so whitespace cannot part
    the two. */
 function serverFindAnchor(){
-  if(!searchAnchor||options.mode==="fts")return null;
+  if(!searchAnchor)return null;
   const host=searchAnchor.host,det=host?.closest("details.dict"),row=host?.closest("dd");
   if(!det||!row)return null;
   const rows=[...det.querySelectorAll(":scope>dl>dd")],articleOffset=rows.indexOf(row);
@@ -685,7 +678,7 @@ async function runTraceRun(record,run){
 }
 async function runFullTextTrace(mode){
   const navigation=fullTextNavigation,generation=navigation?.generation;
-  if(remoteFindTraceActive||options.mode!=="fts"||!navigation?.canNext)return;
+  if(remoteFindTraceActive||stripLayer!=="answer"||!navigation?.canNext)return;
   const run=mode||"forward";
   remoteFindTraceActive=true;remoteFindTraceStop=false;
   const record={diagnosticRun:++remoteFindDiagnosticRun,diagnosticStarted:performance.now(),traceRun:++remoteFindTraceRun};
@@ -740,6 +733,19 @@ async function restoreRemoteFindTarget(){
   catch(error){record.error=String(error?.message||error)}
   finally{if(token===remoteFindToken&&remoteFind===record){remoteFindPending=false;paint()}}
 }
+async function remoteFindEdge(direction){
+  if(!remoteFind?.id||remoteFindPending)return;
+  remoteFindPending=true;const record=remoteFind,token=remoteFindToken,request=++remoteFindRequestSeq;
+  try{
+    const state=await remoteFindFetch(record,direction>0?"navFirst":"navLast");
+    if(request!==remoteFindRequestSeq||token!==remoteFindToken||remoteFind!==record)return;
+    if(state.found){record.state=state;const paintStarted=performance.now();
+      record.error=await showRemoteFindTarget(state.target,state,token)?"":t("search.fullListUnavailable");
+      remoteFindDiagnostic(record,"navigation_target_painted",{elapsedMs:Math.round(performance.now()-paintStarted),detail:`dict=${state.target?.dict||""}; block=${state.target?.blockStart??""}; edge=${direction>0?"first":"last"}; success=${!record.error}`})}
+    else record.state={...record.state,total:state.total,complete:state.complete};
+  }catch(error){record.error=String(error?.message||error)}
+  finally{if(request===remoteFindRequestSeq&&token===remoteFindToken){remoteFindPending=false;paint()}}
+}
 async function gotoRemoteFind(page){
   if(!remoteFind?.id||remoteFindPending||!Number.isInteger(page)||page<1)return;
   remoteFindPending=true;const record=remoteFind,token=remoteFindToken,request=++remoteFindRequestSeq;
@@ -753,9 +759,13 @@ async function gotoRemoteFind(page){
   finally{if(request===remoteFindRequestSeq&&token===remoteFindToken){remoteFindPending=false;paint()}}
 }
 function rebuild() {
-  if (options.mode === "fts") { closeRemoteFind();syncControls(); return; }
   active=!!options.query;
-  if(!active){closeRemoteFind();matches=[];index=-1;docs.clear();restoreExamples();clearPaint();syncControls();return}
+  if(!active){
+    closeRemoteFind();
+    matches=[];index=-1;docs.clear();restoreExamples();clearPaint();
+    stripLayer="answer";renderStrip();
+    return;
+  }
   void startRemoteFind();
 }
 function showExample(hit) {
@@ -815,19 +825,11 @@ function settleOn(hit, det) {
   frame = requestAnimationFrame(align);
 }
 function go(step) {
-  if ($("articleFindMode").value === "fts") {
-    if (step<0?fullTextNavigation?.canPrevious:fullTextNavigation?.canNext)
-      fullTextNavigation[step < 0 ? "previous" : "next"]?.();
-    return;
-  }
   if(remoteFind){void moveRemoteFind(step);return}
-  if(active){void startRemoteFind();return}
-  if (dialog.open || !active) { clearTimeout(timer); readOptions(); active = !!options.query; rebuild(); }
+  readOptions();active=!!options.query;rebuild();
 }
 function goto(page) {
-  if ($("articleFindMode").value === "fts") { fullTextNavigation?.goto?.(page); return true; }
   if(remoteFind){void gotoRemoteFind(page);return true}
-  if(active){void startRemoteFind();return true}
   return false;
 }
 function searchFrom(host,node,offset,direction) {
@@ -836,142 +838,104 @@ function searchFrom(host,node,offset,direction) {
   try { range.setStart(node,Math.max(0,Math.min(offset,node.nodeType===Node.TEXT_NODE?node.length:node.childNodes.length))); range.collapse(true); }
   catch (_) { return; }
   searchAnchor={host,range,direction:direction<0?-1:1};
+
   index=-1;
-  if (options.mode === "fts" && fullTextNavigation) { fullTextNavigation.seekFrom?.(host,node,offset,direction); return; }
-  if (!dialog.open) open(true); else { readOptions(); active=!!options.query; rebuild(); }
+  if (!dialog.open) open(true);
+  // The field is empty until the reader types, but a selection under a live
+  // answer means "find this text again": the answer's own query is the word
+  // this gesture is about.
+  if (!options.query && fullTextNavigation?.query) {
+    options = {...options, query:fullTextNavigation.query};
+    $("articleFindQuery").value = options.query;
+  }
+  readOptions(); active=!!options.query; rebuild();
   $("articleFindQuery").focus();
 }
 function gotoOpen() {
-  // The strip's own count button opens this too, and after a reload the
-  // dialog's mode select is not necessarily on fts even though the walk is
-  // alive; the walk itself decides, not the dialog's stale value.
-  const isFTS = !!fullTextNavigation;
-  const isRemote = !isFTS && options.mode !== "fts" && !!remoteFind;
+  const isFTS = stripLayer==="answer"&&!!fullTextNavigation;
+  const isRemote = !isFTS && !!remoteFind;
   const total = isFTS ? Number(fullTextNavigation.total)||0 : isRemote ? Number(remoteFind.state?.total)||0 : 0;
   const current = isFTS ? Number(fullTextNavigation.current)||1 : isRemote ? Number(remoteFind.state?.position)||1 : 1;
   if (total) window.wudictOpenArticleFindGoto?.(total,current);
 }
+/* The close button belongs to the search layer alone: it ends the dialog's
+   search over the found articles and hands the strip back to the answer
+   underneath. With no answer - an ordinary headword search - there is nothing
+   to fall back to, and the strip hides. */
 function stop() {
   closeRemoteFind();
-  const navigation = fullTextNavigation;
-  fullTextNavigation = null;
-  if (settle) settle();
-  active = false; clearTimeout(timer); restoreExamples(); clearPaint(); matches = []; index = -1;
-  docs.clear();
-  if (dialog.open) dialog.close();
-  strip.hidden = true; measure();
-  navigation?.close?.();
+  active=false; clearTimeout(timer); restoreExamples(); clearPaint(); matches=[]; index=-1; docs.clear();
+  options = {...options, query:""};
+  $("articleFindQuery").value = "";
+  stripLayer = "answer";
+  renderStrip();
+  if (dialog.open) renderFindHistory();
 }
 function setFullTextNavigation(state) {
   const newSearch = !!state && state.generation !== fullTextGeneration;
   if (state && state.generation !== undefined) fullTextGeneration = state.generation;
   fullTextNavigation = state || null;
-  const reading = $("articleFindReading");
-  reading.hidden = !fullTextNavigation;
-  if (fullTextNavigation) reading.textContent = {phrase:"[A B]",near:"[A ↔ B]",fts:"[A … B]"}[fullTextNavigation.reading] || "";
-  if (!fullTextNavigation) {
-    $("articleFindMode").querySelector('option[value="fts"]').disabled = true;
-    if (!active && !dialog.open) strip.hidden = true;
-    syncControls();
-    measure();
-    return;
-  }
-  if (newSearch && !dialog.open) {
-    options = {...options, query:fullTextNavigation.query || "", mode:"fts"};
+  if (newSearch) {
+    // A new answer is a new search: a search inside the previous answer
+    // is over, and the strip goes back to its base layer.
     closeRemoteFind();
-    active=false;matches=[];index=-1;docs.clear();restoreExamples();clearPaint();
+    active=false; clearTimeout(timer); restoreExamples(); clearPaint(); matches=[]; index=-1; docs.clear();
+    options = {...options, query:""};
+    if (dialog.open) $("articleFindQuery").value = "";
+    stripLayer = "answer";
   }
-  if (active && dialog.open && $("articleFindMode").value === "fts") {
-    active = false; clearTimeout(timer); restoreExamples(); clearPaint(); matches = []; index = -1; docs.clear();
-  }
-  if (options.mode === "fts" || newSearch || dialog.open && $("articleFindMode").value === "fts") {
-    $("articleFindLabel").textContent = fullTextNavigation.query || "";
-    $("articleFindLabel").title = fullTextNavigation.query || "";
-  }
-  if (dialog.open) {
-    if ($("articleFindMode").value === "fts") {
-      options = {...options, query:fullTextNavigation.query || "", mode:"fts"};
-      $("articleFindQuery").value = options.query;
-      syncControls();
-    }
-    strip.hidden = true;
-  } else if (options.mode === "fts" || newSearch) {
-    strip.hidden = !fullTextNavigation.visible;
-    $("articleFindCount").textContent = fullTextNavigation.position || "";
-    $("articleFindCount").disabled = !(Number(fullTextNavigation.total)>0);
-    $("articleFindFirst").disabled = !fullTextNavigation.canFirst;
-    $("articleFindPrev").disabled = !fullTextNavigation.canPrevious;
-    $("articleFindNext").disabled = !fullTextNavigation.canNext;
-    $("articleFindLast").disabled = !fullTextNavigation.canLast;
-  }
-  syncControls();
-  measure();
+  renderStrip();
 }
 function schedule() { clearTimeout(timer); timer = setTimeout(() => { if (active) rebuild(); },100); }
 function measure() {
-  document.documentElement.style.setProperty("--article-find-height", strip.hidden ? "0px" : strip.offsetHeight+"px");
+  // Inside the dialog the strip is not the page's bottom bar: the page keeps its
+  // full height and the strip scrolls with the dialog.
+  document.documentElement.style.setProperty("--article-find-height", strip.hidden||dialog.open ? "0px" : strip.offsetHeight+"px");
 }
+/* A modal dialog puts its backdrop over the page, so a strip left in the page
+   could not be clicked while the dialog is open. It travels into the dialog for
+   the duration and comes back to its place afterwards. */
+const stripHome = document.createComment("articleFindStrip");
+strip.parentNode.insertBefore(stripHome, strip);
+function moveStripIntoDialog(){ const actions=dialog.querySelector(".article-find-actions"); if(strip.parentElement!==dialog) dialog.insertBefore(strip,actions||null); }
+function restoreStripHome(){ if(strip.parentElement===dialog) stripHome.parentNode.insertBefore(strip,stripHome.nextSibling); }
 $("sbarFind").onclick = open;
-$("articleFindLabel").onclick = open;
+$("articleFindLabel").onclick = () => { if(!dialog.open) open(); };
 $("articleFindCount").onclick = gotoOpen;
 $("articleFindClose").onclick = () => dialog.close();
 $("articleFindStop").onclick = stop;
-$("articleFindFirst").onclick = () => { if (fullTextNavigation) fullTextNavigation.first?.(); };
-$("articleFindPrev").onclick = () => fullTextNavigation && options.mode === "fts" ? fullTextNavigation.previous?.() : go(-1);
-$("articleFindLast").onclick = () => { if (fullTextNavigation) fullTextNavigation.last?.(); };
-$("articleFindNext").onclick = () => fullTextNavigation && options.mode === "fts" ? fullTextNavigation.next?.() : go(1);
+$("articleFindFirst").onclick = () => { if(stripLayer==="found"){void remoteFindEdge(1);return} fullTextNavigation?.first?.(); };
+$("articleFindPrev").onclick = () => { if(stripLayer==="found"){void moveRemoteFind(-1);return} fullTextNavigation?.previous?.(); };
+$("articleFindNext").onclick = () => { if(stripLayer==="found"){void moveRemoteFind(1);return} fullTextNavigation?.next?.(); };
+$("articleFindLast").onclick = () => { if(stripLayer==="found"){void remoteFindEdge(-1);return} fullTextNavigation?.last?.(); };
 $("articleFindScrollToMatch").onclick = () => {
-  if(options.mode === "fts"){fullTextNavigation?.restore?.();return}
-  if(remoteFind){void restoreRemoteFindTarget();return}
+  if(stripLayer==="found"){if(remoteFind)void restoreRemoteFindTarget();return}
+  fullTextNavigation?.restore?.();
 };
 $("articleFindTrace").onclick = () => {
   if(remoteFindTraceActive){remoteFindTraceStop=true;return}
-  if(options.mode==="fts"){void runFullTextTrace("forward");return}
-  void runRemoteFindTrace();
+  if(stripLayer==="found"){void runRemoteFindTrace();return}
+  void runFullTextTrace("forward");
 };
 $("articleFindTraceRun").addEventListener("change",()=>{
   const select=$("articleFindTraceRun"),run=select.value;
   select.value="";
   window.wudictThemedSelects?.articleFindTraceRun?.sync();
-  if(!run||remoteFindTraceActive||options.mode!=="fts")return;
+  if(remoteFindTraceActive)return;
+  if(stripLayer==="found"){void runRemoteFindTrace();return}
+  if(!run)return;
   void runFullTextTrace(run);
 });
 $("sysLogSearch")?.addEventListener("change",syncRemoteFindTraceButton);
 $("articleFindDialogPrev").onclick = () => go(-1);
 $("articleFindDialogNext").onclick = () => go(1);
-$("articleFindKindWalk").onchange = () => {
-  if (!$("articleFindKindWalk").checked) return;
-  $("articleFindMode").value = "fts";
-  $("articleFindMode").onchange();
-};
-$("articleFindKindSearch").onchange = () => {
-  if (!$("articleFindKindSearch").checked) return;
-  $("articleFindMode").value = $("articleFindWholeWords").checked ? "word" : "contains";
-  $("articleFindMode").onchange();
-};
 $("articleFindWholeWords").onchange = () => {
-  const select = $("articleFindMode");
-  if (select.value === "fts") return;
-  select.value = $("articleFindWholeWords").checked ? "word" : "contains";
-  options = {...options, mode: select.value, wholeWords: $("articleFindWholeWords").checked};
-  syncControls(); save();
+  readOptions(); syncControls(); save();
   if (dialog.open) { active = !!options.query; if (active) rebuild(); }
-};
-$("articleFindMode").onchange = () => {
-  if ($("articleFindMode").value === "fts") {
-    if (!fullTextNavigation) { $("articleFindMode").value = options.mode = "contains"; syncControls(); return; }
-    closeRemoteFind();
-    options = {...options, query:fullTextNavigation.query || "", mode:"fts"};
-    $("articleFindQuery").value = options.query;
-    active = false; clearTimeout(timer); restoreExamples(); clearPaint(); matches = []; index = -1; docs.clear();
-    save(); syncControls();
-    return;
-  }
-  readOptions(); index = -1; active = !!options.query; rebuild(); syncControls();
 };
 for (const id of ["articleFindCase","articleFindAll","articleFindExamples"]) $(id).onchange = () => { readOptions(); index = -1; active = !!options.query; rebuild(); };
 $("articleFindQuery").onfocus = () => { if(!suppressFindHistoryFocus)renderFindHistory(); };
-$("articleFindQuery").oninput = () => { if ($("articleFindMode").value === "fts") { hideFindHistory(); return; } readOptions(); renderFindHistory(); index = -1; active = !!options.query; schedule(); };
+$("articleFindQuery").oninput = () => { readOptions(); renderFindHistory(); index = -1; active = !!options.query; if(active)schedule(); else rebuild(); };
  dialog.addEventListener("keydown", e => {
   const list=$("articleFindHistory"),input=$("articleFindQuery");
   if(e.key==="Escape"&&!list.hidden){e.preventDefault();e.stopPropagation();hideFindHistory();input.focus();return}
@@ -985,11 +949,14 @@ $("articleFindQuery").oninput = () => { if ($("articleFindMode").value === "fts"
 dialog.addEventListener("cancel",e=>{if(!$("articleFindHistory").hidden){e.preventDefault();hideFindHistory();$("articleFindQuery").focus()}});
 document.addEventListener("pointerdown",e=>{if(!$("articleFindQueryBox").contains(e.target))hideFindHistory()});
 dialog.addEventListener("close", () => {
-  if($("articleFindMode").value!=="fts"){readOptions();recordFindHistory(options.query)}
+  restoreStripHome();
+  readOptions();
+  if(options.query)recordFindHistory(options.query);
+  // An empty field means no search layer: the strip goes back to the answer's
+  // walk (or hides when there is none).
+  if(!options.query)stripLayer="answer";
   hideFindHistory();
-  if (active) strip.hidden = false;
-  else if (fullTextNavigation) strip.hidden = !fullTextNavigation.visible;
-  measure();
+  renderStrip();
 });
 document.addEventListener("keydown", e => {
   if (document.querySelector("dialog[open]:not(#articleFindDialog)")) return;
@@ -1025,5 +992,5 @@ window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation,
 }, traceEvent:(stage,detail,elapsedMs=0)=>{
   if(!remoteFindTraceActive)return;
   void remoteFindDiagnostic({diagnosticRun:remoteFindDiagnosticRun,diagnosticStarted:performance.now(),traceRun:remoteFindTraceRun},stage,{elapsedMs,detail:`trace=${remoteFindTraceRun}; source=full_text; ${detail}`});
-}, fullTextModeActive:()=>options.mode === "fts", isActive:()=>active&&!!options.query, searchAcrossBlocks:()=>true, searchFrom, goto, setHistoryLimit:n=>{findHistory=findHistory.slice(0,Math.max(0,Math.min(1000,Number(n)||0)));saveFindHistory();renderFindHistory()}};
+}, fullTextModeActive:()=>stripLayer==="answer"&&!!fullTextNavigation, isActive:()=>active&&!!options.query, searchAcrossBlocks:()=>true, searchFrom, goto, setHistoryLimit:n=>{findHistory=findHistory.slice(0,Math.max(0,Math.min(1000,Number(n)||0)));saveFindHistory();renderFindHistory()}};
 })();

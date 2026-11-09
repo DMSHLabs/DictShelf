@@ -1319,6 +1319,7 @@
   "panel.presetFailed": "Could not switch the preset: {error}",
   "articleFind.title": "Find in articles",
   "articleFind.query": "Word or phrase",
+  "articleFind.scope": "Search the articles this answer found",
   "articleFind.mode": "Search mode",
   "articleFind.phrase": "Phrase in article",
   "articleFind.near": "Near in article",
