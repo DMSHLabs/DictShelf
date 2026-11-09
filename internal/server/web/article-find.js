@@ -864,11 +864,11 @@ function gotoOpen() {
   const current = isFTS ? Number(fullTextNavigation.current)||1 : isRemote ? Number(remoteFind.state?.position)||1 : 1;
   if (total) window.wudictOpenArticleFindGoto?.(total,current);
 }
-/* The close button belongs to the search layer alone: it ends the dialog's
-   search over the found articles and hands the strip back to the answer
-   underneath. With no answer - an ordinary headword search - there is nothing
-   to fall back to, and the strip hides. */
-function stop() {
+/* The strip's close button belongs to the search layer alone: it ends the
+   dialog's search over the found articles and hands the strip back to the
+   answer underneath. With no answer - an ordinary headword search - there is
+   nothing to fall back to, and the strip hides. */
+function closeLayer() {
   closeRemoteFind();
   active=false; clearTimeout(timer); restoreExamples(); clearPaint(); matches=[]; index=-1; docs.clear();
   options = {...options, query:""};
@@ -876,6 +876,22 @@ function stop() {
   stripLayer = "answer";
   renderStrip();
   if (dialog.open) renderFindHistory();
+}
+/* The page calls this when the answer itself is over - a new search, cleared
+   results: everything the find UI holds goes with it, the walk included. */
+function stop() {
+  closeRemoteFind();
+  const navigation = fullTextNavigation;
+  fullTextNavigation = null;
+  if (settle) settle();
+  active = false; clearTimeout(timer); restoreExamples(); clearPaint(); matches = []; index = -1;
+  docs.clear();
+  options = {...options, query:""};
+  $("articleFindQuery").value = "";
+  stripLayer = "answer";
+  strip.hidden = true; measure();
+  if (dialog.open) dialog.close();
+  navigation?.close?.();
 }
 function setFullTextNavigation(state) {
   const newSearch = !!state && state.generation !== fullTextGeneration;
@@ -909,7 +925,7 @@ $("sbarFind").onclick = open;
 $("articleFindLabel").onclick = () => { if(!dialog.open) open(); };
 $("articleFindCount").onclick = gotoOpen;
 $("articleFindClose").onclick = () => dialog.close();
-$("articleFindStop").onclick = stop;
+$("articleFindStop").onclick = closeLayer;
 $("articleFindFirst").onclick = () => { if(stripLayer==="found"){void remoteFindEdge(1);return} fullTextNavigation?.first?.(); };
 $("articleFindPrev").onclick = () => { if(stripLayer==="found"){void moveRemoteFind(-1);return} fullTextNavigation?.previous?.(); };
 $("articleFindNext").onclick = () => { if(stripLayer==="found"){void moveRemoteFind(1);return} fullTextNavigation?.next?.(); };
