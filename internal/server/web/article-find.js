@@ -603,6 +603,9 @@ async function runTraceRun(record,run){
   await remoteFindDiagnostic(record,"navigation_trace_run_start",{detail:`trace=${record.traceRun}; run=${run}; position=${navigation?.current||0}; total=${navigation?.total||0}`});
   try{
     if(run==="forward"||run==="backward"){
+      // Every run starts at its own edge: "start to end" at the first match,
+      // "end to start" at the last, so the trace covers the whole track.
+      await (run==="forward"?fullTextNavigation?.first?.():fullTextNavigation?.last?.());
       const direction=run==="forward"?1:-1;
       let previous=Number(fullTextNavigation?.current)||0;
       while(!remoteFindTraceStop&&fullTextNavigation?.generation===generation&&steps<100000){
@@ -624,24 +627,23 @@ async function runTraceRun(record,run){
         await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
       }
     }else{
-      for(const page of traceSeekPositions(Number(fullTextNavigation?.total)||0)){
-        if(remoteFindTraceStop)break;
+      // Jump around: a random place, a few steps down, the end, a few steps up,
+      // the start - the short hops and both edges in one run.
+      const positions=traceSeekPositions(Number(fullTextNavigation?.total)||0);
+      const landing=positions[Math.min(1,positions.length-1)]||1;
+      const step=async(label,action)=>{
         const t0=performance.now();
-        fullTextNavigation?.goto?.(page);
-        const landed=await traceWaitForPosition(page);
+        await action?.();
+        const position=Number(fullTextNavigation?.current)||0;
         steps++;timings.push(performance.now()-t0);
-        await remoteFindDiagnostic(record,"navigation_trace_step",{completed:steps,total:Math.min(100000,fullTextNavigation?.total||0),detail:`trace=${record.traceRun}; run=seek; step=${steps}; goto=${page}; to=${landed}; step_ms=${Math.round(performance.now()-t0)}`});
-        // Both sides of a jump: the block it landed in is exercised in both
-        // directions, which is where the prefetch and the wrap live.
-        for(const direction of [1,-1]){
-          const from=Number(fullTextNavigation?.current)||0,t1=performance.now();
-          await (direction>0?fullTextNavigation?.next?.():fullTextNavigation?.previous?.());
-          const position=Number(fullTextNavigation?.current)||0;
-          steps++;timings.push(performance.now()-t1);
-          await remoteFindDiagnostic(record,"navigation_trace_step",{completed:steps,total:Math.min(100000,fullTextNavigation?.total||0),detail:`trace=${record.traceRun}; run=seek; step=${steps}; from=${from}; to=${position}; dir=${direction}; step_ms=${Math.round(performance.now()-t1)}`});
-        }
-        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-      }
+        await remoteFindDiagnostic(record,"navigation_trace_step",{completed:steps,total:Math.min(100000,fullTextNavigation?.total||0),detail:`trace=${record.traceRun}; run=jumps; step=${steps}; ${label}; to=${position}; step_ms=${Math.round(performance.now()-t0)}`});
+      };
+      fullTextNavigation?.goto?.(landing);
+      await traceWaitForPosition(landing);
+      for(let i=0;i<3;i++)await step("down",()=>fullTextNavigation?.next?.());
+      await step("last",()=>fullTextNavigation?.last?.());
+      for(let i=0;i<3;i++)await step("up",()=>fullTextNavigation?.previous?.());
+      await step("first",()=>fullTextNavigation?.first?.());
     }
   }catch(error){reason="error";await remoteFindDiagnostic(record,"navigation_trace_error",{detail:`trace=${record.traceRun}; run=${run}; error=${String(error?.message||error).slice(0,700)}`})}
   if(remoteFindTraceStop)reason="stopped";
