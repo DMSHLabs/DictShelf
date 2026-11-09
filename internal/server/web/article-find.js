@@ -531,40 +531,136 @@ async function moveRemoteFind(step){
   }catch(error){record.error=String(error?.message||error);await remoteFindDiagnostic(record,"navigation_trace_error",{detail:`action=move; error=${record.error.slice(0,700)}`});return false}
   finally{if(request===remoteFindRequestSeq&&token===remoteFindToken){remoteFindPending=false;paint()}}
 }
-async function runRemoteFindTrace(){
+/* The trace of the search inside the found articles. It is the same walk the
+   answer's layer gets - from either edge, then jumping around - because the two
+   layers are the same server cursor over the same articles, and the bugs are
+   the same: a step that lands where it was, an edge that is not the edge, two
+   positions that call themselves one. Every position is recorded with the
+   target it stood on, and the runs verify each other at the end. */
+async function runRemoteFindTrace(mode){
   const record=remoteFind;
   if(!record?.id||remoteFindPending||remoteFindTraceActive||!record.state?.found)return;
+  const run=mode||"forward";
   remoteFindTraceActive=true;remoteFindTraceStop=false;record.traceRun=++remoteFindTraceRun;
-  const started=performance.now(),startPosition=Number(record.state.position)||1;
-  let steps=0,reason="end",previousPosition=startPosition;
+  record.traceStarted=performance.now();
+  const origin=Number(record.state.position)||0;
   syncRemoteFindTraceButton();
-  await remoteFindDiagnostic(record,"navigation_trace_start",{detail:`trace=${record.traceRun}; position=${startPosition}; total=${record.state.total||0}; dict=${record.state.target?.dict||""}; block=${record.state.target?.blockStart??""}`});
+  const summaries=[];
+  await remoteFindDiagnostic(record,"navigation_trace_start",{detail:`trace=${record.traceRun}; source=found_articles; run=${run}; position=${origin}; total=${record.state.total||0}`});
   try{
-    while(!remoteFindTraceStop&&remoteFind===record&&steps<100000){
-      if(record.state?.complete&&Number(record.state.position)>=Number(record.state.total)){reason="last_match";break}
-      const stepStarted=performance.now(),from=Number(record.state?.position)||0;
-      const moved=await moveRemoteFind(1);
-      if(remoteFind!==record){reason="search_changed";break}
-      if(!moved){reason=record.error?"error":"no_next_match";break}
-      steps++;
-      const state=record.state||{},position=Number(state.position)||0;
-      await remoteFindDiagnostic(record,"navigation_trace_step",{completed:Math.min(100000,steps),total:Math.min(100000,state.total||0),detail:`trace=${record.traceRun}; step=${steps}; from=${from}; to=${position}; complete=${!!state.complete}; step_ms=${Math.round(performance.now()-stepStarted)}; dict=${state.target?.dict||""}; article=${state.target?.articleIndex??""}; block=${state.target?.blockStart??""}`});
-      if(state.complete&&position<=previousPosition){
-        reason="last_match";
-        const restored=await moveRemoteFind(-1);
-        if(restored)steps++;
-        break;
-      }
-      previousPosition=position;
-      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    for(const name of run==="full"?["forward","backward","seeks"]:[run]){
+      if(remoteFindTraceStop)break;
+      summaries.push(await runFoundTraceRun(record,name));
     }
-    if(steps>=100000)reason="limit";
-    if(remoteFindTraceStop)reason="stopped";
-  }catch(error){reason="error";await remoteFindDiagnostic(record,"navigation_trace_error",{detail:`trace=${record.traceRun}; error=${String(error?.message||error).slice(0,700)}`})}
-  finally{
-    await remoteFindDiagnostic(record,reason==="stopped"?"navigation_trace_stop":"navigation_trace_end",{completed:Math.min(100000,steps),total:Math.min(100000,record.state?.total||0),detail:`trace=${record.traceRun}; reason=${reason}; steps=${steps}; elapsed_ms=${Math.round(performance.now()-started)}; position=${record.state?.position||0}`});
+    // A diagnostic leaves the reader where it found them.
+    if(origin&&!remoteFindTraceStop&&remoteFind===record)await gotoRemoteFind(origin);
+  }catch(error){
+    await remoteFindDiagnostic(record,"navigation_trace_error",{detail:`trace=${record.traceRun}; source=found_articles; error=${String(error?.message||error).slice(0,700)}`});
+  }finally{
+    const forward=summaries.find(summary=>summary.run==="forward");
+    const backward=summaries.find(summary=>summary.run==="backward");
+    if(forward&&backward&&forward.sequence.length&&backward.sequence.length){
+      const left=[...forward.sequence].reverse(),right=backward.sequence;
+      let divergence=-1;
+      for(let index=0;index<Math.min(left.length,right.length);index++){
+        if(left[index]!==right[index]){divergence=index;break}
+      }
+      const agreement=divergence<0&&left.length===right.length?"same":
+        divergence<0?"prefix":"at "+(divergence+1)+": "+left[divergence]+"≠"+right[divergence];
+      let retargeted=0;
+      for(const [position,at] of Object.entries(forward.atOf)){
+        if(backward.atOf[position]&&backward.atOf[position]!==at)retargeted++;
+      }
+      await remoteFindDiagnostic(record,"navigation_trace_compare",{detail:`trace=${record.traceRun}; source=found_articles; suite=${run}; forward=${left.length}; backward=${right.length}; agreement=${agreement}; retargeted=${retargeted}`});
+    }
+    const totals=summaries.map(summary=>`${summary.run}: steps=${summary.steps} p50=${summary.p50} p90=${summary.p90} max=${summary.max} elapsed_ms=${summary.elapsed} reason=${summary.reason}`).join(" | ");
+    const position=Number(record.state?.position)||0;
+    await remoteFindDiagnostic(record,"navigation_trace_end",{completed:Math.min(100000,summaries.reduce((sum,summary)=>sum+summary.steps,0)),total:Math.min(100000,record.state?.total||0),detail:`trace=${record.traceRun}; source=found_articles; suite=${run}; position=${position}`});
+    await remoteFindDiagnostic(record,"navigation_trace_summary",{completed:Math.min(100000,summaries.reduce((sum,summary)=>sum+summary.steps,0)),detail:`trace=${record.traceRun}; source=found_articles; suite=${run}; ${totals||"no runs"}; position=${position}`});
     remoteFindTraceActive=false;remoteFindTraceStop=false;syncRemoteFindTraceButton();paint();
   }
+}
+function remoteFindTargetAt(){
+  const target=remoteFind?.state?.target;
+  return target?[target.dict,target.articleIndex,target.matchIndex,target.blockStart].join(":"):"";
+}
+async function runFoundTraceRun(record,run){
+  const started=performance.now(),timings=[],visited=[],landed={};
+  let steps=0,reason="done";
+  await remoteFindDiagnostic(record,"navigation_trace_run_start",{detail:`trace=${record.traceRun}; source=found_articles; run=${run}; position=${record.state?.position||0}; total=${record.state?.total||0}`});
+  try{
+    if(run==="forward"||run==="backward"){
+      await (run==="forward"?remoteFindEdge(1):remoteFindEdge(-1));
+      if(remoteFind!==record){reason="search_changed"}
+      let previous=Number(record.state?.position)||0;
+      if(previous)visited.push({p:previous,at:remoteFindTargetAt()});
+      const direction=run==="forward"?1:-1;
+      while(!remoteFindTraceStop&&remoteFind===record&&steps<100000){
+        const state=record.state||{},position=Number(state.position)||0,total=Number(state.total)||0;
+        if(direction>0&&state.complete&&total>0&&position>=total)break;
+        if(direction<0&&position<=1)break;
+        const stepStarted=performance.now();
+        const moved=direction>0?await moveRemoteFind(1):await moveRemoteFind(-1);
+        if(remoteFind!==record){reason="search_changed";break}
+        if(!moved){reason=record.error?"error":"end";break}
+        const next=Number(record.state?.position)||0;
+        if(!next||next===position){reason="end";break}
+        // The walk does not wrap for a reader; a step that lands back where it
+        // began is the walk finding the end and is kept out of the record.
+        if(direction>0&&record.state?.complete&&next<=previous){reason="end";break}
+        steps++;timings.push(performance.now()-stepStarted);
+        visited.push({p:next,at:remoteFindTargetAt()});
+        await remoteFindDiagnostic(record,"navigation_trace_step",{completed:Math.min(100000,steps),total:Math.min(100000,total),detail:`trace=${record.traceRun}; source=found_articles; run=${run}; step=${steps}; from=${position}; to=${next}; complete=${!!record.state?.complete}; at=${remoteFindTargetAt()}; step_ms=${Math.round(performance.now()-stepStarted)}`});
+        previous=next;
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      }
+    }else{
+      const total=Number(record.state?.total)||0;
+      const positions=traceSeekPositions(total);
+      const landing=Math.max(1,Math.min(total||1,positions[1]||1));
+      const step=async(label,action)=>{
+        const stepStarted=performance.now();
+        await action?.();
+        const position=Number(record.state?.position)||0;
+        steps++;timings.push(performance.now()-stepStarted);
+        visited.push({p:position,at:remoteFindTargetAt()});
+        landed[label]=position;
+        await remoteFindDiagnostic(record,"navigation_trace_step",{completed:Math.min(100000,steps),total:Math.min(100000,total),detail:`trace=${record.traceRun}; source=found_articles; run=jumps; step=${steps}; ${label}; to=${position}; at=${remoteFindTargetAt()}; step_ms=${Math.round(performance.now()-stepStarted)}`});
+      };
+      await gotoRemoteFind(landing);
+      if(Number(record.state?.position))visited.push({p:Number(record.state.position),at:remoteFindTargetAt()});
+      for(let index=0;index<3;index++)await step("down",()=>moveRemoteFind(1));
+      await step("last",()=>remoteFindEdge(-1));
+      for(let index=0;index<3;index++)await step("up",()=>moveRemoteFind(-1));
+      await step("first",()=>remoteFindEdge(1));
+      const finalTotal=Number(record.state?.total)||0;
+      landed.edges=(landed.first===1?"first=ok":"first="+landed.first)+" "+
+        (!record.state?.complete?"last=provisional":
+          landed.last===finalTotal?"last=ok":"last="+landed.last+"/"+finalTotal);
+    }
+  }catch(error){
+    reason="error";
+    await remoteFindDiagnostic(record,"navigation_trace_error",{detail:`trace=${record.traceRun}; source=found_articles; run=${run}; error=${String(error?.message||error).slice(0,700)}`});
+  }
+  if(remoteFindTraceStop)reason="stopped";
+  const seen=new Map();
+  let revisited=0,mismatched=0;
+  for(const visit of visited){
+    if(!visit.p||!visit.at)continue;
+    if(seen.has(visit.p)){revisited++;if(seen.get(visit.p)!==visit.at)mismatched++;}
+    else seen.set(visit.p,visit.at);
+  }
+  const sequence=visited.map(visit=>visit.p);
+  const ordered=run==="backward"?sequence.every((p,index)=>!index||p<sequence[index-1]):
+    run==="forward"?sequence.every((p,index)=>!index||p>sequence[index-1]):true;
+  const digest=sequence.length<=40?sequence.join(","):sequence.slice(0,10).join(",")+",…,"+sequence.slice(-10).join(",");
+  await remoteFindDiagnostic(record,"navigation_trace_positions",{completed:Math.min(100000,steps),total:Math.min(100000,record.state?.total||0),detail:`trace=${record.traceRun}; source=found_articles; run=${run}; count=${sequence.length}; ordered=${ordered}; revisited=${revisited}; mismatched=${mismatched}; ${run==="seeks"?(landed.edges||"edges=none")+"; ":""}seq=${digest}`});
+  const summary={run,steps,elapsed:Math.round(performance.now()-started),reason,
+    p50:Math.round(tracePercentile(timings,.5)),p90:Math.round(tracePercentile(timings,.9)),
+    max:Math.round(timings.length?Math.max(...timings):0),
+    sequence,atOf:Object.fromEntries(seen)};
+  await remoteFindDiagnostic(record,"navigation_trace_run_end",{completed:Math.min(100000,steps),total:Math.min(100000,record.state?.total||0),detail:`trace=${record.traceRun}; source=found_articles; run=${run}; steps=${steps}; p50=${summary.p50}; p90=${summary.p90}; max=${summary.max}; elapsed_ms=${summary.elapsed}; reason=${reason}`});
+  return summary;
 }
 function tracePercentile(values,fraction){
   if(!values.length)return 0;
@@ -929,7 +1025,7 @@ $("articleFindScrollToMatch").onclick = () => {
 };
 $("articleFindTrace").onclick = () => {
   if(remoteFindTraceActive){remoteFindTraceStop=true;return}
-  if(stripLayer==="found"){void runRemoteFindTrace();return}
+  if(stripLayer==="found"){void runRemoteFindTrace("forward");return}
   void runFullTextTrace("forward");
 };
 $("articleFindTraceRun").addEventListener("change",()=>{
@@ -937,7 +1033,7 @@ $("articleFindTraceRun").addEventListener("change",()=>{
   select.value="";
   window.wudictThemedSelects?.articleFindTraceRun?.sync();
   if(remoteFindTraceActive)return;
-  if(stripLayer==="found"){void runRemoteFindTrace();return}
+  if(stripLayer==="found"){void runRemoteFindTrace(run||"forward");return}
   if(!run)return;
   void runFullTextTrace(run);
 });
