@@ -11132,14 +11132,22 @@ function navPos(){
   if(navSuppressed||!navDet||!markedAnswer){window.wudictArticleFind?.setFullTextNavigation(null);return}
   const state=navServerState;
   if(!state?.found){
-    if(state?.complete){window.wudictArticleFind?.setFullTextNavigation(null);return}
-    window.wudictArticleFind?.setFullTextNavigation({
-      query:lastQuery,generation:searchSeq,reading:lastSearchMode,
-      position:"…",visible:true,total:0,current:0,
-      canPrevious:false,canNext:false,canRestore:false,
-      previous:()=>navGo(-1),next:()=>navGo(1),close:()=>{navSuppressed=true;navDetach()}
-    });
-    return;
+    // A walk that reached its end is not an answer with no matches: the count
+    // and the reader's place are still known, so the bar keeps its number and
+    // the arrows read the ends. Only an answer with nothing to show at all -
+    // no count, nothing found - takes the bar away. With a count the ended walk
+    // falls through to the bar below, which draws "78 of 78" and turns the
+    // arrows off at the ends.
+    if(state?.complete&&!(Number(state.total)||0)){window.wudictArticleFind?.setFullTextNavigation(null);return}
+    if(!state?.complete){
+      window.wudictArticleFind?.setFullTextNavigation({
+        query:lastQuery,generation:searchSeq,reading:lastSearchMode,
+        position:"…",visible:true,total:0,current:0,
+        canPrevious:false,canNext:false,canRestore:false,
+        previous:()=>navGo(-1),next:()=>navGo(1),close:()=>{navSuppressed=true;navDetach()}
+      });
+      return;
+    }
   }
   const count=Number(state.total)||0,position=Number(state.position)||0;
   const fromEnd=Number(state.target?.fromEnd)||0;
@@ -11216,7 +11224,13 @@ async function navGo(step){
   try{
     const state=await navRequest(step<0?"navPrevious":"navNext");
     if(!state||operation!==navOpToken||navSuppressed)return false;
-    navServerState=state;navPos();await navShowTarget(state.target,state,step);
+    // An arrow that ran out of matches answers "complete" without a target. The
+    // reader has not moved: the last match is still theirs, so the bar keeps it
+    // (and the crosshair keeps working) and only learns that the end is here.
+    navServerState=!state.found&&state.complete&&navServerState?.found
+      ?{...navServerState,complete:true,position:Number(state.position)||navServerState.position,total:Number(state.total)||navServerState.total}
+      :state;
+    navPos();await navShowTarget(state.target,state,step);
     return !!state.found;
   }catch(error){console.warn("Article match navigation failed",error)}
   finally{if(operation===navOpToken){navPending=false;navPos()}}

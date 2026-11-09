@@ -612,6 +612,7 @@ async function runTraceRun(record,run){
       if(previous)visited.push({p:previous,at:fullTextNavigation?.at||""});
       while(!remoteFindTraceStop&&fullTextNavigation?.generation===generation&&steps<100000){
         const current=fullTextNavigation;
+        if(!current||current.generation!==generation){reason="search_changed";break}
         if(direction>0&&current.complete&&current.current>=current.total)break;
         if(direction<0&&(Number(current.current)||0)<=1)break;
         const from=Number(current.current)||0,t0=performance.now();
