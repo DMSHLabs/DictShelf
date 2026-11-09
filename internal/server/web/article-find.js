@@ -186,7 +186,7 @@ function syncControls() {
   // they are live as soon as there is a query, not only once a session answers.
   // A session that is already at its end keeps them live - the strip reports the
   // end, the dialog simply hands over.
-  const ready=!!options.query&&!pending;
+  const ready=!!options.query;
   const display=found?(found.error?"⚠ "+t("search.fullListUnavailable"):serverFindPosition()):"";
   // The strip's own count and crosshair belong to its layer renderer; the
   // dialog mirrors the search in the status line and its two buttons.
@@ -195,7 +195,6 @@ function syncControls() {
   // While the search runs the dialog says so, and offers to stop it.
   $("articleFindSearching").hidden=!pending;
   $("articleFindStopFind").hidden=!pending;
-  $("articleFindGo").hidden=pending;
   syncRemoteFindTraceButton();
 }
 /* The window near counts with is the reader's setting (Settings → Results, 1…50,
@@ -1087,7 +1086,7 @@ function setFullTextNavigation(state) {
   }
   renderStrip();
 }
-function schedule() { clearTimeout(timer); timer = setTimeout(() => { if (active) rebuild(); },100); }
+function schedule() { clearTimeout(timer); timer = setTimeout(() => { if (dialog.open) syncControls(); },100); }
 function measure() {
   document.documentElement.style.setProperty("--article-find-height", strip.hidden ? "0px" : strip.offsetHeight+"px");
 }
@@ -1125,6 +1124,7 @@ $("sysLogSearch")?.addEventListener("change",syncRemoteFindTraceButton);
 $("articleFindGo").onclick = async () => {
   readOptions(); active=!!options.query;
   if(!active){dialog.close();return}
+  closeRemoteFind();
   const state=await startRemoteFind(true);
   // Found: the dialog has done its job. Not found: it stays, says so, and the
   // reader can correct the word without reopening it.
@@ -1141,9 +1141,9 @@ for (const id of ["articleFindCase","articleFindAll","articleFindExamples"]) $(i
 $("articleFindQuery").onfocus = () => { if(!suppressFindHistoryFocus)renderFindHistory(); };
 $("articleFindQuery").oninput = () => {
   readOptions(); renderFindHistory(); index=-1; active=!!options.query;
-  // The two buttons follow the field: a query is something to find from here.
-  syncControls();
-  if(active)schedule(); else rebuild();
+  // Typing prepares the query. The search runs when the reader says Find, so an
+  // abandoned word costs nothing and nothing is in flight behind the button.
+  if(active)syncControls(); else rebuild();
 };
  dialog.addEventListener("keydown", e => {
   const list=$("articleFindHistory"),input=$("articleFindQuery");

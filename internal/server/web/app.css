@@ -287,6 +287,9 @@ html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image
 #articleFindNext{margin-left:var(--sp-2)}
 /* A search leaves the dialog only when it has something to show; until then a
    thin line runs under the field and the Find button becomes Stop. */
+/* A class rule on a button beats the [hidden] attribute, so the two states are
+   hidden explicitly rather than left to the user agent. */
+#articleFindGo[hidden],#articleFindStopFind[hidden]{display:none}
 .article-find-searching{position:relative;height:2px;overflow:hidden;border-radius:1px;background:var(--line)}
 .article-find-searching[hidden]{display:none}
 .article-find-searching>span{position:absolute;inset:0;width:40%;background:var(--accent,currentColor);animation:article-find-searching 1.1s ease-in-out infinite}
