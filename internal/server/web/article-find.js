@@ -115,15 +115,21 @@ function fillOptions() {
 }
 function open(preserveAnchor=false) {
   if (!preserveAnchor) searchAnchor = null;
-  /* The words reading navigates the live full-text answer, so it is filled from
-     that answer whenever the dialog opens; the two word readings do it when the
-     search that ran IS that reading - the dialog opened from the mode, the way
-     [A … B] has always been filled. */
-  if (fullTextNavigation && (options.mode === "fts" || options.mode === fullTextNavigation.reading))
-    options = {...options, query:fullTextNavigation.query};
+  /* The strip is the live answer, and the dialog opens on the reading it shows:
+     [A B] and [A ↔ B] are the dialog's own phrase and near readings, and the
+     words reading is the walk itself. Filling the query but not starting a new
+     search - the reader asked to see the mode, not to run it again. */
+  let adopted = false;
+  if (fullTextNavigation && !preserveAnchor) {
+    const reading = fullTextNavigation.reading;
+    const mode = reading === "phrase" || reading === "near" ? reading : "fts";
+    options = {...options, mode, query: fullTextNavigation.query || options.query};
+    adopted = true;
+  }
   fillOptions();
+  syncControls();
   active = options.mode !== "fts" && !!options.query;
-  if (active&&!searchAnchor) rebuild();
+  if (active && !searchAnchor && !adopted) rebuild();
   dialog.showModal();
   strip.hidden = true; measure();
   if (options.mode === "fts") $("articleFindMode").focus();
