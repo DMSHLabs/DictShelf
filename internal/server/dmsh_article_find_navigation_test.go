@@ -348,3 +348,25 @@ func TestArticleFindCapBoundsALiteralList(t *testing.T) {
 		t.Fatal("a capped session claimed its total was exact")
 	}
 }
+
+// The page cache keys on the origin, and the walk's own page loads must use the
+// spelling the reader's page requests carry - otherwise the same block is
+// rendered twice, once for the walk and once for the client's prefetch.
+func TestNavigationOriginIsThePagesOwnSpelling(t *testing.T) {
+	cases := map[string]string{
+		"https://dictshelf.localhost": "https://dictshelf.localhost",
+		"http://127.0.0.1:8080":       "http://127.0.0.1:8080",
+		"":                            "",
+		"https://example.com/":        "",
+		"https://example.com/path":    "",
+		"https://user@example.com":    "",
+		"/relative":                   "",
+		"dictshelf.localhost":         "",
+		"file:///tmp/x":               "",
+	}
+	for raw, want := range cases {
+		if got := navigationOrigin(raw); got != want {
+			t.Errorf("navigationOrigin(%q) = %q, want %q", raw, got, want)
+		}
+	}
+}

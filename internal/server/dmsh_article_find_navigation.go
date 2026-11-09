@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -78,12 +79,17 @@ type articleFindNavigationSession struct {
 	dictionaries []string
 	pageSize     int
 	firstSize    int
-	current      *articleFindNavigationTarget
-	pages        []map[int]articleFindNavigationPage
-	lemmas       map[string]string
-	complete     bool
-	capped       bool // an article hit the mark cap: the total is a lower bound
-	updated      time.Time
+	// origin is the page's own origin, as the reader's requests spell it. The
+	// article page cache keys on it, and this session loads the same blocks the
+	// reader pages through: without it every block was rendered twice, once
+	// under the bridge's virtual origin and once under an empty one.
+	origin   string
+	current  *articleFindNavigationTarget
+	pages    []map[int]articleFindNavigationPage
+	lemmas   map[string]string
+	complete bool
+	capped   bool // an article hit the mark cap: the total is a lower bound
+	updated  time.Time
 }
 
 func (s *Server) handleArticleFindNavigation(w http.ResponseWriter, r *http.Request) {
@@ -187,7 +193,7 @@ func (s *Server) handleArticleFindNavigation(w http.ResponseWriter, r *http.Requ
 		session = &articleFindNavigationSession{id: id, query: query, mode: mode, resultQuery: resultQuery, resultMode: resultMode,
 			ignore: q.Get("ignoreDiacritics") == "1", matchCase: q.Get("matchCase") == "1", examples: q.Get("examples") == "1", nearWords: nearWords,
 			cacheID: q.Get("groupID"), cacheCount: cacheCount, cacheOrders: cacheOrders, rungs: strings.Split(q.Get("rungs"), ","),
-			dictionaries: dictionaries, pageSize: pageSize, firstSize: firstSize,
+			dictionaries: dictionaries, pageSize: pageSize, firstSize: firstSize, origin: navigationOrigin(q.Get("origin")),
 			pages: make([]map[int]articleFindNavigationPage, len(dictionaries)), updated: time.Now()}
 		for i := range session.pages {
 			session.pages[i] = make(map[int]articleFindNavigationPage)
@@ -300,6 +306,22 @@ func navigationNumber(value string, fallback, maxValue int) (int, error) {
 		return 0, errors.New("invalid article navigation number")
 	}
 	return n, nil
+}
+
+// navigationOrigin accepts the spelling a page uses for itself - scheme://host,
+// nothing after the host - and returns "" for anything else, so a malformed or
+// hostile value degrades to "no shared page cache" instead of a new key.
+func navigationOrigin(raw string) string {
+	if raw == "" || len(raw) > 300 {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.User != nil || u.Host == "" ||
+		(u.Scheme != "http" && u.Scheme != "https") ||
+		u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
 }
 
 func navigationCoordinate(value string) (int, error) {
@@ -483,7 +505,8 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 	cacheComplete, cacheHasNext := false, false
 	findFullText := sessionUsesFullTextMarks(session)
 	request := SearchRequest{Query: session.resultQuery, Mode: session.resultMode, Dictionary: session.dictionaries[dictionaryIndex],
-		Format: "raw", Limit: limit, Highlight: findFullText, IgnoreDiacritics: session.ignore, Transport: "article_find_navigation"}
+		Format: "raw", Limit: limit, Highlight: findFullText, IgnoreDiacritics: session.ignore, Transport: "article_find_navigation",
+		Origin: session.origin}
 	if session.cacheID != "" {
 		request.CacheAction = "page"
 		request.CacheID = session.cacheID

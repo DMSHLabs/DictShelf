@@ -274,7 +274,7 @@ function remoteFindSignature(context){
     context.ignore,context.rungs,options.matchCase,options.examples,nearWords()]);
 }
 function remoteFindURL(record,action,extra={}){
-  return "/api/search?"+new URLSearchParams({cacheAction:action,cacheID:record.id,...extra});
+  return "/api/search?"+new URLSearchParams({cacheAction:action,cacheID:record.id,origin:location.origin,...extra});
 }
 async function remoteFindFetch(record,action,extra={}){
 	const started=performance.now();
