@@ -846,8 +846,10 @@ function setFullTextNavigation(state) {
     strip.hidden = !fullTextNavigation.visible;
     $("articleFindCount").textContent = fullTextNavigation.position || "";
     $("articleFindCount").disabled = !(Number(fullTextNavigation.total)>0);
+    $("articleFindFirst").disabled = !fullTextNavigation.canFirst;
     $("articleFindPrev").disabled = !fullTextNavigation.canPrevious;
     $("articleFindNext").disabled = !fullTextNavigation.canNext;
+    $("articleFindLast").disabled = !fullTextNavigation.canLast;
   }
   syncControls();
   measure();
@@ -861,7 +863,9 @@ $("articleFindLabel").onclick = open;
 $("articleFindCount").onclick = gotoOpen;
 $("articleFindClose").onclick = () => dialog.close();
 $("articleFindStop").onclick = stop;
+$("articleFindFirst").onclick = () => { if (fullTextNavigation) fullTextNavigation.first?.(); };
 $("articleFindPrev").onclick = () => fullTextNavigation && options.mode === "fts" ? fullTextNavigation.previous?.() : go(-1);
+$("articleFindLast").onclick = () => { if (fullTextNavigation) fullTextNavigation.last?.(); };
 $("articleFindNext").onclick = () => fullTextNavigation && options.mode === "fts" ? fullTextNavigation.next?.() : go(1);
 $("articleFindScrollToMatch").onclick = () => {
   if(options.mode === "fts"){fullTextNavigation?.restore?.();return}

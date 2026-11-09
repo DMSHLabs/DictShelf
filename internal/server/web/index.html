@@ -975,8 +975,10 @@ window.wudictFontScale=(function(){
   <button type="button" class="btn" id="articleFindLabel" aria-label="{{T:articleFind.settings}}"></button>
   <span id="articleFindReading" hidden></span>
   <button type="button" class="btn" id="articleFindCount" aria-live="polite" aria-haspopup="dialog" aria-controls="maskGotoDialog" disabled></button>
+  <button type="button" class="btn" id="articleFindFirst" aria-label="{{T:articleFind.first}}" title="{{T:articleFind.first}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 4h14"/><path d="M12 20V8"/><path d="m7 13 5-5 5 5"/></svg></button>
   <button type="button" class="btn" id="articleFindPrev" aria-label="{{T:articleFind.previous}}" title="{{T:articleFind.previous}}">↑</button>
   <button type="button" class="btn" id="articleFindNext" aria-label="{{T:articleFind.next}}" title="{{T:articleFind.next}}">↓</button>
+  <button type="button" class="btn" id="articleFindLast" aria-label="{{T:articleFind.last}}" title="{{T:articleFind.last}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 20h14"/><path d="M12 4v12"/><path d="m7 11 5 5 5-5"/></svg></button>
   <button type="button" class="btn" id="articleFindScrollToMatch" aria-label="{{T:articleFind.scrollToMatch}}" title="{{T:articleFind.scrollToMatch}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="2"/></svg></button>
   <button type="button" class="btn" id="articleFindTrace" aria-label="{{T:articleFind.traceStart}}" title="{{T:articleFind.traceStart}}">{{T:articleFind.traceStart}}</button>
   <select id="articleFindTraceRun" class="btn" aria-label="{{T:articleFind.traceMore}}" title="{{T:articleFind.traceMore}}">
@@ -11140,13 +11142,19 @@ function navPos(){
     return;
   }
   const count=Number(state.total)||0,position=Number(state.position)||0;
+  const fromEnd=Number(state.target?.fromEnd)||0;
+  const shown=fromEnd>0?fromEnd:position;
+  const direction=count&&!state.complete?(fromEnd>0?"↑ ":"↓ "):"";
   const block=window.wudictArticleFindBlockRange?.(navDet)||"";
   const canNavigate=!state.complete||count>1;
+  const atStart=position<=1,atEnd=!!state.complete&&count>0&&position>=count;
   window.wudictArticleFind?.setFullTextNavigation({
     query:lastQuery,generation:searchSeq,reading:lastSearchMode,
-    position:count?tx("articleFind.position",{current:position,total:count+(state.complete?"":"+")})+(block?" · "+block:""):tx("articleFind.noMatches"),
-      visible:count>0,canNavigate,canPrevious:canNavigate,canNext:canNavigate,total:count,current:position,complete:!!state.complete,
-    previous:()=>navGo(-1),next:()=>navGo(1),refresh:()=>navPos(),goto:page=>navGoto(page),
+    position:count?direction+tx("articleFind.position",{current:shown,total:count+(state.complete?"":"+")})+(block?" · "+block:""):tx("articleFind.noMatches"),
+      visible:count>0,canNavigate,canPrevious:!atStart,canNext:!atEnd,canFirst:count>0,canLast:count>0,
+      total:count,current:position,complete:!!state.complete,
+    previous:()=>navGo(-1),next:()=>navGo(1),first:()=>navEdge(1),last:()=>navEdge(-1),
+    refresh:()=>navPos(),goto:page=>navGoto(page),
     canRestore:!!navServerState?.found,restore:()=>navRestoreCurrent(),
     seekFrom:(_host,_node,_offset,direction)=>navGo(direction<0?-1:1),
     close:()=>{navSuppressed=true;navDetach()}
@@ -11208,6 +11216,30 @@ async function navGo(step){
     const state=await navRequest(step<0?"navPrevious":"navNext");
     if(!state||operation!==navOpToken||navSuppressed)return false;
     navServerState=state;navPos();await navShowTarget(state.target,state,step);
+    return !!state.found;
+  }catch(error){console.warn("Article match navigation failed",error)}
+  finally{if(operation===navOpToken){navPending=false;navPos()}}
+  return false;
+}
+async function navEdge(direction){
+  if(navSuppressed||!navDet||!markedAnswer)return false;
+  if(navPending){
+    for(let attempt=0;navPending&&attempt<100;attempt++)await new Promise(resolve=>setTimeout(resolve,50));
+    if(navPending)return false;
+  }
+  if(!navSessionID){
+    if(!navDet||!markedAnswer)return false;
+    navSessionID=articleCacheGroupID||newArticleResultCacheID();navServerState=null;
+  }
+  if(!navServerState){
+    await navStart(navDet);
+    if(!navServerState?.found)return false;
+  }
+  navPending=true;const operation=++navOpToken;
+  try{
+    const state=await navRequest(direction>0?"navFirst":"navLast");
+    if(!state||operation!==navOpToken||navSuppressed)return false;
+    navServerState=state;navPos();await navShowTarget(state.target,state,direction>0?1:-1);
     return !!state.found;
   }catch(error){console.warn("Article match navigation failed",error)}
   finally{if(operation===navOpToken){navPending=false;navPos()}}

@@ -1331,6 +1331,8 @@
   "articleFind.blocks": "Search across all result blocks",
   "articleFind.hiddenHint": "Try searching hidden examples.",
   "articleFind.previous": "Find previous",
+  "articleFind.first": "First match",
+  "articleFind.last": "Last match",
   "articleFind.next": "Find next",
   "articleFind.scrollToMatch": "Return to the current match",
   "articleFind.traceStart": "Trace all",

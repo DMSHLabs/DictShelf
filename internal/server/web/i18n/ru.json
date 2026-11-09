@@ -1349,6 +1349,8 @@
   "articleFind.blocks": "Искать по всем блокам результатов",
   "articleFind.hiddenHint": "Попробуйте искать в скрытых примерах.",
   "articleFind.previous": "Найти предыдущее",
+  "articleFind.first": "К первому совпадению",
+  "articleFind.last": "К последнему совпадению",
   "articleFind.next": "Найти следующее",
   "articleFind.scrollToMatch": "Вернуться к текущему совпадению",
   "articleFind.traceStart": "Пройти все",

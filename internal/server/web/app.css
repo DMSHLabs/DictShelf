@@ -273,7 +273,9 @@ html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image
 #articleFindCount{flex:none;white-space:nowrap;font-size:.85em}
 #articleFindCount:disabled{opacity:.65;cursor:default}
 #articleFindStrip>button:not(#articleFindLabel){flex:none}
-#articleFindPrev,#articleFindNext{min-width:44px;min-height:44px}
+#articleFindPrev,#articleFindNext,#articleFindFirst,#articleFindLast{min-width:44px;min-height:44px}
+#articleFindFirst,#articleFindLast{display:grid;place-items:center}
+#articleFindFirst svg,#articleFindLast svg{width:20px;height:20px}
 #articleFindScrollToMatch{display:grid;place-items:center;min-width:44px;min-height:44px}
 #articleFindScrollToMatch svg{width:20px;height:20px}
 #articleFindTrace{white-space:nowrap}
