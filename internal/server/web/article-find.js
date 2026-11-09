@@ -609,6 +609,7 @@ async function runTraceRun(record,run){
       await (run==="forward"?fullTextNavigation?.first?.():fullTextNavigation?.last?.());
       const direction=run==="forward"?1:-1;
       let previous=Number(fullTextNavigation?.current)||0;
+      if(previous)visited.push({p:previous,at:fullTextNavigation?.at||""});
       while(!remoteFindTraceStop&&fullTextNavigation?.generation===generation&&steps<100000){
         const current=fullTextNavigation;
         if(direction>0&&current.complete&&current.current>=current.total)break;
@@ -618,13 +619,15 @@ async function runTraceRun(record,run){
         const next=fullTextNavigation;
         if(!next||next.generation!==generation){reason="search_changed";break}
         const position=Number(next.current)||0;
+        if(!position||position===from){reason=advanced===false?"navigation_unavailable":"no_next_match";break}
+        // The answer does not wrap for the reader: a step that lands back where
+        // the walk began is the walk learning the end. It is undone and kept out
+        // of the record - the positions compared below are the ones a reader can
+        // actually stand on.
+        if(direction>0&&next.complete&&position<=previous){await next.previous();reason="end";break}
         steps++;timings.push(performance.now()-t0);
         visited.push({p:position,at:next.at||""});
         await remoteFindDiagnostic(record,"navigation_trace_step",{completed:steps,total:Math.min(100000,next.total||0),detail:`trace=${record.traceRun}; run=${run}; step=${steps}; from=${from}; to=${position}; complete=${!!next.complete}; at=${next.at||""}; step_ms=${Math.round(performance.now()-t0)}`});
-        if(!position||position===from){reason=advanced===false?"navigation_unavailable":"no_next_match";break}
-        // A forward walk that comes back to where it was has wrapped: the
-        // count was still growing when the last occurrence answered.
-        if(direction>0&&next.complete&&position<=previous){await next.previous();break}
         previous=position;
         await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
       }
@@ -644,6 +647,7 @@ async function runTraceRun(record,run){
       };
       fullTextNavigation?.goto?.(landing);
       await traceWaitForPosition(landing);
+      if(Number(fullTextNavigation?.current))visited.push({p:Number(fullTextNavigation.current),at:fullTextNavigation?.at||""});
       for(let i=0;i<3;i++)await step("down",()=>fullTextNavigation?.next?.());
       await step("last",()=>fullTextNavigation?.last?.());
       for(let i=0;i<3;i++)await step("up",()=>fullTextNavigation?.previous?.());

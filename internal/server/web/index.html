@@ -11459,7 +11459,13 @@ function navSettleCurrent(cur){
   const settleStarted=performance.now();
   let moved=false,attempts=0,stable=0,timer=0,frame=0,timeout=0,observer=null;
   const quit=["wheel","touchstart","pointerdown","keydown"];
+  let settled=false;
   const stop=()=>{
+    // Aligning own scroll ends once; a wheel, a resize and the frame that
+    // noticed the same stop all call this, and the trace wants one line for
+    // the target - not the same measurements written eight times.
+    if(settled)return;
+    settled=true;
     window.wudictArticleFind?.traceEvent?.("navigation_trace_settle",`attempts=${attempts}; stable=${stable}; moved=${moved}; current=${navCurrent===cur};`,Math.round(performance.now()-settleStarted));
     observer?.disconnect();clearTimeout(timer);clearTimeout(timeout);cancelAnimationFrame(frame);
     for(const event of quit)removeEventListener(event,stop);
