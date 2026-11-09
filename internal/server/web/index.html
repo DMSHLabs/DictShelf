@@ -979,6 +979,12 @@ window.wudictFontScale=(function(){
   <button type="button" class="btn" id="articleFindNext" aria-label="{{T:articleFind.next}}" title="{{T:articleFind.next}}">↓</button>
   <button type="button" class="btn" id="articleFindScrollToMatch" aria-label="{{T:articleFind.scrollToMatch}}" title="{{T:articleFind.scrollToMatch}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="2"/></svg></button>
   <button type="button" class="btn" id="articleFindTrace" aria-label="{{T:articleFind.traceStart}}" title="{{T:articleFind.traceStart}}">{{T:articleFind.traceStart}}</button>
+  <select id="articleFindTraceRun" aria-label="{{T:articleFind.traceMore}}" title="{{T:articleFind.traceMore}}">
+    <option value="" selected>▾</option>
+    <option value="backward">{{T:articleFind.traceBackward}}</option>
+    <option value="seeks">{{T:articleFind.traceSeeks}}</option>
+    <option value="full">{{T:articleFind.traceFull}}</option>
+  </select>
 </div>
 <dialog id="articleFindDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="articleFindTitle">
   <h2 id="articleFindTitle">{{T:articleFind.title}}<button type="button" class="btn" id="articleFindClose" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
@@ -1468,11 +1474,13 @@ function cancelArticleResultCaches(){
   }
   maskTaskFinish("search-results");
 }
-function articleCacheURL(state,action,start=0,size=0,marks=hlOn){
-  return "/api/search?"+new URLSearchParams({cacheAction:action,cacheID:state.id,dict:state.dict,
+function articleCacheURL(state,action,start=0,size=0,marks=hlOn,extra=null){
+  const params={cacheAction:action,cacheID:state.id,dict:state.dict,
     cacheCount:String(state.count),cacheOrder:String(state.order),
     q:state.query,mode:state.mode,rung:state.rung,format:"raw",ignoreDiacritics:state.ignore?"1":"0",
-    hl:marks?"1":"0",start:String(start),size:String(size),pageCacheDiagnostics:articlePageCacheDiagnosticsEnabled()?"1":"0",searchDiagnostics:searchArticleDiagnosticsEnabled()?"1":"0"});
+    hl:marks?"1":"0",start:String(start),size:String(size),pageCacheDiagnostics:articlePageCacheDiagnosticsEnabled()?"1":"0",searchDiagnostics:searchArticleDiagnosticsEnabled()?"1":"0"};
+  if(extra)Object.assign(params,extra);
+  return "/api/search?"+new URLSearchParams(params);
 }
 function updateArticleCacheCard(state){
   const det=[...document.querySelectorAll("details.dict")].find(node=>
@@ -7520,14 +7528,14 @@ function scheduleArticleFill(det,rows){
   articleFillRuns.set(det,run);
   const pending=rows.map(row=>({row,urgent:false,done:false,
     placeholder:row.dd.querySelector(":scope>.article-pending")}));
-  let last=null,idle=0,timer=0,observer=null;
+  let last=null,idle=0,timer=0,observer=null,busy=false;
   const alive=()=>articleFillRuns.get(det)===run&&det.isConnected;
   const stop=()=>{
     observer?.disconnect();observer=null;
     if(idle&&window.cancelIdleCallback)window.cancelIdleCallback(idle);
     idle=0;clearTimeout(timer);timer=0;
   };
-  const step=()=>{
+  const step=async()=>{
     clearTimeout(timer);timer=0;idle=0;
     if(!alive())return stop();
     // What the reader can see is rendered before what is merely next: a row
@@ -7539,6 +7547,16 @@ function scheduleArticleFill(det,rows){
       if(!pick)pick=item;
     }
     if(!pick)return stop();
+    if(!pick.row.body){
+      // The block carried only the awaited article's body. Ask for this row's
+      // own; the server has the block cached, so this is one small read, not a
+      // render.
+      busy=true;
+      try{pick.row.body=await articlePendingBody(pick.row)}catch(_){}
+      busy=false;
+      if(!alive())return stop();
+      if(!pick.row.body){pick.done=true;return schedule(pending.some(item=>!item.done&&item.urgent))}
+    }
     pick.done=true;
     if(last)noteArticleHeight(last.dict,last.dd.getBoundingClientRect().height);
     if(pick.placeholder)pick.placeholder.remove();
@@ -7548,6 +7566,7 @@ function scheduleArticleFill(det,rows){
   };
   const schedule=(urgent)=>{
     if(!alive())return stop();
+    if(busy)return;
     if(urgent){
       if(idle&&window.cancelIdleCallback)window.cancelIdleCallback(idle);
       idle=0;
@@ -7573,6 +7592,21 @@ function scheduleArticleFill(det,rows){
     for(const item of pending)if(item.placeholder)observer.observe(item.placeholder);
   }
   schedule(false);
+}
+/* The body of one deferred row. The page carried only the awaited article's
+   body; the server has the block cached and answers this with one stored row. */
+async function articlePendingBody(row){
+  const cached=articleResultCaches.get(row.dict);
+  if(!cached||!row.size)return "";
+  const size=normalizedSearchPortionSize(row.size);
+  const first=Math.max(0,Number(row.first)||0);
+  const want=row.start===0&&first?first:size;
+  const url=articleCacheURL(cached,"page",row.start,want,true,{body:String(row.index),bodyOnly:"1"});
+  let body="";
+  await fetchStream(url,msg=>{
+    if(msg.t==="hit"&&msg.dict===row.dict&&msg.results?.length)body=msg.results[0].Body||"";
+  });
+  return body;
 }
 
 let frameSeq=0;
@@ -8484,7 +8518,10 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null,deferAfter=-1){
       const placeholder=document.createElement("div");
       placeholder.className="article-pending";placeholder.style.height=pendingArticleHeight(h.dict)+"px";
       dd.appendChild(placeholder);
-      pendingRows.push({dd,body:r.Body,dict:h.dict,frag});
+      // The page carries only the awaited article's body; a deferred row asks
+      // for its own when the fill reaches it.
+      pendingRows.push({dd,body:r.Body,dict:h.dict,frag,index:resultIndex,
+        start:paging?paging.start:0,size:paging?paging.size:0,first:paging?paging.firstPageSize:0});
     }else{
       roots.push(renderArticle(dd,r.Body,h.dict,frag));
     }
@@ -10742,7 +10779,9 @@ async function fetchSearchPortion(det,start,options={}){
     buttons.forEach(button=>button.disabled=true);
     try{
       if(!cached.started)pumpArticleResultCaches();
-      const pageURL=articleCacheURL(cached,"page",start,size,marks);
+      const bodyIndex=Number(options.bodyIndex);
+      const pageURL=articleCacheURL(cached,"page",start,size,marks,
+        bodyIndex>=0?{body:String(bodyIndex)}:null);
       const onPage=msg=>{
         if(msg.t==="error")throw new Error(msg.error||"result page unavailable");
         if(msg.t!=="hit"||msg.dict!==id)return;
@@ -11238,9 +11277,9 @@ async function navShowTarget(target,state,direction=0){
       // A backward walk crosses into the previous block, exactly as a forward
       // one crosses into the next; warm it before the reader needs it.
       if(articleOffset<=3&&start>0)
-        window.wudictPrefetchArticleBlock?.(det,previousArticleBlockStart(det,start));
+        window.wudictPrefetchArticleBlock?.(det,previousArticleBlockStart(det,start),rows-1);
     }else if(articleOffset>=rows-4){
-      window.wudictPrefetchArticleBlock?.(det,start+rows);
+      window.wudictPrefetchArticleBlock?.(det,start+rows,0);
     }
   }
   window.wudictArticleFind?.traceEvent?.("navigation_trace_display",`dict=${dict}; article=${target.articleIndex}; block=${start}; mark_ready=true`,Math.round(performance.now()-displayStarted));
@@ -11300,7 +11339,11 @@ window.wudictRestoreArticleBlock=(det,start,marks=false,deferAfter=-1)=>{
   if(!det?.isConnected)return null;
   const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
   const firstPageSize=Math.max(0,Number(det.dataset.searchFirstPageSize)||0);
-  return fetchSearchPortion(det,start,{openAfter:true,size:start===0&&firstPageSize?firstPageSize:size,pageSize:size,firstPageSize,marks,deferAfter});
+  // Only the row the walk stops on gets its body: rows above it would be
+  // placeholders that shift the target when they fill, so a mid-block target
+  // asks for the whole page instead.
+  const bodyWindow=deferAfter>0?-1:deferAfter;
+  return fetchSearchPortion(det,start,{openAfter:true,size:start===0&&firstPageSize?firstPageSize:size,pageSize:size,firstPageSize,marks,deferAfter,bodyIndex:bodyWindow});
 };
 
 /* Warm the NEXT block while the reader reads this one, and the PREVIOUS one
@@ -11315,14 +11358,14 @@ function previousArticleBlockStart(det,start){
   const first=Math.max(0,Number(det.dataset.searchFirstPageSize)||0)||size;
   return start<=first?0:Math.max(first,start-size);
 }
-window.wudictPrefetchArticleBlock=(det,start)=>{
+window.wudictPrefetchArticleBlock=(det,start,bodyIndex=0)=>{
   if(!det?.isConnected||!Number.isInteger(start)||start<0)return;
   const id=det.dataset.searchDict||"",cached=articleResultCaches.get(id);
   if(!cached||cached.displayQuery!==(det.dataset.searchQuery||"")||cached.mode!==(det.dataset.searchMode||""))return;
   const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
   const firstPageSize=Math.max(0,Number(det.dataset.searchFirstPageSize)||0);
   const want=start===0&&firstPageSize?firstPageSize:size;
-  const url=articleCacheURL(cached,"page",start,want,true);
+  const url=articleCacheURL(cached,"page",start,want,true,{body:String(bodyIndex)});
   if(prefetchedBlocks.has(url))return;
   prefetchedBlocks.add(url);
   window.wudictArticleFind?.traceEvent?.("navigation_trace_prefetch",`start=${start}; url=${url}`,0);
@@ -13382,6 +13425,7 @@ function themedSelectCreate(select){
 window.wudictThemedSelects={
   mode:themedSelect($("mode"),$("modeMenuBtn"),$("modeMenu")),
   articleFindMode:themedSelectCreate($("articleFindMode")),
+  articleFindTraceRun:themedSelectCreate($("articleFindTraceRun")),
   pickerGroup:themedSelect($("webPickerGroup"),$("webPickerGroupBtn"),$("webPickerGroupMenu"))
 };
 $("webDictionaryPicker").addEventListener("close",()=>window.wudictThemedSelects.pickerGroup.hide());

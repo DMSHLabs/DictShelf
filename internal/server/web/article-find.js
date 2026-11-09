@@ -551,36 +551,115 @@ async function runRemoteFindTrace(){
     remoteFindTraceActive=false;remoteFindTraceStop=false;syncRemoteFindTraceButton();paint();
   }
 }
-async function runFullTextTrace(){
+function tracePercentile(values,fraction){
+  if(!values.length)return 0;
+  const sorted=[...values].sort((a,b)=>a-b);
+  return sorted[Math.min(sorted.length-1,Math.floor(sorted.length*fraction))];
+}
+/* Deterministic places to jump to: the ends, the middle, then a fixed sequence
+   of pseudo-random positions. Two runs of the same search are comparable, and
+   every run visits the ends, where the wrapping cases live. */
+function traceSeekPositions(total){
+  if(total<2)return total===1?[1]:[];
+  const positions=new Set([1,total,Math.max(1,Math.round(total/2))]);
+  let seed=0x9e3779b9;
+  while(positions.size<6&&positions.size<total){
+    seed=(seed*1664525+1013904223)>>>0;
+    positions.add(1+(seed%total));
+  }
+  return [...positions].sort((a,b)=>a-b);
+}
+/* Waits until the strip reports the expected position: navGoto resolves before
+   the navigation does, so a jump cannot be timed by awaiting it. */
+async function traceWaitForPosition(expected,timeout=5000){
+  const started=performance.now();
+  while(performance.now()-started<timeout){
+    const position=Number(fullTextNavigation?.current)||0;
+    if(position===expected)return position;
+    await new Promise(resolve=>setTimeout(resolve,25));
+  }
+  return Number(fullTextNavigation?.current)||0;
+}
+async function runTraceRun(record,run){
+  const navigation=fullTextNavigation,generation=navigation?.generation;
+  const started=performance.now(),timings=[];
+  let steps=0,reason="done";
+  await remoteFindDiagnostic(record,"navigation_trace_run_start",{detail:`trace=${record.traceRun}; run=${run}; position=${navigation?.current||0}; total=${navigation?.total||0}`});
+  try{
+    if(run==="forward"||run==="backward"){
+      const direction=run==="forward"?1:-1;
+      let previous=Number(fullTextNavigation?.current)||0;
+      while(!remoteFindTraceStop&&fullTextNavigation?.generation===generation&&steps<100000){
+        const current=fullTextNavigation;
+        if(direction>0&&current.complete&&current.current>=current.total)break;
+        if(direction<0&&(Number(current.current)||0)<=1)break;
+        const from=Number(current.current)||0,t0=performance.now();
+        const advanced=direction>0?await current.next():await current.previous();
+        const next=fullTextNavigation;
+        if(!next||next.generation!==generation){reason="search_changed";break}
+        const position=Number(next.current)||0;
+        steps++;timings.push(performance.now()-t0);
+        await remoteFindDiagnostic(record,"navigation_trace_step",{completed:steps,total:Math.min(100000,next.total||0),detail:`trace=${record.traceRun}; run=${run}; step=${steps}; from=${from}; to=${position}; complete=${!!next.complete}; step_ms=${Math.round(performance.now()-t0)}`});
+        if(!position||position===from){reason=advanced===false?"navigation_unavailable":"no_next_match";break}
+        // A forward walk that comes back to where it was has wrapped: the
+        // count was still growing when the last occurrence answered.
+        if(direction>0&&next.complete&&position<=previous){await next.previous();break}
+        previous=position;
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      }
+    }else{
+      for(const page of traceSeekPositions(Number(fullTextNavigation?.total)||0)){
+        if(remoteFindTraceStop)break;
+        const t0=performance.now();
+        fullTextNavigation?.goto?.(page);
+        const landed=await traceWaitForPosition(page);
+        steps++;timings.push(performance.now()-t0);
+        await remoteFindDiagnostic(record,"navigation_trace_step",{completed:steps,total:Math.min(100000,fullTextNavigation?.total||0),detail:`trace=${record.traceRun}; run=seek; step=${steps}; goto=${page}; to=${landed}; step_ms=${Math.round(performance.now()-t0)}`});
+        // Both sides of a jump: the block it landed in is exercised in both
+        // directions, which is where the prefetch and the wrap live.
+        for(const direction of [1,-1]){
+          const from=Number(fullTextNavigation?.current)||0,t1=performance.now();
+          await (direction>0?fullTextNavigation?.next?.():fullTextNavigation?.previous?.());
+          const position=Number(fullTextNavigation?.current)||0;
+          steps++;timings.push(performance.now()-t1);
+          await remoteFindDiagnostic(record,"navigation_trace_step",{completed:steps,total:Math.min(100000,fullTextNavigation?.total||0),detail:`trace=${record.traceRun}; run=seek; step=${steps}; from=${from}; to=${position}; dir=${direction}; step_ms=${Math.round(performance.now()-t1)}`});
+        }
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      }
+    }
+  }catch(error){reason="error";await remoteFindDiagnostic(record,"navigation_trace_error",{detail:`trace=${record.traceRun}; run=${run}; error=${String(error?.message||error).slice(0,700)}`})}
+  if(remoteFindTraceStop)reason="stopped";
+  const summary={run,steps,elapsed:Math.round(performance.now()-started),reason,
+    p50:Math.round(tracePercentile(timings,.5)),p90:Math.round(tracePercentile(timings,.9)),
+    max:Math.round(timings.length?Math.max(...timings):0)};
+  await remoteFindDiagnostic(record,"navigation_trace_run_end",{completed:steps,total:Math.min(100000,fullTextNavigation?.total||0),detail:`trace=${record.traceRun}; run=${run}; steps=${steps}; p50=${summary.p50}; p90=${summary.p90}; max=${summary.max}; elapsed_ms=${summary.elapsed}; reason=${reason}`});
+  return summary;
+}
+async function runFullTextTrace(mode){
   const navigation=fullTextNavigation,generation=navigation?.generation;
   if(remoteFindTraceActive||options.mode!=="fts"||!navigation?.canNext)return;
+  const run=mode||"forward";
   remoteFindTraceActive=true;remoteFindTraceStop=false;
   const record={diagnosticRun:++remoteFindDiagnosticRun,diagnosticStarted:performance.now(),traceRun:++remoteFindTraceRun};
-  let steps=0,reason="last_match",previous=Number(navigation.current)||0;
+  const origin=Number(navigation.current)||0;
   syncRemoteFindTraceButton();
-  await remoteFindDiagnostic(record,"navigation_trace_start",{detail:`trace=${record.traceRun}; source=full_text; position=${previous}; total=${navigation.total||0}`});
+  const summaries=[];
   try{
-    while(!remoteFindTraceStop&&fullTextNavigation?.generation===generation&&steps<100000){
-      const current=fullTextNavigation;
-      if(current.complete&&current.current>=current.total)break;
-      const started=performance.now(),from=Number(current.current)||0;
-      await remoteFindDiagnostic(record,"navigation_request",{detail:`trace=${record.traceRun}; source=full_text; action=navNext; from=${from}`});
-      const advanced=await current.next();
-      const next=fullTextNavigation;
-      if(!next||next.generation!==generation){reason="search_changed";break}
-      const position=Number(next.current)||0;
-      steps++;
-      await remoteFindDiagnostic(record,"navigation_trace_step",{completed:steps,total:Math.min(100000,next.total||0),detail:`trace=${record.traceRun}; source=full_text; step=${steps}; from=${from}; to=${position}; complete=${!!next.complete}; step_ms=${Math.round(performance.now()-started)}`});
-      if(!position||position===from){reason=advanced===false?"navigation_unavailable":"no_next_match";break}
-      if(next.complete&&position<=previous){await next.previous();break}
-      previous=position;
-      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    await remoteFindDiagnostic(record,"navigation_trace_start",{detail:`trace=${record.traceRun}; source=full_text; run=${run}; position=${origin}; total=${navigation.total||0}`});
+    for(const name of run==="full"?["forward","backward","seeks"]:[run]){
+      if(remoteFindTraceStop)break;
+      summaries.push(await runTraceRun(record,name));
     }
-    if(steps>=100000)reason="limit";
-    if(remoteFindTraceStop)reason="stopped";
-  }catch(error){reason="error";await remoteFindDiagnostic(record,"navigation_trace_error",{detail:`trace=${record.traceRun}; source=full_text; error=${String(error?.message||error).slice(0,700)}`})}
+    // A diagnostic leaves the reader where it found them.
+    if(origin&&!remoteFindTraceStop){
+      fullTextNavigation?.goto?.(origin);
+      await traceWaitForPosition(origin);
+    }
+  }catch(error){await remoteFindDiagnostic(record,"navigation_trace_error",{detail:`trace=${record.traceRun}; error=${String(error?.message||error).slice(0,700)}`})}
   finally{
-    await remoteFindDiagnostic(record,reason==="stopped"?"navigation_trace_stop":"navigation_trace_end",{completed:steps,total:Math.min(100000,fullTextNavigation?.total||0),detail:`trace=${record.traceRun}; source=full_text; reason=${reason}; position=${fullTextNavigation?.current||0}`});
+    const totals=summaries.map(s=>`${s.run}: steps=${s.steps} p50=${s.p50} p90=${s.p90} max=${s.max} elapsed_ms=${s.elapsed} reason=${s.reason}`).join(" | ");
+    await remoteFindDiagnostic(record,"navigation_trace_end",{completed:summaries.reduce((sum,s)=>sum+s.steps,0),total:Math.min(100000,fullTextNavigation?.total||0),detail:`trace=${record.traceRun}; source=full_text; suite=${run}; position=${fullTextNavigation?.current||0}`});
+    await remoteFindDiagnostic(record,"navigation_trace_summary",{completed:summaries.reduce((sum,s)=>sum+s.steps,0),detail:`trace=${record.traceRun}; suite=${run}; ${totals||"no runs"}; position=${fullTextNavigation?.current||0}`});
     remoteFindTraceActive=false;remoteFindTraceStop=false;syncRemoteFindTraceButton();
   }
 }
@@ -771,9 +850,16 @@ $("articleFindScrollToMatch").onclick = () => {
 };
 $("articleFindTrace").onclick = () => {
   if(remoteFindTraceActive){remoteFindTraceStop=true;return}
-  if(options.mode==="fts"){void runFullTextTrace();return}
+  if(options.mode==="fts"){void runFullTextTrace("forward");return}
   void runRemoteFindTrace();
 };
+$("articleFindTraceRun").addEventListener("change",()=>{
+  const select=$("articleFindTraceRun"),run=select.value;
+  select.value="";
+  window.wudictThemedSelects?.articleFindTraceRun?.sync();
+  if(!run||remoteFindTraceActive||options.mode!=="fts")return;
+  void runFullTextTrace(run);
+});
 $("sysLogSearch")?.addEventListener("change",syncRemoteFindTraceButton);
 $("articleFindDialogPrev").onclick = () => go(-1);
 $("articleFindDialogNext").onclick = () => go(1);

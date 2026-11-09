@@ -66,6 +66,10 @@ func TestArticlePageCacheKeyReflectsOnlyThePayload(t *testing.T) {
 	noisy.Limit = 21
 	noisy.PageCacheDiagnostics = true
 	noisy.SearchDiagnostics = true
+	// Which body a response carries is a window into the same page, not a
+	// different page: the window must not split the cache.
+	noisy.BodyIndex = 2
+	noisy.BodyOnly = true
 	noisy.ReturnCacheID = "ffffffffffffffff"
 	noisy.ReturnCacheStorage = "disk-temp"
 	if articlePageCacheKey(page) != articlePageCacheKey(noisy) {
@@ -98,5 +102,56 @@ func TestArticlePageCacheKeyReflectsOnlyThePayload(t *testing.T) {
 	wider.Limit = 20
 	if articlePageCacheKey(first) == articlePageCacheKey(wider) {
 		t.Error("the first answer's limit does not change the key")
+	}
+}
+
+// A page is stored once as metadata plus per-result body rows. The reader gets
+// the metadata and the one body it is about to show; a deferred row asks for
+// its own body later, and the walk's page load still assembles the whole page.
+func TestArticlePageCacheServesOneBodyFromAStoredPage(t *testing.T) {
+	isolatedDBDir(t)
+	cache := &articlePageCache{}
+	cache.resetFor("0123456789abcdef", false)
+	loads := 0
+	load := func(emit func(SearchEvent) error) error {
+		loads++
+		return emit(SearchEvent{T: "hit", Dict: "d", Complete: true, Results: []dict.Result{
+			{Headword: "one", Body: "<p>one</p>"},
+			{Headword: "two", Body: "<p>two</p>"},
+		}})
+	}
+	page := func(bodyIndex int, bodyOnly bool) []dict.Result {
+		request := SearchRequest{Query: "q", Mode: "phrase", Format: "raw", Dictionary: "d",
+			CacheAction: "page", CacheID: "0123456789abcdef", CacheCount: 1, Start: 5, Size: 20,
+			BodyIndex: bodyIndex, BodyOnly: bodyOnly}
+		var results []dict.Result
+		if err := cache.serve(context.Background(), request, func(event SearchEvent) error {
+			if event.T == "hit" {
+				results = event.Results
+			}
+			return nil
+		}, load); err != nil {
+			t.Fatal(err)
+		}
+		return results
+	}
+	all := page(0, false)
+	if len(all) != 2 || all[0].Body != "<p>one</p>" || all[1].Body != "<p>two</p>" {
+		t.Fatalf("all bodies = %+v", all)
+	}
+	metadata := page(-1, false)
+	if len(metadata) != 2 || metadata[0].Body != "" || metadata[1].Body != "" || metadata[0].Headword != "one" {
+		t.Fatalf("metadata = %+v", metadata)
+	}
+	second := page(2, true)
+	if len(second) != 1 || second[0].Headword != "two" || second[0].Body != "<p>two</p>" {
+		t.Fatalf("one body = %+v", second)
+	}
+	withSecond := page(2, false)
+	if len(withSecond) != 2 || withSecond[0].Body != "" || withSecond[1].Body != "<p>two</p>" {
+		t.Fatalf("windowed page = %+v", withSecond)
+	}
+	if loads != 1 {
+		t.Fatalf("renders = %d; the page must be rendered once", loads)
 	}
 }

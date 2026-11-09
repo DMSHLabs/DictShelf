@@ -24,10 +24,23 @@ func searchRequestFromQuery(q url.Values) SearchRequest {
 	ignoreDiacritics, _ := queryFlag(q, "ignoreDiacritics")
 	pageCacheDiagnostics, _ := queryFlag(q, "pageCacheDiagnostics")
 	searchDiagnostics, _ := queryFlag(q, "searchDiagnostics")
+	bodyOnly, _ := queryFlag(q, "bodyOnly")
+	bodyIndex := 0
+	switch body := q.Get("body"); body {
+	case "none":
+		bodyIndex = -1
+	case "":
+	default:
+		if index, err := strconv.Atoi(body); err == nil && index >= 0 {
+			bodyIndex = index + 1
+		}
+	}
 	return SearchRequest{
 		Query: q.Get("q"), Mode: q.Get("mode"), Format: q.Get("format"),
 		Dictionary: q.Get("dict"), Limit: n, Highlight: highlight, Suggestions: suggestions,
 		IgnoreDiacritics:     ignoreDiacritics,
+		BodyIndex:            bodyIndex,
+		BodyOnly:             bodyOnly,
 		PageCacheDiagnostics: pageCacheDiagnostics,
 		SearchDiagnostics:    searchDiagnostics,
 		CacheAction:          q.Get("cacheAction"), CacheID: q.Get("cacheID"), CacheCount: cacheCount,

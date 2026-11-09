@@ -1460,6 +1460,7 @@ Hint: pick another port with --port, e.g.:  dictshelf --port %s
 	srv.WebOrigins = cfg.WebOrigins
 	srv.TrustedHosts = cfg.TrustedHosts
 	srv.AuthToken = token
+	srv.ApplySystemLogOptions()
 
 	lib, _ := store.Library()
 	inFolder, fromLib := reg.Counts()

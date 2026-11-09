@@ -26,24 +26,31 @@ import (
 // retains its caller's slot order. Origin is supplied by the host for clean
 // article resource links, never read from the desktop JSON payload.
 type SearchRequest struct {
-	Query                string `json:"q"`
-	Mode                 string `json:"mode,omitempty"`
-	Format               string `json:"format,omitempty"`
-	Dictionary           string `json:"dict,omitempty"`
-	Limit                int    `json:"n,omitempty"`
-	Highlight            bool   `json:"hl,omitempty"`
-	Suggestions          bool   `json:"suggest,omitempty"`
-	IgnoreDiacritics     bool   `json:"ignoreDiacritics,omitempty"`
-	Origin               string `json:"-"`
-	CacheAction          string `json:"cacheAction,omitempty"`
-	CacheID              string `json:"cacheID,omitempty"`
-	ReturnCacheID        string `json:"returnCacheID,omitempty"`
-	ReturnCacheStorage   string `json:"returnCacheStorage,omitempty"`
-	CacheCount           int    `json:"cacheCount,omitempty"`
-	CacheOrder           int    `json:"cacheOrder,omitempty"`
-	Start                int    `json:"start,omitempty"`
-	Size                 int    `json:"size,omitempty"`
-	Rung                 string `json:"rung,omitempty"`
+	Query              string `json:"q"`
+	Mode               string `json:"mode,omitempty"`
+	Format             string `json:"format,omitempty"`
+	Dictionary         string `json:"dict,omitempty"`
+	Limit              int    `json:"n,omitempty"`
+	Highlight          bool   `json:"hl,omitempty"`
+	Suggestions        bool   `json:"suggest,omitempty"`
+	IgnoreDiacritics   bool   `json:"ignoreDiacritics,omitempty"`
+	Origin             string `json:"-"`
+	CacheAction        string `json:"cacheAction,omitempty"`
+	CacheID            string `json:"cacheID,omitempty"`
+	ReturnCacheID      string `json:"returnCacheID,omitempty"`
+	ReturnCacheStorage string `json:"returnCacheStorage,omitempty"`
+	CacheCount         int    `json:"cacheCount,omitempty"`
+	CacheOrder         int    `json:"cacheOrder,omitempty"`
+	Start              int    `json:"start,omitempty"`
+	Size               int    `json:"size,omitempty"`
+	Rung               string `json:"rung,omitempty"`
+	// BodyIndex selects which result's body a page response carries: 0 is every
+	// body (the default, and what the walk's own page load needs), -1 is none,
+	// and n > 0 names result n-1. Zero must mean "all": a request that never
+	// mentions bodies (the native bridge drops this field) must get the page it
+	// always got.
+	BodyIndex            int    `json:"-"`
+	BodyOnly             bool   `json:"-"`
 	PageCacheDiagnostics bool   `json:"pageCacheDiagnostics,omitempty"`
 	SearchDiagnostics    bool   `json:"searchDiagnostics,omitempty"`
 	Transport            string `json:"-"`

@@ -346,6 +346,18 @@ func (p *Prefs) systemLogOptions() systemLogOptions {
 	return f.SystemLog
 }
 
+// ApplySystemLogOptions makes the saved system-log choice effective at launch.
+// The desktop's settings bridge applies it when the page asks; a serve or CLI
+// launch has no page, and without this the log ignored what the user chose.
+func (s *Server) ApplySystemLogOptions() {
+	if s.reg == nil || s.reg.prefs == nil {
+		return
+	}
+	options := s.reg.prefs.systemLogOptions()
+	logx.ConfigureSystemLog(options.Enabled, options.BaseEvents, options.WebEvents, options.DownloadEvents)
+	logx.ConfigureSystemLogSearchEvents(options.SearchEvents)
+}
+
 func (p *Prefs) setSystemLogOptions(value systemLogOptions) error {
 	value.Configured = true
 	return p.mutate(func(f *prefsFile) { f.SystemLog = value })
