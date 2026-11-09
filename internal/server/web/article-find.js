@@ -191,8 +191,7 @@ function syncControls() {
   // The strip's own count and crosshair belong to its layer renderer; the
   // dialog mirrors the search in the status line and its two buttons.
   $("articleFindStatus").textContent=display||t("articleFind.scope");
-  $("articleFindDialogPrev").disabled=!ready;
-  $("articleFindDialogNext").disabled=!ready;
+  $("articleFindGo").disabled=!ready;
   syncRemoteFindTraceButton();
 }
 /* The window near counts with is the reader's setting (Settings → Results, 1…50,
@@ -215,6 +214,7 @@ function ensureFindStyle(root) {
   style.textContent = highlightCSS; root.appendChild(style);
 }
 function paint() {
+  if(remoteFind&&options.query)stripLayer="found";
   syncRemoteFindTraceButton();
   clearPaint();
   // The ranges are painted by CSS Custom Highlight, whose rules must live in the
@@ -1076,10 +1076,10 @@ $("articleFindTraceRun").addEventListener("change",()=>{
   void runFullTextTrace(run);
 });
 $("sysLogSearch")?.addEventListener("change",syncRemoteFindTraceButton);
-// The dialog's own two buttons hand the search to the strip: they run the step
-// and close the dialog, and the strip underneath is the control from there.
-$("articleFindDialogPrev").onclick = () => { go(-1); dialog.close(); };
-$("articleFindDialogNext").onclick = () => { go(1); dialog.close(); };
+// One action: the dialog finds, then hands the search to the strip - the arrows
+// there step, jump to the ends and close it. A second pair of arrows in a window
+// that closes on use was one set too many.
+$("articleFindGo").onclick = () => { readOptions(); active=!!options.query; if(active)go(1); dialog.close(); };
 $("articleFindWholeWords").onchange = () => {
   readOptions(); syncControls(); save();
   if (dialog.open) { active = !!options.query; if (active) rebuild(); }
@@ -1100,7 +1100,9 @@ $("articleFindQuery").oninput = () => {
     e.preventDefault();const rows=[...list.querySelectorAll('[role="option"]')],at=rows.indexOf(e.target),next=at+(e.key==="ArrowDown"?1:-1);
     if(rows[next])rows[next].focus();else if(e.key==="ArrowUp")input.focus();return;
   }
-  if (e.key === "Enter" && e.target.tagName !== "BUTTON") { e.preventDefault(); go(e.shiftKey ? -1 : 1); }
+  // Enter is the Find button: Shift+Enter still steps backwards when the
+  // reader knows they overshot.
+  if (e.key === "Enter" && e.target.tagName !== "BUTTON") { e.preventDefault(); readOptions(); active=!!options.query; if(active)go(e.shiftKey ? -1 : 1); dialog.close(); }
 });
 dialog.addEventListener("cancel",e=>{if(!$("articleFindHistory").hidden){e.preventDefault();hideFindHistory();$("articleFindQuery").focus()}});
 document.addEventListener("pointerdown",e=>{if(!$("articleFindQueryBox").contains(e.target))hideFindHistory()});

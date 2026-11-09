@@ -1339,6 +1339,7 @@
   "articleFind.query": "Слово или фраза",
   "articleFind.scope": "Поиск по найденным статьям",
   "articleFind.searching": "Ищу в найденных статьях",
+  "articleFind.find": "Найти",
   "articleFind.mode": "Режим поиска",
   "articleFind.phrase": "Фраза в статье",
   "articleFind.near": "Рядом в статье",
