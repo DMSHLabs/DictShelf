@@ -10715,6 +10715,7 @@ async function fetchSearchPortion(det,start,options={}){
         window.wudictArticleFind?.refresh();
       };
       const ready=prefetchedPages.get(pageURL);
+      window.wudictArticleFind?.traceEvent?.("navigation_trace_page",`start=${start}; marks=${marks?1:0}; source=${ready?"prefetched":"server"}; url=${pageURL}`,0);
       if(ready){
         // The block is already here: the walk warmed it while the reader was
         // reading. Consume it, so the next visit asks the server again.
@@ -11088,7 +11089,7 @@ async function navStart(det){
       // "fts" here is the walk itself: the session reads the marks the answer
       // was painted with, and resultMode says which reading ran.
       mode:"fts",resultMode:det.dataset.searchMode||lastSearchMode,nearWords:String(findContext.nearWords||10),pageSize:String(size),firstSize:String(firstSize),
-      groupID:findContext.groupID||"",rungs:orders.map(index=>(findContext.rungs||[])[index]||"").join(",")});
+      groupID:findContext.groupID||"",rungs:(findContext.rungs||[]).join(",")});
     if(!state||operation!==navOpToken||navDet!==det||navSuppressed)return;
     navServerState=state;navPos();await navShowTarget(state.target,state);
   }catch(error){console.warn("Article match navigation unavailable",error)}
@@ -11261,6 +11262,7 @@ window.wudictPrefetchArticleBlock=(det,start)=>{
   const url=articleCacheURL(cached,"page",start,want,true);
   if(prefetchedBlocks.has(url))return;
   prefetchedBlocks.add(url);
+  window.wudictArticleFind?.traceEvent?.("navigation_trace_prefetch",`start=${start}; url=${url}`,0);
   // Through the walk's own stream, not apiFetch: the desktop's in-process
   // resource handler answers with a loopback Host while the native bridge names
   // the virtual origin, and the server's page cache keys on the origin. Keep the

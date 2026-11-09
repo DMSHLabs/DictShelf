@@ -135,7 +135,9 @@ func (c *articlePageCache) serve(ctx context.Context, r SearchRequest, emit func
 		var events []SearchEvent
 		if json.Unmarshal(cached, &events) == nil {
 			if diagnostics {
-				logx.SystemDiagnostic("article_page_cache stage=hit id=%q dict=%q start=%d size=%d bytes=%d events=%d elapsed_ms=%d", r.CacheID, r.Dictionary, pageStart, pageSize, len(cached), len(events), time.Since(started).Milliseconds())
+				logx.SystemDiagnostic("article_page_cache stage=hit id=%q dict=%q start=%d size=%d bytes=%d events=%d elapsed_ms=%d transport=%q origin=%q format=%q hl=%t rung=%q count=%d order=%d q=%q",
+					r.CacheID, r.Dictionary, pageStart, pageSize, len(cached), len(events), time.Since(started).Milliseconds(),
+					r.Transport, r.Origin, r.Format, r.Highlight, r.Rung, r.CacheCount, r.CacheOrder, r.Query)
 			}
 			for _, event := range events {
 				if err := emit(event); err != nil {
@@ -146,7 +148,7 @@ func (c *articlePageCache) serve(ctx context.Context, r SearchRequest, emit func
 		}
 	}
 	if diagnostics {
-		logx.SystemDiagnostic("article_page_cache stage=miss id=%q dict=%q start=%d size=%d cache_ready=%t reason=%s", r.CacheID, r.Dictionary, pageStart, pageSize, cacheReady, map[bool]string{true: "not_found", false: "inactive_or_unavailable"}[cacheReady])
+		logx.SystemDiagnostic("article_page_cache stage=miss id=%q dict=%q start=%d size=%d cache_ready=%t reason=%s transport=%q origin=%q format=%q hl=%t rung=%q count=%d order=%d q=%q", r.CacheID, r.Dictionary, pageStart, pageSize, cacheReady, map[bool]string{true: "not_found", false: "inactive_or_unavailable"}[cacheReady], r.Transport, r.Origin, r.Format, r.Highlight, r.Rung, r.CacheCount, r.CacheOrder, r.Query)
 	}
 	var events []SearchEvent
 	err := load(func(event SearchEvent) error {
@@ -194,7 +196,7 @@ func (c *articlePageCache) serve(ctx context.Context, r SearchRequest, emit func
 		return nil
 	}
 	if diagnostics {
-		logx.SystemDiagnostic("article_page_cache stage=store id=%q dict=%q start=%d size=%d bytes=%d events=%d elapsed_ms=%d", r.CacheID, r.Dictionary, pageStart, pageSize, len(payload), len(events), time.Since(started).Milliseconds())
+		logx.SystemDiagnostic("article_page_cache stage=store id=%q dict=%q start=%d size=%d bytes=%d events=%d elapsed_ms=%d transport=%q origin=%q format=%q hl=%t rung=%q count=%d order=%d q=%q", r.CacheID, r.Dictionary, pageStart, pageSize, len(payload), len(events), time.Since(started).Milliseconds(), r.Transport, r.Origin, r.Format, r.Highlight, r.Rung, r.CacheCount, r.CacheOrder, r.Query)
 	}
 	for {
 		var total int64
