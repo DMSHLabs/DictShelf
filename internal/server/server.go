@@ -1633,7 +1633,7 @@ func marker(on bool) func(term, rung string) (*hilite.Terms, *articleFindMarking
 // result line carries its slot index `i` so the client fills the correct
 // preference-ordered position regardless of completion order.
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
-	if action := r.URL.Query().Get("cacheAction"); action == "navStart" || action == "navNext" || action == "navPrevious" || action == "navGoto" || action == "navClose" {
+	if action := r.URL.Query().Get("cacheAction"); action == "navStart" || action == "navNext" || action == "navPrevious" || action == "navGoto" || action == "navFirst" || action == "navLast" || action == "navClose" {
 		s.handleArticleFindNavigation(w, r)
 		return
 	}

@@ -1919,7 +1919,7 @@ async function apiFetch(url,options){
       return {ok:status>=200&&status<300,status,json:async()=>value,text:async()=>JSON.stringify(value)};
     }
     if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/search"&&method==="GET"&&
-       /^nav(Start|Next|Previous|Goto|Close)$/.test(requestURL.searchParams.get("cacheAction")||"")){
+       /^nav(Start|Next|Previous|Goto|First|Last|Close)$/.test(requestURL.searchParams.get("cacheAction")||"")){
       const result=JSON.parse(window.wudictAndroidGo.articleFindNavigation(requestURL.searchParams.toString()));
       const status=result.status||500,body=result.body||{error:"article navigation failed"};
       return {ok:status>=200&&status<300,status,json:async()=>body,text:async()=>JSON.stringify(body)};
@@ -2101,7 +2101,7 @@ async function apiFetch(url,options){
         nativeMethod="browseFindPage";argument=requestURL.searchParams.toString();
       }
       else if(requestURL.pathname==="/api/search"&&method==="GET"&&
-        /^nav(Start|Next|Previous|Goto|Close)$/.test(requestURL.searchParams.get("cacheAction")||"")){
+        /^nav(Start|Next|Previous|Goto|First|Last|Close)$/.test(requestURL.searchParams.get("cacheAction")||"")){
         nativeMethod="articleFindNavigation";argument=requestURL.searchParams.toString();
       }
       if(nativeMethod){
