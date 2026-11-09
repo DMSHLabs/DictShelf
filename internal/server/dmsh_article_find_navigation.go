@@ -398,18 +398,14 @@ func (s *Server) moveArticleFindNavigation(ctx context.Context, session *article
 	load := func(_ context.Context, dictionaryIndex, blockStart int) (articleFindNavigationPage, error) {
 		return s.loadArticleFindNavigationPage(ctx, session, dictionaryIndex, blockStart)
 	}
-	target, wrapped, err := session.move(ctx, direction, load)
+	target, _, err := session.advance(ctx, direction, load)
 	if err != nil {
 		return articleFindNavigationResponse{}, err
 	}
 	if target == nil {
-		session.complete = true
-		return articleFindNavigationResponse{Complete: true}, nil
+		return session.endOfWalk(direction), nil
 	}
 	session.current = target
-	if wrapped && direction > 0 {
-		session.complete = true
-	}
 	if session.complete {
 		session.fromEnd = 0
 	} else if session.fromEnd > 0 {
@@ -659,6 +655,39 @@ func (s *Server) loadArticleFindNavigationPage(ctx context.Context, session *art
 }
 
 type articleFindNavigationPageLoader func(context.Context, int, int) (articleFindNavigationPage, error)
+
+// advance is one step of the reader's arrow. The walk wraps at the ends - a
+// diagnostic counts on it, and so does the anchor start - but the arrow does
+// not: stepping past the last match carries nobody back to the first. It only
+// says the answer is complete, and the cursor stays where the reader was.
+func (session *articleFindNavigationSession) advance(ctx context.Context, direction int, load articleFindNavigationPageLoader) (*articleFindNavigationTarget, bool, error) {
+	target, wrapped, err := session.move(ctx, direction, load)
+	if err != nil || target == nil || !wrapped {
+		return target, wrapped, err
+	}
+	if direction > 0 {
+		session.complete = true
+	}
+	return nil, wrapped, nil
+}
+
+// endOfWalk answers an arrow that has nowhere left to go: no target, the end
+// known, and the position the reader is standing on so the bar keeps its
+// number instead of reading as an answer with no matches.
+func (session *articleFindNavigationSession) endOfWalk(direction int) articleFindNavigationResponse {
+	if direction > 0 {
+		session.complete = true
+	}
+	if session.complete {
+		session.fromEnd = 0
+	}
+	position, total := 0, session.total()
+	if session.current != nil {
+		position, total = session.position(session.current)
+	}
+	session.updated = time.Now()
+	return articleFindNavigationResponse{Complete: session.complete, Position: position, Total: total}
+}
 
 func (session *articleFindNavigationSession) move(ctx context.Context, direction int, load articleFindNavigationPageLoader) (*articleFindNavigationTarget, bool, error) {
 	if direction != 1 && direction != -1 {

@@ -62,6 +62,46 @@ func TestArticleFindNavigationWalksDictionaryBlocksAndWraps(t *testing.T) {
 	}
 }
 
+// The walk wraps so a diagnostic and the anchor start can count the answer, but
+// the reader's own arrow must not: pressing down on the last match, while the
+// count is still short of the truth, used to carry the reader to the first.
+func TestArticleFindArrowStopsAtTheEndInsteadOfWrapping(t *testing.T) {
+	contents := [][]int{{1, 1}, {1}}
+	session := &articleFindNavigationSession{
+		dictionaries: []string{"first", "second"},
+		pageSize:     10,
+		firstSize:    10,
+		pages:        []map[int]articleFindNavigationPage{{}, {}},
+	}
+	load := func(_ context.Context, dictionary, start int) (articleFindNavigationPage, error) {
+		end := min(start+session.blockLength(start), len(contents[dictionary]))
+		return articleFindNavigationPage{Start: start, Counts: append([]int(nil), contents[dictionary][start:end]...)}, nil
+	}
+	for {
+		target, _, err := session.advance(context.Background(), 1, load)
+		if err != nil {
+			t.Fatalf("advance: %v", err)
+		}
+		if target == nil {
+			break
+		}
+		session.current = target
+	}
+	last := *session.current
+	if session.complete != true {
+		t.Fatalf("complete = %t after the arrow ran out; want true", session.complete)
+	}
+	if last.Dictionary != "second" || last.MatchIndex != 0 {
+		t.Fatalf("cursor = %+v; want the last match of the last dictionary", last)
+	}
+	bare := &articleFindNavigationSession{dictionaries: []string{"first"}, pageSize: 10, firstSize: 10,
+		pages: []map[int]articleFindNavigationPage{{}}}
+	end := bare.endOfWalk(1)
+	if !end.Complete || end.Found || end.Total != 0 {
+		t.Fatalf("end of walk = %+v; want complete, no target", end)
+	}
+}
+
 func TestArticleFindNavigationUsesServerSearchAndHighlights(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{

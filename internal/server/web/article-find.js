@@ -619,12 +619,14 @@ async function runTraceRun(record,run){
         const next=fullTextNavigation;
         if(!next||next.generation!==generation){reason="search_changed";break}
         const position=Number(next.current)||0;
-        if(!position||position===from){reason=advanced===false?"navigation_unavailable":"no_next_match";break}
-        // The answer does not wrap for the reader: a step that lands back where
-        // the walk began is the walk learning the end. It is undone and kept out
-        // of the record - the positions compared below are the ones a reader can
-        // actually stand on.
-        if(direction>0&&next.complete&&position<=previous){await next.previous();reason="end";break}
+        // An arrow that has nowhere left to go answers "found=false, complete"
+        // and leaves the cursor alone: the walk does not wrap for a reader, so
+        // the position is unchanged and there is nothing to record or undo.
+        if(!position||position===from){
+          if(advanced===false&&next.complete)reason="end";
+          else reason=advanced===false?"navigation_unavailable":"no_next_match";
+          break;
+        }
         steps++;timings.push(performance.now()-t0);
         visited.push({p:position,at:next.at||""});
         await remoteFindDiagnostic(record,"navigation_trace_step",{completed:steps,total:Math.min(100000,next.total||0),detail:`trace=${record.traceRun}; run=${run}; step=${steps}; from=${from}; to=${position}; complete=${!!next.complete}; at=${next.at||""}; step_ms=${Math.round(performance.now()-t0)}`});
