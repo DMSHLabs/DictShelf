@@ -72,6 +72,42 @@ func (c *articlePageCache) openLocked() error {
 	return nil
 }
 
+// articlePageCacheKey is what a stored page DEPENDS ON: the fields that change
+// the bytes of the answer. The request carries more - the result limit, the
+// diagnostic switches, the return-cache naming - and none of those change a
+// page, so keying on the whole request stored one block under several keys and
+// every caller re-rendered it: on a Wikipedia library that is 4.5-7.8 MB and
+// half a second of work per duplicate, in a cache that holds 128 MiB.
+//
+// The window is the one field that differs by action: a page names it as
+// start/size, the first answer as its limit.
+func articlePageCacheKey(r SearchRequest) string {
+	start, size := r.Start, r.Size
+	if r.CacheAction != "page" {
+		start, size = 0, r.Limit
+	}
+	key, _ := json.Marshal(struct {
+		Query            string `json:"q"`
+		Mode             string `json:"mode,omitempty"`
+		Format           string `json:"format,omitempty"`
+		Dictionary       string `json:"dict,omitempty"`
+		Highlight        bool   `json:"hl,omitempty"`
+		IgnoreDiacritics bool   `json:"ignoreDiacritics,omitempty"`
+		Rung             string `json:"rung,omitempty"`
+		CacheAction      string `json:"cacheAction,omitempty"`
+		CacheID          string `json:"cacheID,omitempty"`
+		CacheCount       int    `json:"cacheCount,omitempty"`
+		CacheOrder       int    `json:"cacheOrder,omitempty"`
+		Start            int    `json:"start,omitempty"`
+		Size             int    `json:"size,omitempty"`
+		Origin           string `json:"origin,omitempty"`
+	}{Query: r.Query, Mode: r.Mode, Format: r.Format, Dictionary: r.Dictionary,
+		Highlight: r.Highlight, IgnoreDiacritics: r.IgnoreDiacritics, Rung: r.Rung,
+		CacheAction: r.CacheAction, CacheID: r.CacheID, CacheCount: r.CacheCount,
+		CacheOrder: r.CacheOrder, Start: start, Size: size, Origin: r.Origin})
+	return string(key)
+}
+
 func (c *articlePageCache) serve(ctx context.Context, r SearchRequest, emit func(SearchEvent) error, load func(func(SearchEvent) error) error) error {
 	started := time.Now()
 	pageStart, pageSize := r.Start, r.Size
@@ -82,10 +118,7 @@ func (c *articlePageCache) serve(ctx context.Context, r SearchRequest, emit func
 	if limit <= 0 {
 		limit = articlePageCacheMaxBytes
 	}
-	key, _ := json.Marshal(struct {
-		SearchRequest
-		Origin string
-	}{r, r.Origin})
+	key := articlePageCacheKey(r)
 	var cached []byte
 	cacheReady := false
 	diagnostics := r.PageCacheDiagnostics

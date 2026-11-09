@@ -1,86 +1,55 @@
 // Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+//
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package server
 
-import (
-	"context"
-	"encoding/json"
-	"testing"
-)
+import "testing"
 
-func TestArticlePageCacheLRUAndSearchReset(t *testing.T) {
-	id := "article-page-test-0001"
-	event := SearchEvent{T: "hit", Complete: true}
-	payload, err := json.Marshal([]SearchEvent{event})
-	if err != nil {
-		t.Fatal(err)
+// The page cache key is what the stored page depends on. Keying on the whole
+// request made one block live under several keys - the navigation sets the
+// result LIMIT, the client does not; a diagnostic run sets its switches - and
+// every duplicate re-rendered 4.5-7.8 MB of article HTML into a 128 MiB cache.
+func TestArticlePageCacheKeyReflectsOnlyThePayload(t *testing.T) {
+	page := SearchRequest{Query: "джазовый кларнетист", Mode: "phrase", Format: "raw",
+		Dictionary: "1757caa7b754", CacheAction: "page", CacheID: "0123456789abcdef",
+		CacheCount: 3, CacheOrder: 1, Rung: "phrase", Highlight: true,
+		IgnoreDiacritics: true, Start: 5, Size: 20}
+	noisy := page
+	noisy.Limit = 21
+	noisy.PageCacheDiagnostics = true
+	noisy.SearchDiagnostics = true
+	noisy.ReturnCacheID = "ffffffffffffffff"
+	noisy.ReturnCacheStorage = "disk-temp"
+	if articlePageCacheKey(page) != articlePageCacheKey(noisy) {
+		t.Fatal("a field that does not shape the page changed the key")
 	}
-	c := &articlePageCache{maxBytes: int64(len(payload)*2 + 1)}
-	c.resetFor(id, false)
-	t.Cleanup(func() {
-		if c.db != nil {
-			_ = c.db.Close()
-		}
-	})
-	loads := 0
-	read := func(start int) {
-		t.Helper()
-		r := SearchRequest{CacheID: id, CacheAction: "page", Start: start, Size: 1}
-		if err := c.serve(context.Background(), r, func(got SearchEvent) error {
-			if got.T != "hit" || !got.Complete {
-				t.Fatalf("unexpected cached event: %+v", got)
-			}
-			return nil
-		}, func(emit func(SearchEvent) error) error {
-			loads++
-			return emit(event)
-		}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	read(0)
-	read(1)
-	read(0) // recently used; the next insert must evict page 1
-	read(2)
-	if loads != 3 {
-		t.Fatalf("loads after LRU insert = %d, want 3", loads)
-	}
-	read(0)
-	if loads != 3 {
-		t.Fatalf("recent page was evicted: loads = %d", loads)
-	}
-	read(1)
-	if loads != 4 {
-		t.Fatalf("oldest page was not evicted: loads = %d", loads)
-	}
-	c.resetFor("article-page-test-0002", false)
-	id = "article-page-test-0002"
-	read(0)
-	if loads != 5 {
-		t.Fatalf("new search reused old page: loads = %d", loads)
-	}
-}
-
-func TestArticlePageCacheDoesNotFreezeGrowingResults(t *testing.T) {
-	c := &articlePageCache{}
-	c.resetFor("article-page-test-growing", false)
-	defer func() {
-		if c.db != nil {
-			_ = c.db.Close()
-		}
-	}()
-	r := SearchRequest{CacheID: "article-page-test-growing", CacheAction: "page", Size: 20}
-	loads := 0
-	for i := 0; i < 2; i++ {
-		if err := c.serve(context.Background(), r, func(SearchEvent) error { return nil }, func(emit func(SearchEvent) error) error {
-			loads++
-			return emit(SearchEvent{T: "hit", Total: loads, Complete: false, HasNext: true})
-		}); err != nil {
-			t.Fatal(err)
+	for name, change := range map[string]func(*SearchRequest){
+		"query":       func(r *SearchRequest) { r.Query = "other" },
+		"mode":        func(r *SearchRequest) { r.Mode = "near" },
+		"format":      func(r *SearchRequest) { r.Format = "clean" },
+		"dictionary":  func(r *SearchRequest) { r.Dictionary = "other" },
+		"highlight":   func(r *SearchRequest) { r.Highlight = false },
+		"diacritics":  func(r *SearchRequest) { r.IgnoreDiacritics = false },
+		"rung":        func(r *SearchRequest) { r.Rung = "words" },
+		"cache id":    func(r *SearchRequest) { r.CacheID = "fedcba9876543210" },
+		"cache count": func(r *SearchRequest) { r.CacheCount = 2 },
+		"cache order": func(r *SearchRequest) { r.CacheOrder = 2 },
+		"start":       func(r *SearchRequest) { r.Start = 25 },
+		"size":        func(r *SearchRequest) { r.Size = 5 },
+		"origin":      func(r *SearchRequest) { r.Origin = "http://127.0.0.1:6888" },
+	} {
+		changed := page
+		change(&changed)
+		if articlePageCacheKey(page) == articlePageCacheKey(changed) {
+			t.Errorf("%s changed the page but not the key", name)
 		}
 	}
-	if loads != 2 {
-		t.Fatalf("incomplete result was cached: loads = %d", loads)
+	// The FIRST answer has no window but its limit - that one is part of it.
+	first := SearchRequest{Query: "q", Mode: "phrase", Dictionary: "d", CacheID: "0123456789abcdef", Limit: 5}
+	wider := first
+	wider.Limit = 20
+	if articlePageCacheKey(first) == articlePageCacheKey(wider) {
+		t.Error("the first answer's limit does not change the key")
 	}
 }
