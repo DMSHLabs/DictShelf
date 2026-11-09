@@ -77,6 +77,22 @@ The header of a dictionary shows its count; **the reading that answered is not
 announced** - a full-text mode asks for one reading and has no relaxation to
 explain. What the reading matched is what the article's marks highlight.
 
+### Stepping through the matches
+
+A reading that matches article text opens a bar along the bottom: the query, the
+reading (`[A B]`, `[A ↔ B]` or `[A … B]`) and the position, such as
+*3 of 47 · articles 21–40*. <kbd>↑</kbd> and <kbd>↓</kbd> go to the previous and
+next match and bring it into view. A phrase is one match even when a link splits
+its words, and a near window is one match; only the **Words** reading stops at
+each word.
+
+Scroll away from the match you are on and the crosshair button returns to it,
+reopening the dictionary section or the block of results if you left them. It
+never moves the position forward; only <kbd>↓</kbd> does.
+
+A `+` after the total means the count is still growing: the rest of the
+dictionary is being searched.
+
 ## Inflected words
 
 When a single-word query returns nothing in a dictionary, DictShelf looks up the

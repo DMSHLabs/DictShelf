@@ -1332,7 +1332,7 @@
   "articleFind.hiddenHint": "Try searching hidden examples.",
   "articleFind.previous": "Find previous",
   "articleFind.next": "Find next",
-  "articleFind.scrollToMatch": "Scroll to current match",
+  "articleFind.scrollToMatch": "Return to the current match",
   "articleFind.traceStart": "Trace all",
   "articleFind.traceStop": "Stop trace",
   "articleFind.traceLogDisabled": "search event logging is off",
