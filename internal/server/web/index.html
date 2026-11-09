@@ -1455,6 +1455,7 @@ function stopArticleResultCaches(){
   articleCacheGroupID="";articleCacheGroupCount=1;
   prefetchedBlocks.clear();
   prefetchedPages.clear();
+  prefetchAbort?.abort();prefetchAbort=null;
   articleCacheSearchSettled=false;
   articleResultCaches.clear();maskTaskFinish("search-results");
 }
@@ -7517,19 +7518,61 @@ function noteArticleHeight(dict,height){
 function scheduleArticleFill(det,rows){
   const run=(articleFillRuns.get(det)||0)+1;
   articleFillRuns.set(det,run);
-  const state={rows,at:0,last:null};
-  const step=()=>{
-    if(articleFillRuns.get(det)!==run||!det.isConnected)return;
-    if(state.last)noteArticleHeight(state.last.dict,state.last.dd.getBoundingClientRect().height);
-    const row=state.rows[state.at++];
-    if(!row)return;
-    const placeholder=row.dd.querySelector(":scope>.article-pending");
-    if(placeholder)placeholder.remove();
-    renderArticle(row.dd,row.body,row.dict,row.frag);
-    state.last=row;
-    if(window.requestIdleCallback)requestIdleCallback(step,{timeout:300});else setTimeout(step,32);
+  const pending=rows.map(row=>({row,urgent:false,done:false,
+    placeholder:row.dd.querySelector(":scope>.article-pending")}));
+  let last=null,idle=0,timer=0,observer=null;
+  const alive=()=>articleFillRuns.get(det)===run&&det.isConnected;
+  const stop=()=>{
+    observer?.disconnect();observer=null;
+    if(idle&&window.cancelIdleCallback)window.cancelIdleCallback(idle);
+    idle=0;clearTimeout(timer);timer=0;
   };
-  if(window.requestIdleCallback)requestIdleCallback(step,{timeout:300});else setTimeout(step,32);
+  const step=()=>{
+    clearTimeout(timer);timer=0;idle=0;
+    if(!alive())return stop();
+    // What the reader can see is rendered before what is merely next: a row
+    // scrolled into the viewport outranks the reading-order queue.
+    let pick=null;
+    for(const item of pending){
+      if(item.done)continue;
+      if(item.urgent){pick=item;break}
+      if(!pick)pick=item;
+    }
+    if(!pick)return stop();
+    pick.done=true;
+    if(last)noteArticleHeight(last.dict,last.dd.getBoundingClientRect().height);
+    if(pick.placeholder)pick.placeholder.remove();
+    renderArticle(pick.row.dd,pick.row.body,pick.row.dict,pick.row.frag);
+    last=pick.row;
+    schedule(pending.some(item=>!item.done&&item.urgent));
+  };
+  const schedule=(urgent)=>{
+    if(!alive())return stop();
+    if(urgent){
+      if(idle&&window.cancelIdleCallback)window.cancelIdleCallback(idle);
+      idle=0;
+      if(!timer)timer=setTimeout(step,0);
+      return;
+    }
+    if(timer||idle)return;
+    if(window.requestIdleCallback)idle=window.requestIdleCallback(step,{timeout:300});
+    else timer=setTimeout(step,32);
+  };
+  if(window.IntersectionObserver){
+    // A margin, not the bare viewport: a row is worth rendering just before it
+    // can be seen, and a placeholder that is already off screen is not.
+    observer=new IntersectionObserver(entries=>{
+      let found=false;
+      for(const entry of entries){
+        if(!entry.isIntersecting)continue;
+        const item=pending.find(candidate=>candidate.placeholder===entry.target);
+        if(item&&!item.done){item.urgent=true;found=true}
+      }
+      if(found)schedule(true);
+    },{rootMargin:"240px 0px"});
+    for(const item of pending)if(item.placeholder)observer.observe(item.placeholder);
+  }
+  schedule(false);
 }
 
 let frameSeq=0;
@@ -11116,13 +11159,13 @@ async function navGo(step){
   try{
     const state=await navRequest(step<0?"navPrevious":"navNext");
     if(!state||operation!==navOpToken||navSuppressed)return false;
-    navServerState=state;navPos();await navShowTarget(state.target,state);
+    navServerState=state;navPos();await navShowTarget(state.target,state,step);
     return !!state.found;
   }catch(error){console.warn("Article match navigation failed",error)}
   finally{if(operation===navOpToken){navPending=false;navPos()}}
   return false;
 }
-async function navShowTarget(target,state){
+async function navShowTarget(target,state,direction=0){
   if(!target)return;
   for(const old of navCurrent?.els||[navCurrent?.el].filter(Boolean))old.classList.remove("wu-cur");
   navCurrent=null;
@@ -11190,17 +11233,30 @@ async function navShowTarget(target,state){
   for(const item of activeMarks)item.classList.add("wu-cur");
   navCurrent={det,host,el:mark,els:activeMarks};navServerState=state;
   const rows=det.querySelectorAll(":scope>dl>dd").length;
-  if(rows>0&&articleOffset>=rows-4)window.wudictPrefetchArticleBlock?.(det,start+rows);
+  if(rows>0){
+    if(direction<0){
+      // A backward walk crosses into the previous block, exactly as a forward
+      // one crosses into the next; warm it before the reader needs it.
+      if(articleOffset<=3&&start>0)
+        window.wudictPrefetchArticleBlock?.(det,previousArticleBlockStart(det,start));
+    }else if(articleOffset>=rows-4){
+      window.wudictPrefetchArticleBlock?.(det,start+rows);
+    }
+  }
   window.wudictArticleFind?.traceEvent?.("navigation_trace_display",`dict=${dict}; article=${target.articleIndex}; block=${start}; mark_ready=true`,Math.round(performance.now()-displayStarted));
   navSettleCurrent(navCurrent);navPos();
 }
 function navGoto(page){
   if(!Number.isInteger(page)||page<1||!navServerState)return;
   if(navPending||!navSessionID)return;
+  const before=Number(navServerState.position)||0;
   navPending=true;const operation=++navOpToken;
   navRequest("navGoto",{position:String(page)}).then(state=>{
     if(!state?.found||operation!==navOpToken||navSuppressed)return;
-    navServerState=state;navPos();return navShowTarget(state.target,state);
+    // The jump has a direction too: the block it lands in is warmed toward the
+    // side the reader is heading for.
+    const direction=(Number(state.position)||0)>=before?1:-1;
+    navServerState=state;navPos();return navShowTarget(state.target,state,direction);
   }).catch(error=>console.warn("Article match navigation failed",error)).finally(()=>{if(operation===navOpToken){navPending=false;navPos()}});
 }
 async function navRestoreCurrent(){
@@ -11247,13 +11303,20 @@ window.wudictRestoreArticleBlock=(det,start,marks=false,deferAfter=-1)=>{
   return fetchSearchPortion(det,start,{openAfter:true,size:start===0&&firstPageSize?firstPageSize:size,pageSize:size,firstPageSize,marks,deferAfter});
 };
 
-/* Warm the NEXT block while the reader reads this one. The walk crosses blocks
-   one after another, so this request runs when the current block is nearly
-   spent, once per block, and keeps the parsed page: the restore that follows
-   renders it instead of asking the server again - no second render, no second
-   transfer and no second parse of 4.5-7.8 MB. */
+/* Warm the NEXT block while the reader reads this one, and the PREVIOUS one
+   while walking back. The walk crosses blocks one after another, so this runs
+   when the current block is nearly spent (or just entered, going backward),
+   once per block, and keeps the parsed page: the restore that follows renders
+   it instead of asking the server again - no second render, no second transfer
+   and no second parse of 4.5-7.8 MB. */
+let prefetchAbort=null;
+function previousArticleBlockStart(det,start){
+  const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
+  const first=Math.max(0,Number(det.dataset.searchFirstPageSize)||0)||size;
+  return start<=first?0:Math.max(first,start-size);
+}
 window.wudictPrefetchArticleBlock=(det,start)=>{
-  if(!det?.isConnected||det.dataset.searchHasNext!=="true")return;
+  if(!det?.isConnected||!Number.isInteger(start)||start<0)return;
   const id=det.dataset.searchDict||"",cached=articleResultCaches.get(id);
   if(!cached||cached.displayQuery!==(det.dataset.searchQuery||"")||cached.mode!==(det.dataset.searchMode||""))return;
   const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
@@ -11263,15 +11326,19 @@ window.wudictPrefetchArticleBlock=(det,start)=>{
   if(prefetchedBlocks.has(url))return;
   prefetchedBlocks.add(url);
   window.wudictArticleFind?.traceEvent?.("navigation_trace_prefetch",`start=${start}; url=${url}`,0);
-  // Through the walk's own stream, not apiFetch: the desktop's in-process
+  // One prefetch at a time: a new one means the block it was warming is no
+  // longer the one the reader is heading for, and the server can stop rendering
+  // it. Through the walk's own stream, not apiFetch: the desktop's in-process
   // resource handler answers with a loopback Host while the native bridge names
-  // the virtual origin, and the server's page cache keys on the origin. Keep the
-  // parsed page, so the restore neither asks again nor parses it again.
+  // the virtual origin, and the page cache keys on the origin.
+  prefetchAbort?.abort();
+  prefetchAbort=new AbortController();
+  const controller=prefetchAbort;
   fetchStream(url,msg=>{
     if(msg.t!=="hit"||msg.dict!==id)return;
     prefetchedPages.set(url,msg);
     while(prefetchedPages.size>2)prefetchedPages.delete(prefetchedPages.keys().next().value);
-  }).catch(()=>prefetchedBlocks.delete(url));
+  },controller.signal).catch(()=>prefetchedBlocks.delete(url));
 };
 window.wudictArticleBlockHasMore=(det,direction)=>{
   if(!det?.isConnected)return false;
