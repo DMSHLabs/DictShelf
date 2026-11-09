@@ -1123,9 +1123,16 @@ $("sysLogSearch")?.addEventListener("change",syncRemoteFindTraceButton);
 // that closes on use was one set too many.
 $("articleFindGo").onclick = async () => {
   readOptions(); active=!!options.query;
+  // The button's whole path is worth a line in the log: a press that seems to do
+  // nothing is either a press that never arrived or an answer that never came.
+  const note=(stage,detail)=>void sendBrowseDiagnostic({event:"search_article",stage,runId:0,query:String(options.query||"").slice(0,200),detail});
+  const anchor=findAnchor();
+  note("navigation_find_click",`query=${options.query}; active=${active}; pending=${remoteFindPending}; anchor=${anchor?anchor.dict+":"+anchor.article:"none"}`);
   if(!active){dialog.close();return}
   closeRemoteFind();
-  const state=await startRemoteFind(true);
+  let state=null,error="";
+  try{state=await startRemoteFind(true)}catch(failure){error=String(failure?.message||failure)}
+  note("navigation_find_result",`found=${!!state?.found}; complete=${!!state?.complete}; total=${state?.total||0}; position=${state?.position||0}; error=${(error||remoteFind?.error||"").slice(0,300)}`);
   // Found: the dialog has done its job. Not found: it stays, says so, and the
   // reader can correct the word without reopening it.
   if(state?.found)dialog.close();
