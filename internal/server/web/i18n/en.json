@@ -1320,6 +1320,7 @@
   "articleFind.title": "Find in articles",
   "articleFind.query": "Word or phrase",
   "articleFind.scope": "Search the articles this answer found",
+  "articleFind.searching": "Searching the found articles",
   "articleFind.mode": "Search mode",
   "articleFind.phrase": "Phrase in article",
   "articleFind.near": "Near in article",

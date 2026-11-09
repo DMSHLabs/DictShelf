@@ -232,6 +232,7 @@ function paint() {
   renderStrip();
 }
 function closeRemoteFind(){
+  findProgressEnd();
   remoteFindToken++;remoteFindRequestSeq++;remoteFindPending=false;
   const previous=remoteFind;remoteFind=null;
   if(previous?.id)apiFetch("/api/search?"+new URLSearchParams({cacheAction:"navClose",cacheID:previous.id})).catch(()=>{});
@@ -279,11 +280,34 @@ function remoteFindSignature(context){
   return JSON.stringify([context.groupID,context.dictionaries,context.orders,context.cacheCount,context.query,context.mode,options.query,searchMode(),
     context.ignore,context.rungs,options.matchCase,options.examples,nearWords()]);
 }
+/* The page's task strip is where "something is happening" is said. A search is a
+   burst of requests - one per step, sometimes seconds each while a block of
+   articles is loaded - so the strip starts with the first and lingers a moment
+   after the last, instead of starting and finishing on every step. */
+let findProgressTimer=0,findProgressOn=false;
+function findProgressStart(){
+  if(findProgressOn)return;
+  if(typeof maskTaskStart!=="function")return;
+  findProgressOn=true;
+  try{maskTaskStart("article-find",t("articleFind.searching"))}catch(_){findProgressOn=false}
+}
+function findProgressPing(){
+  findProgressStart();
+  clearTimeout(findProgressTimer);
+  findProgressTimer=setTimeout(findProgressEnd,600);
+}
+function findProgressEnd(){
+  clearTimeout(findProgressTimer);findProgressTimer=0;
+  if(!findProgressOn)return;
+  findProgressOn=false;
+  if(typeof maskTaskFinish==="function")try{maskTaskFinish("article-find")}catch(_){}
+}
 function remoteFindURL(record,action,extra={}){
   return "/api/search?"+new URLSearchParams({cacheAction:action,cacheID:record.id,origin:location.origin,...extra});
 }
 async function remoteFindFetch(record,action,extra={}){
 	const started=performance.now();
+  findProgressStart();
 	const requestMeta={action,fromPosition:Number(record.state?.position)||0,fromTotal:Number(record.state?.total)||0,
     fromDict:record.state?.target?.dict||"",fromBlock:Number(record.state?.target?.blockStart)||0};
 	const requestLogStarted=performance.now();
@@ -291,13 +315,14 @@ async function remoteFindFetch(record,action,extra={}){
 	const requestLogMs=Math.round(performance.now()-requestLogStarted);
 	let response;
 	try{response=await apiFetch(remoteFindURL(record,action,extra))}
-	catch(error){await remoteFindDiagnostic(record,"navigation_response",{elapsedMs:Math.round(performance.now()-started),detail:`action=${action}; transport_error=${String(error).slice(0,700)}`});throw error}
+	catch(error){findProgressPing();await remoteFindDiagnostic(record,"navigation_response",{elapsedMs:Math.round(performance.now()-started),detail:`action=${action}; transport_error=${String(error).slice(0,700)}`});throw error}
   if(!response.ok){
     const error=await response.text();
     await remoteFindDiagnostic(record,"navigation_response",{elapsedMs:Math.round(performance.now()-started),detail:`action=${action}; status=${response.status}; error=${String(error).slice(0,700)}`});
     throw new Error(error||"article search failed");
   }
   const state=await response.json();
+  findProgressPing();
   await remoteFindDiagnostic(record,"navigation_response",{elapsedMs:Math.round(performance.now()-started),completed:Math.min(100000,state.total||0),
     detail:`action=${action}; found=${!!state.found}; complete=${!!state.complete}; position=${state.position||0}/${state.total||0}; dict=${state.target?.dict||""}; article=${state.target?.articleIndex??""}; block=${state.target?.blockStart??""}; occurrences=${state.target?.occurrences?.length||0}; diagnostic_request_ms=${requestLogMs}`});
   return state;
@@ -1109,5 +1134,5 @@ window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation,
 }, traceEvent:(stage,detail,elapsedMs=0)=>{
   if(!remoteFindTraceActive)return;
   void remoteFindDiagnostic({diagnosticRun:remoteFindDiagnosticRun,diagnosticStarted:performance.now(),traceRun:remoteFindTraceRun},stage,{elapsedMs,detail:`trace=${remoteFindTraceRun}; source=full_text; ${detail}`});
-}, fullTextModeActive:()=>stripLayer==="answer"&&!!fullTextNavigation, isActive:()=>active&&!!options.query, searchAcrossBlocks:()=>true, searchFrom, goto, setHistoryLimit:n=>{findHistory=findHistory.slice(0,Math.max(0,Math.min(1000,Number(n)||0)));saveFindHistory();renderFindHistory()}};
+}, progressPing:findProgressPing, progressEnd:findProgressEnd, fullTextModeActive:()=>stripLayer==="answer"&&!!fullTextNavigation, isActive:()=>active&&!!options.query, searchAcrossBlocks:()=>true, searchFrom, goto, setHistoryLimit:n=>{findHistory=findHistory.slice(0,Math.max(0,Math.min(1000,Number(n)||0)));saveFindHistory();renderFindHistory()}};
 })();
