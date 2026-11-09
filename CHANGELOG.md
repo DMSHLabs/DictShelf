@@ -1,8 +1,50 @@
 # Changelog
 
 Notable changes in **DictShelf**, based on the WuWeiDict codebase. Release tags
-for this fork are prefixed `wudict2-`; one
+for this fork are prefixed `dictshelf-v`; one
 tagged line per release, newest first.
+
+## dictshelf-v1.03.0 — 2026-11-09
+
+From `dev`. Full-text answers are painted and walked by the server, and a page
+of results no longer arrives as one unreadable block of article text.
+
+*The `dictshelf-v1.02.x` tags before this one were published with the store
+release notes only; this is the first entry written here under the prefix the
+release workflow uses.*
+
+### Finding a phrase inside articles
+
+- **One stop per match, not per word.** A phrase split by a link - *джазовый*
+  in one element, *кларнетист* in the next - is one match and one stop; the
+  nearby reading counts a whole window as one match. The **Words** reading still
+  stops at each word.
+- **The strip says where you are**: the position, the block of results, and a
+  `+` when the total is still growing.
+- **The crosshair returns** to the match you were on after you scroll away, page
+  to another block, or close the section; it never moves to the next one.
+
+### Crossing a block of results
+
+- The article you asked for is shown **before** the other nineteen are built;
+  they fill in as you read, and the next block is fetched while you read this
+  one.
+- A page carries **one article body at a time** instead of a whole block, and is
+  compressed for a network client; the wait at a block boundary fell from
+  seconds to tens of milliseconds on a large archive.
+- A jump to a random match shows the target first and settles the rows above it.
+
+### Diagnostics
+
+- **Trace all** keeps its forward walk; a menu beside it adds **Backward**,
+  **From random places** and a **full run**. Each run writes its own
+  p50/p90/max and a final summary to the System Log, then returns to where you
+  were.
+
+### Not checked
+
+- The phone (Android WebView): all of the above was verified in the Windows
+  window and in a browser.
 
 ## wudict2-v0.11.1 — 2026-10-08
 
