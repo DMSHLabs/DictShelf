@@ -425,16 +425,17 @@ function rangeFromNodes(doc,first,firstStart,last,lastEnd){
   return range;
 }
 // locateFindText finds one occurrence's text among the article's text nodes,
-// starting at the node cursor: inside a single node first (the common case), then
-// across a run of consecutive ones (a phrase the markup split).
-function locateFindText(nodes,cursor,occurrence,doc){
+// starting at the node cursor and, in that first node, after the offset the
+// previous occurrence ended at. Without the offset a repeated word resolves to
+// its first place every time: the counter moves and the mark does not.
+function locateFindText(nodes,cursor,occurrence,doc,from=0){
   const want=foldFindText(occurrence.text);
-  if(!want)return {range:null,cursor};
+  if(!want)return {range:null,cursor,offset:0};
   for(let i=cursor;i<nodes.length;i++){
-    const folded=foldFindText(nodes[i].data),at=folded.indexOf(want);
+    const folded=foldFindText(nodes[i].data),at=folded.indexOf(want,i===cursor?Math.max(0,from):0);
     if(at<0)continue;
     const range=rangeFromNodes(doc,nodes[i],at,nodes[i],at+want.length);
-    if(range)return {range,cursor:i};
+    if(range)return {range,cursor:i,offset:at+want.length};
   }
   for(let i=cursor;i<nodes.length;i++){
     let joined="",spans=[];
@@ -445,59 +446,41 @@ function locateFindText(nodes,cursor,occurrence,doc){
       spans.push({node:nodes[j],from:at,to:at+text.length});
       if(joined.length<want.length)continue;
       const found=joined.indexOf(want);
-      if(found<0)continue;
-      const end=found+want.length;
-      const first=spans.find(span=>span.to>found),last=spans.find(span=>span.to>=end);
-      if(!first||!last)continue;
-      const range=rangeFromNodes(doc,first.node,found-first.from,last.node,end-last.from);
-      if(range)return {range,cursor:j};
+      if(found<0)break;
+      let first=null,last=null,firstStart=0,lastEnd=0;
+      for(const span of spans){
+        if(!first&&found<span.to){first=span.node;firstStart=Math.max(0,found-span.from)}
+        if(!last&&found+want.length<=span.to){last=span.node;lastEnd=found+want.length-span.from}
+      }
+      const range=first&&last?rangeFromNodes(doc,first,firstStart,last,lastEnd):null;
+      if(range)return {range,cursor:j,offset:lastEnd};
     }
   }
-  return {range:null,cursor};
+  return {range:null,cursor,offset:0};
 }
 function serverFindRanges(root,occurrences){
   const doc=root.ownerDocument||root,win=doc.defaultView;
   if(!win)return [];
   const nodes=findTextNodes(root),out=[];
-  let cursor=0,missed=0;
+  let cursor=0,offset=0,missed=0;
   for(const occurrence of occurrences||[]){
     const spans=occurrence?.spans||[];
     if(!spans.length){missed++;continue}
     const first=resolveNodePath(root,spans[0].path),last=resolveNodePath(root,spans[spans.length-1].path);
     let range=first&&last?rangeFromNodes(doc,first,spans[0].start,last,spans[spans.length-1].end):null;
     if(range&&foldFindText(range.toString())!==foldFindText(occurrence.text))range=null;
-    if(!range){
-      const located=locateFindText(nodes,cursor,occurrence,doc);
-      range=located.range;cursor=located.cursor;
+    if(range){
+      const at=nodes.indexOf(range.startContainer);
+      if(at>=0){cursor=at;offset=range.startContainer===range.endContainer?range.endOffset:0}
+    }else{
+      const located=locateFindText(nodes,cursor,occurrence,doc,offset);
+      range=located.range;cursor=located.cursor;offset=located.offset;
     }
     if(!range){missed++;continue}
-    for(let i=cursor;i<nodes.length;i++){if(nodes[i]===range.startContainer||range.intersectsNode?.(nodes[i])){cursor=i;break}}
     out.push({range,example:range.startContainer.parentElement?.closest(".wu-xonly,.wu-sec,.dsl_opt,.wu-exonly,.wu-ex,.dsl_ex")||null});
   }
   if(missed)window.wudictArticleFind?.traceEvent?.("navigation_trace_ranges",`occurrences=${(occurrences||[]).length}; painted=${out.length}; missed=${missed}`);
   return out;
-}
-/* The reader's own position, named the way the page CAN name it: a snippet of
-   the article's text taken from the selection. The server finds that snippet in
-   its own model of the same article, so the gesture does not depend on the two
-   trees having the same node indices - a frame's parser moves <link>/<style>
-   into a head the server never had, and every top-level index shifts with them.
-   The snippet is folded the way the server folds it, so whitespace cannot part
-   the two. */
-function serverFindAnchor(){
-  if(!searchAnchor)return null;
-  const host=searchAnchor.host,det=host?.closest("details.dict"),row=host?.closest("dd");
-  if(!det||!row)return null;
-  const rows=[...det.querySelectorAll(":scope>dl>dd")],articleOffset=rows.indexOf(row);
-  if(articleOffset<0)return null;
-  const range=searchAnchor.range;
-  let node=range.startContainer;
-  while(node&&node.nodeType!==3)node=node.firstChild;
-  if(!node)return null;
-  const text=foldFindText(node.data.slice(range.startOffset)).slice(0,64);
-  if(!text)return null;
-  return {dict:det.dataset.searchDict||"",article:(Number(det.dataset.searchPageStart)||0)+articleOffset,
-    text,direction:searchAnchor.direction};
 }
 async function showRemoteFindTarget(target,state,token){
   if(!target)return false;
