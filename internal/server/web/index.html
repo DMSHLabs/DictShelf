@@ -976,8 +976,8 @@ window.wudictFontScale=(function(){
   <span id="articleFindReading" hidden></span>
   <button type="button" class="btn" id="articleFindCount" aria-live="polite" aria-haspopup="dialog" aria-controls="maskGotoDialog" disabled></button>
   <button type="button" class="btn" id="articleFindFirst" aria-label="{{T:articleFind.first}}" title="{{T:articleFind.first}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 4h14"/><path d="M12 20V8"/><path d="m7 13 5-5 5 5"/></svg></button>
-  <button type="button" class="btn" id="articleFindPrev" aria-label="{{T:articleFind.previous}}" title="{{T:articleFind.previous}}">↑</button>
-  <button type="button" class="btn" id="articleFindNext" aria-label="{{T:articleFind.next}}" title="{{T:articleFind.next}}">↓</button>
+  <button type="button" class="btn" id="articleFindPrev" aria-label="{{T:articleFind.previous}}" title="{{T:articleFind.previous}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 20V8"/><path d="m7 13 5-5 5 5"/></svg></button>
+  <button type="button" class="btn" id="articleFindNext" aria-label="{{T:articleFind.next}}" title="{{T:articleFind.next}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 4v12"/><path d="m7 11 5 5 5-5"/></svg></button>
   <button type="button" class="btn" id="articleFindLast" aria-label="{{T:articleFind.last}}" title="{{T:articleFind.last}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 20h14"/><path d="M12 4v12"/><path d="m7 11 5 5 5-5"/></svg></button>
   <button type="button" class="btn" id="articleFindScrollToMatch" aria-label="{{T:articleFind.scrollToMatch}}" title="{{T:articleFind.scrollToMatch}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="2"/></svg></button>
   <button type="button" class="btn" id="articleFindTrace" aria-label="{{T:articleFind.traceStart}}" title="{{T:articleFind.traceStart}}">{{T:articleFind.traceStart}}</button>
@@ -11159,7 +11159,7 @@ function navPos(){
   window.wudictArticleFind?.setFullTextNavigation({
     query:lastQuery,generation:searchSeq,reading:lastSearchMode,
     position:count?direction+tx("articleFind.position",{current:shown,total:count+(state.complete?"":"+")})+(block?" · "+block:""):tx("articleFind.noMatches"),
-    visible:count>0,canNavigate,canPrevious:!atStart,canNext:!atEnd,canFirst:count>0,canLast:count>0,
+    visible:count>0,canNavigate,canPrevious:!atStart,canNext:!atEnd,canFirst:count>0&&!atStart,canLast:count>0&&!atEnd,
     total:count,current:position,complete:!!state.complete,
     at:state.target?[state.target.dict,state.target.articleIndex,state.target.matchIndex,state.target.blockStart].join(":"):"",
     previous:()=>navGo(-1),next:()=>navGo(1),first:()=>navEdge(1),last:()=>navEdge(-1),
