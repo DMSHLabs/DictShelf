@@ -599,6 +599,7 @@ async function traceWaitForPosition(expected,timeout=5000){
 async function runTraceRun(record,run){
   const navigation=fullTextNavigation,generation=navigation?.generation;
   const started=performance.now(),timings=[];
+  const visited=[],landed={};
   let steps=0,reason="done";
   await remoteFindDiagnostic(record,"navigation_trace_run_start",{detail:`trace=${record.traceRun}; run=${run}; position=${navigation?.current||0}; total=${navigation?.total||0}`});
   try{
@@ -618,7 +619,8 @@ async function runTraceRun(record,run){
         if(!next||next.generation!==generation){reason="search_changed";break}
         const position=Number(next.current)||0;
         steps++;timings.push(performance.now()-t0);
-        await remoteFindDiagnostic(record,"navigation_trace_step",{completed:steps,total:Math.min(100000,next.total||0),detail:`trace=${record.traceRun}; run=${run}; step=${steps}; from=${from}; to=${position}; complete=${!!next.complete}; step_ms=${Math.round(performance.now()-t0)}`});
+        visited.push({p:position,at:next.at||""});
+        await remoteFindDiagnostic(record,"navigation_trace_step",{completed:steps,total:Math.min(100000,next.total||0),detail:`trace=${record.traceRun}; run=${run}; step=${steps}; from=${from}; to=${position}; complete=${!!next.complete}; at=${next.at||""}; step_ms=${Math.round(performance.now()-t0)}`});
         if(!position||position===from){reason=advanced===false?"navigation_unavailable":"no_next_match";break}
         // A forward walk that comes back to where it was has wrapped: the
         // count was still growing when the last occurrence answered.
@@ -636,7 +638,9 @@ async function runTraceRun(record,run){
         await action?.();
         const position=Number(fullTextNavigation?.current)||0;
         steps++;timings.push(performance.now()-t0);
-        await remoteFindDiagnostic(record,"navigation_trace_step",{completed:steps,total:Math.min(100000,fullTextNavigation?.total||0),detail:`trace=${record.traceRun}; run=jumps; step=${steps}; ${label}; to=${position}; step_ms=${Math.round(performance.now()-t0)}`});
+        visited.push({p:position,at:fullTextNavigation?.at||""});
+        landed[label]=position;
+        await remoteFindDiagnostic(record,"navigation_trace_step",{completed:steps,total:Math.min(100000,fullTextNavigation?.total||0),detail:`trace=${record.traceRun}; run=jumps; step=${steps}; ${label}; to=${position}; at=${fullTextNavigation?.at||""}; step_ms=${Math.round(performance.now()-t0)}`});
       };
       fullTextNavigation?.goto?.(landing);
       await traceWaitForPosition(landing);
@@ -644,12 +648,31 @@ async function runTraceRun(record,run){
       await step("last",()=>fullTextNavigation?.last?.());
       for(let i=0;i<3;i++)await step("up",()=>fullTextNavigation?.previous?.());
       await step("first",()=>fullTextNavigation?.first?.());
+      // The edges are known without walking: first is 1, last is the total once
+      // the count is exact. A jump that missed says so here, not in a grep.
+      const total=Number(fullTextNavigation?.total)||0;
+      landed.edges=(landed.first===1?"first=ok":"first="+landed.first)+" "+
+        (!fullTextNavigation?.complete?"last=provisional":
+          landed.last===total?"last=ok":"last="+landed.last+"/"+total);
     }
   }catch(error){reason="error";await remoteFindDiagnostic(record,"navigation_trace_error",{detail:`trace=${record.traceRun}; run=${run}; error=${String(error?.message||error).slice(0,700)}`})}
   if(remoteFindTraceStop)reason="stopped";
+  const seen=new Map();
+  let revisited=0,mismatched=0;
+  for(const visit of visited){
+    if(!visit.p||!visit.at)continue;
+    if(seen.has(visit.p)){revisited++;if(seen.get(visit.p)!==visit.at)mismatched++;}
+    else seen.set(visit.p,visit.at);
+  }
+  const sequence=visited.map(visit=>visit.p);
+  const ordered=run==="backward"?sequence.every((p,i)=>!i||p<sequence[i-1]):
+    run==="forward"?sequence.every((p,i)=>!i||p>sequence[i-1]):true;
+  const digest=sequence.length<=40?sequence.join(","):sequence.slice(0,10).join(",")+",…,"+sequence.slice(-10).join(",");
+  await remoteFindDiagnostic(record,"navigation_trace_positions",{completed:steps,total:Math.min(100000,fullTextNavigation?.total||0),detail:`trace=${record.traceRun}; run=${run}; count=${sequence.length}; ordered=${ordered}; revisited=${revisited}; mismatched=${mismatched}; ${run==="seeks"?(landed.edges||"edges=none")+"; ":""}seq=${digest}`});
   const summary={run,steps,elapsed:Math.round(performance.now()-started),reason,
     p50:Math.round(tracePercentile(timings,.5)),p90:Math.round(tracePercentile(timings,.9)),
-    max:Math.round(timings.length?Math.max(...timings):0)};
+    max:Math.round(timings.length?Math.max(...timings):0),
+    sequence,atOf:Object.fromEntries(seen)};
   await remoteFindDiagnostic(record,"navigation_trace_run_end",{completed:steps,total:Math.min(100000,fullTextNavigation?.total||0),detail:`trace=${record.traceRun}; run=${run}; steps=${steps}; p50=${summary.p50}; p90=${summary.p90}; max=${summary.max}; elapsed_ms=${summary.elapsed}; reason=${reason}`});
   return summary;
 }
@@ -667,6 +690,27 @@ async function runFullTextTrace(mode){
     for(const name of run==="full"?["forward","backward","seeks"]:[run]){
       if(remoteFindTraceStop)break;
       summaries.push(await runTraceRun(record,name));
+    }
+    // The two walks cover the same track from opposite ends: one sequence
+    // reversed must equal the other, position for position, and a position must
+    // carry the same target whichever run reached it. That is what "the jumps
+    // are correct" means, and it is checked here rather than by eye later.
+    const forward=summaries.find(summary=>summary.run==="forward");
+    const backward=summaries.find(summary=>summary.run==="backward");
+    if(forward&&backward&&forward.sequence.length&&backward.sequence.length){
+      const left=[...forward.sequence].reverse(),right=backward.sequence;
+      let divergence=-1;
+      const shared=Math.min(left.length,right.length);
+      for(let index=0;index<shared;index++){
+        if(left[index]!==right[index]){divergence=index;break}
+      }
+      const agreement=divergence<0&&left.length===right.length?"same":
+        divergence<0?"prefix":"at "+(divergence+1)+": "+left[divergence]+"≠"+right[divergence];
+      let retargeted=0;
+      for(const [position,at] of Object.entries(forward.atOf)){
+        if(backward.atOf[position]&&backward.atOf[position]!==at)retargeted++;
+      }
+      await remoteFindDiagnostic(record,"navigation_trace_compare",{detail:`trace=${record.traceRun}; suite=${run}; forward=${left.length}; backward=${right.length}; agreement=${agreement}; retargeted=${retargeted}`});
     }
     // A diagnostic leaves the reader where it found them.
     if(origin&&!remoteFindTraceStop){

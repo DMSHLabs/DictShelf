@@ -11151,8 +11151,9 @@ function navPos(){
   window.wudictArticleFind?.setFullTextNavigation({
     query:lastQuery,generation:searchSeq,reading:lastSearchMode,
     position:count?direction+tx("articleFind.position",{current:shown,total:count+(state.complete?"":"+")})+(block?" · "+block:""):tx("articleFind.noMatches"),
-      visible:count>0,canNavigate,canPrevious:!atStart,canNext:!atEnd,canFirst:count>0,canLast:count>0,
-      total:count,current:position,complete:!!state.complete,
+    visible:count>0,canNavigate,canPrevious:!atStart,canNext:!atEnd,canFirst:count>0,canLast:count>0,
+    total:count,current:position,complete:!!state.complete,
+    at:state.target?[state.target.dict,state.target.articleIndex,state.target.matchIndex,state.target.blockStart].join(":"):"",
     previous:()=>navGo(-1),next:()=>navGo(1),first:()=>navEdge(1),last:()=>navEdge(-1),
     refresh:()=>navPos(),goto:page=>navGoto(page),
     canRestore:!!navServerState?.found,restore:()=>navRestoreCurrent(),
