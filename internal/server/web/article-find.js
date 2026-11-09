@@ -289,7 +289,9 @@ function findProgressStart(){
   if(findProgressOn)return;
   if(typeof maskTaskStart!=="function")return;
   findProgressOn=true;
-  try{maskTaskStart("article-find",t("articleFind.searching"))}catch(_){findProgressOn=false}
+  // background: the thin line at the bottom, the same one the dictionary scan
+  // uses - not a card that names itself over the page.
+  try{maskTaskStart("article-find",t("articleFind.searching"),null,{background:true})}catch(_){findProgressOn=false}
 }
 function findProgressPing(){
   findProgressStart();
