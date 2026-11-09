@@ -4,7 +4,54 @@
 
 package server
 
-import "testing"
+import (
+	"context"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+)
+
+// The walk's page load and the reader's prefetch ask for the same block within
+// a few hundred milliseconds. The second caller waits for the first render
+// instead of starting a second one over the same 4.5-7.8 MB.
+func TestArticlePageCacheRendersOnePageForConcurrentCallers(t *testing.T) {
+	isolatedDBDir(t)
+	cache := &articlePageCache{}
+	cache.resetFor("0123456789abcdef", false)
+	request := SearchRequest{Query: "q", Mode: "phrase", Format: "raw", Dictionary: "d",
+		CacheAction: "page", CacheID: "0123456789abcdef", CacheCount: 1, Start: 5, Size: 20,
+		Origin: "http://127.0.0.1:6888", Highlight: true}
+	var renders int32
+	started := make(chan struct{})
+	var once sync.Once
+	load := func(emit func(SearchEvent) error) error {
+		once.Do(func() { close(started) })
+		atomic.AddInt32(&renders, 1)
+		time.Sleep(80 * time.Millisecond)
+		return emit(SearchEvent{T: "hit", Dict: "d", Complete: true,
+			Results: []dict.Result{{Headword: "h", Body: "b"}}})
+	}
+	serve := func() error {
+		return cache.serve(context.Background(), request, func(SearchEvent) error { return nil }, load)
+	}
+	first := make(chan error, 1)
+	go func() { first <- serve() }()
+	<-started
+	second := make(chan error, 1)
+	go func() { second <- serve() }()
+	if err := <-first; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-second; err != nil {
+		t.Fatal(err)
+	}
+	if got := atomic.LoadInt32(&renders); got != 1 {
+		t.Fatalf("renders = %d; want one page for both callers", got)
+	}
+}
 
 // The page cache key is what the stored page depends on. Keying on the whole
 // request made one block live under several keys - the navigation sets the

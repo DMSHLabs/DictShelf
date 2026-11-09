@@ -25,6 +25,11 @@ type articlePageCache struct {
 	db       *sql.DB
 	access   int64
 	maxBytes int64
+	// flights holds one render per key that is in progress. The walk's own page
+	// load and the reader's prefetch ask for the same block within a few hundred
+	// milliseconds; without this, whichever arrives second starts a second
+	// render of 4.5-7.8 MB instead of waiting for the first.
+	flights map[string]chan struct{}
 }
 
 func (c *articlePageCache) resetFor(id string, diagnostics bool) {
@@ -122,6 +127,25 @@ func (c *articlePageCache) serve(ctx context.Context, r SearchRequest, emit func
 	var cached []byte
 	cacheReady := false
 	diagnostics := r.PageCacheDiagnostics
+	emitCached := func(payload []byte) (bool, error) {
+		var events []SearchEvent
+		if json.Unmarshal(payload, &events) != nil {
+			return false, nil
+		}
+		if diagnostics {
+			logx.SystemDiagnostic("article_page_cache stage=hit id=%q dict=%q start=%d size=%d bytes=%d events=%d elapsed_ms=%d transport=%q origin=%q format=%q hl=%t rung=%q count=%d order=%d q=%q",
+				r.CacheID, r.Dictionary, pageStart, pageSize, len(payload), len(events), time.Since(started).Milliseconds(),
+				r.Transport, r.Origin, r.Format, r.Highlight, r.Rung, r.CacheCount, r.CacheOrder, r.Query)
+		}
+		for _, event := range events {
+			if err := emit(event); err != nil {
+				return true, err
+			}
+		}
+		return true, nil
+	}
+	var waiting chan struct{}
+	owner := false
 	c.mu.Lock()
 	if c.id == r.CacheID && c.openLocked() == nil {
 		cacheReady = true
@@ -129,26 +153,56 @@ func (c *articlePageCache) serve(ctx context.Context, r SearchRequest, emit func
 			c.access++
 			_, _ = c.db.ExecContext(ctx, `UPDATE article_page SET accessed=? WHERE cache_key=?`, c.access, string(key))
 		}
+		// Somebody is already rendering this page: wait for that render
+		// instead of starting a second one over the same megabytes.
+		if len(cached) == 0 {
+			if pending, ok := c.flights[key]; ok {
+				waiting = pending
+			} else {
+				waiting = make(chan struct{})
+				if c.flights == nil {
+					c.flights = make(map[string]chan struct{})
+				}
+				c.flights[key] = waiting
+				owner = true
+			}
+		}
 	}
 	c.mu.Unlock()
+	if waiting != nil && !owner {
+		select {
+		case <-waiting:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		cached = nil
+		c.mu.Lock()
+		if c.id == r.CacheID && c.openLocked() == nil {
+			_ = c.db.QueryRowContext(ctx, `SELECT payload FROM article_page WHERE cache_key=?`, string(key)).Scan(&cached)
+		}
+		c.mu.Unlock()
+	}
 	if len(cached) > 0 {
-		var events []SearchEvent
-		if json.Unmarshal(cached, &events) == nil {
-			if diagnostics {
-				logx.SystemDiagnostic("article_page_cache stage=hit id=%q dict=%q start=%d size=%d bytes=%d events=%d elapsed_ms=%d transport=%q origin=%q format=%q hl=%t rung=%q count=%d order=%d q=%q",
-					r.CacheID, r.Dictionary, pageStart, pageSize, len(cached), len(events), time.Since(started).Milliseconds(),
-					r.Transport, r.Origin, r.Format, r.Highlight, r.Rung, r.CacheCount, r.CacheOrder, r.Query)
-			}
-			for _, event := range events {
-				if err := emit(event); err != nil {
-					return err
-				}
-			}
+		if decoded, err := emitCached(cached); err != nil {
+			return err
+		} else if decoded {
 			return nil
 		}
 	}
 	if diagnostics {
 		logx.SystemDiagnostic("article_page_cache stage=miss id=%q dict=%q start=%d size=%d cache_ready=%t reason=%s transport=%q origin=%q format=%q hl=%t rung=%q count=%d order=%d q=%q", r.CacheID, r.Dictionary, pageStart, pageSize, cacheReady, map[bool]string{true: "not_found", false: "inactive_or_unavailable"}[cacheReady], r.Transport, r.Origin, r.Format, r.Highlight, r.Rung, r.CacheCount, r.CacheOrder, r.Query)
+	}
+	if owner {
+		// This call owns the render: release the waiters when it is done,
+		// whether it stored a page or not.
+		defer func() {
+			c.mu.Lock()
+			if c.flights[key] == waiting {
+				delete(c.flights, key)
+			}
+			c.mu.Unlock()
+			close(waiting)
+		}()
 	}
 	var events []SearchEvent
 	err := load(func(event SearchEvent) error {
