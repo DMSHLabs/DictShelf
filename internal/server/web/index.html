@@ -995,9 +995,13 @@ window.wudictFontScale=(function(){
        while the "full text" reading below them is not matching at all but
        navigation of the marks the server's answer carries, and joins the list
        only while such an answer is on screen. -->
-  <label class="article-find-mode" for="articleFindMode">{{T:articleFind.mode}}<select id="articleFindMode" aria-label="{{T:articleFind.mode}}">
-    <option value="contains" selected>{{T:articleFind.wordInArticle}}</option><option value="word" hidden>{{T:articleFind.wordInArticle}}</option><option value="fts" hidden>{{T:articleFind.fullText}}</option>
-  </select></label>
+  <div class="article-find-kind" role="radiogroup" aria-label="{{T:articleFind.mode}}">
+    <label id="articleFindKindWalkLabel"><input type="radio" name="articleFindKind" id="articleFindKindWalk" value="walk">{{T:articleFind.kindWalk}}</label>
+    <label><input type="radio" name="articleFindKind" id="articleFindKindSearch" value="search" checked>{{T:articleFind.kindSearch}}</label>
+    <select id="articleFindMode" hidden aria-hidden="true">
+      <option value="contains" selected>{{T:articleFind.wordInArticle}}</option><option value="word" hidden>{{T:articleFind.wordInArticle}}</option><option value="fts" hidden>{{T:articleFind.fullText}}</option>
+    </select>
+  </div>
   <label><input type="checkbox" id="articleFindWholeWords">{{T:articleFind.wholeWords}}</label>
   <label><input type="checkbox" id="articleFindCase">{{T:articleFind.case}}</label>
   <label><input type="checkbox" id="articleFindAll" checked>{{T:articleFind.all}}</label>
@@ -13429,7 +13433,6 @@ function themedSelectCreate(select){
 }
 window.wudictThemedSelects={
   mode:themedSelect($("mode"),$("modeMenuBtn"),$("modeMenu")),
-  articleFindMode:themedSelectCreate($("articleFindMode")),
   pickerGroup:themedSelect($("webPickerGroup"),$("webPickerGroupBtn"),$("webPickerGroupMenu"))
 };
 $("webDictionaryPicker").addEventListener("close",()=>window.wudictThemedSelects.pickerGroup.hide());

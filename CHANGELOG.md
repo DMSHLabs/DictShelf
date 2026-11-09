@@ -23,6 +23,9 @@ release workflow uses.*
   `+` when the total is still growing.
 - **The crosshair returns** to the match you were on after you scroll away, page
   to another block, or close the section; it never moves to the next one.
+- **Find in articles asks one question**: jump over the matches the search found
+  (the query and its options are off), or search a word in the articles it found
+  - whole words only on request. The page-of-modes list is gone.
 
 ### Crossing a block of results
 

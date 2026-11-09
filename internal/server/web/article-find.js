@@ -135,8 +135,14 @@ function open(preserveAnchor=false) {
   if (active && !searchAnchor && !adopted) rebuild();
   dialog.showModal();
   strip.hidden = true; measure();
-  if (options.mode === "fts") $("articleFindMode").focus();
+  if (options.mode === "fts") $("articleFindKindWalk").focus();
   else { $("articleFindQuery").focus(); $("articleFindQuery").select(); }
+}
+function syncFindKind(fts) {
+  const walk = !!fullTextNavigation;
+  $("articleFindKindWalkLabel").hidden = !walk;
+  $("articleFindKindWalk").checked = !!fts && walk;
+  $("articleFindKindSearch").checked = !(!!fts && walk);
 }
 function syncControls() {
   syncRemoteFindTraceButton();
@@ -149,9 +155,10 @@ function syncControls() {
     options={...options,mode:"contains"};select.value="contains";fts=false;save();
     if(dialog.open){active=!!options.query;if(active)rebuild()}
   }
+  syncFindKind(fts);
   $("articleFindStop").disabled = fts && hasFTS;
   $("articleFindQuery").disabled = fts;
-  for (const id of ["articleFindCase","articleFindAll","articleFindExamples"]) $(id).disabled = fts;
+  for (const id of ["articleFindCase","articleFindAll","articleFindExamples","articleFindWholeWords"]) $(id).disabled = fts;
   if (fts) {
     if (fullTextNavigation) {
       options.query = fullTextNavigation.query || "";
@@ -875,6 +882,16 @@ $("articleFindTraceRun").addEventListener("change",()=>{
 $("sysLogSearch")?.addEventListener("change",syncRemoteFindTraceButton);
 $("articleFindDialogPrev").onclick = () => go(-1);
 $("articleFindDialogNext").onclick = () => go(1);
+$("articleFindKindWalk").onchange = () => {
+  if (!$("articleFindKindWalk").checked) return;
+  $("articleFindMode").value = "fts";
+  $("articleFindMode").onchange();
+};
+$("articleFindKindSearch").onchange = () => {
+  if (!$("articleFindKindSearch").checked) return;
+  $("articleFindMode").value = $("articleFindWholeWords").checked ? "word" : "contains";
+  $("articleFindMode").onchange();
+};
 $("articleFindWholeWords").onchange = () => {
   const select = $("articleFindMode");
   if (select.value === "fts") return;

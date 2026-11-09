@@ -1357,6 +1357,8 @@
   "articleFind.traceSeeks": "С случайных мест",
   "articleFind.traceFull": "Полный прогон",
   "articleFind.wordInArticle": "Слово в статье",
+  "articleFind.kindWalk": "Прыжки по найденному",
+  "articleFind.kindSearch": "Поиск в найденных статьях",
   "articleFind.wholeWords": "Только целые слова",
   "articleFind.traceStop": "Остановить проход",
   "articleFind.traceLogDisabled": "журналирование поиска выключено",

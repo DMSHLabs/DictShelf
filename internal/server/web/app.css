@@ -283,6 +283,8 @@ html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image
 #articleFindTraceRun:disabled{opacity:.45}
 #articleFindNext{margin-left:var(--sp-2)}
 .article-find-query-row,.article-find-mode{display:grid;grid-template-columns:max-content minmax(0,1fr);align-items:center;gap:calc(var(--ui-control-gap) * 1em)}
+.article-find-kind{display:flex;flex-wrap:wrap;align-items:center;gap:.35em 1.2em}
+.article-find-kind label{display:flex;align-items:center;gap:.4em;white-space:nowrap}
 .article-find-query-row input,.article-find-mode select{width:100%;min-width:0}
 /* Gaps scale with the viewport and button height; fixed end gutters keep
    the controls clear of the screen edges. The dictionary label gives up

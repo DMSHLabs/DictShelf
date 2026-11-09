@@ -1339,6 +1339,8 @@
   "articleFind.traceSeeks": "From random places",
   "articleFind.traceFull": "Full run",
   "articleFind.wordInArticle": "Word in article",
+  "articleFind.kindWalk": "Jump over the matches",
+  "articleFind.kindSearch": "Search the found articles",
   "articleFind.wholeWords": "Whole words only",
   "articleFind.traceStop": "Stop trace",
   "articleFind.traceLogDisabled": "search event logging is off",
