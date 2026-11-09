@@ -214,7 +214,7 @@ for (const language of ['en', 'ru']) {
   vm.runInNewContext(main.match(/^const FEAT_NAME=.*;$/m)[0] + '\n' +
     main.match(/^const fullTextReading=.*;$/m)[0] + '\n' +
     main.match(/function favouriteControl\(result,dictID,dt,dd\)\{[\s\S]*?\n}/)[0] + '\n' +
-    main.match(/function renderSlot\(box,h,mode,q,perDict,group,paging=null,deferAfter=-1\)\{[\s\S]*?\n}/)[0], resultContext);
+    main.match(/function renderSlot\(box,h,mode,q,perDict,group,paging=null,deferAfter=-1,deferAll=false\)\{[\s\S]*?\n}/)[0], resultContext);
   const box=node(), body='<p lang="en">word {query}</p>', headword='<word> {number}';
   resultContext.renderSlot(box,{dict:'original-id',name:'<Dictionary>',results:[{Headword:headword,Body:body}]},'prefix','word',1,false);
   assert.match(box.children[0].innerHTML, /&lt;Dictionary&gt;/);

@@ -773,8 +773,11 @@ function searchFrom(host,node,offset,direction) {
   $("articleFindQuery").focus();
 }
 function gotoOpen() {
-  const isFTS = $("articleFindMode").value === "fts" && !!fullTextNavigation;
-  const isRemote = options.mode !== "fts" && !!remoteFind;
+  // The strip's own count button opens this too, and after a reload the
+  // dialog's mode select is not necessarily on fts even though the walk is
+  // alive; the walk itself decides, not the dialog's stale value.
+  const isFTS = !!fullTextNavigation;
+  const isRemote = !isFTS && options.mode !== "fts" && !!remoteFind;
   const total = isFTS ? Number(fullTextNavigation.total)||0 : isRemote ? Number(remoteFind.state?.total)||0 : 0;
   const current = isFTS ? Number(fullTextNavigation.current)||1 : isRemote ? Number(remoteFind.state?.position)||1 : 1;
   if (total) window.wudictOpenArticleFindGoto?.(total,current);

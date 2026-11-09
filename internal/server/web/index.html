@@ -8438,7 +8438,7 @@ function favouriteSource(dd,source){
   dd.append(details);
 }
 
-function renderSlot(box,h,mode,q,perDict,group,paging=null,deferAfter=-1){
+function renderSlot(box,h,mode,q,perDict,group,paging=null,deferAfter=-1,deferAll=false){
   box.innerHTML="";
   if(h.error){
     box.innerHTML=`<details class="dict" data-dict="${escAttr(h.dict)}"><summary>${dictIconHTML(h.dict)}<span class="dict-info-name" data-dict="${escAttr(h.dict)}">${esc(hitName(h))}</span><span class="count">⚠ ${esc(window.wudictI18n.errorText(h.error))}</span></summary></details>`;
@@ -8514,7 +8514,11 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null,deferAfter=-1){
     const favourite=favouriteControl(r,h.dict,dt,dd);if(favourite)dt.append(favourite);
     if(h.dict==="favourites")favouriteSource(dd,r.favoriteSource);
     const frag=anchorOnce&&anchorOnce.dict===h.dict&&r===h.results[0]?anchorOnce.frag:"";
-    if(deferAfter>=0&&resultIndex>deferAfter){
+    // A jump into the middle of a block shows the target first and leaves the
+    // rows above it as placeholders too; they fill in reading order and the
+    // settle loop keeps the target still while their heights become real.
+    const defer=deferAfter>=0&&(deferAll?resultIndex!==deferAfter:resultIndex>deferAfter);
+    if(defer){
       const placeholder=document.createElement("div");
       placeholder.className="article-pending";placeholder.style.height=pendingArticleHeight(h.dict)+"px";
       dd.appendChild(placeholder);
@@ -10791,7 +10795,7 @@ async function fetchSearchPortion(det,start,options={}){
         const page={start:msg.start||0,size:pageSize,firstPageSize,total:cached.total,lowerBound:cached.total,
           exact:cached.done,hasNext:!!msg.hasNext};
         renderSlot(box,{...msg,name:cached.name,results:visible},
-          mode,query,initial,det.dataset.searchGroup==="true",page,options.deferAfter??-1);
+          mode,query,initial,det.dataset.searchGroup==="true",page,options.deferAfter??-1,options.deferAll===true);
         loaded=box.querySelector(":scope>details.dict");
         if(loaded)loaded.open=shouldOpen();
         window.wudictArticleFind?.refresh();
@@ -10832,13 +10836,13 @@ async function fetchSearchPortion(det,start,options={}){
       if(!visible.length){
         if(all.length<=start){
           const fallbackStart=Math.max(0,all.length-size),fallback=all.slice(fallbackStart);
-          renderSlot(box,{...msg,results:fallback},mode,query,initial,det.dataset.searchGroup==="true",{...page,start:fallbackStart},options.deferAfter??-1);
+          renderSlot(box,{...msg,results:fallback},mode,query,initial,det.dataset.searchGroup==="true",{...page,start:fallbackStart},options.deferAfter??-1,options.deferAll===true);
           loaded=box.querySelector(":scope>details.dict");if(loaded)loaded.open=shouldOpen();
           window.wudictArticleFind?.refresh();
         }
         return;
       }
-      renderSlot(box,{...msg,results:visible},mode,query,initial,det.dataset.searchGroup==="true",page,options.deferAfter??-1);
+      renderSlot(box,{...msg,results:visible},mode,query,initial,det.dataset.searchGroup==="true",page,options.deferAfter??-1,options.deferAll===true);
       loaded=box.querySelector(":scope>details.dict");if(loaded)loaded.open=shouldOpen();
       window.wudictArticleFind?.refresh();
     });
@@ -11339,11 +11343,11 @@ window.wudictRestoreArticleBlock=(det,start,marks=false,deferAfter=-1)=>{
   if(!det?.isConnected)return null;
   const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
   const firstPageSize=Math.max(0,Number(det.dataset.searchFirstPageSize)||0);
-  // Only the row the walk stops on gets its body: rows above it would be
-  // placeholders that shift the target when they fill, so a mid-block target
-  // asks for the whole page instead.
-  const bodyWindow=deferAfter>0?-1:deferAfter;
-  return fetchSearchPortion(det,start,{openAfter:true,size:start===0&&firstPageSize?firstPageSize:size,pageSize:size,firstPageSize,marks,deferAfter,bodyIndex:bodyWindow});
+  // A jump into the middle of a block carries only the target's body and shows
+  // it first, deferring the rows above it as well; the settle loop re-aligns as
+  // those rows take their real height.
+  const bodyWindow=deferAfter;
+  return fetchSearchPortion(det,start,{openAfter:true,size:start===0&&firstPageSize?firstPageSize:size,pageSize:size,firstPageSize,marks,deferAfter,bodyIndex:bodyWindow,deferAll:deferAfter>0});
 };
 
 /* Warm the NEXT block while the reader reads this one, and the PREVIOUS one
