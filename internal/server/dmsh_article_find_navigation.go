@@ -41,6 +41,10 @@ type articleFindNavigationTarget struct {
 	EntryID         int64                       `json:"entryId,omitempty"`
 	ExpectedMatches int                         `json:"expectedMatches,omitempty"`
 	Reading         string                      `json:"reading,omitempty"`
+	// FromEnd is how many matches from the end this target is while the total is
+	// still provisional (1 = the last match). Zero means it is known from the
+	// start.
+	FromEnd int `json:"fromEnd,omitempty"`
 }
 
 type articleFindNavigationResponse struct {
@@ -89,6 +93,7 @@ type articleFindNavigationSession struct {
 	// under the bridge's virtual origin and once under an empty one.
 	origin   string
 	current  *articleFindNavigationTarget
+	fromEnd  int
 	pages    []map[int]articleFindNavigationPage
 	lemmas   map[string]string
 	complete bool
@@ -236,7 +241,7 @@ func (s *Server) handleArticleFindNavigation(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		writeArticleFindNavigation(w, response)
-	case "navNext", "navPrevious", "navGoto":
+	case "navNext", "navPrevious", "navGoto", "navFirst", "navLast":
 		s.articleFindNavigationMu.Lock()
 		session = s.articleFindNavigationSessions[id]
 		s.articleFindNavigationMu.Unlock()
@@ -246,7 +251,13 @@ func (s *Server) handleArticleFindNavigation(w http.ResponseWriter, r *http.Requ
 		}
 		var response articleFindNavigationResponse
 		var err error
-		if q.Get("cacheAction") == "navGoto" {
+		if action := q.Get("cacheAction"); action == "navFirst" || action == "navLast" {
+			direction := 1
+			if action == "navLast" {
+				direction = -1
+			}
+			response, err = s.edgeArticleFindNavigation(r.Context(), session, direction)
+		} else if q.Get("cacheAction") == "navGoto" {
 			position, parseErr := navigationNumber(q.Get("position"), 0, int(^uint(0)>>1))
 			if parseErr != nil {
 				httpErr(w, http.StatusBadRequest, "%v", parseErr)
@@ -292,6 +303,8 @@ func (s *Server) gotoArticleFindNavigation(ctx context.Context, session *article
 				if position <= seen+count {
 					target := session.target(dictionaryIndex, start, start+offset, position-seen-1)
 					session.current = target
+					session.fromEnd = 0
+					target.FromEnd = 0
 					session.updated = time.Now()
 					current, total := session.position(target)
 					return articleFindNavigationResponse{Found: true, Target: target, Position: current, Total: total, Complete: session.complete}, nil
@@ -397,6 +410,18 @@ func (s *Server) moveArticleFindNavigation(ctx context.Context, session *article
 	if wrapped && direction > 0 {
 		session.complete = true
 	}
+	if session.complete {
+		session.fromEnd = 0
+	} else if session.fromEnd > 0 {
+		if direction < 0 {
+			session.fromEnd++
+		} else if session.fromEnd > 1 {
+			session.fromEnd--
+		} else {
+			session.fromEnd = 0
+		}
+	}
+	target.FromEnd = session.fromEnd
 	session.updated = time.Now()
 	position, total := session.position(target)
 	return articleFindNavigationResponse{Found: true, Target: target, Position: position, Total: total, Complete: session.complete}, nil
@@ -488,6 +513,18 @@ func (s *Server) startArticleFindNavigationFromAnchor(ctx context.Context, sessi
 	if wrapped && direction > 0 {
 		session.complete = true
 	}
+	if session.complete {
+		session.fromEnd = 0
+	} else if session.fromEnd > 0 {
+		if direction < 0 {
+			session.fromEnd++
+		} else if session.fromEnd > 1 {
+			session.fromEnd--
+		} else {
+			session.fromEnd = 0
+		}
+	}
+	target.FromEnd = session.fromEnd
 	session.updated = time.Now()
 	position, total := session.position(target)
 	return articleFindNavigationResponse{Found: true, Target: target, Position: position, Total: total, Complete: session.complete}, nil
@@ -1007,4 +1044,55 @@ func (session *articleFindNavigationSession) total() int {
 		}
 	}
 	return total
+}
+
+// edgeArticleFindNavigation answers "go to the first / last match": the edge is
+// found from the edge itself - the last dictionary from its last block
+// backwards, the first dictionary from block 0 forwards - so no walk through
+// the whole selection is needed. The cursor lands on the edge match and, when
+// the total is still provisional, says how far from the end it is.
+func (s *Server) edgeArticleFindNavigation(ctx context.Context, session *articleFindNavigationSession, direction int) (articleFindNavigationResponse, error) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if len(session.dictionaries) == 0 || len(session.pages) != len(session.dictionaries) {
+		return articleFindNavigationResponse{}, errors.New("article find session is unavailable")
+	}
+	load := func(_ context.Context, dictionaryIndex, blockStart int) (articleFindNavigationPage, error) {
+		return s.loadArticleFindNavigationPage(ctx, session, dictionaryIndex, blockStart)
+	}
+	var target *articleFindNavigationTarget
+	var err error
+	if direction > 0 {
+		for index := 0; index < len(session.dictionaries) && target == nil; index++ {
+			target, err = session.findInDictionary(ctx, index, 1, 0, -1, load)
+		}
+	} else {
+		for index := len(session.dictionaries) - 1; index >= 0 && target == nil; index-- {
+			var last int
+			last, err = session.lastArticleIndex(ctx, index, load)
+			if err != nil {
+				break
+			}
+			target, err = session.findInDictionary(ctx, index, -1, last, -1, load)
+			if err != nil {
+				break
+			}
+		}
+	}
+	if err != nil {
+		return articleFindNavigationResponse{}, err
+	}
+	if target == nil {
+		session.complete = true
+		return articleFindNavigationResponse{Complete: true, Total: session.total()}, nil
+	}
+	session.current = target
+	session.updated = time.Now()
+	session.fromEnd = 0
+	if direction < 0 && !session.complete {
+		session.fromEnd = 1
+	}
+	target.FromEnd = session.fromEnd
+	position, total := session.position(target)
+	return articleFindNavigationResponse{Found: true, Target: target, Position: position, Total: total, Complete: session.complete}, nil
 }
