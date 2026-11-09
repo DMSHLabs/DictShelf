@@ -112,7 +112,6 @@ function fillOptions() {
   options.mode = options.mode === "word" ? "word" : options.mode === "fts" && fullTextNavigation ? "fts" : "contains";
   $("articleFindMode").value = options.mode;
   $("articleFindWholeWords").checked = options.mode === "word";
-  $("articleFindWrap").checked = !!options.wrap;
   $("articleFindCase").checked = options.matchCase;
   $("articleFindAll").checked = options.all;
   $("articleFindExamples").checked = options.examples;
@@ -513,13 +512,6 @@ async function showRemoteFindTarget(target,state,token){
 }
 async function moveRemoteFind(step){
   if(!remoteFind?.id||remoteFindPending)return false;
-  // Wrap around: at either end the server turns the cursor over only when the
-  // reader asked for it; otherwise the arrow stops there.
-  const known=remoteFind.state;
-  if(!options.wrap&&known?.complete){
-    const total=Number(known.total)||0,position=Number(known.position)||0;
-    if((step>0&&total>0&&position>=total)||(step<0&&position<=1))return false;
-  }
   remoteFindPending=true;const record=remoteFind,token=remoteFindToken,request=++remoteFindRequestSeq;
   try{
     if(record.pendingTarget){

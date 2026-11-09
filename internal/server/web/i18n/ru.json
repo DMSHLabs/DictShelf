@@ -1359,7 +1359,6 @@
   "articleFind.wordInArticle": "Слово в статье",
   "articleFind.kindWalk": "Прыжки по найденному",
   "articleFind.kindSearch": "Поиск в найденных статьях",
-  "articleFind.wrap": "Переход по кругу",
   "articleFind.wholeWords": "Только целые слова",
   "articleFind.traceStop": "Остановить проход",
   "articleFind.traceLogDisabled": "журналирование поиска выключено",
