@@ -99,7 +99,7 @@ function renderFindHistory(filter=$("articleFindQuery").value){
   for(const value of rows){
     const button=document.createElement("button");button.type="button";button.setAttribute("role","option");button.textContent=value;
     button.addEventListener("click",()=>{
-      const input=$("articleFindQuery");input.value=value;hideFindHistory();readOptions();index=-1;active=!!options.query;
+      const input=$("articleFindQuery");input.value=value;hideFindHistory();readOptions();index=-1;active=!!options.query;syncControls();
       rebuild();recordFindHistory(value);suppressFindHistoryFocus=true;input.focus();suppressFindHistoryFocus=false;hideFindHistory();
     });
     list.appendChild(button);
@@ -181,7 +181,7 @@ function renderStrip(){
   syncControls();
 }
 function syncControls() {
-  const found=remoteFind,pending=remoteFindPending;
+  const found=remoteFind,pending=!!found?.pending;
   // The dialog's two buttons are how the search starts as well as how it steps:
   // they are live as soon as there is a query, not only once a session answers.
   // A session that is already at its end keeps them live - the strip reports the
@@ -337,7 +337,7 @@ async function startRemoteFind(){
     return;
   }
   const context=remoteFindContext(),anchor=serverFindAnchor(),signature=remoteFindSignature(context)+JSON.stringify(anchor);
-  if(remoteFind?.signature===signature){paint();return}
+  if(remoteFind?.signature===signature){stripLayer="found";paint();return}
   closeRemoteFind();
   if(!context.dictionaries.length||!context.query||!context.mode){remoteFind={signature,state:{complete:true,total:0,found:false}};stripLayer="found";paint();return}
   const record={id:remoteFindID(),signature,query:options.query,state:null,pending:true,error:"",diagnosticRun:++remoteFindDiagnosticRun,diagnosticStarted:performance.now()};
