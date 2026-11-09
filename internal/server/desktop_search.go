@@ -222,7 +222,7 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argument string) (any, error) {
 	switch method {
 	case "articleFindNavigation":
-		return s.DesktopArticleFindNavigation(ctx, argument)
+		return s.DesktopArticleFindNavigation(ctx, baseURL, argument)
 	case "uiLanguageChoice":
 		return s.reg.UILanguageChoice(), nil
 	case "desktopHotkeys":

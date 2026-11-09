@@ -190,10 +190,17 @@ func (s *Server) handleArticleFindNavigation(w http.ResponseWriter, r *http.Requ
 			httpErr(w, http.StatusBadRequest, "%v", err)
 			return
 		}
+		// The page requests keyed by this session carry the origin the server
+		// sees on them; a request that has one of its own is the authority, and
+		// the bridge (which has none) supplies it in the query.
+		origin := navigationOrigin(q.Get("origin"))
+		if own := navigationOrigin(originOf(r)); own != "" {
+			origin = own
+		}
 		session = &articleFindNavigationSession{id: id, query: query, mode: mode, resultQuery: resultQuery, resultMode: resultMode,
 			ignore: q.Get("ignoreDiacritics") == "1", matchCase: q.Get("matchCase") == "1", examples: q.Get("examples") == "1", nearWords: nearWords,
 			cacheID: q.Get("groupID"), cacheCount: cacheCount, cacheOrders: cacheOrders, rungs: strings.Split(q.Get("rungs"), ","),
-			dictionaries: dictionaries, pageSize: pageSize, firstSize: firstSize, origin: navigationOrigin(q.Get("origin")),
+			dictionaries: dictionaries, pageSize: pageSize, firstSize: firstSize, origin: origin,
 			pages: make([]map[int]articleFindNavigationPage, len(dictionaries)), updated: time.Now()}
 		for i := range session.pages {
 			session.pages[i] = make(map[int]articleFindNavigationPage)
