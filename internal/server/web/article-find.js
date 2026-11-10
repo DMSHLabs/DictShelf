@@ -597,6 +597,13 @@ async function showRemoteFindTarget(target,state,token){
   remoteFind.state=state;remoteFind.target=target;
   dialog.close();strip.hidden=false;measure();
   restoreExamples();showExample(matches[index]);paint();
+  // If the article itself is nowhere on screen, bring it in first: the fine
+  // alignment below can decline to move (a reader scrolling, a closed subtree),
+  // and then the counter would run while the page stood still.
+  {
+    const box=host.getBoundingClientRect();
+    if(box.bottom<0||box.top>innerHeight)host.scrollIntoView({block:"center",behavior:"instant"});
+  }
   // A run waits for this before it steps again: otherwise every step cancels the
   // previous scroll and the numbers move while the page stands still.
   remoteFindSettled=new Promise(resolve=>{
