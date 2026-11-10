@@ -270,3 +270,34 @@ func TestSystemLogMultipleProcesses(t *testing.T) {
 		t.Fatalf("lost process records: %d", len(seen))
 	}
 }
+
+// The console records the browser writes for itself and for a page's external
+// stylesheet are not this program failing: the Info panel must not report an
+// error for them, while an exception the interface threw still counts.
+func TestSystemHasErrorsIgnoresWebConsoleNoise(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		console string
+		wantErr bool
+	}{
+		{"resize loop", "ResizeObserver loop completed with undel", false},
+		{"external stylesheet", "Refused to apply style from https", false},
+		{"external script", "Refused to execute script from https", false},
+		{"our own exception", "Uncaught TypeError: x is undefined", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := isolatedSystemLog(t)
+			if err := os.MkdirAll(root, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(root, "system_2026_11_11__02_00_00.log")
+			record := "2026-11-11T02:00:00Z web console error=" + tc.console + " path=/ line=0\n"
+			if err := os.WriteFile(path, []byte(record), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if got := SystemHasErrors(); got != tc.wantErr {
+				t.Fatalf("SystemHasErrors = %v, want %v for %q", got, tc.wantErr, tc.console)
+			}
+		})
+	}
+}

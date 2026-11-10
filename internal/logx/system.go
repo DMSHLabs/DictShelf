@@ -308,8 +308,40 @@ func hasSystemErrorRecord(contents []byte) bool {
 	return false
 }
 
+// webConsoleNoise names the console records that are not this program failing.
+// The first is the browser's own warning about its resize loop; the others are
+// the refusal of a stylesheet or script an ARTICLE links from the web, which
+// this app blocks on purpose - offline, no external loads - so the refusal is
+// the block working, not an error. The message is recorded truncated, which is
+// why these match on a prefix of it.
+var webConsoleNoise = []string{
+	"resizeobserver loop",
+	"refused to apply style from",
+	"refused to execute script from",
+}
+
+// isWebConsoleNoise reports that a recorded console line is one of the above.
+// Everything else a page logs stays a candidate: an exception thrown by the
+// interface is this program's failure, however it got here.
+func isWebConsoleNoise(message string) bool {
+	// The record carries its timestamp before the message, so this looks for the
+	// marker rather than a prefix.
+	if !strings.Contains(message, "web console error=") {
+		return false
+	}
+	for _, noise := range webConsoleNoise {
+		if strings.Contains(message, noise) {
+			return true
+		}
+	}
+	return false
+}
+
 func isSystemError(message string) bool {
 	message = strings.ToLower(message)
+	if isWebConsoleNoise(message) {
+		return false
+	}
 	// Successful jobs include error="<nil>" in their diagnostic records.
 	// Remove that value before looking for error markers so it does not make
 	// the Info panel report a false positive.

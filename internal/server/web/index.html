@@ -4791,10 +4791,16 @@ $("workspaceFrameWindow").addEventListener("close",()=>workspaceReturnFocus?.foc
 $("dictSettingsScroll").addEventListener("scroll",()=>{
   dictListTop=$("dictSettingsScroll").scrollTop;
 },{passive:true});
-$("editDictSettings").onclick=async()=>{
-  // An index job may have changed dictionary capabilities since the last list load.
-  await loadDicts();
+$("editDictSettings").onclick=()=>{
+  // The window opens with the list the panel already shows, and the refresh runs
+  // when it closes. Awaiting /api/dicts first made the door wait for every
+  // dictionary to be derived again - seconds of nothing happening on a large
+  // library - and re-rendering the list while the window is open would move the
+  // rows under the reader's hands. An index job that changed a dictionary's
+  // capabilities is picked up by the refresh, so the next open carries them.
+  if($("dictSettings").open)return;
   showDictSettings();
+  $("dictSettings").addEventListener("close",()=>loadDicts(),{once:true});
 };
 $("closeDictSettings").onclick=()=>$("dictSettings").close();
 let favouriteDeleteID="";
