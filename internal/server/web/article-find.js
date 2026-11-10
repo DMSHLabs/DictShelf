@@ -186,9 +186,11 @@ function syncControls() {
   // they are live as soon as there is a query, not only once a session answers.
   // A session that is already at its end keeps them live - the strip reports the
   // end, the dialog simply hands over.
-  const display=found?(found.error?"⚠ "+t("search.fullListUnavailable"):serverFindPosition()):"";
+  // A refusal is shown as it came: "no matches" and "the anchor was rejected"
+  // look the same to a reader otherwise, and neither says why Find did nothing.
+  const display=found?(found.error?"⚠ "+found.error:serverFindPosition()):"";
   // The strip's own count and crosshair belong to its layer renderer; the
-  // dialog mirrors the search in the status line and its two buttons.
+  // dialog mirrors the search in the status line.
   $("articleFindStatus").textContent=display||t("articleFind.scope");
   // While the search runs the dialog says so, and offers to stop it.
   $("articleFindSearching").hidden=!pending;
@@ -1130,7 +1132,12 @@ async function findFromDialog(){
   if(!active){dialog.close();return}
   closeRemoteFind();
   let state=null,error="";
-  try{state=await startRemoteFind(true)}catch(failure){error=String(failure?.message||failure)}
+  try{state=await startRemoteFind(true)}
+  catch(failure){
+    error=String(failure?.message||failure);
+    if(remoteFind)remoteFind.error=error;
+    else $("articleFindStatus").textContent="⚠ "+error;
+  }
   note("navigation_find_result",`found=${!!state?.found}; complete=${!!state?.complete}; total=${state?.total||0}; position=${state?.position||0}; error=${(error||remoteFind?.error||"").slice(0,300)}`);
   // Found: the dialog has done its job - before the article is painted, because
   // painting waits for a block of articles and the window must not wait with it.
