@@ -348,6 +348,31 @@ func (p Prepared) TextStale(srcPath string) []Reason {
 	return append(out, Outdated(p.Meta)...)
 }
 
+// CheapStale is TextStale without reading the source's content: the recorded
+// revision, the size, the abbreviation companion (a small file) and the version
+// stamps - but not the 1 MiB sample. It is what a LIST ROW asks, because the
+// sample costs a megabyte of reads per dictionary and on a phone's FUSE mount
+// that is the difference between a list that appears and one that takes
+// seconds. A same-size edit therefore stays invisible here; TextStale sees it
+// where a rebuild is actually decided, which is the only place it changes what
+// happens.
+func (p Prepared) CheapStale(srcPath string) []Reason {
+	if !p.Usable() {
+		return []Reason{ReasonSchema}
+	}
+	var out []Reason
+	if srcPath != "" {
+		if sourceSizeChanged(p.Meta, srcPath) {
+			out = append(out, ReasonSource)
+		}
+		companion, _ := dict.AbbrevCompanion(srcPath)
+		if abbrevChangedMeta(p.Meta, companion) {
+			out = append(out, ReasonAbbrev)
+		}
+	}
+	return append(out, Outdated(p.Meta)...)
+}
+
 // Stale is Inspect(textDB).Stale(srcPath).
 func Stale(textDB, srcPath string) []Reason { return Inspect(textDB).Stale(srcPath) }
 

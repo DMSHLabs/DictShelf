@@ -385,6 +385,26 @@ func SourceChanged(textDB, srcPath string) bool {
 }
 
 // sourceChangedMeta is SourceChanged for a meta table already in hand.
+// sourceSizeChanged is sourceChangedMeta without the content sample: the
+// recorded revision, else the size. A listing asks this one (CheapStale).
+func sourceSizeChanged(meta map[string]string, srcPath string) bool {
+	if want := meta["source_revision"]; want != "" {
+		if revision, err := dict.SourceRevision(srcPath); err == nil && revision != "" {
+			return revision != want
+		}
+	}
+	st, err := os.Stat(srcPath)
+	if err != nil {
+		return false
+	}
+	size := meta["source_size"]
+	if size == "" {
+		return false
+	}
+	n, err := strconv.ParseInt(size, 10, 64)
+	return err != nil || n != st.Size()
+}
+
 func sourceChangedMeta(meta map[string]string, srcPath string) bool {
 	if want := meta["source_revision"]; want != "" {
 		if revision, err := dict.SourceRevision(srcPath); err == nil && revision != "" {

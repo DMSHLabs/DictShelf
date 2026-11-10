@@ -134,3 +134,31 @@ func TestSourceGoneSeesAForeignPath(t *testing.T) {
 		t.Error("an empty claim was judged")
 	}
 }
+
+// The list row asks CheapStale: the size and the revision, not the content
+// sample. A same-size edit is therefore invisible to it and still caught where
+// a rebuild is decided.
+func TestCheapStaleSkipsTheContentSample(t *testing.T) {
+	t.Setenv("WUDICT_DB_DIR", t.TempDir())
+	src := writeSrc(t, filepath.Join(t.TempDir(), "s.mdx"), "AAAA")
+	dir := t.TempDir()
+	textDB := filepath.Join(dir, TextDBName)
+	ingestSrc(t, src, textDB, Plan{})
+	p := Inspect(textDB)
+	if got := p.CheapStale(src); len(got) != 0 {
+		t.Fatalf("CheapStale of a fresh build = %v", got)
+	}
+	// Same size, different bytes: the sample sees it, the cheap ask does not.
+	writeSrc(t, src, "BBBB")
+	if got := p.TextStale(src); len(got) == 0 {
+		t.Fatal("TextStale did not see a same-size edit")
+	}
+	if got := p.CheapStale(src); len(got) != 0 {
+		t.Errorf("CheapStale read the source's content: %v", got)
+	}
+	// A different size is cheap to notice and is noticed.
+	writeSrc(t, src, "AAAAAAA")
+	if got := p.CheapStale(src); len(got) == 0 {
+		t.Error("CheapStale missed a changed size")
+	}
+}

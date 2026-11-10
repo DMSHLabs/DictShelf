@@ -1235,7 +1235,7 @@ func (s *Server) diskDictInfo(e *entry) dictInfo {
 				// Both forms are current: the title-only index and the
 				// read-through one the reader asked for explicitly. Only a
 				// database without either marker is not.
-				info.Outdated = !zimPreparedHeadwords(p) || len(p.Stale(e.Path)) > 0
+				info.Outdated = !zimPreparedHeadwords(p) || len(p.CheapStale(e.Path)) > 0
 			} else if !info.SelfIndexed {
 				info.Outdated = true
 			}
@@ -1255,14 +1255,17 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 		ec, _ := strconv.Atoi(meta["entry_count"])
 		info := dictInfo{
 			ID: e.ID, Path: e.Path, Name: meta["name"], Format: meta["format"], Entries: ec,
-			Headwords:         sourceHeadwordCount(e.Path, meta),
-			SelfIndexed:       formatHasSelfIndex(meta["format"]),
-			Caps:              dict.Caps{Exact: true, Prefix: true, Contains: p.Plan.Contains, FTS: p.Plan.FullText || store.OwnFullText(meta)},
-			ArchiveIndex:      store.OwnFullText(meta),
-			OurFullText:       p.Plan.FullText,
-			DBPath:            p.TextDB,
-			ContainsStale:     p.Plan.Contains && store.FoldStale(meta),
-			Outdated:          rebuildable(e.Path) && (!formatHasSelfIndex(meta["format"]) || isZIMPath(e.Path)) && len(p.Stale(e.Path)) > 0,
+			Headwords:     sourceHeadwordCount(e.Path, meta),
+			SelfIndexed:   formatHasSelfIndex(meta["format"]),
+			Caps:          dict.Caps{Exact: true, Prefix: true, Contains: p.Plan.Contains, FTS: p.Plan.FullText || store.OwnFullText(meta)},
+			ArchiveIndex:  store.OwnFullText(meta),
+			OurFullText:   p.Plan.FullText,
+			DBPath:        p.TextDB,
+			ContainsStale: p.Plan.Contains && store.FoldStale(meta),
+			// CheapStale, not Stale: a list row may not read a megabyte of the
+			// source per dictionary. A same-size edit shows up when a rebuild is
+			// decided (store.TextStale), which is where it changes anything.
+			Outdated:          rebuildable(e.Path) && (!formatHasSelfIndex(meta["format"]) || isZIMPath(e.Path)) && len(p.CheapStale(e.Path)) > 0,
 			DiacriticsPending: rebuildable(e.Path) && needsFoldedReindex(meta),
 		}
 		info.ContainsSize, info.FullTextSize = p.ContainsSize, p.FullTextSize
