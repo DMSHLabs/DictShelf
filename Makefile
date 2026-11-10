@@ -56,6 +56,14 @@ i18n-check: ## Check interface catalogs, persistence, cache and English fallback
 i18n-check-js: ## Check JS plural rules and fallback (optional; requires Node, no npm)
 	node tools/i18n-test.cjs
 
+.PHONY: sbar-check-js
+sbar-check-js: ## Check the status bar's walk rule (optional; requires Node, no npm)
+	node tools/sbar-walk-test.cjs
+
+.PHONY: group-split-check-js
+group-split-check-js: ## Check the group editor's two-pane split rule (optional; requires Node, no npm)
+	node tools/group-split-test.cjs
+
 # The document gate (`tools/docs-check.py`) is not part of this tree: it governs
 # the fork's working notes, which are kept outside the public repository.
 

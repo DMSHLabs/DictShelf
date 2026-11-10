@@ -88,6 +88,12 @@ function activateGroupPanel(panel){
 for(const [panelId,panel] of [['groupControls','controls'],['groupMembers','members'],['groupAvailable','available']]){
   $(panelId).addEventListener('pointerdown',()=>activateGroupPanel(panel));
 }
+/* The pane with the FOCUS is the one being worked in: its filter, its + / -
+   buttons, its rows. pointerdown alone misses a focus that arrives by keyboard,
+   and focus is what the reader keeps after a press, so both say the same thing. */
+for(const [panelId,panel] of [['groupMembers','members'],['groupAvailable','available']]){
+  $(panelId).addEventListener('focusin',()=>activateGroupPanel(panel));
+}
 for(const [searchId,panel] of [['groupMembersSearch','members'],['groupAvailableSearch','available']]){
   $(searchId).addEventListener('focus',()=>activateGroupPanel(panel));
   $(searchId).addEventListener('blur',()=>requestAnimationFrame(updateGroupSplit));
@@ -298,15 +304,18 @@ function updateGroupSplit(){
   const gap=parseFloat(getComputedStyle(lists).rowGap)||0;
   const listsHeight=lists.clientHeight;
   const panelSpace=Math.max(0,listsHeight-gap);
+  const visibleRows=rows=>rows.querySelectorAll('.group-row:not([hidden])').length;
   const activeRows=groupActivePanel==='members'?$('groupRows'):availableRows;
-  const activeCount=activeRows.querySelectorAll('.group-row:not([hidden])').length;
-  const equalPanels=activeCount>8;
-  const inactiveTarget=panelSpace*(equalPanels?1/2:1/3);
+  const inactiveRows=groupActivePanel==='members'?availableRows:$('groupRows');
+  const activeCount=visibleRows(activeRows),inactiveCount=visibleRows(inactiveRows);
+  const equalPanels=groupSplitEqual(activeCount,inactiveCount);
   const memberRow=groupRowHeight('groupRows'),availableRow=groupRowHeight('groupOtherRows');
   if(groupActivePanel==='available')editor.classList.add('compact-controls');
 
-  // The active list gets most of the room. Hide the inactive search dock only
-  // when its smaller share cannot hold the panel chrome and two dictionary rows.
+  // The pane NOT being worked in keeps its search dock only where the share it
+  // will get can hold it and two dictionary rows; the active pane always keeps
+  // its own - that is the filter the reader is using.
+  const inactiveTarget=Math.floor(Math.max(0,panelSpace-1)/2);
   if(groupActivePanel==='members'&&inactiveTarget<groupPanelChromeHeight(available,availableRows)+2*availableRow)
     available.classList.add('search-collapsed');
   if(groupActivePanel==='available'&&inactiveTarget<groupPanelChromeHeight(members,memberRows)+2*memberRow)
@@ -314,23 +323,30 @@ function updateGroupSplit(){
 
   const memberChrome=groupPanelChromeHeight(members,memberRows);
   const availableChrome=groupPanelChromeHeight(available,availableRows);
-  const memberTen=memberChrome+groupRowsCapacityHeight(memberRows,10);
-  const availableTen=availableChrome+groupRowsCapacityHeight(availableRows,10);
-  const memberTwo=memberChrome+groupRowsCapacityHeight(memberRows,2);
-  const availableTwo=availableChrome+groupRowsCapacityHeight(availableRows,2);
 
   if(groupActivePanel==='members'||groupActivePanel==='available'){
-    const activeTen=groupActivePanel==='members'?memberTen:availableTen;
-    const inactiveTwo=groupActivePanel==='members'?availableTwo:memberTwo;
-    const inactiveCeiling=Math.floor(Math.max(0,panelSpace-(equalPanels?0:1))/2);
+    // Even halves need BOTH lists to be long. Otherwise the inactive pane keeps
+    // a fixed small share - its chrome and two rows, never more than half - and
+    // does NOT grow with its own content: a dictionary added to the group above
+    // must not take the room from the library the reader is adding it from. The
+    // active pane takes everything else, and when the reader moves to the other
+    // list its two rows are all it keeps.
+    const inactiveChrome=groupActivePanel==='members'?availableChrome:memberChrome;
+    const inactiveTwo=inactiveChrome+groupRowsCapacityHeight(inactiveRows,Math.min(inactiveCount,2));
+    const inactiveCeiling=Math.floor(Math.max(0,panelSpace-1)/2);
     const inactiveHeight=equalPanels?inactiveCeiling:Math.min(inactiveTwo,inactiveCeiling);
-    const activeCeiling=Math.max(0,panelSpace-inactiveHeight);
-    const activeFloor=Math.ceil(panelSpace*(equalPanels?1/2:2/3));
-    const activeHeight=equalPanels?activeCeiling:Math.min(activeCeiling,Math.max(activeTen,activeFloor));
-    const memberHeight=groupActivePanel==='members'?activeHeight:panelSpace-activeHeight;
+    const activeHeight=Math.max(0,panelSpace-inactiveHeight);
+    const memberHeight=groupActivePanel==='members'?activeHeight:inactiveHeight;
     lists.style.setProperty('--group-members-height',Math.ceil(memberHeight)+'px');
     lists.classList.add('members-sized');
   }
+}
+/* Even halves are for two long lists: with eight or more dictionaries visible in
+   each, both panes have something to show and neither has a claim on the other's
+   share. Before that the working pane wins the space, because that is where the
+   reader is adding, removing and filtering. */
+function groupSplitEqual(activeCount,inactiveCount){
+  return activeCount>=8&&inactiveCount>=8;
 }
 function groupRowHeight(id){return Math.max(44,$(id).querySelector('.group-row:not([hidden])')?.getBoundingClientRect().height||0)}
 function groupPanelChromeHeight(panel,rows,withoutSearch=false){

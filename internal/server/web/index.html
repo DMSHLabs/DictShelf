@@ -340,38 +340,52 @@ window.wudictFontScale=(function(){
   <footer id="maskDock" class="mask-dock" role="search"></footer>
 </div>
 
-<!-- The status bar. Four controls and nothing else: the two jumps between the
-     dictionaries of the current answer, the scope those jumps walk inside, and
-     one handle on the example fold - the controls a reader touches WHILE
-     reading, at one tap, with the article still on screen. Everything here
-     also exists in the drawer (the fold has its row there, the jumps have the
-     picker's list, the scope has the panel's group row), so hiding the bar
-     takes nothing away; that is what its row in Settings is for.
-     The arrows walk the sections in DOM order - the order the server emits in
-     the reader's preference, which is also the order the native picker's list
-     is built from - and jump with the SAME call the picker makes, opening the
-     section they land on (jumpToSection). They are hidden when there is
-     nowhere to go: fewer than two dictionaries answered.
+<!-- The status bar: the controls a reader touches WHILE reading, at one tap,
+     with the article still on screen. Two walks and a fold - one press to the
+     next or previous ARTICLE, one to the next or previous DICTIONARY of the
+     answer, the scope the dictionary walk moves inside, and the example fold.
+     Everything here also exists in the drawer (the fold has its row there, the
+     walks have the picker's list, the scope has the panel's group row), so
+     hiding the bar takes nothing away; that is what its row in Settings is for.
+     The two walks are told apart by place and by glyph, never by a mode:
+     `↑ ↓` step articles and stand at the left, where a hand already goes; the
+     magnifier belongs to them because it searches the text they walk;
+     `▲ chip ▼` step dictionaries and FLANK the picker, so the chip names the
+     place its own arrows walk. The article walk is the fine one and crosses
+     dictionary boundaries - short articles put two dictionaries' rows on one
+     screen, and a press that stops at a boundary there moves nothing (the
+     reader's call, 2026-11-10) - while the dictionary walk is the coarse one
+     and skips the rest of the section in front of them.
+     Both lists are walked in DOM order - the order the server emits in the
+     reader's preference, which is also the order the native picker's list is
+     built from - and a jump uses the SAME call the picker makes
+     (jumpToSection / jumpToArticle), opening the section it lands on. Each
+     pair dims at its own end and neither wraps; each is hidden when it has
+     nowhere to go: the article pair at fewer than two articles, the dictionary
+     pair at fewer than two dictionaries OR when the row has no room for it -
+     measured on the laid-out row, never a breakpoint, so a long group name
+     costs the pair and not the label.
      The chip's words are the panel row's words, and its colour is the state:
      accent = the examples are shown, which is the layer being off.
-     The row reads left to right as a small gutter, the two arrows with a square
-     of air between them, the scope chip with a square of air on EACH side of it,
-     then the fold's handle and a small gutter closing the row. `.rpad` is that
-     square and it is built from the row's own height rather than a number (see
+     The row reads left to right as a small gutter, the article pair with a
+     square of air between its arrows, the magnifier, the scope chip with a
+     square of air on EACH side of it and its own two arrows around it, then the
+     fold's handle and a small gutter closing the row. `.rpad` is that square
+     and it is built from the row's own height rather than a number (see
      app.css); `.edge` is the two ends, which are gutters and not squares - the
      reader reported from the phone that the arrows and the fold's handle sat
      too far from the screen's edges.
      The two squares around the chip are FLOORS, not decoration: they carry the
-     auto margins that centre the group, so the gap before the chip and the gap
-     after it are the same and neither can collapse to nothing on a narrow
+     flex that keeps the group's air equal, so the gap before the chip and the
+     gap after it are the same and neither can collapse to nothing on a narrow
      screen - a phone showed the chip pressed against the ▼ with no air at all.
      Under pressure the chip is what gives (its label ellipsises, and the fold's
      handle shortens itself - see app.css), never the spacing around it. -->
 <div class="sbar" id="sbar">
   <span class="rpad edge" aria-hidden="true"></span>
-  <button type="button" class="btn" id="sbarPrev" aria-label="{{T:search.previousDict}}" title="{{T:search.jumpAbove}}">▲</button>
+  <button type="button" class="btn" id="sbarArticlePrev" aria-label="{{T:search.previousArticle}}" title="{{T:search.jumpArticleAbove}}">↑</button>
   <span class="rpad arrow-gap" aria-hidden="true"></span>
-  <button type="button" class="btn" id="sbarNext" aria-label="{{T:search.nextDict}}" title="{{T:search.jumpBelow}}">▼</button>
+  <button type="button" class="btn" id="sbarArticleNext" aria-label="{{T:search.nextArticle}}" title="{{T:search.jumpArticleBelow}}">↓</button>
   <a class="btn" id="sbarBackWords" href="/browse" aria-label="{{T:search.backToWords}}" title="{{T:search.backToWords}}" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6"/></svg><span>{{T:search.words}}</span></a>
   <span class="rpad floor find-gap" aria-hidden="true"></span>
   <button type="button" class="btn" id="sbarFind" aria-label="{{T:articleFind.title}}" title="{{T:articleFind.title}}"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m12 12 5 5" stroke="currentColor" stroke-width="1.8"/></svg></button>
@@ -391,22 +405,24 @@ window.wudictFontScale=(function(){
        cannot see is a control they cannot use. There it says nothing but its
        book mark (scopeLabel), because the field has no room for a name. -->
   <span class="rpad floor" aria-hidden="true"></span>
+  <button type="button" class="btn" id="sbarDictPrev" aria-label="{{T:search.previousDict}}" title="{{T:search.jumpAbove}}">▲</button>
   <span class="seg" id="dictSeg">
     <span class="chip btn" id="dictChip" aria-hidden="true"><svg class="bk" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M1.5 3.1c1.9-.5 3.8-.3 5.6.7v8.4c-1.8-1-3.7-1.2-5.6-.7V3.1zm13 0c-1.9-.5-3.8-.3-5.6.7v8.4c1.8-1 3.7-1.2 5.6-.7V3.1z"/></svg><span class="lbl" id="dictLbl"></span></span>
     <select id="dict" aria-label="{{T:search.dictionary}}" disabled><option value="all">{{T:search.all}}</option></select>
   </span>
-  <!-- The chip's place in this row is BETWEEN the two floors, which is why this
-       one carries an id: placeDictSeg moves the seg back on every paint, and
-       "before the Examples button" would land it after BOTH floors and glue it
-       to the handle (measured: the two floors ended up adjacent and the gap on
-       the chip's right was zero). -->
+  <button type="button" class="btn" id="sbarDictNext" aria-label="{{T:search.nextDict}}" title="{{T:search.jumpBelow}}">▼</button>
+  <!-- The chip's place in this row is BETWEEN its two arrows, which is why this
+       floor carries an id: placeDictSeg moves the seg back on every paint, and
+       "before the Examples button" would land it after BOTH the ▼ and this
+       floor and glue it to the handle (measured: the two floors ended up
+       adjacent and the gap on the chip's right was zero). -->
   <span class="rpad floor" id="dictSegGap" aria-hidden="true"></span>
   <!-- The fold's handle wears two lengths: "Examples" where the row has room,
      "Ex" on a narrow screen, where the reader said shortening it was
      acceptable. Which one is drawn is CSS's business (app.css), so nothing has
      to measure the row at runtime and the title/aria-label keep the full word
      in both cases. -->
-  <button type="button" class="btn" data-layer="off" id="sbarExamples" aria-pressed="true" title="{{T:search.examplesHint}}"><span class="lbl-full">{{T:panel.examples}}</span><span class="lbl-short" aria-hidden="true">{{T:search.examplesShort}}</span></button>
+  <button type="button" class="btn" data-layer="off" id="sbarExamples" aria-pressed="true" title="{{T:search.examplesHint}}"><span class="lbl-full">{{T:panel.examples}}</span><span class="lbl-short" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" focusable="false"><path d="M8 1.3v13.4M2.2 4.7l11.6 6.6M13.8 4.7 2.2 11.3"/></svg></span></button>
   <span class="rpad edge" aria-hidden="true"></span>
 </div>
 
@@ -1709,7 +1725,7 @@ if(searchPortionInput){
 if(window.wudictAndroidGo){
   document.documentElement.setAttribute('data-android-go','');
   if(window.wudictAndroidGo.isDebugBuild?.())$('androidBridgeStage').hidden=false;
-  $('sbarPrev').before($('sbarBackWords'));
+  $('sbarArticlePrev').before($('sbarBackWords'));
 }
 // Initialized before async startup and native callbacks can create a picker menu.
 const sheetMenus=[];
@@ -3670,7 +3686,24 @@ function jumpToSection(det){
   sbarTarget=det.querySelector(":scope > summary");
   sbarTarget?.classList.add("sbar-target");
   requestAnimationFrame(()=>scrollToSectionArticle(det));
-  sbarSettleStart(det);
+  sbarSettleStart(det,()=>scrollToSectionArticle(det));
+}
+/* The article step's landing: the same jump at a finer grain. The section it
+   lives in is opened first - a collapsed section holds a `dt` but has no box to
+   land on - and the headword is lifted under the pinned dictionary summary,
+   which is the line sbarArticleLine reads back, so the arrow and the rule agree
+   about where the step put them. */
+function jumpToArticle(dt){
+  const det=dt.closest("details.dict");
+  if(!det)return;
+  sbarAimed=dt;
+  det.open=true;openedIdx=-1;clearTimeout(barrier);barrier=null;
+  if(markedAnswer)navAttach(det);
+  sbarTarget?.classList.remove("sbar-target");
+  sbarTarget=dt;
+  sbarTarget.classList.add("sbar-target");
+  requestAnimationFrame(()=>scrollToArticle(dt));
+  sbarSettleStart(dt,()=>scrollToArticle(dt));
 }
 let sbarTarget=null;
 function scrollToSectionArticle(det){
@@ -3682,6 +3715,20 @@ function scrollToSectionArticle(det){
   const max=Math.max(0,document.documentElement.scrollHeight-innerHeight);
   scrollTo({top:Math.max(0,Math.min(wanted,max)),behavior:"instant"});
 }
+function scrollToArticle(dt){
+  const wanted=scrollY+dt.getBoundingClientRect().top-sbarArticleLine(dt);
+  const max=Math.max(0,document.documentElement.scrollHeight-innerHeight);
+  scrollTo({top:Math.max(0,Math.min(wanted,max)),behavior:"instant"});
+}
+/* Where a section jump should leave the section, and where it is now: one read
+   for the settle loop below, so the line it aims at and the line it measures
+   cannot drift apart. */
+function sbarSectionLanding(det){
+  const title=det.querySelector(":scope > dl > dt");
+  const summary=det.querySelector(":scope > summary");
+  return {line:title?(parseFloat(getComputedStyle(summary).top)||0)+summary.getBoundingClientRect().height
+    :(parseFloat(getComputedStyle(det).scrollMarginTop)||0),actual:(title||det).getBoundingClientRect().top};
+}
 /* The landing is re-aligned for a moment after the jump, because the page it
    lands on is still growing: the scroll is aimed at a document that does not
    yet hold everything the section is about to have (a collapsed section
@@ -3690,24 +3737,24 @@ function scrollToSectionArticle(det){
    halfway down the screen instead of under the bar — the reader reported
    exactly that, and only for collapsed sections. Bounded in time, and
    abandoned the moment the reader takes over: their own scroll clears the aim,
-   which is the condition this loop watches. */
+   which is the condition this loop watches. Both walks feed it: the target is
+   the section a dictionary jump aimed at or the headword an article step did,
+   and `land` re-does that jump's own scroll. */
 let sbarSettle=null;
-function sbarSettleStart(det){
+function sbarSettleStart(target,land){
   clearInterval(sbarSettle);
   const t0=performance.now();
   let good=0;
   sbarSettle=setInterval(()=>{
     const stop=()=>{clearInterval(sbarSettle);sbarSettle=null};
-    if(sbarAimed!==det||!det.isConnected||performance.now()-t0>1500)return stop();
-    const title=det.querySelector(":scope > dl > dt");
-    const summary=det.querySelector(":scope > summary");
-    const line=title?(parseFloat(getComputedStyle(summary).top)||0)+summary.getBoundingClientRect().height
-      :(parseFloat(getComputedStyle(det).scrollMarginTop)||0);
-    const actual=(title||det).getBoundingClientRect().top;
+    if(sbarAimed!==target||!target.isConnected||performance.now()-t0>1500)return stop();
+    const landing=target.matches("dt")
+      ?{line:sbarArticleLine(target),actual:target.getBoundingClientRect().top}
+      :sbarSectionLanding(target);
     const atEnd=scrollY>=document.documentElement.scrollHeight-innerHeight-2;
-    if(Math.abs(actual-line)>2&&!atEnd){
+    if(Math.abs(landing.actual-landing.line)>2&&!atEnd){
       good=0;
-      scrollToSectionArticle(det);
+      land();
       return;
     }
     if(++good>=2)stop();
@@ -8357,7 +8404,7 @@ function favouriteControl(result,dictID,dt,dd){
   button.type="button";button.className="favourite-control";
   button.innerHTML=inFavourites
     ?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5 9.5 17.5 19.5 6.5"/></svg>'
-    :'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.75 5.57 6.15.9-4.45 4.33 1.05 6.12L12 17.03l-5.5 2.89 1.05-6.12L3.1 9.47l6.15-.9z"/></svg>';
+    :'<svg class="fav-star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.75 5.57 6.15.9-4.45 4.33 1.05 6.12L12 17.03l-5.5 2.89 1.05-6.12L3.1 9.47l6.15-.9z"/></svg>';
   const copyTargets=inFavourites?favouriteCollections.filter(c=>c.id!==dictID):[];
   const target=document.createElement("select");
   if(inFavourites&&copyTargets.length){
@@ -11813,6 +11860,14 @@ $("barBackWords").addEventListener("click",onBackWords);
    precisely what the reader asks for by walking to it (one at a time, which is
    not the burst `expand all` has to avoid). */
 function sbarSections(){return [...$("out").querySelectorAll("details.dict:not(.noindex)")]}
+/* The articles the left pair walks: the headwords of those same sections, in
+   the same DOM order, so a step crosses a dictionary boundary by itself - the
+   reader's call, because short articles put two dictionaries' rows on one
+   screen and a press that stops at the boundary would move nothing there. The
+   `dt` of a deferred row is in the page already (only its body is a
+   placeholder), and a section nobody has fetched has none, so the walk covers
+   what the answer actually holds - it never asks for a block. */
+function sbarArticles(){return [...$("out").querySelectorAll("details.dict:not(.noindex) > dl > dt")]}
 /* Measured and published, like --barh above and for the same reason: the page's
    bottom padding is built from it, and a guessed number would either leave the
    last line under the bar or float it above a visible gap. The bar wears the
@@ -11844,7 +11899,7 @@ function sbarMeasure(){
   }
 }
 function sbarPaint(){
-  const n=sbarSections().length;
+  const n=sbarSections().length,articles=sbarArticles();
   // The bar is there from the moment the reader has it on - before the first
   // search too, where it shows the scope and the fold's handle and nothing else
   // (the scope lives in it, so this is also what keeps the picker reachable from
@@ -11856,15 +11911,47 @@ function sbarPaint(){
   // A control that cannot act is not shown (D102): with one dictionary there is
   // nowhere to walk, and the arrows are what would lie about it. Where an arrow
   // can act but has run out of list, it is dimmed instead - see sbarEndsPaint.
-  $("sbarPrev").hidden=$("sbarNext").hidden=n<2;
+  // The chip is placed FIRST: its words are the label the dictionary pair is
+  // measured against, and a stale label would measure the wrong row.
+  placeDictSeg();
+  $("sbarArticlePrev").hidden=$("sbarArticleNext").hidden=articles.length<2;
+  // The row measures itself and undresses in ONE order: the fold's word for a
+  // mark, the chip's name for its book, and only then the dictionary pair -
+  // the arrows go last because the chip alone still reaches every dictionary
+  // through its list. When the pair is gone the ladder is walked again without
+  // it, so the space it freed can bring its name back.
+  sbarFitRow(n>=2);
   const returnURL=maskReturn||browseReturn;
   const androidGo=document.documentElement.hasAttribute("data-android-go");
   $("sbarBackWords").hidden=!returnURL||(!androidGo&&n>=2)||document.documentElement.hasAttribute("data-webview2");
   $("barBackWords").hidden=!returnURL||androidGo;
   if(returnURL)$("sbarBackWords").href=$("barBackWords").href=returnURL;
-  placeDictSeg();
   sbarMeasure();
   sbarEndsPaint();
+}
+/* Whether the row as it stands has room: nothing overflows, and the chip's name
+   is whole (a cut name is the one thing the row may not take without asking). */
+function sbarRowFits(bar,label){
+  return bar.scrollWidth<=bar.clientWidth+1&&label.scrollWidth<=label.clientWidth+1;
+}
+/* The row gives way in the order `RESULTS-WALK.md` fixes: word, then name, then
+   arrows. Measured, never a breakpoint - a long group name has to cost the same
+   steps as a narrow window, and a wider one walks the ladder back up by itself,
+   because every paint starts from the whole row. */
+function sbarFitRow(pair){
+  const bar=$("sbar"),label=$("dictLbl"),prev=$("sbarDictPrev"),next=$("sbarDictNext");
+  const undress=()=>{
+    bar.classList.remove("sbar-mark","sbar-book");
+    if(sbarRowFits(bar,label))return true;
+    bar.classList.add("sbar-mark");
+    if(sbarRowFits(bar,label))return true;
+    bar.classList.add("sbar-book");
+    return sbarRowFits(bar,label);
+  };
+  prev.hidden=next.hidden=!pair;
+  if(undress()||!pair)return;
+  prev.hidden=next.hidden=true;
+  undress();
 }
 /* Where the scope control lives, which is wherever the reader can reach it: in
    the status bar while that bar is on screen, and back inside the search field
@@ -11883,10 +11970,10 @@ function sbarPaint(){
 function placeDictSeg(){
   const seg=$("dictSeg");
   if(!seg)return;
-  // In the bar the seg goes BETWEEN the two floors, which is what keeps a
+  // In the bar the seg goes BETWEEN its two arrows, which is what keeps a
   // square of air on each side of it (see the markup and .rpad.floor).
-  const toBar=$("dictSegGap");
-  if(seg.parentElement!==toBar){
+  const toBar=$("sbarDictNext");
+  if(seg.nextElementSibling!==toBar){
     toBar.before(seg);
   }
   // The chip's label depends on where it lives (see scopeLabel), so the move
@@ -11894,38 +11981,71 @@ function placeDictSeg(){
   // painted from, so nothing else would.
   syncChips();
 }
-/* Where the reader is: an index into the sections, always - the first one
-   included, because at the top of the page the first dictionary is the one in
-   front of them. Two answers, in this order, and the order is the whole trick:
-   a jump of OURS (an arrow, or the picker's list) records what it aimed at, and
-   that stands until the reader scrolls by hand - because the page settles a
-   little AFTER the landing, so the section just landed on can sit below the
-   line this rule reads, and a pure geometric answer would name the section it
-   was jumped away from. Reading the position back off the page is right
-   whenever the reader is the one who moved - which is exactly when the aim is
-   cleared. */
+/* Where the reader is: an index into the list, always - the first item
+   included, because at the top of the page the first dictionary (and the first
+   article) is the one in front of them. Two answers, in this order, and the
+   order is the whole trick: a jump of OURS (an arrow, or the picker's list)
+   records what it aimed at, and that stands until the reader scrolls by hand -
+   because the page settles a little AFTER the landing, so the place just landed
+   on can sit below the line this rule reads, and a pure geometric answer would
+   name the place it was jumped away from. Reading the position back off the
+   page is right whenever the reader is the one who moved - which is exactly
+   when the aim is cleared.
+   The LINE comes from the caller, because the two walks land on different
+   things: a section lands on its own scroll-margin-top, an article under the
+   sticky dictionary summary. */
 let sbarAimed=null;
-function sbarAt(list){
-  if(!list.length)return -1;
-  if(sbarAimed&&list.includes(sbarAimed))return list.indexOf(sbarAimed);
+function sbarLine(){
   // The sections' own scroll-margin-top is the line a jump lands them on - NOT
   // barH(), which reads 0 while the top bar is auto-hidden, and a jump downward
   // is exactly the scroll that hides it.
-  const line=(parseFloat(getComputedStyle(list[0]).scrollMarginTop)||0)+8;
-  // The FIRST section is the reader's before anything has crossed that line:
-  // the answer starts right under the bar, so at the top of the page the
-  // dictionary in front of them is the first one - not "none", which aimed the
-  // down arrow at the section they were already looking at and merely lifted it
-  // into place (reported by the reader). Starting at 0 also means a spent
-  // up-arrow (at the first dictionary) and a spent down-arrow (at the last)
-  // cover every position the walk can be in.
+  const first=sbarSections()[0];
+  return first?(parseFloat(getComputedStyle(first).scrollMarginTop)||0)+8:8;
+}
+function sbarArticleLine(dt){
+  // The bottom of the section's own summary is where an article step lands the
+  // headword, and the same line answers "which article am I in". It comes from
+  // the summary of the section the reader is in - or of the article being
+  // stepped to - and never from a fixed height: a long dictionary name wraps the
+  // header onto two lines, and a one-line constant then puts the headword UNDER
+  // the header it is meant to stand beneath (reported from the window).
+  const summary=dt?dt.closest("details.dict")?.querySelector(":scope > summary"):sbarPinnedSummary();
+  if(!summary)return sbarLine();
+  return (parseFloat(getComputedStyle(summary).top)||0)+summary.getBoundingClientRect().height;
+}
+/* The header the reader is under: the last section summary that has reached the
+   sticky line. Two headers can be at that line at once while one section takes
+   the other's place, and the incoming one is the one whose bottom the content
+   has to clear. */
+function sbarPinnedSummary(){
+  const summaries=[...$("out").querySelectorAll("details.dict:not(.noindex) > summary")];
+  if(!summaries.length)return null;
+  // The headers share one rule, so the line they stick to is read once; only the
+  // rectangles differ. This runs on every scroll frame, which is why the loop
+  // does not ask for a computed style per section.
+  const stick=parseFloat(getComputedStyle(summaries[0]).top)||0;
+  let found=null;
+  for(const summary of summaries)
+    if(summary.getBoundingClientRect().top<=stick+1)found=summary;
+  return found||summaries[0];
+}
+function sbarAt(list,line){
+  if(!list.length)return -1;
+  if(sbarAimed&&list.includes(sbarAimed))return list.indexOf(sbarAimed);
+  // The first item is the reader's before anything has crossed that line: the
+  // answer starts right under the bar, so at the top of the page the first
+  // dictionary is the one in front of them - not "none", which aimed the down
+  // arrow at the section they were already looking at and merely lifted it into
+  // place (reported by the reader). Starting at 0 also means a spent up-arrow
+  // (at the first) and a spent down-arrow (at the last) cover every position
+  // the walk can be in.
   let at=0;
   for(let i=0;i<list.length;i++)if(list[i].getBoundingClientRect().top<=line)at=i;
   return at;
 }
 function livePickerCurrentID(){
   const list=sbarSections();
-  const current=list[sbarAt(list)];
+  const current=list[sbarAt(list,sbarLine())];
   return current?.querySelector(":scope > dl > dd[data-dict]")?.dataset.dict||"";
 }
 function sbarPickerCurrentChanged(){
@@ -11934,29 +12054,47 @@ function sbarPickerCurrentChanged(){
   for(const button of $('webPickerRows').querySelectorAll('.web-picker-row'))
     button.setAttribute('aria-current',String(button.dataset.dict===current));
 }
-/* The ends of the list, and what happens there. The walk does NOT wrap - the
+/* The ends of the list, and what happens there. Neither walk wraps - the
    reader asked for a first and a last dictionary, and an arrow that comes back
    round the other side tells them nothing about where they are. At the end the
    arrow is DIMMED (`.lim`), which is the same call the font steppers make at
    their bounds: never `disabled`, because a control that stops taking presses
-   reads as broken, and a press there does nothing anyway (sbarGo clamps). */
+   reads as broken, and a press there does nothing anyway (the walk clamps).
+   Each pair answers for its own list. */
 function sbarEndsPaint(){
-  const list=sbarSections();
-  if(!list.length)return;
-  const at=sbarAt(list);
-  $("sbarPrev").classList.toggle("lim",at<=0);
-  $("sbarNext").classList.toggle("lim",at>=list.length-1);
+  const sections=sbarSections();
+  if(sections.length){
+    const at=sbarAt(sections,sbarLine());
+    $("sbarDictPrev").classList.toggle("lim",at<=0);
+    $("sbarDictNext").classList.toggle("lim",at>=sections.length-1);
+  }
+  const articles=sbarArticles();
+  if(articles.length){
+    const at=sbarAt(articles,sbarArticleLine());
+    $("sbarArticlePrev").classList.toggle("lim",at<=0);
+    $("sbarArticleNext").classList.toggle("lim",at>=articles.length-1);
+  }
 }
 function sbarGo(step){
   const list=sbarSections();
   if(list.length<2)return;
-  const at=sbarAt(list);
+  const at=sbarAt(list,sbarLine());
   const to=at+step;
   if(to<0||to>list.length-1)return;   // the end of the list: nothing to do
   jumpToSection(list[to]);
 }
-$("sbarPrev").onclick=()=>sbarGo(-1);
-$("sbarNext").onclick=()=>sbarGo(1);
+function sbarArticleGo(step){
+  const list=sbarArticles();
+  if(list.length<2)return;
+  const at=sbarAt(list,sbarArticleLine());
+  const to=at+step;
+  if(to<0||to>list.length-1)return;   // the end of the answer: nothing to do
+  jumpToArticle(list[to]);
+}
+$("sbarArticlePrev").onclick=()=>sbarArticleGo(-1);
+$("sbarArticleNext").onclick=()=>sbarArticleGo(1);
+$("sbarDictPrev").onclick=()=>sbarGo(-1);
+$("sbarDictNext").onclick=()=>sbarGo(1);
 /* The ends move as the reader moves, so they are repainted on the page's own
    scroll too - coalesced to one paint per frame, like the sections' own
    repaint. */
@@ -11975,6 +12113,11 @@ for(const ev of ["wheel","touchmove"])
   addEventListener(ev,clearSbarAim,{passive:true});
 addEventListener("pointerdown",e=>{if(!e.target.closest?.("#sbar"))clearSbarAim()},{passive:true});
 addEventListener("scroll",sbarEndsChanged,{passive:true});
+/* The row's fit is a measurement, so it has to be taken again when the row
+   changes size: a resized window, a rotated phone, a group renamed while the
+   answer is on screen. The bar's own ResizeObserver only publishes its height;
+   this one asks for the whole paint, which is where the pair is decided. */
+addEventListener("resize",sbarChanged,{passive:true});
 /* Sections stream in, a new search replaces them all, and highlighting
    re-renders what it touched - so the bar follows the DOM rather than the
    search, coalesced to one paint per frame. The observer is the same shape as

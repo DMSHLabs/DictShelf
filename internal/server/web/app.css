@@ -308,16 +308,26 @@ html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image
    the dictionary arrows form a pair; the other three gaps share the slack. */
 .sbar .rpad.floor{margin:0}
 @media(min-width:601px){.sbar .rpad.arrow-gap{flex:none}}
-.sbar:has(#sbarNext[hidden]) .arrow-gap,
-.sbar:has(#sbarNext[hidden]) .find-gap{display:none}
+/* A pair that is not shown takes its own gap with it, so the row's squares do
+   not stand around nothing. The article pair is the one the row always keeps;
+   the dictionary pair is dropped by measurement (see sbarDictFits), and its
+   arrows are simply `hidden` - nothing else carries their space. */
+.sbar:has(#sbarArticleNext[hidden]) .arrow-gap,
+.sbar:has(#sbarArticleNext[hidden]) .find-gap{display:none}
 /* The dictionary picker remains the same transparent select over its chip. */
 .sbar .seg{display:flex;position:relative;flex:0 1 auto;align-self:stretch;
-  align-items:center;justify-content:center;min-width:0}
+  align-items:center;justify-content:center;min-width:0;overflow:hidden}
 .sbar .seg select{position:absolute;inset:0;width:100%;height:100%;margin:0;
   min-height:0;padding:0;border:0;max-width:none;opacity:0;-webkit-appearance:none;
   appearance:none}
 .sbar .seg:has(select:focus-visible) .chip{outline:2px solid var(--focus);outline-offset:1px}
 .sbar .seg:has(select:disabled){opacity:.55}
+/* The dictionary arrows stand a step off the chip. Flush against its border the
+   three read as one box - the reader saw a single wider control with a dark mark
+   in it - so each arrow keeps the chip's side to itself by the row's smallest
+   measure, which also follows the reader's own UI size. */
+.sbar #sbarDictPrev{margin-inline-end:var(--sp-1)}
+.sbar #sbarDictNext{margin-inline-start:var(--sp-1)}
 /* The status bar is wider than the search field's pill, so the chip may show
    more of a group's name before it ellipsises - and it has to: "All
    Dictionaries" is 16 characters and the field's own cap of 11ch cut it to
@@ -345,21 +355,28 @@ html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image
    at", never "the thing is switched off". */
 .sbar #sbarExamples{font-size:calc(var(--ui-font-addition) * 1rem);font-weight:400}
 .sbar #sbarExamples[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
-/* The fold's handle wears TWO lengths, and it is the one control in this row
-   that may give up width without giving up meaning - the reader said so
-   ("on narrow screens Examples can be shortened to Ex"). CSS picks one; the
-   title and the aria-label keep the full word in both cases. The switch is a
-   media query rather than a measurement, because what has to fit beside it is
-   a known-ish set: the two arrows, their square, the two floors around the
-   scope chip and the chip itself, whose name can be long. Measured in the
-   browser: the row needs 415px of viewport for the full word with "All
-   Dictionaries" in the chip, so the breakpoint sits just under that - 420 -
-   and a 412px phone (the reader's own) takes the short one. */
+/* The row gives way in ONE order, and the order is the point: the fold's handle
+   trades its word for a mark first (the smallest thing it can say and still be
+   the same control), then the scope chip trades its name for its book - the
+   picker behind it is unchanged - and only then do the dictionary arrows stand
+   down. Every step is taken only when the row has measured itself out of room
+   (sbarFitRow in index.html); the title and the aria-label keep the full words
+   in every state, so the control still says what it does. */
 .sbar #sbarExamples .lbl-short{display:none}
-@media (max-width:420px){
-  .sbar #sbarExamples .lbl-full{display:none}
-  .sbar #sbarExamples .lbl-short{display:inline}
-}
+.sbar.sbar-mark #sbarExamples .lbl-full{display:none}
+/* The mark is an ICON among icons, not a word: a drawn asterisk, so its box and
+   its ink are the same thing and the button can centre it exactly. A text `*`
+   cannot be centred that way - the glyph's ink sits in the upper half of the em
+   box and its side bearings are not symmetric, which is what the reader saw as
+   "не по центру" at any size. */
+.sbar.sbar-mark #sbarExamples{display:grid;place-items:center;box-sizing:border-box;
+  width:calc(var(--ui-control-height) * 1em);min-width:calc(var(--ui-control-height) * 1em);
+  height:calc(var(--ui-control-height) * 1em);min-height:0;
+  padding:0;font-size:calc(var(--ui-font-base) * 1rem)}
+.sbar.sbar-mark #sbarExamples .lbl-short{display:block;width:17px;height:17px}
+.sbar #sbarExamples .lbl-short svg{display:block;width:100%;height:100%}
+.sbar.sbar-book #dictLbl{display:none}
+.sbar.sbar-book #dictChip::after{display:none}
 .brand{font-weight:700;color:var(--accent);font-size:15px;letter-spacing:.02em;
   margin-right:var(--sp-1);user-select:none;white-space:nowrap}
 /* Wordmark: "WuWei" carries the accent, "Dict" recedes to normal weight — one
@@ -548,7 +565,7 @@ select{box-sizing:border-box;font-size:calc(var(--ui-font-base) * 1rem);min-heig
    that was switched off. */
 .chip::after{content:"";flex:none;width:0;height:0;margin-top:1px;
   border:3px solid transparent;border-top-color:var(--fg)}
-.chip .lbl{overflow:hidden;text-overflow:ellipsis}
+.chip .lbl{overflow:hidden;text-overflow:ellipsis;min-width:0}
 .chip .bk{width:14px;height:14px;flex:none}
 .bar .chip{display:none}
 .btn{box-sizing:border-box;font-size:calc(var(--ui-font-base) * 1rem);min-height:calc(var(--ui-control-height) * 1em);
@@ -676,6 +693,13 @@ summary.search-result-summary .search-dict-identity::before{content:"›";color:
 details.dict[open]>summary.search-result-summary .search-dict-identity::before{transform:rotate(90deg)}
 details.dict[open]>summary{border-bottom:1px solid var(--line-soft)}
 details.dict>summary.sbar-target{outline-color:var(--accent)}
+/* The headword an article step landed on wears the summary's own mark: one
+   class, one meaning - "this is where the bar just put you" - and it is
+   cleared by the same acts, a wheel, a touch move or a press outside the bar.
+   The transparent outline is what makes the mark a colour change on a line that
+   was already laid out, so a step never re-flows the article. */
+details.dict>dl>dt{outline:2px solid transparent;outline-offset:2px;border-radius:6px}
+details.dict>dl>dt.sbar-target{outline-color:var(--accent)}
 details.dict>summary:focus-visible{outline-color:var(--focus)}
 /* Expand-all can put a hundred dictionaries' articles on screen at once.
    Articles are built eagerly either way (renderSlot appends them all; the
@@ -755,12 +779,18 @@ dd{margin:var(--sp-1) 0 0 0}
 .favourite-action-group{display:inline-flex;align-items:center;flex:none;gap:.2em;margin-inline-start:auto}
 .favourite-action-group .favourite-control{border-radius:7px}
 .favourite-target{box-sizing:border-box;width:max-content;min-width:0;max-width:min(90vw,24em);height:1.8em;padding:0 .5em;border:1px solid var(--line-soft);
-  border-radius:7px;background-color:var(--paper-bg,var(--bg-card));background-image:var(--paper-bk-image,none);background-size:cover;color:var(--fg);font:inherit;font-size:.8em;cursor:pointer}
+  border-radius:7px;background-color:var(--paper-bg,var(--bg-card));background-image:var(--paper-bk-image,none);background-size:cover;color:var(--fg);font:inherit;font-weight:400;font-size:.8em;cursor:pointer}
 .favourite-target option{background-color:var(--paper-bg,var(--bg-card));color:var(--fg)}
 .favourite-target:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .favourite-control svg{display:block;width:1.8em;height:1.8em;flex:none;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .favourite-control.is-saved{color:var(--accent)}
-.favourite-control.is-saved svg{fill:none}
+/* A saved star is SOLID: the filled glyph is the state, the outline is "not
+   saved yet". The rule names the star because the same button wears a check in
+   a favourites dictionary, where a filled glyph would read as a blob. The saved
+   star also keeps full strength and a plain cursor: `:disabled` would fade it
+   to .55 and show a progress cursor, and both say "working", not "saved". */
+.favourite-control.is-saved .fav-star{fill:currentColor}
+.favourite-control.is-saved:has(.fav-star){opacity:1;cursor:default}
 .favourite-control:disabled{opacity:.55;cursor:progress}
 .favourite-control:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .favourites-dialog-actions{display:flex;justify-content:flex-end;gap:var(--sp-1);margin-top:var(--sp-2)}
