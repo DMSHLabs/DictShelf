@@ -44,6 +44,7 @@ let findHistory=loadFindHistory(),suppressFindHistoryFocus=false;
 let matches = [], index = -1, active = false, restored = [], docs = new Set(), timer, fullTextNavigation = null, fullTextGeneration = null, searchAnchor = null;
 let remoteFind = null, remoteFindToken = 0, remoteFindRequestSeq = 0, remoteFindPending = false;
 let remoteFindSpot = "";
+let remoteFindSettled = Promise.resolve();
 let settle = null;
 const fallbackSelections = new Map();
 const highlightCSS = "::highlight(wudict-find-all){background:#ffe082;color:#171717}::highlight(wudict-find-current){background:#ff9800;color:#171717;text-decoration:underline}";
@@ -589,13 +590,21 @@ async function showRemoteFindTarget(target,state,token){
   }
   if(!found.length||token!==remoteFindToken)return false;
   matches=found.map(item=>({host,range:item.range,spot:item.spot,example:item.example}));
+  remoteFindSettled=Promise.resolve();
   docs=new Set(matches.map(item=>item.range.startContainer.ownerDocument));
   index=Math.max(0,Math.min(Number(target.matchIndex)||0,matches.length-1));
   remoteFindSpot=matches[index]?.spot?`${target.dict}:${target.articleIndex}:${matches[index].spot}`:"";
   remoteFind.state=state;remoteFind.target=target;
   dialog.close();strip.hidden=false;measure();
   restoreExamples();showExample(matches[index]);paint();
-  settleOn(matches[index],det);
+  // A run waits for this before it steps again: otherwise every step cancels the
+  // previous scroll and the numbers move while the page stands still.
+  remoteFindSettled=new Promise(resolve=>{
+    let finished=false;
+    const finish=()=>{if(!finished){finished=true;resolve()}};
+    settleOn(matches[index],det,finish);
+    setTimeout(finish,1500);
+  });
   return true;
 }
 async function moveRemoteFind(step){
@@ -706,6 +715,7 @@ async function runFoundTraceRun(record,run){
         visited.push({p:next,at:remoteFindTargetAt(),spot:remoteFindSpot});
         await remoteFindDiagnostic(record,"navigation_trace_step",{completed:Math.min(100000,steps),total:Math.min(100000,total),detail:`trace=${record.traceRun}; source=found_articles; run=${run}; step=${steps}; from=${position}; to=${next}; complete=${!!record.state?.complete}; at=${remoteFindTargetAt()}; spot=${remoteFindSpot}; step_ms=${Math.round(performance.now()-stepStarted)}`});
         previous=next;
+        await remoteFindSettled;
         await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
       }
     }else{
@@ -723,10 +733,11 @@ async function runFoundTraceRun(record,run){
       };
       await gotoRemoteFind(landing);
       if(Number(record.state?.position))visited.push({p:Number(record.state.position),at:remoteFindTargetAt()});
-      for(let index=0;index<3;index++)await step("down",()=>moveRemoteFind(1));
-      await step("last",()=>remoteFindEdge(-1));
-      for(let index=0;index<3;index++)await step("up",()=>moveRemoteFind(-1));
-      await step("first",()=>remoteFindEdge(1));
+      const stepSettled=async action=>{await action;await remoteFindSettled;};
+      for(let index=0;index<3;index++)await step("down",()=>stepSettled(moveRemoteFind(1)));
+      await step("last",()=>stepSettled(remoteFindEdge(-1)));
+      for(let index=0;index<3;index++)await step("up",()=>stepSettled(moveRemoteFind(-1)));
+      await step("first",()=>stepSettled(remoteFindEdge(1)));
       const finalTotal=Number(record.state?.total)||0;
       landed.edges=(landed.first===1?"first=ok":"first="+landed.first)+" "+
         (!record.state?.complete?"last=provisional":
@@ -995,7 +1006,7 @@ function topOf(hit) {
     return (hit.host.closest("details.dict") || hit.host).getBoundingClientRect().top;
   return rect.top + (hit.host.shadowRoot ? 0 : hit.host.getBoundingClientRect().top);
 }
-function settleOn(hit, det) {
+function settleOn(hit, det, done) {
   if (settle) settle();
   let moves = 0, stable = 0, pending = 0, frame = 0, observer = null;
   const quit = ["wheel","touchstart","pointerdown","keydown"];
@@ -1004,6 +1015,7 @@ function settleOn(hit, det) {
     observer?.disconnect();
     for (const event of quit) removeEventListener(event,stopSettle);
     if (settle === stopSettle) settle = null;
+    if (done) done();
   };
   const align = () => {
     if (!active || matches[index] !== hit || !hit.host.isConnected) return stopSettle();
