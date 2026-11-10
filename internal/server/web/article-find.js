@@ -186,12 +186,10 @@ function syncControls() {
   // they are live as soon as there is a query, not only once a session answers.
   // A session that is already at its end keeps them live - the strip reports the
   // end, the dialog simply hands over.
-  const ready=!!options.query;
   const display=found?(found.error?"⚠ "+t("search.fullListUnavailable"):serverFindPosition()):"";
   // The strip's own count and crosshair belong to its layer renderer; the
   // dialog mirrors the search in the status line and its two buttons.
   $("articleFindStatus").textContent=display||t("articleFind.scope");
-  $("articleFindGo").disabled=!ready;
   // While the search runs the dialog says so, and offers to stop it.
   $("articleFindSearching").hidden=!pending;
   $("articleFindStopFind").hidden=!pending;
@@ -1122,7 +1120,7 @@ $("sysLogSearch")?.addEventListener("change",syncRemoteFindTraceButton);
 // One action: the dialog finds, then hands the search to the strip - the arrows
 // there step, jump to the ends and close it. A second pair of arrows in a window
 // that closes on use was one set too many.
-$("articleFindGo").onclick = async () => {
+async function findFromDialog(){
   readOptions(); active=!!options.query;
   // The button's whole path is worth a line in the log: a press that seems to do
   // nothing is either a press that never arrived or an answer that never came.
@@ -1143,7 +1141,7 @@ $("articleFindGo").onclick = async () => {
     if(!await showRemoteFindTarget(state.target,state,remoteFindToken))remoteFind.error=t("search.fullListUnavailable");
     paint();
   }
-};
+}
 $("articleFindStopFind").onclick = () => {
   closeRemoteFind();stripLayer="answer";renderStrip();syncControls();
 };
@@ -1221,5 +1219,5 @@ window.wudictArticleFind = {stop, refresh:schedule, setFullTextNavigation,
 }, traceEvent:(stage,detail,elapsedMs=0)=>{
   if(!remoteFindTraceActive)return;
   void remoteFindDiagnostic({diagnosticRun:remoteFindDiagnosticRun,diagnosticStarted:performance.now(),traceRun:remoteFindTraceRun},stage,{elapsedMs,detail:`trace=${remoteFindTraceRun}; source=full_text; ${detail}`});
-}, progressPing:findProgressPing, progressEnd:findProgressEnd, fullTextModeActive:()=>stripLayer==="answer"&&!!fullTextNavigation, isActive:()=>active&&!!options.query, searchAcrossBlocks:()=>true, searchFrom, goto, setHistoryLimit:n=>{findHistory=findHistory.slice(0,Math.max(0,Math.min(1000,Number(n)||0)));saveFindHistory();renderFindHistory()}};
+}, find:()=>{void findFromDialog()}, progressPing:findProgressPing, progressEnd:findProgressEnd, fullTextModeActive:()=>stripLayer==="answer"&&!!fullTextNavigation, isActive:()=>active&&!!options.query, searchAcrossBlocks:()=>true, searchFrom, goto, setHistoryLimit:n=>{findHistory=findHistory.slice(0,Math.max(0,Math.min(1000,Number(n)||0)));saveFindHistory();renderFindHistory()}};
 })();
