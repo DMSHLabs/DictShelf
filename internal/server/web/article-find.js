@@ -1123,33 +1123,39 @@ $("sysLogSearch")?.addEventListener("change",syncRemoteFindTraceButton);
 // there step, jump to the ends and close it. A second pair of arrows in a window
 // that closes on use was one set too many.
 async function findFromDialog(){
-  // First thing, before any request: the press is visible. A Find that leaves
-  // this line unchanged never reached the code.
-  $("articleFindStatus").textContent="…";
-  readOptions(); active=!!options.query;
-  // The button's whole path is worth a line in the log: a press that seems to do
-  // nothing is either a press that never arrived or an answer that never came.
-  const note=(stage,detail)=>void sendBrowseDiagnostic({event:"search_article",stage,runId:0,query:String(options.query||"").slice(0,200),detail});
-  const anchor=findAnchor();
-  note("navigation_find_click",`query=${options.query}; active=${active}; pending=${remoteFindPending}; anchor=${anchor?anchor.dict+":"+anchor.article:"none"}`);
-  if(!active){dialog.close();return}
-  closeRemoteFind();
-  let state=null,error="";
-  try{state=await startRemoteFind(true)}
-  catch(failure){
-    error=String(failure?.message||failure);
-    if(remoteFind)remoteFind.error=error;
-    else $("articleFindStatus").textContent="⚠ "+error;
-  }
-  note("navigation_find_result",`found=${!!state?.found}; complete=${!!state?.complete}; total=${state?.total||0}; position=${state?.position||0}; error=${(error||remoteFind?.error||"").slice(0,300)}`);
-  // Found: the dialog has done its job - before the article is painted, because
-  // painting waits for a block of articles and the window must not wait with it.
-  // Not found: it stays, says so, and the word can be corrected in place.
-  if(state?.found){
-    dialog.close();
-    remoteFindSpot="";
-    if(!await showRemoteFindTarget(state.target,state,remoteFindToken))remoteFind.error=t("search.fullListUnavailable");
-    paint();
+  const status=$("articleFindStatus");
+  // Everything here is guarded: a Find that cannot run has to say why in the
+  // dialog's own line instead of stopping on a line nobody sees. The log is a
+  // courtesy too - a diagnostic that fails must not stop the search.
+  const note=(stage,detail)=>{
+    try{void sendBrowseDiagnostic({event:"search_article",stage,runId:0,query:String(options.query||"").slice(0,200),detail})}catch(_){}
+  };
+  try{
+    status.textContent="…";
+    readOptions(); active=!!options.query;
+    const anchor=findAnchor();
+    note("navigation_find_click",`query=${options.query}; active=${active}; pending=${remoteFindPending}; anchor=${anchor?anchor.dict+":"+anchor.article:"none"}`);
+    if(!active){dialog.close();return}
+    closeRemoteFind();
+    let state=null,error="";
+    try{state=await startRemoteFind(true)}
+    catch(failure){
+      error=String(failure?.message||failure);
+      if(remoteFind)remoteFind.error=error;
+    }
+    note("navigation_find_result",`found=${!!state?.found}; complete=${!!state?.complete}; total=${state?.total||0}; position=${state?.position||0}; error=${(error||remoteFind?.error||"").slice(0,300)}`);
+    if(error||!state){status.textContent="⚠ "+(error||t("search.fullListUnavailable"));return}
+    // Found: the dialog has done its job - before the article is painted,
+    // because painting waits for a block of articles and the window must not
+    // wait with it. Not found: it stays and says so in place.
+    if(state.found){
+      dialog.close();
+      remoteFindSpot="";
+      if(!await showRemoteFindTarget(state.target,state,remoteFindToken))remoteFind.error=t("search.fullListUnavailable");
+      paint();
+    }
+  }catch(failure){
+    status.textContent="⚠ "+String(failure?.message||failure);
   }
 }
 $("articleFindGo").onclick = () => { void findFromDialog(); };
