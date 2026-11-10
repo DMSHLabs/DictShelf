@@ -391,14 +391,15 @@ async function startRemoteFind(jump=false){
       if(token!==remoteFindToken||remoteFind!==record)return null;
       if(state.found||!anchor)break;
     }
+    // The anchored start can refuse - an article the session does not know, a
+    // page that would not open. The whole answer is still worth searching before
+    // saying there is nothing, so a refusal is retried without the anchor.
+    if(!state?.found&&anchor&&token===remoteFindToken&&remoteFind===record){
+      state=await remoteFindFetch(record,"navStart",params);
+      if(token!==remoteFindToken||remoteFind!==record)return null;
+    }
     record.state=state;record.pendingTarget=!jump&&anchor&&state.found?state:null;record.anchorDirection=anchor?.direction||0;
     record.pending=false;record.error="";
-    if(jump&&state?.found){
-      // The reader asked to be taken there, so the first match is painted now;
-      // the strip steps from it.
-      remoteFindSpot="";
-      if(!await showRemoteFindTarget(state.target,state,token))record.error=t("search.fullListUnavailable");
-    }
   }catch(error){
     if(token!==remoteFindToken||remoteFind!==record)return null;
     record.state={complete:true,total:0,found:false};record.pending=false;record.error=String(error?.message||error);
@@ -1133,9 +1134,15 @@ $("articleFindGo").onclick = async () => {
   let state=null,error="";
   try{state=await startRemoteFind(true)}catch(failure){error=String(failure?.message||failure)}
   note("navigation_find_result",`found=${!!state?.found}; complete=${!!state?.complete}; total=${state?.total||0}; position=${state?.position||0}; error=${(error||remoteFind?.error||"").slice(0,300)}`);
-  // Found: the dialog has done its job. Not found: it stays, says so, and the
-  // reader can correct the word without reopening it.
-  if(state?.found)dialog.close();
+  // Found: the dialog has done its job - before the article is painted, because
+  // painting waits for a block of articles and the window must not wait with it.
+  // Not found: it stays, says so, and the word can be corrected in place.
+  if(state?.found){
+    dialog.close();
+    remoteFindSpot="";
+    if(!await showRemoteFindTarget(state.target,state,remoteFindToken))remoteFind.error=t("search.fullListUnavailable");
+    paint();
+  }
 };
 $("articleFindStopFind").onclick = () => {
   closeRemoteFind();stripLayer="answer";renderStrip();syncControls();
