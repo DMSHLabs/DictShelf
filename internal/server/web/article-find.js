@@ -1123,6 +1123,9 @@ $("sysLogSearch")?.addEventListener("change",syncRemoteFindTraceButton);
 // there step, jump to the ends and close it. A second pair of arrows in a window
 // that closes on use was one set too many.
 async function findFromDialog(){
+  // First thing, before any request: the press is visible. A Find that leaves
+  // this line unchanged never reached the code.
+  $("articleFindStatus").textContent="…";
   readOptions(); active=!!options.query;
   // The button's whole path is worth a line in the log: a press that seems to do
   // nothing is either a press that never arrived or an answer that never came.
@@ -1149,6 +1152,7 @@ async function findFromDialog(){
     paint();
   }
 }
+$("articleFindGo").onclick = () => { void findFromDialog(); };
 $("articleFindStopFind").onclick = () => {
   closeRemoteFind();stripLayer="answer";renderStrip();syncControls();
 };
