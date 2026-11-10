@@ -170,7 +170,12 @@ function renderStrip(){
     const atEnd=!!state.found&&!!state.complete&&total>0&&position>=total;
     $("articleFindLabel").textContent=options.query;
     $("articleFindLabel").title=options.query;
-    $("articleFindCount").textContent=serverFindPosition();
+    // The strip is where a reader of the page looks, and the dialog that would
+    // carry a message is usually closed by then: a step that could not be shown
+    // says so here instead of leaving the counter to claim a place on its own.
+    const error=String(found?.error||"");
+    $("articleFindCount").textContent=error?"⚠ "+error:serverFindPosition();
+    $("articleFindCount").title=error;
     $("articleFindCount").disabled=!state.found;
     $("articleFindFirst").disabled=pending||atStart;
     $("articleFindPrev").disabled=pending||atStart;
@@ -360,7 +365,7 @@ async function startRemoteFind(jump=false){
   const signature=remoteFindSignature(context)+JSON.stringify(anchor)+(jump?"|jump":"");
   if(remoteFind?.signature===signature){
     stripLayer="found";
-    if(jump&&remoteFind.state?.found)await showRemoteFindTarget(remoteFind.state.target,remoteFind.state,remoteFindToken);
+    if(jump&&remoteFind.state?.found){const shown=await showRemoteFindTarget(remoteFind.state.target,remoteFind.state,remoteFindToken);if(remoteFind)remoteFind.error=shown;}
     paint();
     return remoteFind.state||null;
   }
@@ -561,26 +566,113 @@ function serverFindRanges(root,occurrences){
   if(missed)window.wudictArticleFind?.traceEvent?.("navigation_trace_ranges",`occurrences=${(occurrences||[]).length}; painted=${out.length}; missed=${missed}`);
   return out;
 }
+/* Is the painted word where the reader can see it? A range can resolve and be
+   painted while the viewport stands somewhere else: the block was just
+   restored, the article is taller than the screen, or the subtree holds no
+   layout yet. The counter follows the server's cursor, so it moves whether or
+   not the page did. */
+function findHitOnScreen(hit,det){
+  if(!hit?.host.isConnected)return false;
+  const rect=hit.range.getBoundingClientRect();
+  if(!rect.width&&!rect.height)return false;
+  /* A closed <details> is skipped in layout rather than zeroed: its content
+     answers with a plausible box while nothing of it is drawn. checkVisibility
+     is not fooled by that. Its options stay at their defaults on purpose:
+     contentVisibilityAuto:true would also reject the marks inside our own
+     content-visibility:auto result list, which are exactly the off-screen ones
+     worth scrolling to. */
+  const parent=hit.range.startContainer.parentElement;
+  if(parent?.checkVisibility&&!parent.checkVisibility())return false;
+  const top=topOf(hit),bottom=top+rect.height;
+  // Beyond the document's end is a box for content the page has not laid out
+  // (content-visibility:auto), not a place the reader can be sent to.
+  if(top+scrollY>document.documentElement.scrollHeight)return false;
+  const {ceiling,floor}=findViewport(det);
+  return bottom>ceiling&&top<floor;
+}
+/* The band a match may stand in: below the bar and the dictionary's own header,
+   above the strip. One place computes it, because the check and the alignment
+   disagreeing is how a mark lands under the strip and reads as "not shown". */
+function findViewport(det){
+  return {ceiling:barH()+(det?.querySelector(":scope>summary")?.offsetHeight||0),
+    floor:innerHeight-(strip.hidden?0:strip.offsetHeight)-8};
+}
+/* Bring the word itself into view, now. The settle loop below refines the place
+   over animation frames, and a window that is not painting - occluded,
+   minimised, a WebView between loads - runs none of them; then the number would
+   move while the page stood still. So the first alignment waits for no frame:
+   it scrolls, measures and repeats, and it says whether the word was reached. */
+async function revealFindHit(hit,det,token){
+  for(let attempt=0;attempt<12;attempt++){
+    if(token!==remoteFindToken)return false;
+    // The block was replaced under us: no scroll can reach it, and the caller
+    // re-establishes the target instead of spending its attempts here.
+    if(!hit.host.isConnected)return false;
+    if(findHitOnScreen(hit,det))return true;
+    const rect=hit.range.getBoundingClientRect(),parent=hit.range.startContainer.parentElement;
+    // A box that draws nothing belongs to a folded section of the article (a
+    // wiki table of contents, a folded example). Open the fold that holds the
+    // word - the reader asked to see it - and measure again.
+    for(let el=parent;el;el=el.parentElement)if(el.tagName==="DETAILS"&&!el.open)el.open=true;
+    const top=topOf(hit);
+    if(rect.width||rect.height){
+      /* A place beyond the document's own end is not a place yet: the list is
+         content-visibility:auto, so a block nobody has scrolled through reports
+         plausible boxes for content the page is not laid out for, and a scroll
+         to them is clamped. Bringing the ARTICLE in makes the browser lay its
+         subtree out; the next attempt measures the word for real and aligns it.
+         This is the case the counter used to move across alone. */
+      if(top+scrollY>document.documentElement.scrollHeight)hit.host.scrollIntoView({block:"center",behavior:"instant"});
+      else revealAt(top,det,attempt>0);
+    }else{
+      // No box at all: WebView2 has not laid the article out. Scrolling the
+      // text's own element in makes it do so, which is what the settle loop's
+      // first branch does too - only this one does not wait for a frame.
+      (parent?.isConnected?parent:hit.host||det)?.scrollIntoView({block:"center",behavior:"instant"});
+    }
+    await new Promise(resolve=>setTimeout(resolve,120));
+  }
+  return findHitOnScreen(hit,det);
+}
+/* "" is the word on screen; anything else is the reason it is not. The caller
+   puts that reason on the strip's layer, so a click that cannot show its match
+   says so instead of moving the counter alone. */
 async function showRemoteFindTarget(target,state,token){
-  if(!target)return false;
+  const failed=t("search.fullListUnavailable");
+  if(!target)return failed;
+  // The answer's own walk and this one share the result list, and a step of
+  // either can replace a dictionary's block while the other is still using it.
+  // A target that vanished between being painted and being shown is worth
+  // re-establishing: the next attempt finds the block again and repaints it.
+  for(let attempt=0;attempt<3;attempt++){
+    const outcome=await paintRemoteFindTarget(target,state,token);
+    if(outcome!=="lost")return outcome==="shown"?"":outcome;
+    if(token!==remoteFindToken)return failed;
+    await new Promise(resolve=>setTimeout(resolve,250));
+  }
+  return t("articleFind.showFailed");
+}
+async function paintRemoteFindTarget(target,state,token){
+  const failed=t("search.fullListUnavailable");
   let det=null;
   for(let attempt=0;attempt<50;attempt++){
     det=[...$("out").querySelectorAll("details.dict")].find(node=>node.dataset.searchDict===target.dict);
     if(det)break;
-    if(token!==remoteFindToken)return false;
+    if(token!==remoteFindToken)return failed;
     await new Promise(resolve=>setTimeout(resolve,100));
   }
-  if(!det)return false;
+  if(!det)return failed;
   const blockStart=Number(target.blockStart)||0;
   if((Number(det.dataset.searchPageStart)||0)!==blockStart){
     const replacement=await window.wudictRestoreArticleBlock?.(det,blockStart);
-    if(!replacement||token!==remoteFindToken)return false;
+    if(token!==remoteFindToken)return failed;
+    if(!replacement)return "lost";
     det=replacement;
   }
   det.open=true;
   const row=det.querySelectorAll(":scope>dl>dd")[Number(target.articleIndex)-blockStart];
   const host=row?.querySelector(".article");
-  if(!host)return false;
+  if(!host)return failed;
   let found=[];
   for(let attempt=0;attempt<50;attempt++){
     const root=rootFor(host);
@@ -588,22 +680,25 @@ async function showRemoteFindTarget(target,state,token){
     if(found.length||token!==remoteFindToken)break;
     await new Promise(resolve=>setTimeout(resolve,100));
   }
-  if(!found.length||token!==remoteFindToken)return false;
+  if(!found.length||token!==remoteFindToken)return failed;
   matches=found.map(item=>({host,range:item.range,spot:item.spot,example:item.example}));
   remoteFindSettled=Promise.resolve();
   docs=new Set(matches.map(item=>item.range.startContainer.ownerDocument));
   index=Math.max(0,Math.min(Number(target.matchIndex)||0,matches.length-1));
-  remoteFindSpot=matches[index]?.spot?`${target.dict}:${target.articleIndex}:${matches[index].spot}`:"";
   remoteFind.state=state;remoteFind.target=target;
   dialog.close();strip.hidden=false;measure();
   restoreExamples();showExample(matches[index]);paint();
-  // If the article itself is nowhere on screen, bring it in first: the fine
-  // alignment below can decline to move (a reader scrolling, a closed subtree),
-  // and then the counter would run while the page stood still.
-  {
-    const box=host.getBoundingClientRect();
-    if(box.bottom<0||box.top>innerHeight)host.scrollIntoView({block:"center",behavior:"instant"});
+  // The word itself has to reach the page before the counter may say it did.
+  const shown=await revealFindHit(matches[index],det,token);
+  if(token!==remoteFindToken)return failed;
+  if(!shown){
+    // A step the reader cannot see is recorded as an empty place - the trace's
+    // "stuck" count is about the counter, and this is the page standing still.
+    remoteFindSpot="";
+    if(!host.isConnected||!det.isConnected)return "lost";
+    return t("articleFind.showFailed");
   }
+  remoteFindSpot=matches[index]?.spot?`${target.dict}:${target.articleIndex}:${matches[index].spot}`:"";
   // A run waits for this before it steps again: otherwise every step cancels the
   // previous scroll and the numbers move while the page stands still.
   remoteFindSettled=new Promise(resolve=>{
@@ -612,7 +707,7 @@ async function showRemoteFindTarget(target,state,token){
     settleOn(matches[index],det,finish);
     setTimeout(finish,1500);
   });
-  return true;
+  return "shown";
 }
 async function moveRemoteFind(step){
   if(!remoteFind?.id||remoteFindPending)return false;
@@ -622,14 +717,14 @@ async function moveRemoteFind(step){
       const target=record.pendingTarget;record.pendingTarget=null;
       if(step===record.anchorDirection){
         const paintStarted=performance.now();
-        record.error=await showRemoteFindTarget(target.target,target,token)?"":t("search.fullListUnavailable");
+        record.error=await showRemoteFindTarget(target.target,target,token);
         await remoteFindDiagnostic(record,"navigation_target_painted",{elapsedMs:Math.round(performance.now()-paintStarted),detail:`dict=${target.target?.dict||""}; article=${target.target?.articleIndex??""}; block=${target.target?.blockStart??""}; position=${target.position||0}/${target.total||0}; success=${!record.error}`});
         return !record.error;
       }
     }
     const state=await remoteFindFetch(record,step<0?"navPrevious":"navNext");
     if(request!==remoteFindRequestSeq||token!==remoteFindToken||remoteFind!==record)return;
-    if(state.found){record.state=state;const paintStarted=performance.now();record.error=await showRemoteFindTarget(state.target,state,token)?"":t("search.fullListUnavailable");
+    if(state.found){record.state=state;const paintStarted=performance.now();record.error=await showRemoteFindTarget(state.target,state,token);
       await remoteFindDiagnostic(record,"navigation_target_painted",{elapsedMs:Math.round(performance.now()-paintStarted),detail:`dict=${state.target?.dict||""}; article=${state.target?.articleIndex??""}; block=${state.target?.blockStart??""}; position=${state.position||0}/${state.total||0}; success=${!record.error}`})}
     else record.state={...record.state,...state};
     return !!state.found&&!record.error;
@@ -959,7 +1054,7 @@ async function restoreRemoteFindTarget(){
   if(!remoteFind?.target||remoteFindPending)return;
   const record=remoteFind,token=remoteFindToken,target=record.target,state=record.state;
   remoteFindPending=true;paint();
-  try{record.error=await showRemoteFindTarget(target,state,token)?"":t("search.fullListUnavailable")}
+  try{record.error=await showRemoteFindTarget(target,state,token)}
   catch(error){record.error=String(error?.message||error)}
   finally{if(token===remoteFindToken&&remoteFind===record){remoteFindPending=false;paint()}}
 }
@@ -970,7 +1065,7 @@ async function remoteFindEdge(direction){
     const state=await remoteFindFetch(record,direction>0?"navFirst":"navLast");
     if(request!==remoteFindRequestSeq||token!==remoteFindToken||remoteFind!==record)return;
     if(state.found){record.state=state;const paintStarted=performance.now();
-      record.error=await showRemoteFindTarget(state.target,state,token)?"":t("search.fullListUnavailable");
+      record.error=await showRemoteFindTarget(state.target,state,token);
       remoteFindDiagnostic(record,"navigation_target_painted",{elapsedMs:Math.round(performance.now()-paintStarted),detail:`dict=${state.target?.dict||""}; block=${state.target?.blockStart??""}; edge=${direction>0?"first":"last"}; success=${!record.error}`})}
     else record.state={...record.state,total:state.total,complete:state.complete};
   }catch(error){record.error=String(error?.message||error)}
@@ -982,7 +1077,7 @@ async function gotoRemoteFind(page){
   try{
     const state=await remoteFindFetch(record,"navGoto",{position:String(page)});
     if(request!==remoteFindRequestSeq||token!==remoteFindToken||remoteFind!==record)return;
-    if(state.found){record.state=state;const paintStarted=performance.now();record.error=await showRemoteFindTarget(state.target,state,token)?"":t("search.fullListUnavailable");
+    if(state.found){record.state=state;const paintStarted=performance.now();record.error=await showRemoteFindTarget(state.target,state,token);
       remoteFindDiagnostic(record,"navigation_target_painted",{elapsedMs:Math.round(performance.now()-paintStarted),detail:`dict=${state.target?.dict||""}; block=${state.target?.blockStart??""}; success=${!record.error}`})}
     else record.state={...record.state,total:state.total,complete:state.complete};
   }catch(error){record.error=String(error?.message||error)}
@@ -1014,29 +1109,39 @@ function topOf(hit) {
   return rect.top + (hit.host.shadowRoot ? 0 : hit.host.getBoundingClientRect().top);
 }
 function settleOn(hit, det, done) {
-  if (settle) settle();
-  let moves = 0, stable = 0, pending = 0, frame = 0, observer = null;
+  if (settle) settle("superseded");
+  let moves = 0, stable = 0, pending = 0, frame = 0, observer = null, stopped = false;
   const quit = ["wheel","touchstart","pointerdown","keydown"];
-  const stopSettle = () => {
+  /* Every exit names itself in the trace. A settle that ends with the word off
+     screen is the defect behind "the counter moved and the page did not", and
+     the log should say which guard ended it rather than leave it to a guess. */
+  const stopSettle = (reason = "done") => {
+    if (stopped) return;
+    stopped = true;
     clearTimeout(pending); clearTimeout(timeout); cancelAnimationFrame(frame);
     observer?.disconnect();
-    for (const event of quit) removeEventListener(event,stopSettle);
+    for (const event of quit) removeEventListener(event,onQuit);
     if (settle === stopSettle) settle = null;
+    window.wudictArticleFind?.traceEvent?.("navigation_trace_settle",
+      `source=found_articles; stop=${reason}; moves=${moves}; stable=${stable}; on_screen=${findHitOnScreen(hit,det)}`,0);
     if (done) done();
   };
+  const onQuit = () => stopSettle("reader");
   const align = () => {
-    if (!active || matches[index] !== hit || !hit.host.isConnected) return stopSettle();
+    if (!active) return stopSettle("inactive");
+    // A newer target took over: its own settle follows and this one is over.
+    if (matches[index] !== hit) return stopSettle("superseded");
+    if (!hit.host.isConnected) return stopSettle("replaced");
     const rect = hit.range.getBoundingClientRect(), laidOut = !!(rect.width || rect.height);
     const top = topOf(hit), bottom = top + rect.height;
-    const ceiling = barH() + (det?.querySelector(":scope>summary")?.offsetHeight || 0);
-    const floor = innerHeight - strip.offsetHeight - 8;
+    const {ceiling,floor} = findViewport(det);
     // Opening the target dictionary can move it again as earlier sections
     // finish laying out. Keep checking until the whole result list settles.
     if (laidOut && top >= ceiling && top < floor && Math.min(bottom,top+24) <= floor) {
-      if (++stable >= 8) return stopSettle();
+      if (++stable >= 8) return stopSettle("aligned");
     } else {
       stable = 0;
-      if (++moves > 30) return stopSettle();
+      if (++moves > 30) return stopSettle("not_settled");
       if (!laidOut) {
         // A zero-sized Range inside content-visibility:auto has no useful
         // page coordinates. Scrolling its text node into view makes WebView2
@@ -1050,8 +1155,8 @@ function settleOn(hit, det, done) {
   observer.observe($("out"));
   if (det) observer.observe(det);
   observer.observe(hit.host);
-  for (const event of quit) addEventListener(event,stopSettle,{passive:true});
-  const timeout = setTimeout(stopSettle,6500);
+  for (const event of quit) addEventListener(event,onQuit,{passive:true});
+  const timeout = setTimeout(() => stopSettle("timeout"),6500);
   settle = stopSettle;
   frame = requestAnimationFrame(align);
 }
@@ -1199,7 +1304,7 @@ async function findFromDialog(){
     if(state.found){
       dialog.close();
       remoteFindSpot="";
-      if(!await showRemoteFindTarget(state.target,state,remoteFindToken))remoteFind.error=t("search.fullListUnavailable");
+      const shown=await showRemoteFindTarget(state.target,state,remoteFindToken);if(shown)remoteFind.error=shown;
       paint();
     }
   }catch(failure){

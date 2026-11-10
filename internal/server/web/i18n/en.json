@@ -1353,6 +1353,7 @@
   "articleFind.position": "{current} of {total}",
   "articleFind.resultBlock": "articles {start}–{end}",
   "articleFind.noMatches": "No matches",
+  "articleFind.showFailed": "Could not show the match",
   "articleFind.fromStart": "From the beginning",
   "articleFind.fromEnd": "From the end",
   "articleFind.finish": "Finish finding",

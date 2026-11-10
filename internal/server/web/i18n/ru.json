@@ -1371,6 +1371,7 @@
   "articleFind.position": "{current} из {total}",
   "articleFind.resultBlock": "статьи {start}–{end}",
   "articleFind.noMatches": "Совпадений нет",
+  "articleFind.showFailed": "Не удалось показать совпадение",
   "articleFind.fromStart": "С начала",
   "articleFind.fromEnd": "С конца",
   "articleFind.finish": "Завершить поиск",
