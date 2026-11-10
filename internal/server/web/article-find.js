@@ -437,6 +437,28 @@ function serverFindPosition(){
    the article's text nodes in order behind a cursor, so repeated words still
    land in the right places. A match neither way is skipped and reported: the
    reader sees fewer marks, never wrong ones. */
+/* The reader's own position, named the way the page CAN name it: a snippet of
+   the article's text taken from the selection. The server finds that snippet in
+   its own model of the same article, so the gesture does not depend on the two
+   trees having the same node indices - a frame's parser moves <link>/<style>
+   into a head the server never had, and every top-level index shifts with them.
+   The snippet is folded the way the server folds it, so whitespace cannot part
+   the two. */
+function serverFindAnchor(){
+  if(!searchAnchor)return null;
+  const host=searchAnchor.host,det=host?.closest("details.dict"),row=host?.closest("dd");
+  if(!det||!row)return null;
+  const rows=[...det.querySelectorAll(":scope>dl>dd")],articleOffset=rows.indexOf(row);
+  if(articleOffset<0)return null;
+  const range=searchAnchor.range;
+  let node=range.startContainer;
+  while(node&&node.nodeType!==3)node=node.firstChild;
+  if(!node)return null;
+  const text=foldFindText(node.data.slice(range.startOffset)).slice(0,64);
+  if(!text)return null;
+  return {dict:det.dataset.searchDict||"",article:(Number(det.dataset.searchPageStart)||0)+articleOffset,
+    text,direction:searchAnchor.direction};
+}
 function foldFindText(value){
   const collapsed=String(value??"").replace(/\s+/gu," ").trim();
   return options.matchCase?collapsed:collapsed.toLocaleLowerCase();
