@@ -302,16 +302,25 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	const windowUseDefault = uint(0x80000000)
 	windowWidth, windowHeight := windowUseDefault, windowUseDefault
 	windowCenter := false
-	if desktopRequest != nil {
-		if value, err := desktopRequest(context.Background(), "desktopWindowSize", ""); err == nil {
-			if size, ok := value.(map[string]any); ok {
-				width, widthOK := size["width"].(float64)
-				height, heightOK := size["height"].(float64)
-				if widthOK && heightOK && width >= 480 && width <= 10000 && height >= 320 && height <= 10000 {
-					windowWidth, windowHeight = uint(width), uint(height)
-					windowCenter = true
-				}
-			}
+	// The size a reader left is asked for once, before the window exists. Say in
+	// the log what came back: "the window forgot its size" is a saved value that
+	// could not be read, or a read that returned nothing usable, and the two look
+	// the same on screen.
+	if desktopRequest == nil {
+		logx.SystemDiagnostic("desktop window size not restored: no request channel")
+	} else if value, err := desktopRequest(context.Background(), "desktopWindowSize", ""); err != nil {
+		logx.Warn("could not read the desktop window size: %v", err)
+	} else if size, ok := value.(map[string]any); !ok {
+		logx.SystemDiagnostic("desktop window size not restored: nothing saved")
+	} else {
+		width, widthOK := size["width"].(float64)
+		height, heightOK := size["height"].(float64)
+		if widthOK && heightOK && width >= 480 && width <= 10000 && height >= 320 && height <= 10000 {
+			windowWidth, windowHeight = uint(width), uint(height)
+			windowCenter = true
+			logx.SystemDiagnostic("desktop window size restored width=%d height=%d", windowWidth, windowHeight)
+		} else {
+			logx.Warn("desktop window size not restored: saved value is not usable (%v)", value)
 		}
 	}
 	webviewStarted := time.Now()
