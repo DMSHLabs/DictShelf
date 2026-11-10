@@ -37,8 +37,15 @@ type Config struct {
 	// "decide from how the app was launched" - a GUI launch (a macOS .app, the
 	// double-clicked DictShelf.exe) gets an icon, a terminal or a service does not.
 	// TRAY=1 or TRAY=0 overrides that decision in either direction (D74).
-	Tray         *bool  // TRAY
-	Verbose      bool   // VERBOSE=1: verbose logging
+	Tray    *bool // TRAY
+	Verbose bool  // VERBOSE=1: verbose logging
+
+	// FindTrace (TEST_FIND_TRACE) shows the "Trace all" controls on the Find in
+	// articles strip. It is a developer switch, not a feature: the trace walks
+	// every match of both layers and writes each step to the system log, which
+	// is how this fork checks its own navigation. Hidden in a release unless the
+	// installation asks for it explicitly.
+	FindTrace    bool   // TEST_FIND_TRACE=ON
 	Speexdec     string // SPEEXDEC: path to the external speexdec binary (.spx audio)
 	SpeexBackend string // SPEEX_BACKEND: internal (in-process libspeex, default) | external (speexdec binary)
 
@@ -283,6 +290,12 @@ func Load(configPath string, flags map[string]string) (Config, error) {
 	}
 	if v := get("VERBOSE"); v != "" {
 		cfg.Verbose = !isOff(v)
+	}
+	// The developer switches are read the other way round: only an explicitly
+	// positive value turns one on, so "off", a typo or a stale word keeps the
+	// feature hidden rather than shipping it to a reader.
+	if v := get("TEST_FIND_TRACE"); v != "" {
+		cfg.FindTrace = isOn(v)
 	}
 	if v := get("SPEEXDEC"); v != "" {
 		cfg.Speexdec = ExpandHome(v)
@@ -587,6 +600,15 @@ const configTemplate = `# DictShelf configuration  (~/.dmshlabs/dictshelf/dictsh
 #                                     # "on" = always, "off" = never. The key is a random string in
 #                                     # ~/.dmshlabs/dictshelf/token: "dictshelf token" prints the link that carries
 #                                     # it, "wudict token --rotate" replaces it.
+# ---- Developer switches ---------------------------------------------------
+# These are for building and diagnosing the fork. They change what the
+# interface OFFERS, not what it does, and every one of them is off in a
+# release build unless a line here says otherwise.
+# TEST_FIND_TRACE = "ON"              # show "Trace all" on the Find in articles strip:
+#                                     # the self-check that walks every match of both
+#                                     # layers and records each step in the system log.
+#                                     # Only an explicit on ("ON", "1", "true", "yes")
+#                                     # shows it; any other value, or no line, hides it.
 `
 
 // EnsureConfigFile makes sure a config file exists, generating the fully
@@ -1417,6 +1439,17 @@ const DefaultLemmaURL = "https://raw.githubusercontent.com/DMSHLabs/lemmas/main/
 func isOff(v string) bool {
 	switch strings.ToLower(strings.TrimSpace(v)) {
 	case "0", "false", "off", "no", "n":
+		return true
+	}
+	return false
+}
+
+// isOn is the mirror of isOff and it is deliberately not "!isOff": a developer
+// switch must be off for anything a person did not mean as a yes. "off", an
+// empty value and a typo all keep it hidden.
+func isOn(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "on", "yes", "y":
 		return true
 	}
 	return false

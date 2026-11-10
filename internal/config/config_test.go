@@ -266,6 +266,46 @@ func TestWebOriginsConfig(t *testing.T) {
 	}
 }
 
+// TEST_FIND_TRACE is a developer switch, and unlike every other boolean here it
+// is on only for an explicitly positive value: "off", an empty value and a typo
+// all keep the find trace controls hidden, which is what a release shows.
+func TestFindTraceIsOnOnlyWhenAsked(t *testing.T) {
+	t.Setenv("TEST_FIND_TRACE", "")
+	for _, tc := range []struct {
+		value string
+		want  bool
+	}{
+		{"", false},
+		{"off", false},
+		{"0", false},
+		{"maybe", false},
+		{"ON", true},
+		{"on", true},
+		{"1", true},
+		{"true", true},
+		{"yes", true},
+	} {
+		p := filepath.Join(t.TempDir(), Name)
+		body := "SERVER_PORT = \"7788\"\n"
+		if tc.value != "" {
+			body += "TEST_FIND_TRACE = \"" + tc.value + "\"\n"
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(p, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(cfg.Problems) != 0 {
+			t.Errorf("TEST_FIND_TRACE=%q is reported as an unknown setting: %v", tc.value, cfg.Problems)
+		}
+		if cfg.FindTrace != tc.want {
+			t.Errorf("TEST_FIND_TRACE=%q gives FindTrace=%v, want %v", tc.value, cfg.FindTrace, tc.want)
+		}
+	}
+}
+
 // AUTO_INDEX is a retired setting. Older config files still load, while index
 // preparation is driven by dictionary discovery rather than search requests.
 func TestLegacyAutoIndexSettingIgnored(t *testing.T) {

@@ -141,6 +141,7 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 	s.ImportURLHosts = cfg.ImportURLHosts
 	s.ImportInsecure = cfg.ImportInsecure
 	s.AllowRemoteDelete = cfg.AllowRemoteDelete
+	s.FindTrace = cfg.FindTrace
 	s.BrowserExtensions = cfg.BrowserExtensions
 	s.WebOrigins = cfg.WebOrigins
 	s.TrustedHosts = cfg.TrustedHosts

@@ -1354,6 +1354,7 @@
   "articleFind.resultBlock": "articles {start}–{end}",
   "articleFind.noMatches": "No matches",
   "articleFind.showFailed": "Could not show the match",
+  "articleFind.cacheUnavailable": "The found articles are no longer available. Run the main search again.",
   "articleFind.fromStart": "From the beginning",
   "articleFind.fromEnd": "From the end",
   "articleFind.finish": "Finish finding",

@@ -1372,6 +1372,7 @@
   "articleFind.resultBlock": "статьи {start}–{end}",
   "articleFind.noMatches": "Совпадений нет",
   "articleFind.showFailed": "Не удалось показать совпадение",
+  "articleFind.cacheUnavailable": "Найденные статьи больше недоступны. Повторите основной поиск.",
   "articleFind.fromStart": "С начала",
   "articleFind.fromEnd": "С конца",
   "articleFind.finish": "Завершить поиск",

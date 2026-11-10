@@ -312,6 +312,11 @@ type Server struct {
 	// default, so a Server built directly in a test behaves like a real one.
 	AllowRemoteDelete bool
 
+	// FindTrace shows the "Trace all" controls of the Find in articles strip
+	// (config TEST_FIND_TRACE, a developer switch). New() leaves it false, so a
+	// page served by a test - and a release - carries no trace controls.
+	FindTrace bool
+
 	// Morph lemmatizes a word when a search finds nothing anywhere, so an
 	// inflected form still reaches its entry (O3, config MORPH_CACHE). Nil -
 	// which is what a Server built directly in a test has - is disabled, and
@@ -626,6 +631,10 @@ func (s *Server) basePage() []byte {
 		page = strings.ReplaceAll(page, "{{NEAR_WORDS_MIN}}", strconv.Itoa(ftsq.NearMin))
 		page = strings.ReplaceAll(page, "{{NEAR_WORDS_DEFAULT}}", strconv.Itoa(ftsq.NearDefault))
 		page = strings.ReplaceAll(page, "{{NEAR_WORDS_MAX}}", strconv.Itoa(ftsq.NearMax))
+		// The find trace controls are a developer switch (TEST_FIND_TRACE): the
+		// page asks for them as a boolean and the strip keeps them hidden unless
+		// this build's configuration says otherwise.
+		page = strings.ReplaceAll(page, "{{FIND_TRACE}}", strconv.FormatBool(s.FindTrace))
 		page = strings.ReplaceAll(page, "{{HEADWORDCSS}}", assetTag(headwordControlCSS))
 		// The role stylesheet for articles wudict writes itself
 		// (internal/artmark). It is a floor under BOTH article surfaces, so

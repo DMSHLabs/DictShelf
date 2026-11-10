@@ -167,7 +167,13 @@ function renderStrip(){
     const position=Number(state.position)||0,total=Number(state.total)||0;
     const pending=!!found?.pending;
     const atStart=!!state.found&&position<=1;
-    const atEnd=!!state.found&&!!state.complete&&total>0&&position>=total;
+    /* The end of the track is either an exact count the position reached, or the
+       outermost match a walk from the end found: after "to the last match" the
+       count is usually still provisional, and asking for one more press to
+       learn that nothing follows left the down arrow alive at the end of the
+       answer. `fromEnd` is the server's own "how many matches stand between
+       this one and the end", so 1 IS the last match. */
+    const atEnd=!!state.found&&(Number(state.target?.fromEnd)===1||!!state.complete&&total>0&&position>=total);
     $("articleFindLabel").textContent=options.query;
     $("articleFindLabel").title=options.query;
     // The strip is where a reader of the page looks, and the dialog that would
@@ -255,9 +261,17 @@ function remoteFindID(){
 let remoteFindDiagnosticRun=0;
 let remoteFindTraceRun=0,remoteFindTraceActive=false,remoteFindTraceStop=false,remoteFindDiagnosticTail=Promise.resolve();
 function remoteFindTraceEnabled(){return searchArticleDiagnosticsEnabled()||remoteFindTraceActive}
+/* "Trace all" is a developer switch, not a release feature (config
+   TEST_FIND_TRACE, read by the page as window.wudictFindTrace): the walk it
+   starts writes every step into the system log, and a reader has no use for
+   it. Both controls exist in the markup and stay hidden unless the
+   installation asked for them. */
+function remoteFindTraceAvailable(){return window.wudictFindTrace===true}
 function syncRemoteFindTraceButton(){
-  const button=$("articleFindTrace");
+  const button=$("articleFindTrace"),picker=$("articleFindTraceRun");
   if(!button)return;
+  if(!remoteFindTraceAvailable()){button.hidden=true;if(picker)picker.hidden=true;return}
+  if(picker)picker.hidden=false;
   const fullText=stripLayer==="answer"&&!!fullTextNavigation;
   const visible=fullText||stripLayer==="found"&&!!remoteFind?.id;
   button.hidden=false;
@@ -329,6 +343,18 @@ function findAnchor(){
 function remoteFindURL(record,action,extra={}){
   return "/api/search?"+new URLSearchParams({cacheAction:action,cacheID:record.id,origin:location.origin,...extra});
 }
+/* A refusal reaches the reader as a sentence, not as the wire body: the strip
+   shows it where the position goes. The raw text still goes to the system log,
+   which is where a cause belongs. Every refusal of the article cache means the
+   answer's result pages are gone from the server, and a new main search is the
+   way back - so that is what the sentence says, whatever the body holds. */
+function remoteFindReason(body){
+  const text=String(body||"").trim();
+  let reason="";
+  try{reason=String(JSON.parse(text)?.error||"")}catch(_){}
+  if(reason||!text||text.startsWith("{")||text.length>160)return t("articleFind.cacheUnavailable");
+  return text;
+}
 async function remoteFindFetch(record,action,extra={}){
 	const started=performance.now();
   findProgressStart();
@@ -343,7 +369,10 @@ async function remoteFindFetch(record,action,extra={}){
   if(!response.ok){
     const error=await response.text();
     await remoteFindDiagnostic(record,"navigation_response",{elapsedMs:Math.round(performance.now()-started),detail:`action=${action}; status=${response.status}; error=${String(error).slice(0,700)}`});
-    throw new Error(error||"article search failed");
+    // A refusal ends the burst of work: the strip's thin line is the sign that
+    // something is happening, and it must not go on for a request that is over.
+    findProgressEnd();
+    throw new Error(remoteFindReason(error));
   }
   const state=await response.json();
   findProgressPing();
@@ -381,7 +410,11 @@ async function startRemoteFind(jump=false){
       cacheOrders:context.orders.join(","),q:options.query,mode:searchMode(),
       resultQuery:context.query,resultMode:context.mode,ignoreDiacritics:context.ignore?"1":"0",
       matchCase:options.matchCase?"1":"0",examples:options.examples?"1":"0",nearWords:String(nearWords()),
-      pageSize:String(size),firstSize:String(firstSize),prime:"0",groupID:context.groupID,rungs:context.rungs.join(",")};
+      // prime:"1" - the cursor STANDS on the first match, because Find paints it.
+      // The peek start (`prime=0`) leaves the cursor in front of that match, so
+      // the reader's first down-arrow only selected the word already on screen:
+      // a press that did nothing, and a second press that moved.
+      pageSize:String(size),firstSize:String(firstSize),prime:"1",groupID:context.groupID,rungs:context.rungs.join(",")};
     // Down from the reader's place, then up from it: a word above them is not
     // missed for being behind them. Only a miss in both directions is "no such
     // expression", and that is answered by an empty answer, not by an error.
@@ -426,7 +459,9 @@ function serverFindPosition(){
   // the number counts from the edge the reader came from, and a small arrow says
   // which way they are travelling.
   const fromEnd=Number(state.target?.fromEnd)||0;
-  const shown=fromEnd>0?fromEnd:Number(state.position)||1;
+  // An exact count knows the canonical number, so the edge-relative reading
+  // stops: otherwise the last match kept reading "1 of 4" once the count closed.
+  const shown=!state.complete&&fromEnd>0?fromEnd:Number(state.position)||1;
   const direction=total&&!state.complete?(fromEnd>0?"↑ ":"↓ "):"";
   return t("articleFind.position",{current:direction+shown,total:String(total)+(state.complete?"":"+")});
 }
@@ -577,18 +612,59 @@ function findHitOnScreen(hit,det){
   if(!rect.width&&!rect.height)return false;
   /* A closed <details> is skipped in layout rather than zeroed: its content
      answers with a plausible box while nothing of it is drawn. checkVisibility
-     is not fooled by that. Its options stay at their defaults on purpose:
-     contentVisibilityAuto:true would also reject the marks inside our own
-     content-visibility:auto result list, which are exactly the off-screen ones
-     worth scrolling to. */
+     at its defaults is not fooled by that. */
   const parent=hit.range.startContainer.parentElement;
   if(parent?.checkVisibility&&!parent.checkVisibility())return false;
+  /* A subtree the browser has not laid out (content-visibility:auto) is the
+     other way to get a real-looking box over nothing: its place is an estimate
+     from contain-intrinsic-size, not the article's own layout. That is why the
+     answer may sit "on screen" and still not be there. */
+  if(!findHitLaid(hit))return false;
   const top=topOf(hit),bottom=top+rect.height;
   // Beyond the document's end is a box for content the page has not laid out
   // (content-visibility:auto), not a place the reader can be sent to.
   if(top+scrollY>document.documentElement.scrollHeight)return false;
   const {ceiling,floor}=findViewport(det);
   return bottom>ceiling&&top<floor;
+}
+/* Is the word's own box a laid-out one? Both the folded section and the skipped
+   subtree still answer getBoundingClientRect; checkVisibility is what tells them
+   apart, and only its contentVisibilityAuto option reads the second case. A mark
+   that is merely off screen is laid out - the reveal scrolls to it - so this
+   asks about layout, never about position. */
+function findHitLaid(hit){
+  const parent=hit.range.startContainer.parentElement;
+  if(!parent?.checkVisibility)return true;
+  return parent.checkVisibility({contentVisibilityAuto:true});
+}
+/* What is actually at the word's own pixel? A box can be inside the viewport and
+   still draw nothing there - covered by the strip, inside a folded section, in a
+   subtree that was never laid out. The browser answers "what is at this point"
+   better than any rectangle arithmetic, so the reveal believes this and nothing
+   else. A frame is asked in its own document: the outer point only ever names
+   the frame. Returns null when the browser cannot say. */
+function findHitAtPoint(hit){
+  const rect=hit.range.getBoundingClientRect();
+  const x=rect.left+Math.min(Math.max(rect.width/2,1),24),y=rect.top+rect.height/2;
+  /* A frame renders its own document, and the range's rect IS in that document's
+     coordinates - so the point is asked there unshifted. Shifting it by the
+     frame's own box (which this did first) moved the point outside the frame and
+     answered "not visible" for a word the reader could see. A frame the point
+     cannot answer for is left to the geometry, which already placed its box. */
+  const frame=hit.host.shadowRoot?null:hit.host.contentDocument;
+  if(frame){
+    if(x<0||y<0||x>=hit.host.clientWidth||y>=hit.host.clientHeight)return null;
+    try{
+      const inner=frame.elementFromPoint(x,y);
+      return inner&&frame.body?.contains(inner)===true?true:null;
+    }catch(_){return null}
+  }
+  if(!(x>=0&&y>=0&&x<innerWidth&&y<innerHeight))return null;
+  try{
+    const at=document.elementFromPoint(x,y);
+    if(!at)return null;
+    return hit.host===at||hit.host.contains(at)||at.contains(hit.host);
+  }catch(_){return null}
 }
 /* The band a match may stand in: below the bar and the dictionary's own header,
    above the strip. One place computes it, because the check and the alignment
@@ -603,27 +679,34 @@ function findViewport(det){
    move while the page stood still. So the first alignment waits for no frame:
    it scrolls, measures and repeats, and it says whether the word was reached. */
 async function revealFindHit(hit,det,token){
-  for(let attempt=0;attempt<12;attempt++){
-    if(token!==remoteFindToken)return false;
+  let attempts=0, at=null;
+  for(;attempts<12;attempts++){
+    if(token!==remoteFindToken)return {shown:false,attempts,at};
     // The block was replaced under us: no scroll can reach it, and the caller
     // re-establishes the target instead of spending its attempts here.
-    if(!hit.host.isConnected)return false;
-    if(findHitOnScreen(hit,det))return true;
+    if(!hit.host.isConnected)return {shown:false,attempts,at};
+    at=findHitAtPoint(hit);
+    // On screen by the numbers AND at the word's own pixel: a mark that is in
+    // the band but covered (the strip, a folded section, a skipped subtree) is
+    // not shown, and saying it is was the report this check exists for.
+    if(findHitOnScreen(hit,det)&&at!==false)return {shown:true,attempts,at};
     const rect=hit.range.getBoundingClientRect(),parent=hit.range.startContainer.parentElement;
     // A box that draws nothing belongs to a folded section of the article (a
     // wiki table of contents, a folded example). Open the fold that holds the
     // word - the reader asked to see it - and measure again.
     for(let el=parent;el;el=el.parentElement)if(el.tagName==="DETAILS"&&!el.open)el.open=true;
-    const top=topOf(hit);
-    if(rect.width||rect.height){
-      /* A place beyond the document's own end is not a place yet: the list is
-         content-visibility:auto, so a block nobody has scrolled through reports
-         plausible boxes for content the page is not laid out for, and a scroll
-         to them is clamped. Bringing the ARTICLE in makes the browser lay its
-         subtree out; the next attempt measures the word for real and aligns it.
-         This is the case the counter used to move across alone. */
+    if(!findHitLaid(hit)){
+      /* The browser has not laid the word's part of the article out: its box is
+         an estimate, so aiming at a coordinate cannot work. Bringing the
+         ARTICLE in is what makes the browser lay the subtree out; the next
+         attempt measures the word for real. */
+      (hit.host||det)?.scrollIntoView({block:"center",behavior:"instant"});
+    }else if(rect.width||rect.height){
+      const top=topOf(hit);
+      /* A place beyond the document's own end is not a place yet: a scroll to it
+         is clamped, so the article is brought in first and measured next. */
       if(top+scrollY>document.documentElement.scrollHeight)hit.host.scrollIntoView({block:"center",behavior:"instant"});
-      else revealAt(top,det,attempt>0);
+      else revealAt(top,det,attempts>0);
     }else{
       // No box at all: WebView2 has not laid the article out. Scrolling the
       // text's own element in makes it do so, which is what the settle loop's
@@ -632,7 +715,7 @@ async function revealFindHit(hit,det,token){
     }
     await new Promise(resolve=>setTimeout(resolve,120));
   }
-  return findHitOnScreen(hit,det);
+  return {shown:findHitOnScreen(hit,det)&&findHitAtPoint(hit)!==false,attempts,at};
 }
 /* "" is the word on screen; anything else is the reason it is not. The caller
    puts that reason on the strip's layer, so a click that cannot show its match
@@ -689,9 +772,15 @@ async function paintRemoteFindTarget(target,state,token){
   dialog.close();strip.hidden=false;measure();
   restoreExamples();showExample(matches[index]);paint();
   // The word itself has to reach the page before the counter may say it did.
-  const shown=await revealFindHit(matches[index],det,token);
+  const reveal=await revealFindHit(matches[index],det,token);
   if(token!==remoteFindToken)return failed;
-  if(!shown){
+  // What the check saw, in the log: "the counter says it is here and nothing is"
+  // is only diagnosable from these numbers.
+  if(remoteFind){
+    const rect=matches[index].range.getBoundingClientRect(),view=findViewport(det);
+    await remoteFindDiagnostic(remoteFind,"navigation_target_reveal",{detail:`dict=${target.dict}; article=${target.articleIndex}; block=${blockStart}; match=${index}; shown=${reveal.shown}; attempts=${reveal.attempts}; at_point=${reveal.at}; laid=${findHitLaid(matches[index])}; top=${Math.round(topOf(matches[index]))}; height=${Math.round(rect.height)}; scroll=${Math.round(scrollY)}; viewport=${innerHeight}; doc=${document.documentElement.scrollHeight}; ceiling=${Math.round(view.ceiling)}; floor=${Math.round(view.floor)}; host=${host.tagName.toLowerCase()}${host.shadowRoot?":shadow":host.contentDocument?":frame":""}; block_open=${det.open}; strip=${strip.hidden?"hidden":Math.round(strip.offsetHeight)}; bar=${Math.round(barH())}`});
+  }
+  if(!reveal.shown){
     // A step the reader cannot see is recorded as an empty place - the trace's
     // "stuck" count is about the counter, and this is the page standing still.
     remoteFindSpot="";
@@ -726,7 +815,11 @@ async function moveRemoteFind(step){
     if(request!==remoteFindRequestSeq||token!==remoteFindToken||remoteFind!==record)return;
     if(state.found){record.state=state;const paintStarted=performance.now();record.error=await showRemoteFindTarget(state.target,state,token);
       await remoteFindDiagnostic(record,"navigation_target_painted",{elapsedMs:Math.round(performance.now()-paintStarted),detail:`dict=${state.target?.dict||""}; article=${state.target?.articleIndex??""}; block=${state.target?.blockStart??""}; position=${state.position||0}/${state.total||0}; success=${!record.error}`})}
-    else record.state={...record.state,...state};
+    else /* A step that found nothing is the end of the track, not a lost answer:
+          the reader still stands on the match they were looking at, and only
+          the count's closure changes. Turning `found` off here emptied the
+          strip into "no matches" and re-enabled both arrows at the very end. */
+      record.state={...record.state,...state,found:!!record.state?.target};
     return !!state.found&&!record.error;
   }catch(error){record.error=String(error?.message||error);await remoteFindDiagnostic(record,"navigation_trace_error",{detail:`action=move; error=${record.error.slice(0,700)}`});return false}
   finally{if(request===remoteFindRequestSeq&&token===remoteFindToken){remoteFindPending=false;paint()}}
@@ -797,10 +890,14 @@ async function runFoundTraceRun(record,run){
     if(run==="forward"||run==="backward"){
       await (run==="forward"?remoteFindEdge(1):remoteFindEdge(-1));
       if(remoteFind!==record){reason="search_changed"}
+      /* An edge that could not be shown is a failure of the RUN, not the end of
+         the answer: without this the walk started from wherever the cursor was
+         and reported "end" with no steps, which reads as "there was nothing". */
+      else if(record.error)reason="error";
       let previous=Number(record.state?.position)||0;
       if(previous)visited.push({p:previous,at:remoteFindTargetAt(),spot:remoteFindSpot});
       const direction=run==="forward"?1:-1;
-      while(!remoteFindTraceStop&&remoteFind===record&&steps<100000){
+      while(!remoteFindTraceStop&&remoteFind===record&&reason==="done"&&steps<100000){
         const state=record.state||{},position=Number(state.position)||0,total=Number(state.total)||0;
         if(direction>0&&state.complete&&total>0&&position>=total)break;
         if(direction<0&&position<=1)break;
@@ -1258,12 +1355,14 @@ $("articleFindScrollToMatch").onclick = () => {
   fullTextNavigation?.restore?.();
 };
 $("articleFindTrace").onclick = () => {
+  if(!remoteFindTraceAvailable())return;
   if(remoteFindTraceActive){remoteFindTraceStop=true;return}
   if(stripLayer==="found"){void runRemoteFindTrace("forward");return}
   void runFullTextTrace("forward");
 };
 $("articleFindTraceRun").addEventListener("change",()=>{
   const select=$("articleFindTraceRun"),run=select.value;
+  if(!remoteFindTraceAvailable()){select.value="";return}
   select.value="";
   window.wudictThemedSelects?.articleFindTraceRun?.sync();
   if(remoteFindTraceActive)return;

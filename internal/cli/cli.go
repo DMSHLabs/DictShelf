@@ -1456,6 +1456,7 @@ Hint: pick another port with --port, e.g.:  dictshelf --port %s
 	srv.Speexdec = sxPath
 	useLemmaClient(cfg.LemmaURL, cfg.ImportInsecure)
 	srv.AllowRemoteDelete = cfg.AllowRemoteDelete
+	srv.FindTrace = cfg.FindTrace
 	srv.BrowserExtensions = cfg.BrowserExtensions
 	srv.WebOrigins = cfg.WebOrigins
 	srv.TrustedHosts = cfg.TrustedHosts
