@@ -310,17 +310,23 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		logx.SystemDiagnostic("desktop window size not restored: no request channel")
 	} else if value, err := desktopRequest(context.Background(), "desktopWindowSize", ""); err != nil {
 		logx.Warn("could not read the desktop window size: %v", err)
-	} else if size, ok := value.(map[string]any); !ok {
-		logx.SystemDiagnostic("desktop window size not restored: nothing saved")
 	} else {
-		width, widthOK := size["width"].(float64)
-		height, heightOK := size["height"].(float64)
-		if widthOK && heightOK && width >= 480 && width <= 10000 && height >= 320 && height <= 10000 {
-			windowWidth, windowHeight = uint(width), uint(height)
+		// The answer is the server's own struct on this side of the bridge and an
+		// object on the other, so it is asked for the same way the hot keys are:
+		// one JSON round-trip reads either shape.
+		var size struct {
+			Width  float64 `json:"width"`
+			Height float64 `json:"height"`
+		}
+		if encoded, encodeErr := json.Marshal(value); encodeErr == nil {
+			_ = json.Unmarshal(encoded, &size)
+		}
+		if size.Width >= 480 && size.Width <= 10000 && size.Height >= 320 && size.Height <= 10000 {
+			windowWidth, windowHeight = uint(size.Width), uint(size.Height)
 			windowCenter = true
 			logx.SystemDiagnostic("desktop window size restored width=%d height=%d", windowWidth, windowHeight)
 		} else {
-			logx.Warn("desktop window size not restored: saved value is not usable (%v)", value)
+			logx.SystemDiagnostic("desktop window size not restored: nothing saved")
 		}
 	}
 	webviewStarted := time.Now()
