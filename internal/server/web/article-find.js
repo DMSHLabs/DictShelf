@@ -528,6 +528,13 @@ function serverFindRanges(root,occurrences){
   const doc=root.ownerDocument||root,win=doc.defaultView;
   if(!win)return [];
   const nodes=findTextNodes(root),out=[];
+  // A place in the article is named by its distance in CHARACTERS from the
+  // article's first letter, not by the index of a text node: the tree is rebuilt
+  // when a block of articles is reloaded, and node indices move with it while
+  // the text does not.
+  const base=new Array(nodes.length);
+  let chars=0;
+  for(let index=0;index<nodes.length;index++){base[index]=chars;chars+=nodes[index].data.length}
   let cursor=0,offset=0,missed=0;
   for(const occurrence of occurrences||[]){
     const spans=occurrence?.spans||[];
@@ -546,8 +553,8 @@ function serverFindRanges(root,occurrences){
     // Where this range sits in the article's own text order: two positions that
     // paint the same range are the same place on screen, whatever the counter
     // says, and that is exactly the bug worth catching.
-    const nodeAt=nodes.indexOf(range.startContainer);
-    const spot=nodeAt>=0?`${nodeAt}:${range.startOffset}-${range.endOffset}`:"";
+    const startAt=nodes.indexOf(range.startContainer),endAt=nodes.indexOf(range.endContainer);
+    const spot=startAt>=0&&endAt>=0?`${base[startAt]+range.startOffset}-${base[endAt]+range.endOffset}`:"";
     out.push({range,spot,example:range.startContainer.parentElement?.closest(".wu-xonly,.wu-sec,.dsl_opt,.wu-exonly,.wu-ex,.dsl_ex")||null});
   }
   if(missed)window.wudictArticleFind?.traceEvent?.("navigation_trace_ranges",`occurrences=${(occurrences||[]).length}; painted=${out.length}; missed=${missed}`);
