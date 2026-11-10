@@ -344,6 +344,13 @@ func (r *Registry) queueNewDictionaries() error {
 		}
 		for _, other := range family {
 			key := other.indexRemovalKey()
+			// Resolve before believing "no index": a folder prepared from this file
+			// under another path - a library carried from another machine - holds
+			// the index already. Asking here as well as below is what keeps a
+			// pending entry from a previous run from rebuilding that data.
+			if !hasBrowseIndex(other.Path) {
+				store.ResolveDir(other.Path)
+			}
 			if wanted, pending := f.DSLPending[key]; pending {
 				// A pending receipt may have been written before the user enabled
 				// optional indexes. Keep existing features and add the current
@@ -364,13 +371,6 @@ func (r *Registry) queueNewDictionaries() error {
 					changed = true
 				}
 				continue
-			}
-			// "No index" is asked of the library before it is believed: a folder
-			// prepared from this very file under another path - the copy of a
-			// library made on another machine - holds the index already and is
-			// re-claimed here instead of being rebuilt beside (store.ResolveDir).
-			if !hasBrowseIndex(other.Path) {
-				store.ResolveDir(other.Path)
 			}
 			// A dictionary with no index is queued, whether it never had one or
 			// had one that is now gone: the headword index is mandatory, so
@@ -471,6 +471,16 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 			}
 			e.gen.Add(1)
 			continue
+		}
+		// Ask again whether the library holds a folder for this file: between
+		// filling the queue and running it a copy can have been resolved
+		// (store.ResolveDir), and a job that reads "prepared" wrongly rebuilds data
+		// that is there. The PLAN stays the queue's - it is the request, and an
+		// explicit removal must happen; the merging of defaults with what a
+		// database already has is queueNewDictionaries' job, done while it fills
+		// the queue.
+		if !hasBrowseIndex(e.Path) {
+			store.ResolveDir(e.Path)
 		}
 		pending = append(pending, pendingDictionaryIndex{entry: e, key: key, plan: v, prepared: hasBrowseIndex(e.Path)})
 	}
