@@ -719,7 +719,7 @@ async function runFoundTraceRun(record,run){
         steps++;timings.push(performance.now()-stepStarted);
         visited.push({p:position,at:remoteFindTargetAt(),spot:remoteFindSpot});
         landed[label]=position;
-        await remoteFindDiagnostic(record,"navigation_trace_step",{completed:Math.min(100000,steps),total:Math.min(100000,total),detail:`trace=${record.traceRun}; source=found_articles; run=jumps; step=${steps}; ${label}; to=${position}; at=${remoteFindTargetAt()}; step_ms=${Math.round(performance.now()-stepStarted)}`});
+        await remoteFindDiagnostic(record,"navigation_trace_step",{completed:Math.min(100000,steps),total:Math.min(100000,total),detail:`trace=${record.traceRun}; source=found_articles; run=jumps; step=${steps}; ${label}; to=${position}; at=${remoteFindTargetAt()}; spot=${remoteFindSpot}; step_ms=${Math.round(performance.now()-stepStarted)}`});
       };
       await gotoRemoteFind(landing);
       if(Number(record.state?.position))visited.push({p:Number(record.state.position),at:remoteFindTargetAt()});
