@@ -219,7 +219,11 @@ func reconcileText(src string, t Target, h Hooks, out *Outcome) (p Prepared, dir
 	if textDB == "" {
 		if dir == "" {
 			var ok bool
-			if dir, ok = LookupDir(src); !ok {
+			// ResolveDir, not LookupDir: a folder prepared from this file under
+			// another path (a library copied from another machine, a moved or
+			// renamed source) is this dictionary's prepared data, and building a
+			// second one beside it is the one thing a preparation must never do.
+			if dir, ok = ResolveDir(src); !ok {
 				if dir, err = ClaimDir(src); err != nil {
 					return p, dir, err
 				}

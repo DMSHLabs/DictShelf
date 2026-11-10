@@ -365,6 +365,13 @@ func (r *Registry) queueNewDictionaries() error {
 				}
 				continue
 			}
+			// "No index" is asked of the library before it is believed: a folder
+			// prepared from this very file under another path - the copy of a
+			// library made on another machine - holds the index already and is
+			// re-claimed here instead of being rebuilt beside (store.ResolveDir).
+			if !hasBrowseIndex(other.Path) {
+				store.ResolveDir(other.Path)
+			}
 			// A dictionary with no index is queued, whether it never had one or
 			// had one that is now gone: the headword index is mandatory, so
 			// "there is no index" is a state to leave, never a state to respect.

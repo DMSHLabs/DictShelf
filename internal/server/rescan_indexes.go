@@ -334,7 +334,10 @@ func (r *Registry) updateDictionaryIndexesContext(ctx context.Context, req resca
 		if e.builtin || store.IsTextDB(e.Path) {
 			continue
 		}
-		_, prepared := store.LookupDir(e.Path)
+		// ResolveDir, not LookupDir: a prepared folder recognised by content is
+		// this dictionary's index even though no claim names it yet, and a rescan
+		// that reported it missing would queue a rebuild of data it already has.
+		_, prepared := store.ResolveDir(e.Path)
 		_, pending := rec.DSLPending[e.indexRemovalKey()]
 		// A dictionary with no prepared index is fresh, full stop: the index is
 		// mandatory, so there is no remembered state that would make its absence

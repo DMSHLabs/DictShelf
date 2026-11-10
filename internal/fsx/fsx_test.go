@@ -151,3 +151,61 @@ func TestSamePath(t *testing.T) {
 		}
 	}
 }
+
+// HashTail is the other half of a file's identity: the end of it. The
+// interesting case is two files that share a size and a head, which is what an
+// edit past the sampled window leaves behind.
+func TestHashTail(t *testing.T) {
+	dir := t.TempDir()
+	const window = 1 << 20
+	head := strings.Repeat("h", window)
+	same := filepath.Join(dir, "same")
+	if err := os.WriteFile(same, []byte(head+strings.Repeat("t", window)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	changed := filepath.Join(dir, "changed")
+	if err := os.WriteFile(changed, []byte(head+strings.Repeat("T", window)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if HashSample(same) != HashSample(changed) {
+		t.Fatal("the test cannot see the tail: the heads already differ")
+	}
+	if HashTail(same) == HashTail(changed) {
+		t.Error("HashTail does not reach the end of the file")
+	}
+	if got := HashTail(same); got == "" || got != HashTail(same) {
+		t.Errorf("HashTail is not a stable answer: %q", got)
+	}
+	// A file shorter than the window is the whole file, which is also its head.
+	short := filepath.Join(dir, "short")
+	if err := os.WriteFile(short, []byte("abc"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if HashTail(short) != HashSample(short) {
+		t.Error("a short file's tail is not its whole content")
+	}
+	if got := HashTail(filepath.Join(dir, "absent")); got != "" {
+		t.Errorf("missing file: %q, want empty", got)
+	}
+}
+
+// ForeignAbs answers the one question a copied library forces: is this absolute
+// path even a path of this operating system?
+func TestForeignAbs(t *testing.T) {
+	windows, posix := `D:\dicts\x.dsl`, "/storage/emulated/0/DictShelf/x.dsl"
+	foreign, native := windows, posix
+	if runtime.GOOS == "windows" {
+		foreign, native = posix, windows
+	}
+	if !ForeignAbs(foreign) {
+		t.Errorf("%q is not recognised as another OS's path", foreign)
+	}
+	if ForeignAbs(native) {
+		t.Errorf("%q is this OS's own path", native)
+	}
+	for _, rel := range []string{"", "dicts/x.dsl", "x.dsl"} {
+		if ForeignAbs(rel) {
+			t.Errorf("%q is relative, not another OS's absolute path", rel)
+		}
+	}
+}

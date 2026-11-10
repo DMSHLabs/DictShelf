@@ -364,7 +364,12 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 		"ingest_version":    fmt.Sprint(IngestVersion),    // which IngestPlan wrote this (stale.go)
 		"body_encoding":     bodyEncodingLabel,
 		"created":           time.Now().UTC().Format(time.RFC3339),
-		"source_sha256_1M":  fsx.HashSample(srcMeta.Path),
+		// The source's identity, not just its change signal: the size, and the
+		// hashes of its head and tail. A copy of the library on another machine
+		// is recognised by this pair alone (store's ResolveDir), so it must be
+		// written here, where the file is already open for reading.
+		"source_sha256_1M":   fsx.HashSample(srcMeta.Path),
+		"source_sha256_tail": fsx.HashTail(srcMeta.Path),
 	}
 	if revision, err := dict.SourceRevision(srcMeta.Path); err != nil {
 		return rep, err

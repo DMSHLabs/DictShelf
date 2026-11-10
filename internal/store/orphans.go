@@ -66,7 +66,17 @@ type Orphan struct {
 func sourceGone(src string) bool {
 	// Comparison descriptors are references, not surviving dictionary sources.
 	src = dict.SourceInput(src)
-	if src == "" || !filepath.IsAbs(src) {
+	if src == "" {
+		return false
+	}
+	// A library copied from another machine keeps that machine's absolute path,
+	// which cannot name a file here - absent, not unknown. Saying so is what lets
+	// Relink (and the orphan list) treat such a folder like one whose source was
+	// moved rather than one nobody can judge.
+	if fsx.ForeignAbs(src) {
+		return true
+	}
+	if !filepath.IsAbs(src) {
 		return false
 	}
 	_, err := os.Stat(src)
@@ -290,7 +300,16 @@ func sameContent(meta map[string]string, st os.FileInfo, p string, hash *string)
 		if *hash == "" {
 			*hash = fsx.HashSample(p)
 		}
-		return *hash == want
+		if *hash != want {
+			return false
+		}
+		// The tail is recorded by everything this build prepares, and it is the
+		// half that carries the whole-content checksum of a .dz or a .zim. A
+		// folder that predates it is judged by the head alone, as before.
+		if wantTail := meta["source_sha256_tail"]; wantTail != "" {
+			return fsx.HashTail(p) == wantTail
+		}
+		return true
 	}
 	t, err := time.Parse(time.RFC3339, meta["source_mtime"])
 	return err == nil && t.Equal(st.ModTime().UTC().Truncate(time.Second))

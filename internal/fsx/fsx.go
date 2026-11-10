@@ -19,6 +19,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 )
 
 // ErrNotRegular: the path is a directory, a pipe, a device or a socket. A pipe
@@ -215,4 +217,54 @@ func HashSample(path string) string {
 	h := sha256.New()
 	_, _ = io.CopyN(h, f, 1<<20)
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+// HashTail is HashSample for the END of the file: SHA-256 of its last MiB (the
+// whole file when shorter), hex-encoded, and "" when it cannot be opened.
+//
+// The pair is what lets the sample identify a file rather than only notice a
+// change. For the formats this app reads, the tail carries a checksum of the
+// whole content - gzip's CRC32 and ISIZE (.dz/.gz), a ZIM's MD5 - so matching
+// head and tail checks the file, not a sample of it; for a source whose tail is
+// plain content the pair is evidence, and the caller compares the size first
+// (store's source signature).
+func HashTail(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil || !st.Mode().IsRegular() {
+		return ""
+	}
+	off := st.Size() - 1<<20
+	if off < 0 {
+		off = 0
+	}
+	if _, err := f.Seek(off, io.SeekStart); err != nil {
+		return ""
+	}
+	h := sha256.New()
+	// A file shorter than the window is the whole file: the copy ends early
+	// and that is the answer, not a failure.
+	if _, err := io.CopyN(h, f, 1<<20); err != nil && !errors.Is(err, io.EOF) {
+		return ""
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// ForeignAbs reports that path is absolute for ANOTHER operating system than the
+// one running: a Windows drive path on a Unix-like system, or a POSIX path on
+// Windows. A prepared library copied between machines keeps the path of the
+// machine that wrote it, and that path names nothing here - which is a fact
+// about the path, not a guess about the file.
+func ForeignAbs(path string) bool {
+	if path == "" {
+		return false
+	}
+	if runtime.GOOS == "windows" {
+		return strings.HasPrefix(path, "/") && !strings.HasPrefix(path, "//")
+	}
+	return len(path) >= 3 && path[1] == ':' && (path[2] == '\\' || path[2] == '/')
 }

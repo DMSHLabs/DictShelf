@@ -209,7 +209,25 @@ func LookupDir(srcPath string) (string, bool) {
 	if dir, ok := ownedDir(candidateDirs(srcPath), srcPath); ok {
 		return dir, true
 	}
-	return byteCutDir(srcPath)
+	if dir, ok := byteCutDir(srcPath); ok {
+		return dir, true
+	}
+	// The folder's NAME is a hint - it derives from the file name as it was when
+	// the folder was claimed - and the receipt is the ownership. Without this
+	// walk a renamed source could never reach its own prepared data, however
+	// clearly the receipt named it: the candidates above are all spelled after
+	// the new name. Called only when the cheap answer missed, so an owned
+	// dictionary costs exactly what it did before.
+	if dirs, err := SourceFolders(srcPath); err == nil {
+		for _, dir := range dirs {
+			// An interrupted claim is a receipt without a database; claiming it
+			// here would skip the grace claimFrom gives one.
+			if fsx.FileExists(TextDBPath(dir)) {
+				return dir, true
+			}
+		}
+	}
+	return "", false
 }
 
 // ownedDir is the first of cands holding a text.db prepared from srcPath.
@@ -626,13 +644,18 @@ func writeInfo(dir, source string) error {
 	// stale, or empty. Overwriting the claim with it would orphan the folder
 	// from its own source (LookupDir would never find it again).
 	// The keep marker (D156) is the receipt's other fact of its own: a user's
-	// decision, so a regeneration carries it over like the claim.
+	// decision, so a regeneration carries it over like the claim. The adoption
+	// record is the third - how this folder came to claim a source it was not
+	// prepared from - and it is history too: a rebuild that re-claims the
+	// folder writes a fresh receipt and starts the record over.
 	kept := false
+	adopted, adoptedFrom := "", ""
 	if prior, err := readInfo(InfoPath(dir)); err == nil {
 		if source == "" {
 			source = prior["source"]
 		}
 		kept = prior[keepKey] != ""
+		adopted, adoptedFrom = prior[adoptedKey], prior[adoptedFromKey]
 	}
 	if source == "" {
 		source = meta["source_path"]
@@ -673,10 +696,22 @@ func writeInfo(dir, source string) error {
 	fmt.Fprintf(&b, "source = %s\n", source)
 	fmt.Fprintf(&b, "source_size = %s\n", meta["source_size"])
 	fmt.Fprintf(&b, "source_mtime = %s\n", meta["source_mtime"])
+	// The source's identity: the pair a folder is recognised by when this
+	// machine is not the one that prepared it (store's ResolveDir). Copied from
+	// the meta like everything else here, so a listing can compare sizes
+	// without opening a database.
+	fmt.Fprintf(&b, "source_sha256_head = %s\n", meta["source_sha256_1M"])
+	fmt.Fprintf(&b, "source_sha256_tail = %s\n", meta["source_sha256_tail"])
 	fmt.Fprintf(&b, "imported = %s\n", meta["created"])
 	fmt.Fprintf(&b, "uuid = %s\n", meta["dict_uuid"])
 	if kept {
 		fmt.Fprintf(&b, "\n%s%s = %s\n", keepComment, keepKey, keepValue)
+	}
+	if adopted != "" {
+		fmt.Fprintf(&b, "\n%s%s = %s\n", adoptedComment, adoptedKey, adopted)
+		if adoptedFrom != "" {
+			fmt.Fprintf(&b, "%s = %s\n", adoptedFromKey, adoptedFrom)
+		}
 	}
 	fmt.Fprintf(&b, "\n# origin: %s\n", src)
 	// What the database actually holds, in the form's own words (SPEC §24).

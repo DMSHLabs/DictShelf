@@ -193,7 +193,7 @@ func Fingerprint(textDB string) (string, error) {
 func volatileMeta(k string) bool {
 	switch k {
 	case "dict_uuid", "created", "source_path", "source_size", "source_mtime",
-		"source_sha256_1M", "source_revision", "body_encoding", "body_dict_bytes",
+		"source_sha256_1M", "source_sha256_tail", "source_revision", "body_encoding", "body_dict_bytes",
 		"ingest_version", "reader_version", "markup_version", "fold_version",
 		"body_bytes", "stored_body_bytes", "headword_bytes", "stats_version",
 		"contains_index_bytes", "full_text_index_bytes",
