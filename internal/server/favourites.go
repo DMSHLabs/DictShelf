@@ -371,19 +371,29 @@ func (s *Server) copyFavourite(sourceID, articleID, targetID string) error {
 }
 
 func (s *Server) removeFavourite(req favouriteRequest) error {
-	id := strings.TrimSpace(req.FavoriteID)
-	if id == "" {
-		return fmt.Errorf("favoriteId is required")
-	}
 	collectionID := strings.TrimSpace(req.Collection)
 	if collectionID == "" {
 		collectionID = s.defaultFavouriteID()
 	}
-	_, ok := s.favouriteStore(collectionID)
-	if !ok {
+	if _, ok := s.favouriteStore(collectionID); !ok {
 		return fmt.Errorf("unknown favourites collection")
 	}
+	// A result that is not itself a favourites article carries only the source
+	// dictionary and the headword - no favourite id. The snapshot is keyed by
+	// exactly that pair, so the id is resolved here rather than remembered by
+	// the page: the reader un-stars the article they are reading.
+	dictionary, headword := strings.TrimSpace(req.Dictionary), strings.TrimSpace(req.Headword)
 	return s.rebuildFavourites(collectionID, func(target *favorites.Store) error {
+		id := strings.TrimSpace(req.FavoriteID)
+		if id == "" {
+			if dictionary == "" || headword == "" {
+				return fmt.Errorf("favoriteId, or dictionary and headword, are required")
+			}
+			var ok bool
+			if id, ok = target.ArticleID(dictionary, headword); !ok {
+				return dict.ErrNotFound
+			}
+		}
 		return target.Remove(id)
 	})
 }

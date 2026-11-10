@@ -8396,6 +8396,47 @@ function promote(boxes,i){
     ref.after(b);ref=b;       // in order, so preference survives among them
   }
 }
+/* One star, one queue. The reader's star flips at once, but the requests go to
+   the server one at a time and always carry the LAST wish: a press, an unpress
+   and a press again while the first request is still out end in the state the
+   reader left, not in a race between three calls. `saved` answers the state the
+   server holds; `write(id, want)` sends one change; `onChange` repaints. */
+function favouriteToggleQueue({saved,write,onChange,onError}){
+  const settled=new Map(),desired=new Map();
+  let running=false;
+  const current=id=>desired.has(id)?desired.get(id):settled.has(id)?settled.get(id):saved(id);
+  const pending=()=>{
+    for(const [id,want] of desired)
+      if(want!==(settled.has(id)?settled.get(id):saved(id)))return {id,want};
+    return null;
+  };
+  const pump=async()=>{
+    if(running)return;
+    running=true;
+    try{
+      for(let next=pending();next;next=pending()){
+        try{await write(next.id,next.want)}
+        catch(error){
+          // The server is the truth again: forget the wish and put the star back.
+          desired.delete(next.id);settled.delete(next.id);
+          onChange();onError(error);
+          return;
+        }
+        settled.set(next.id,next.want);
+        // A press that arrived while this one was out is a NEWER wish: it is
+        // kept, and the loop below sends it next. Only a wish that is still the
+        // reader's last is dropped as settled.
+        if(desired.get(next.id)===next.want)desired.delete(next.id);
+        onChange();
+      }
+    }finally{running=false;onChange()}
+  };
+  return {
+    current,
+    toggle(id){desired.set(id,!current(id));onChange();return pump()},
+    pump,
+  };
+}
 function favouriteControl(result,dictID,dt,dd){
   const inFavourites=favouriteCollections.some(c=>c.id===dictID);
   if(inFavourites&&!result.favoriteId)return null;
@@ -8412,37 +8453,66 @@ function favouriteControl(result,dictID,dt,dd){
     for(const collection of copyTargets){const option=document.createElement("option");option.value=collection.id;option.textContent=favouriteCollectionLabel(collection.id)||collection.name;target.appendChild(option)}
     if(copyTargets.some(c=>c.id===selectedFavourite))target.value=selectedFavourite;
   }
+  /* The star toggles: a full star takes the article out of the collection, an
+     empty one puts it in. A request the server has not answered is not a state
+     the reader has to wait for - the star flips at once, the request runs in the
+     background, and a second press while the first is in flight is REMEMBERED
+     rather than raced (favouriteToggleQueue above). */
+  const savedIn=targetID=>Array.isArray(result.favoriteIn)&&result.favoriteIn.includes(targetID);
+  const remember=(targetID,yes)=>{
+    result.favoriteIn=Array.isArray(result.favoriteIn)?result.favoriteIn:[];
+    const at=result.favoriteIn.indexOf(targetID);
+    if(yes&&at<0)result.favoriteIn.push(targetID);
+    if(!yes&&at>=0)result.favoriteIn.splice(at,1);
+    result.favorite=result.favoriteIn.length>0;
+  };
   const paint=()=>{
     const targetID=inFavourites?target.value:selectedFavourite;
-    const saved=Array.isArray(result.favoriteIn)&&result.favoriteIn.includes(targetID);
+    const saved=inFavourites?savedIn(targetID):queue.current(targetID);
     button.classList.toggle("is-saved",saved);
-    button.disabled=inFavourites?(!copyTargets.length||saved):saved;
-    button.title=saved?tx("favourites.savedIn",{name:favouriteCollectionLabel(targetID)}):
+    button.disabled=inFavourites?(!copyTargets.length||saved):false;
+    button.title=saved?tx(inFavourites?"favourites.savedIn":"favourites.removeFrom",{name:favouriteCollectionLabel(targetID)}):
       inFavourites?tx("favourites.copyTo",{name:favouriteCollectionLabel(targetID)}):
       tx("favourites.saveTo",{name:favouriteCollectionLabel(selectedFavourite)});
     button.setAttribute("aria-label",button.title);
   };
+  const queue=favouriteToggleQueue({
+    saved:savedIn,
+    write:async (collectionID,want)=>{
+      const response=await apiFetch("/api/favourites",{method:want?"POST":"DELETE",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({dict:dictID,headword:result.Headword,collectionId:collectionID})});
+      const value=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(value.error||tx("favourites.failed"));
+      remember(collectionID,want);
+      try{await loadFavouriteCollections()}catch(_){}
+    },
+    onChange:()=>{if(button.isConnected)paint()},
+    onError:error=>alert(window.wudictI18n.errorText(error.message)),
+  });
   paint();
   actions.addEventListener("favourite-target-change",paint);
   button.addEventListener("click",async event=>{
-    event.preventDefault();event.stopPropagation();if(button.disabled)return;button.disabled=true;
-    const payload=inFavourites?{dict:dictID,favoriteId:result.favoriteId,collectionId:target.value}:
-      {dict:dictID,headword:result.Headword,collectionId:selectedFavourite};
-    try{
-      const response=await apiFetch("/api/favourites",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-      const value=await response.json();
-      if(!response.ok)throw new Error(value.error||tx("favourites.failed"));
-      result.favoriteIn=Array.isArray(result.favoriteIn)?result.favoriteIn:[];
-      const targetID=inFavourites?target.value:selectedFavourite;
-      if(!result.favoriteIn.includes(targetID))result.favoriteIn.push(targetID);
-      result.favorite=result.favoriteIn.length>0;paint();
-      try{await loadFavouriteCollections()}catch(_){}
-    }catch(error){alert(window.wudictI18n.errorText(error.message))}
-    finally{if(button.isConnected)paint()}
+    event.preventDefault();event.stopPropagation();
+    if(button.disabled)return;
+    if(inFavourites){
+      button.disabled=true;
+      const payload={dict:dictID,favoriteId:result.favoriteId,collectionId:target.value};
+      try{
+        const response=await apiFetch("/api/favourites",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+        const value=await response.json();
+        if(!response.ok)throw new Error(value.error||tx("favourites.failed"));
+        remember(target.value,true);
+        try{await loadFavouriteCollections()}catch(_){}
+      }catch(error){alert(window.wudictI18n.errorText(error.message))}
+      finally{if(button.isConnected)paint()}
+      return;
+    }
+    await queue.toggle(selectedFavourite);
   });
   if(inFavourites){
     const remove=document.createElement("button");remove.type="button";remove.className="favourite-control";remove.title=tx("favourites.remove");remove.setAttribute("aria-label",remove.title);
-    remove.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 3v6m4-6v6"/></svg>';
+    remove.innerHTML='<svg class="fav-trash" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 3v6m4-6v6"/></svg>';
     remove.addEventListener("click",async event=>{
       event.preventDefault();event.stopPropagation();remove.disabled=true;
       try{const response=await apiFetch("/api/favourites",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({favoriteId:result.favoriteId,collectionId:dictID})});const value=await response.json();if(!response.ok)throw new Error(value.error||tx("favourites.failed"));dt.remove();dd.remove();try{await loadFavouriteCollections()}catch(_){}}
@@ -8555,6 +8625,10 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null,deferAfter=-1,deferAl
       `<button type="button" class="result-page-action" data-dir="next" aria-label="${escAttr(tx("search.nextArticleBlock"))}" title="${escAttr(tx("search.nextArticleBlock"))}" ${paging.hasNext?"":"disabled"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 4 8 8-8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button></span>`;
   })():"";
   det.dataset.searchMode=mode;det.dataset.searchQuery=q;det.dataset.searchDict=h.dict;
+  // A favourites collection is a dictionary of the reader's own articles, and
+  // its name is the reader's own words in the header of every result. The mark
+  // lets the header size it as an addition rather than as a dictionary title.
+  if(favouriteCollections.some(collection=>collection.id===h.dict))det.dataset.favourites="1";
   det.dataset.searchInitial=String(perDict);det.dataset.searchPageSize=String(pageSize);
   det.dataset.searchRung=h.rung||"";
   det.dataset.searchFirstPageSize=String(paging?.firstPageSize||0);det.dataset.searchGroup=String(!!group);
@@ -8753,8 +8827,13 @@ let maskGotoTarget="block",searchPortionGotoDetails=null,articleFindGotoTotal=0;
 let searchDictNameObserver=null,searchDictHeaderWidths=new WeakMap();
 function fitSearchDictName(name,controlsWrapped){
   if(!name?.isConnected)return;
-  if(!controlsWrapped){name.dataset.fit="section";return}
-  for(const level of ["section","addition","hint"]){
+  // A favourites collection's name is the reader's own words in a header, not a
+  // dictionary's title: it sits at the addition size from the start and only
+  // steps down to the hint. A dictionary keeps the full title until the header
+  // wraps, then walks the same ladder.
+  const favourites=!!name.closest("details.dict[data-favourites]");
+  if(!controlsWrapped&&!favourites){name.dataset.fit="section";return}
+  for(const level of favourites?["addition","hint"]:["section","addition","hint"]){
     name.dataset.fit=level;
     void name.offsetWidth;
     if(name.scrollWidth<=name.clientWidth+1)return;

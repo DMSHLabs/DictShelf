@@ -783,6 +783,10 @@ dd{margin:var(--sp-1) 0 0 0}
 .favourite-target option{background-color:var(--paper-bg,var(--bg-card));color:var(--fg)}
 .favourite-target:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .favourite-control svg{display:block;width:1.8em;height:1.8em;flex:none;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+/* The trash beside the star is the quiet half of the pair: fewer pixels and a
+   thinner line, so a favourites row does not read as two controls of equal
+   weight - one saves, the other removes. */
+.favourite-control .fav-trash{width:1.45em;height:1.45em;stroke-width:1.7}
 .favourite-control.is-saved{color:var(--accent)}
 /* A saved star is SOLID: the filled glyph is the state, the outline is "not
    saved yet". The rule names the star because the same button wears a check in

@@ -1099,6 +1099,7 @@
   "favourites.delete": "Delete",
   "favourites.deleteConfirm": "Permanently delete “{name}”, its {count} saved articles and media? Size: {size}.",
   "favourites.saveTo": "Save to {name}",
+  "favourites.removeFrom": "Remove from {name}",
   "favourites.savedIn": "Already in {name}",
   "favourites.source": "Source",
   "favourites.sourceDictionary": "Dictionary",

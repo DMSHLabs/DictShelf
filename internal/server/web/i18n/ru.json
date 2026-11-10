@@ -1113,6 +1113,7 @@
   "favourites.delete": "Удалить",
   "favourites.deleteConfirm": "Безвозвратно удалить словарь «{name}», все его сохранённые статьи ({count}) и медиафайлы? Размер: {size}.",
   "favourites.saveTo": "Добавить в «{name}»",
+  "favourites.removeFrom": "Убрать из «{name}»",
   "favourites.savedIn": "Уже есть в «{name}»",
   "favourites.source": "Источник",
   "favourites.sourceDictionary": "Словарь",

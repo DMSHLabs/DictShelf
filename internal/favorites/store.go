@@ -202,6 +202,17 @@ func (s *Store) Has(dictionaryID, headword string) bool {
 	return d.HasFavourite(dictionaryID, headword)
 }
 
+// ArticleID is the id of the snapshot whose source is that article, by the pair
+// the page holds when it is not looking at a favourites result.
+func (s *Store) ArticleID(dictionaryID, headword string) (string, bool) {
+	d, err := store.Open(s.Path())
+	if err != nil {
+		return "", false
+	}
+	defer d.Close()
+	return d.FavouriteIDBySource(dictionaryID, headword)
+}
+
 func (s *Store) AssetToken(entryID int64, rawURL string) (string, bool) {
 	d, err := store.Open(s.Path())
 	if err != nil {

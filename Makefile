@@ -64,6 +64,10 @@ sbar-check-js: ## Check the status bar's walk rule (optional; requires Node, no 
 group-split-check-js: ## Check the group editor's two-pane split rule (optional; requires Node, no npm)
 	node tools/group-split-test.cjs
 
+.PHONY: favourite-toggle-check-js
+favourite-toggle-check-js: ## Check the favourites star's background toggle queue (optional; requires Node, no npm)
+	node tools/favourite-toggle-test.cjs
+
 # The document gate (`tools/docs-check.py`) is not part of this tree: it governs
 # the fork's working notes, which are kept outside the public repository.
 

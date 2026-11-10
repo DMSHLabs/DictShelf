@@ -106,6 +106,43 @@ func TestFavouriteSnapshotsRoundTripThroughServerAndPreparedMedia(t *testing.T) 
 	}
 }
 
+// The star in a search result is a toggle, and a result that is not itself a
+// favourites article has no favourite id to send. The server resolves the
+// snapshot from the pair the page holds - the source dictionary and the
+// headword - and a second press reports that there is nothing left to remove.
+func TestFavouriteRemovesBySourceAndHeadword(t *testing.T) {
+	s := newTestServer(t)
+	sources := getDicts(t, s, "/api/dicts")
+	if len(sources) != 1 {
+		t.Fatalf("source dictionaries = %d", len(sources))
+	}
+	s.favourites = favorites.New(filepath.Join(t.TempDir(), "favourites"))
+	if err := s.favourites.EnsureNamed("Избранное"); err != nil {
+		t.Fatal(err)
+	}
+	s.reg.AddBuiltin(Builtin{ID: favorites.ID, Path: s.favourites.Path()})
+	if err := s.reg.rescan(false); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal(favouriteRequest{Dictionary: sources[0].ID, Headword: "corazón"})
+	if added := httptestNew(s, http.MethodPost, "/api/favourites", body); added.Code != http.StatusOK {
+		t.Fatalf("add status %d: %s", added.Code, added.Body.String())
+	}
+	if articles, err := s.favourites.Manifest(); err != nil || len(articles) != 1 {
+		t.Fatalf("saved snapshots = %d, %v", len(articles), err)
+	}
+	removed := httptestNew(s, http.MethodDelete, "/api/favourites", body)
+	if removed.Code != http.StatusOK {
+		t.Fatalf("remove by source status %d: %s", removed.Code, removed.Body.String())
+	}
+	if articles, err := s.favourites.Manifest(); err != nil || len(articles) != 0 {
+		t.Fatalf("snapshots after removal = %d, %v", len(articles), err)
+	}
+	if again := httptestNew(s, http.MethodDelete, "/api/favourites", body); again.Code != http.StatusNotFound {
+		t.Fatalf("second removal status %d, want 404", again.Code)
+	}
+}
+
 func TestFavouriteResourceNameUnescapesURLPathOnlyOnce(t *testing.T) {
 	ref := htmlref.Ref{Tag: "img", Attr: "src", URL: "_assets_/hash/East_Side_School%E2%80%93Old_Hammond_High_School%252C_Louisiana.jpg"}
 	name, ok := favouriteResourceName(ref)

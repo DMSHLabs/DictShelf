@@ -205,6 +205,17 @@ func (s *Store) HasFavourite(sourceID, headword string) bool {
 	return err == nil
 }
 
+// FavouriteIDBySource is the id of the snapshot taken from that article, found
+// by the pair a reader's page actually holds - the source dictionary and the
+// headword - rather than by an id only a favourites result carries.
+func (s *Store) FavouriteIDBySource(sourceID, headword string) (string, bool) {
+	var id string
+	if err := s.db.QueryRow("SELECT favourite_id FROM favourite_article WHERE source_id=? AND source_headword=? LIMIT 1", sourceID, headword).Scan(&id); err != nil {
+		return "", false
+	}
+	return id, id != ""
+}
+
 func (s *Store) AssetToken(entryID int64, rawURL string) (string, bool) {
 	var data string
 	if err := s.db.QueryRow("SELECT assets_json FROM favourite_article WHERE entry_id=?", entryID).Scan(&data); err != nil {
