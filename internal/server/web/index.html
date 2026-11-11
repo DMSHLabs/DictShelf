@@ -4445,6 +4445,10 @@ function renderPanel(){
         : "";
     for(const[key,label,on,bytes]of feats){
       if(d.dsl&&(key==="fts"||key==="contains"))continue;
+      /* A switch that cannot move is noise. Without a live source there is
+         nothing to rebuild from, so the chip is not drawn at all - the size of
+         the index and the archive's own index are facts and stay. */
+      if(!canToggle)continue;
       if(key==="media"&&!on&&!d.hasMedia)continue; // nothing to pack
       /* A built index says its size beside its name (both of ours are measured
          from the database), and an absent one says nothing extra: the estimate
