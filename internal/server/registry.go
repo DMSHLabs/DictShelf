@@ -984,7 +984,23 @@ func NewRegistry(dictDirs []string, useCached bool, opts ...Option) (*Registry, 
 	r.startJanitor()
 	r.startTempSweep()
 	r.startReceiptUpgrade()
+	r.startSiblingCleanup()
 	return r, nil
+}
+
+// startSiblingCleanup removes library copies left beside the library (db1,
+// db2) once per process. Off the request path; nothing opens them, so the
+// removal races no reader. Recognised by content - store.CleanSiblingLibraries
+// never touches a folder that holds no prepared dictionary.
+func (r *Registry) startSiblingCleanup() {
+	r.jobs.wg.Add(1)
+	go func() {
+		defer r.jobs.wg.Done()
+		removed, freed := store.CleanSiblingLibraries()
+		if len(removed) > 0 {
+			store.IndexDiagnostic("removed sibling libraries %v, freed %d bytes", removed, freed)
+		}
+	}()
 }
 
 // startReceiptUpgrade refreshes the receipts a library prepared by an older

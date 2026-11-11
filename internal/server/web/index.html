@@ -3912,7 +3912,12 @@ async function loadDicts(rescan){
   // drop a group the user currently has selected.
   if(blocking)dictsSettled=false;
   if(blocking){
-    setPhase("boot");startBootScreen();dictTotal=0;
+    setPhase("boot");
+    // Arriving from Browse with a word: the reader is waiting for that article,
+    // and the first dictionary row is a hundred milliseconds away (the list
+    // streams now). The start-up art would only flash over the result.
+    if(!initialParams.has("browse"))startBootScreen();
+    dictTotal=0;
   }
   const rows=[];
   const listDiagnostics=dictionaryListDiagnosticsEnabled();
