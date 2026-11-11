@@ -32,31 +32,26 @@ func (s *Server) listDictionaries(parent context.Context, ifNoneMatch string, em
 	groups := s.groupsNow()
 	problems := facet.CountProblems(groups.problems)
 	global := s.rowsGlobal(groups)
-	wantProgress := len(showProgress) > 0 && showProgress[0] && ifNoneMatch == ""
-	var progressErr error
-	progress := func(done, total int) {
-		if wantProgress && progressErr == nil {
-			progressErr = emit(dictMsg{T: "checking", Done: done, Total: total})
-		}
-	}
-	var keys []string
-	if wantProgress {
-		keys = rowKeysWithProgress(entries, global, progress)
-	} else {
+	// A validator has to be judged over the WHOLE list before a byte of the body
+	// (a 304 carries none). Without one there is nothing to decide up front, so
+	// the per-row keys are derived while the list streams: the first row leaves
+	// at once instead of after every dictionary has been stat-ed. That up-front
+	// pass is what showed "checking ... N of M" and held the first row back for
+	// seconds on a phone's FUSE mount - and a Browse word click is a page load
+	// that waits for that first row before it can search.
+	_ = showProgress
+	keys := make([]string, len(entries))
+	if ifNoneMatch != "" {
 		keys = rowKeys(entries, global)
-	}
-	if progressErr != nil {
-		return dictionaryListResult{}, progressErr
+		if matchesTag(ifNoneMatch, s.listTag(entries, keys, problems)) {
+			return dictionaryListResult{notModified: true}, nil
+		}
 	}
 	ids := make(map[string]bool, len(entries))
 	for _, e := range entries {
 		ids[e.ID] = true
 	}
 	s.dictRows.keep(ids)
-	tag := s.listTag(entries, keys, problems)
-	if ifNoneMatch != "" && matchesTag(ifNoneMatch, tag) {
-		return dictionaryListResult{notModified: true}, nil
-	}
 
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
@@ -85,7 +80,7 @@ func (s *Server) listDictionaries(parent context.Context, ifNoneMatch string, em
 	keepable.Store(true)
 	for i, e := range entries {
 		wg.Add(1)
-		go func(e *entry, key string) {
+		go func(i int, e *entry) {
 			defer wg.Done()
 			select {
 			case sem <- struct{}{}:
@@ -96,6 +91,11 @@ func (s *Server) listDictionaries(parent context.Context, ifNoneMatch string, em
 			if ctx.Err() != nil {
 				return
 			}
+			key := keys[i]
+			if key == "" {
+				key = rowKey(e, global)
+				keys[i] = key
+			}
 			info, held := s.dictInfoFor(e, global, key)
 			noteArchiveFullText(&info)
 			s.attachEstimate(&info)
@@ -103,7 +103,7 @@ func (s *Server) listDictionaries(parent context.Context, ifNoneMatch string, em
 				keepable.Store(false)
 			}
 			_ = write(dictMsg{T: "dict", Dict: &info})
-		}(e, keys[i])
+		}(i, e)
 	}
 	wg.Wait()
 	emitMu.Lock()
@@ -113,7 +113,10 @@ func (s *Server) listDictionaries(parent context.Context, ifNoneMatch string, em
 	}
 	end := dictMsg{T: "end"}
 	if ctx.Err() == nil && keepable.Load() {
-		end.ETag = tag
+		// Every key is in by now, so the validator describes the list that was
+		// streamed. It rides on the end message for the next request, which may
+		// carry it (the web path does; the Android bridge has no headers).
+		end.ETag = s.listTag(entries, keys, problems)
 	}
 	// Free space rides on the list rather than on a route of its own: it is one
 	// number, the page that needs it already has this response in hand, and a

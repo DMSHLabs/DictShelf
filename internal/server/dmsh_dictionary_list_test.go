@@ -117,3 +117,36 @@ func TestDictionaryListEmitterFailureCancelsWork(t *testing.T) {
 		t.Fatalf("emitter error: got %v after %d events, want %v after begin", err, seen, want)
 	}
 }
+
+// A request without a validator has nothing to decide up front, so the list
+// streams row by row: no "checking N of M" pass, and the validator still rides
+// on the end message for the next request. That up-front pass is what held the
+// first row back - and a Browse word click waits for it before it can search.
+func TestDictionaryListStreamsWithoutTheUpFrontCheck(t *testing.T) {
+	s, _, _ := settled(t)
+	var events []dictMsg
+	if _, err := s.listDictionaries(context.Background(), "", func(event dictMsg) error {
+		events = append(events, event)
+		return nil
+	}, true); err != nil {
+		t.Fatal(err)
+	}
+	rows := 0
+	for _, event := range events {
+		switch event.T {
+		case "checking":
+			t.Fatalf("a list without a validator reported a checking pass: %+v", event)
+		case "dict":
+			rows++
+		}
+	}
+	if len(events) < 2 || events[0].T != "begin" || events[len(events)-1].T != "end" {
+		t.Fatalf("unexpected stream: first %q last %q", events[0].T, events[len(events)-1].T)
+	}
+	if rows != len(s.reg.all()) {
+		t.Fatalf("streamed %d rows, registry holds %d", rows, len(s.reg.all()))
+	}
+	if tag := events[len(events)-1].ETag; tag == "" {
+		t.Error("the streamed list carried no validator for the next request")
+	}
+}
