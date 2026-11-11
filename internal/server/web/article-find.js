@@ -1395,7 +1395,9 @@ async function findFromDialog(){
       error=String(failure?.message||failure);
       if(remoteFind)remoteFind.error=error;
     }
-    note("navigation_find_result",`found=${!!state?.found}; complete=${!!state?.complete}; total=${state?.total||0}; position=${state?.position||0}; error=${(error||remoteFind?.error||"").slice(0,300)}`);
+    const findError=(error||remoteFind?.error||"").slice(0,300);
+    note("navigation_find_result",`found=${!!state?.found}; complete=${!!state?.complete}; total=${state?.total||0}; position=${state?.position||0}`+
+      (findError?`; error=${findError}`:""));
     if(error||!state){status.textContent="⚠ "+(error||t("search.fullListUnavailable"));return}
     // Found: the dialog has done its job - before the article is painted,
     // because painting waits for a block of articles and the window must not

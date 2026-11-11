@@ -3916,11 +3916,16 @@ async function loadDicts(rescan){
   const blocking=phase==="boot"||phase==="failed";
   const initialParams=new URLSearchParams(location.search);
   const scopedBrowseArticle=blocking&&initialParams.has("q")&&initialParams.has("from")&&initialParams.has("browse");
+  const browseReturnLoad=blocking&&(scopedBrowseArticle||initialParams.has("browseReturnDiag"));
   const controller=blocking?new AbortController():null;
   const stopBoot=blocking?()=>controller.abort():null;
   if(blocking){
-    setGlobalStop(stopBoot,tx("dictUI.stop"));
-    updateIndexingTask(tx("search.loading"));
+    if(browseReturnLoad)
+      maskTaskStart("dictionary-list",tx("search.loading"),stopBoot,{background:true});
+    else{
+      setGlobalStop(stopBoot,tx("dictUI.stop"));
+      updateIndexingTask(tx("search.loading"));
+    }
   }
   // A first load has no groups to show until the last row has resolved. A
   // RESCAN keeps the ones it has: the list on screen is already the previous
@@ -4006,6 +4011,7 @@ async function loadDicts(rescan){
     return false;
   }finally{
     clearTimeout(watchdog);
+    if(browseReturnLoad)maskTaskFinish("dictionary-list");
     if(blocking&&globalStopAction===stopBoot)clearGlobalStop();
     // A reindex can finish while its follow-up dictionary refresh is still
     // settling. Re-render the shared notice after that refresh so a completed

@@ -23,7 +23,11 @@ var systemRoot func() string
 var systemSessionPath string
 var diagnosticURL = regexp.MustCompile(`https?://[^\s"<>]+`)
 var canceledSystemErrorField = regexp.MustCompile(`(?i)\berror=(?:"(?:\\.|[^"\\])*context canceled"|context canceled)(?:$|[\s,;])`)
-var emptySystemErrorField = regexp.MustCompile(`(?i)\berror=""`)
+
+// A diagnostic detail may end with `error=` inside its enclosing quote. That
+// empty field is not a failure, including in logs written before the detail
+// stopped emitting it.
+var emptySystemErrorField = regexp.MustCompile(`(?i)\berror=(?:""|"$|$)`)
 var systemLogEnabled = true
 var systemLogBaseEvents = true
 var systemLogWebEvents = true

@@ -85,6 +85,7 @@ func TestSystemHasErrorsIgnoresSuccessfulJobRecords(t *testing.T) {
 	path := filepath.Join(root, "system_2026_10_22__17_58_28.log")
 	records := "2026-10-22T14:58:28Z job=42 finish stage=\"save database\" error=\"<nil>\"\n" +
 		"2026-10-22T14:58:28Z text result source=\"dict.lsd\" error=\"<nil>\"\n" +
+		"2026-11-11T01:51:37Z search_article stage=navigation_find_result query=\"Home\" detail=\"found=true; complete=false; total=1; position=1; error=\"\n" +
 		"2026-10-22T14:58:29Z safe stop requested job=\"initial-index-queue\"\n" +
 		"2026-10-22T14:58:29Z job=42 finish stage=\"index\" error=\"context canceled\"\n" +
 		"2026-10-22T14:58:29Z new dictionary index failed error=\"preparing \\\"dict.dsl\\\": context canceled\"\n"
@@ -93,6 +94,9 @@ func TestSystemHasErrorsIgnoresSuccessfulJobRecords(t *testing.T) {
 	}
 	if SystemHasErrors() {
 		t.Fatal("successful and Safe Stop cancellation records were reported as errors")
+	}
+	if !isSystemError(`search_article stage=navigation_find_result detail="found=false; error=could not search"`) {
+		t.Fatal("a nonempty find error was ignored")
 	}
 	SystemError("database write failed")
 	if !SystemHasErrors() {

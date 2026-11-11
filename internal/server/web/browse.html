@@ -876,7 +876,8 @@ function browseMaskThreshold(){
 function browseNeedsApply(){return browseHeadwordControl?.needsApply(state?.total||0)??((state?.total||0)>=browseMaskThreshold())}
 function findAwaitingApply(){return findApplyPending||browseNeedsApply()&&!findApproved}
 function attachBrowseProgress(job){
-  if(!job.taskID&&window.wudictTasks)job.taskID=window.wudictTasks.start("browse",job.message,{stop:job.cancel});
+  if(!job.taskID&&window.wudictTasks)job.taskID=window.wudictTasks.start("browse",job.message,{
+    stop:job.cancel,background:job.kind==="alphabet"||job.kind==="chooser"});
 }
 function browseProgress(message,cancel=null,kind="",scope=""){
   const seq=++browseProgressSeq;
@@ -2272,7 +2273,7 @@ async function chooser(){
   const heading='<div class="chooser-head"><b>'+tx("browse.choose")+'</b><button type="button" id="closeBrowseChooser" aria-label="'+tx("pages.close")+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><p class="chooser-hint">'+tx("browse.chooseHint")+'</p>';
   card(heading);
   let text="",ds=[];
-  const endProgress=browseProgress(t("browse.loadingDictionaries"));
+  const endProgress=browseProgress(t("browse.loadingDictionaries"),null,"chooser");
   let prefs;
   try{
     if(window.wudictAndroidGo){
