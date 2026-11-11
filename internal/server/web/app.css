@@ -163,6 +163,13 @@ html[data-theme="dark"]{color-scheme:dark}
 body{margin:0;padding-top:var(--barh);
   background:var(--bg);color:var(--fg);
   font-family:var(--font);line-height:var(--fi)}
+/* The result area owns the space between the two bars, empty or full. The
+   bottom bar is a sibling in the flow (it is not fixed - see .sbar), so an
+   empty screen used to leave it directly under the search field, in the top
+   third, and the first painted article dropped it to the bottom. Measured
+   bars, not guessed ones: --barh and --sbarh are published by the page, and
+   --sbarh is absent while the bar is hidden. */
+#out{min-height:calc(100dvh - var(--barh) - var(--sbarh,0px))}
 /* ── the content column ─────────────────────────────────────────────
    One geometry, worn by the toolbar and the results alike, so their edges
    cannot drift apart. They used to be described separately: both capped at
