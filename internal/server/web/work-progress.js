@@ -302,8 +302,15 @@
       // carried the rows.
       const rows=typeof window.wudictTaskRows==='function'?window.wudictTaskRows(s):undefined;
       const withRows=rows===undefined?{}:{children:rows};
-      if(!indexTaskID)indexTaskID=taskStart(taskType,message,{stop,...withRows});
-      taskUpdate(indexTaskID,{type:taskType,message,done:s.currentDone||0,total:s.currentTotal||0,dictionaryDone:s.dictionaryDone||0,dictionaryTotal:s.dictionaryTotal||0,elapsedMs:s.elapsedMs||0,stopRequested:!!s.stopRequested,stop:s.id==='starting'?null:stop,...withRows});
+      /* The start-up sweep runs on every launch and mostly finds nothing to
+         do. It is not something the reader started or has to watch, so it
+         reports on the thin stripe at the bottom instead of opening the work
+         panel - the same way an article opened out of Browse does. A rebuild
+         someone asked for keeps the panel, and so does anything running beside
+         this one, because the stripe needs every task to be background. */
+      const quietJob=s.id==='initial-index-queue';
+      if(!indexTaskID)indexTaskID=taskStart(taskType,message,{stop,background:quietJob,...withRows});
+      taskUpdate(indexTaskID,{type:taskType,message,background:quietJob,done:s.currentDone||0,total:s.currentTotal||0,dictionaryDone:s.dictionaryDone||0,dictionaryTotal:s.dictionaryTotal||0,elapsedMs:s.elapsedMs||0,stopRequested:!!s.stopRequested,stop:s.id==='starting'?null:stop,...withRows});
     } else if(indexTaskID) {
       taskFinish(indexTaskID);indexTaskID=0;
     }
