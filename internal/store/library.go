@@ -724,6 +724,22 @@ func writeInfo(dir, source string) error {
 	fmt.Fprintf(&b, "source_sha256_tail = %s\n", meta["source_sha256_tail"])
 	fmt.Fprintf(&b, "imported = %s\n", meta["created"])
 	fmt.Fprintf(&b, "uuid = %s\n", meta["dict_uuid"])
+	// What a LIST ROW reads (store.PreparedFromReceipt): the stamps Outdated
+	// compares, the split's flag and the source's cheap identity, so /api/dicts
+	// can answer for a prepared dictionary without opening its database. Copied
+	// from the meta like everything above; a receipt this build has not
+	// regenerated lacks them, and the row reads the database instead.
+	fmt.Fprintf(&b, "ingest_version = %s\n", meta["ingest_version"])
+	fmt.Fprintf(&b, "reader_version = %s\n", meta["reader_version"])
+	fmt.Fprintf(&b, "markup_version = %s\n", meta["markup_version"])
+	fmt.Fprintf(&b, "fold_version = %s\n", meta["fold_version"])
+	fmt.Fprintf(&b, "articles_split = %s\n", meta["articles_split"])
+	fmt.Fprintf(&b, "headword_count = %s\n", meta["headword_count"])
+	fmt.Fprintf(&b, "source_revision = %s\n", meta["source_revision"])
+	fmt.Fprintf(&b, "abbrev_size = %s\n", meta["abbrev_size"])
+	fmt.Fprintf(&b, "abbrev_sha256 = %s\n", meta["abbrev_sha256"])
+	fmt.Fprintf(&b, "abbrev_mtime = %s\n", meta["abbrev_mtime"])
+	fmt.Fprintf(&b, "contents_lang = %s\n", meta["contents_lang"])
 	if kept {
 		fmt.Fprintf(&b, "\n%s%s = %s\n", keepComment, keepKey, keepValue)
 	}

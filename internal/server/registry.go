@@ -983,7 +983,23 @@ func NewRegistry(dictDirs []string, useCached bool, opts ...Option) (*Registry, 
 	r.upgradeAbbrev()
 	r.startJanitor()
 	r.startTempSweep()
+	r.startReceiptUpgrade()
 	return r, nil
+}
+
+// startReceiptUpgrade refreshes the receipts a library prepared by an older
+// build still has bare, so the dictionary list can answer from them
+// (store.PreparedFromReceipt) instead of opening every database. Off the request
+// path: the first listing after an upgrade pays the database reads as it always
+// did, and every one after it does not.
+func (r *Registry) startReceiptUpgrade() {
+	r.jobs.wg.Add(1)
+	go func() {
+		defer r.jobs.wg.Done()
+		if n := store.UpgradeReceipts(); n > 0 {
+			store.IndexDiagnostic("receipt upgrade rewrote %d receipts", n)
+		}
+	}()
 }
 
 // startTempSweep clears the working files interrupted ingests left behind, off

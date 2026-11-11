@@ -1250,7 +1250,7 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 	// probing or opening the source. ZIM uses a prepared row only for the
 	// explicitly requested headword-only database.
 	// The library folder is located from the source path.
-	if p, ok := preparedInfo(e.Path); ok && p.Meta != nil && (!entryHasSelfIndex(e) || isZIMPath(e.Path) && zimPreparedHeadwords(p)) {
+	if p, ok := rowPrepared(e.Path); ok && p.Meta != nil && (!entryHasSelfIndex(e) || isZIMPath(e.Path) && zimPreparedHeadwords(p)) {
 		meta := p.Meta
 		ec, _ := strconv.Atoi(meta["entry_count"])
 		info := dictInfo{
@@ -1403,6 +1403,30 @@ func validPrepared(path string) (string, bool) {
 func preparedInfo(path string) (store.Prepared, bool) {
 	if store.IsTextDB(path) {
 		return store.Inspect(path), true
+	}
+	return store.FindPrepared(path)
+}
+
+// rowPrepared is preparedInfo for a LIST ROW, which reads a handful of fields
+// and may answer them from the folder's receipt without opening the database
+// (store.PreparedFromReceipt). On a phone's FUSE mount that open is tens of
+// milliseconds per dictionary, paid once per page load - and a Browse word click
+// is a page load.
+//
+// A ZIM keeps the database read: its row asks the archive's own index form
+// (index_kind), which the receipt does not carry, and there are a few of them.
+func rowPrepared(path string) (store.Prepared, bool) {
+	if isZIMPath(path) {
+		return preparedInfo(path)
+	}
+	if store.IsTextDB(path) {
+		if p, ok := store.PreparedFromReceipt(filepath.Dir(path)); ok {
+			return p, true
+		}
+		return store.Inspect(path), true
+	}
+	if p, ok := store.FindPreparedFromReceipt(path); ok {
+		return p, true
 	}
 	return store.FindPrepared(path)
 }
