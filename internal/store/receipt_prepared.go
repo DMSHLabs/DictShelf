@@ -6,6 +6,7 @@ package store
 
 import (
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/DMSHLabs/DictShelf/internal/fsx"
@@ -59,7 +60,8 @@ func PreparedFromReceipt(dir string) (Prepared, bool) {
 		"articles_split": info["articles_split"], "dict_uuid": info["uuid"],
 		"created": info["imported"], "index_lang": info["language"],
 		"contents_lang": info["contents_lang"],
-		"abbrev_size":   info["abbrev_size"], "abbrev_sha256": info["abbrev_sha256"],
+		"index_kind":    info["index_kind"], "own_ft_index": info["own_ft_index"],
+		"abbrev_size": info["abbrev_size"], "abbrev_sha256": info["abbrev_sha256"],
 		"abbrev_mtime": info["abbrev_mtime"],
 	}
 	// The level and the trigram flag are the receipt's own spelling (index,
@@ -114,6 +116,15 @@ func FindPreparedFromReceipt(srcPath string) (Prepared, bool) {
 	return p, true
 }
 
+// receiptCurrent reports that a receipt carries the fields this build writes.
+// A receipt from before the marker is rewritten even when the fields it lacks
+// are absent by nature for that dictionary (index_kind on a non-ZIM, say).
+func receiptCurrent(info map[string]string) bool {
+	n, err := strconv.Atoi(info["receipt_version"])
+	return err == nil && n >= receiptVersion &&
+		info["ingest_version"] != "" && info["source_sha256_head"] != ""
+}
+
 // UpgradeReceipts rewrites the receipts that predate the row fields, so the
 // first listing of a library prepared by an older build pays the database read
 // once instead of forever. Best-effort and idempotent: a receipt that already
@@ -127,7 +138,7 @@ func UpgradeReceipts() int {
 	n := 0
 	for _, f := range folders {
 		info, err := readInfo(InfoPath(f.Dir))
-		if err == nil && info["ingest_version"] != "" && info["source_sha256_head"] != "" {
+		if err == nil && receiptCurrent(info) {
 			continue
 		}
 		if err := WriteInfo(f.Dir); err == nil {

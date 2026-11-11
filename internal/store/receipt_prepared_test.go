@@ -17,6 +17,7 @@ var keysOfInterest = []string{
 	"has_trigram", "articles_split", "ingest_version", "reader_version",
 	"markup_version", "fold_version", "source_size", "source_sha256_1M",
 	"abbrev_size", "abbrev_sha256", "index_lang", "contents_lang",
+	"index_kind", "own_ft_index",
 }
 
 // A fold is one thing however it is read: the receipt must answer exactly what

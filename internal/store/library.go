@@ -54,6 +54,11 @@ import (
 	"github.com/DMSHLabs/DictShelf/internal/logx"
 )
 
+// receiptVersion is the set of fields writeInfo writes. Bump it in the same
+// commit as a new field, so store.UpgradeReceipts rewrites the receipts an older
+// build left behind.
+const receiptVersion = 1
+
 // Names of the files inside a prepared-dictionary folder.
 const (
 	TextDBName  = "text.db"
@@ -687,6 +692,11 @@ func writeInfo(dir, source string) error {
 		src += "  [no longer on disk - this folder is now the only copy]"
 	}
 	var b strings.Builder
+	// Which set of fields this receipt carries. A build that adds one bumps it,
+	// so the upgrade pass knows a receipt is worth rewriting even when the
+	// fields it gained are legitimately absent for this dictionary (index_kind
+	// on a non-ZIM, say).
+	fmt.Fprintf(&b, "receipt_version = %d\n", receiptVersion)
 	fmt.Fprintf(&b, "# DictShelf - prepared dictionary\n")
 	fmt.Fprintf(&b, "# This folder is one dictionary. Copy, move or zip it as a unit;\n")
 	fmt.Fprintf(&b, "# drop it into your dictionary folder to use it on another machine.\n")
@@ -736,6 +746,12 @@ func writeInfo(dir, source string) error {
 	fmt.Fprintf(&b, "articles_split = %s\n", meta["articles_split"])
 	fmt.Fprintf(&b, "headword_count = %s\n", meta["headword_count"])
 	fmt.Fprintf(&b, "source_revision = %s\n", meta["source_revision"])
+	// The ZIM facts a row reads: which form of index the database holds
+	// (index_kind) and whether the archive answers full text itself
+	// (own_ft_index). Without them a row answered from this receipt loses the
+	// "built-in: words only" chip on a prepared-only archive.
+	fmt.Fprintf(&b, "index_kind = %s\n", meta["index_kind"])
+	fmt.Fprintf(&b, "own_ft_index = %s\n", meta[OwnFullTextKey])
 	fmt.Fprintf(&b, "abbrev_size = %s\n", meta["abbrev_size"])
 	fmt.Fprintf(&b, "abbrev_sha256 = %s\n", meta["abbrev_sha256"])
 	fmt.Fprintf(&b, "abbrev_mtime = %s\n", meta["abbrev_mtime"])
