@@ -1068,6 +1068,7 @@
   "search.examplesHint": "Примеры показаны — нажмите, чтобы скрыть строки, содержащие только примеры",
   "search.searching": "Поиск…",
   "search.progress": "Проверено словарей: {done} из {total}",
+  "search.openingArticle": "Открываем статью…",
   "search.countingArticles": "Подсчёт найденных статей…",
   "search.dictionaryFoundCount": "{found} из {total}",
   "search.dictionaryPickerGroupCount": "{name} {found} ({total})",

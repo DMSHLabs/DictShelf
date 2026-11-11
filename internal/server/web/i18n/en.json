@@ -1054,6 +1054,7 @@
   "search.examplesHint": "Examples are shown — tap to fold the lines that hold nothing but examples",
   "search.searching": "Searching…",
   "search.progress": "Searched {done} of {total} dictionaries",
+  "search.openingArticle": "Opening the article…",
   "search.countingArticles": "Counting matching articles…",
   "search.dictionaryFoundCount": "{found} of {total}",
   "search.dictionaryPickerGroupCount": "{name} {found} ({total})",

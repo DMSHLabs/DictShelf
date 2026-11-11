@@ -983,7 +983,7 @@ func NewRegistry(dictDirs []string, useCached bool, opts ...Option) (*Registry, 
 	r.upgradeAbbrev()
 	r.startJanitor()
 	r.startTempSweep()
-	r.startReceiptUpgrade()
+	r.upgradeReceipts()
 	r.startSiblingCleanup()
 	return r, nil
 }
@@ -1003,19 +1003,18 @@ func (r *Registry) startSiblingCleanup() {
 	}()
 }
 
-// startReceiptUpgrade refreshes the receipts a library prepared by an older
-// build still has bare, so the dictionary list can answer from them
-// (store.PreparedFromReceipt) instead of opening every database. Off the request
-// path: the first listing after an upgrade pays the database reads as it always
-// did, and every one after it does not.
-func (r *Registry) startReceiptUpgrade() {
-	r.jobs.wg.Add(1)
-	go func() {
-		defer r.jobs.wg.Done()
-		if n := store.UpgradeReceipts(); n > 0 {
-			store.IndexDiagnostic("receipt upgrade rewrote %d receipts", n)
-		}
-	}()
+// upgradeReceipts refreshes the receipts a library prepared by an older build
+// still has bare, so the dictionary list can answer from them
+// (store.PreparedFromReceipt) instead of opening every database.
+//
+// Synchronous, before the registry is handed out: the pass rewrites files in the
+// library, and a background one raced a caller that was writing a receipt of its
+// own (a kept orphan lost its marker). After the first run it is a read per
+// folder; the run that upgrades an old library pays its database reads once.
+func (r *Registry) upgradeReceipts() {
+	if n := store.UpgradeReceipts(); n > 0 {
+		store.IndexDiagnostic("receipt upgrade rewrote %d receipts", n)
+	}
 }
 
 // startTempSweep clears the working files interrupted ingests left behind, off

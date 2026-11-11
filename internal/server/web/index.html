@@ -3986,6 +3986,7 @@ async function loadDicts(rescan){
         if(blocking&&!initialURLApplied&&initialParams.has("q")&&initialParams.has("from")){
           initialURLApplied=true;
           logBrowseReturnRoute("first_dictionary_apply_url",{hasFrom:initialParams.has("from"),query:initialParams.get("q")||""});
+          beginArticleOpenProgress();
           applyURL();
         }
       }else if(msg.t==="end"){
@@ -8170,12 +8171,39 @@ function maskViewObserveNotice(){
 window.addEventListener("wudict-tasks-ready",maskViewObserveNotice);
 maskViewObserveNotice();
 let busyTimer=null,busyWanted=false;
+/* Opening one article out of Browse is a wait of about a second, and the field's
+   spinner reads as "searching for the word you typed" - which the reader did
+   not. The app already has a signal for "working, not hung": the thin running
+   stripe at the bottom of the window (work-progress.js, the background-only
+   form of the task dock). It is used here INSTEAD of the spinner, never beside
+   it, and it ends exactly when the search's busy state does. */
+let articleOpenTask=null,articleOpenBusy=false,articleOpenTimer=null;
+function beginArticleOpenProgress(){
+  if(articleOpenTask!==null||articleOpenBusy)return;
+  if(!window.wudictTasks)return; // no dock: the spinner below is the fallback
+  articleOpenBusy=true;
+  try{articleOpenTask=window.wudictTasks.start("article-open",tx("search.openingArticle"),{background:true})}
+  catch(_){articleOpenTask=null;articleOpenBusy=false}
+  // The stripe is finished by the search's own end. This is the backstop for a
+  // transition that never reaches one (a failed apply, a page torn down).
+  clearTimeout(articleOpenTimer);
+  articleOpenTimer=setTimeout(endArticleOpenProgress,15000);
+}
+function endArticleOpenProgress(){
+  clearTimeout(articleOpenTimer);
+  articleOpenTimer=null;
+  articleOpenBusy=false;
+  if(articleOpenTask===null)return;
+  try{window.wudictTasks?.finish(articleOpenTask)}catch(_){}
+  articleOpenTask=null;
+}
 function setBusy(on){
   busyWanted=on;
   if(maskViewTraceID)maskViewTrace(on?"spinner_requested":"spinner_cleared");
   clearTimeout(busyTimer);
   const box=$("qbox");
-  if(!on){box.classList.remove("busy");return}
+  if(!on){endArticleOpenProgress();box.classList.remove("busy");return}
+  if(articleOpenBusy)return; // the running stripe says it instead
   if(box.classList.contains("busy"))return; // already spinning: leave it alone
   busyTimer=setTimeout(()=>{if(busyWanted)box.classList.add("busy")},BUSY_DELAY);
 }
