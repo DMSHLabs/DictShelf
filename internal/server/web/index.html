@@ -1916,6 +1916,7 @@ let prefOrder=[],prefPinned=[],prefCustomOrder=false,prefOrderModeKnown=false,di
 /* Set when /api/dicts has delivered its last row. The picker's groups are
    counted over the complete list or not shown at all. */
 let dictsSettled=false;
+let startupDictionaryListReported=false;
 function loadJSON(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}}
 /* One-time adoption of a pre-server build's localStorage, so upgrading does
    not silently throw away someone's curation. Self-erasing: the keys are
@@ -3149,7 +3150,7 @@ if(!window.wudictAndroidShell){try{quietMessages=localStorage.getItem("wudict_sh
 const BOOT_MSGS=[tx("search.boot1"),tx("search.boot2"),
   tx("search.boot3"),tx("search.boot4"),
   tx("search.boot5")];
-let bootTimer=null,bootIdx=0,bootProgress=null;
+let bootTimer=null,bootIdx=0,bootProgress=null,bootListTaskActive=false;
 function paintBoot(){
 	const progress=bootProgress;
 	const message=progress?tx(progress.stage==="reading"?"search.readingDictProgress":"search.checkingDictsProgress",{done:window.wudictI18n.number(progress.done),total:window.wudictI18n.number(progress.total)}):BOOT_MSGS[bootIdx];
@@ -3177,8 +3178,10 @@ function stopBootScreen(){
 }
 function setBootProgress(done,total,stage="checking"){
 	bootProgress={done:Math.max(0,Number(done)||0),total:Math.max(0,Number(total)||0),stage};
+	if(bootListTaskActive)maskTaskUpdate("dictionary-list",tx(stage==="reading"?"search.readingDictProgress":"search.checkingDictProgress",{
+		done:window.wudictI18n.number(bootProgress.done),total:window.wudictI18n.number(bootProgress.total)}),bootProgress.done,bootProgress.total);
 	if(bootTimer){clearInterval(bootTimer);bootTimer=null}
-	if(!quietMessages)updateDesktopStartupStatus(tx(stage==="reading"?"search.readingDictProgress":"search.checkingDictsProgress",{
+	if(!quietMessages&&!bootListTaskActive)updateDesktopStartupStatus(tx(stage==="reading"?"search.readingDictProgress":"search.checkingDictsProgress",{
 		done:window.wudictI18n.number(bootProgress.done),total:window.wudictI18n.number(bootProgress.total)}));
 	// Only a screen that is already up is redrawn: progress arriving is not a
 	// reason to summon the art over a list that is about to replace it.
@@ -3894,7 +3897,10 @@ function refreshDictUI(now){
   refreshLivePicker();
 }
 
+let desktopStartupFinished=false;
 function finishDesktopStartup(){
+  if(desktopStartupFinished)return;
+  desktopStartupFinished=true;
   if(window.wudictWindowsShell&&typeof window.wudictStartupReady==="function"){
     window.wudictStartupReady().then(showPendingUpdateInstalled,showPendingUpdateInstalled);
     return;
@@ -3917,11 +3923,17 @@ async function loadDicts(rescan){
   const initialParams=new URLSearchParams(location.search);
   const scopedBrowseArticle=blocking&&initialParams.has("q")&&initialParams.has("from")&&initialParams.has("browse");
   const browseReturnLoad=blocking&&(scopedBrowseArticle||initialParams.has("browseReturnDiag"));
+  // The dictionary-list wait is represented by the shared thin status-bar
+  // stripe on every platform, including desktop. The native Windows splash
+  // remains responsible only for the short WebView startup transition.
+  const backgroundListProgress=blocking;
   const controller=blocking?new AbortController():null;
   const stopBoot=blocking?()=>controller.abort():null;
   if(blocking){
-    if(browseReturnLoad)
-      maskTaskStart("dictionary-list",tx("search.loading"),stopBoot,{background:true});
+    if(backgroundListProgress){
+      bootListTaskActive=true;
+      maskTaskStart("dictionary-list",tx("search.loading"),browseReturnLoad?stopBoot:null,{background:true});
+    }
     else{
       setGlobalStop(stopBoot,tx("dictUI.stop"));
       updateIndexingTask(tx("search.loading"));
@@ -3938,7 +3950,7 @@ async function loadDicts(rescan){
     // for that article, and the first dictionary row is ~100 ms away now that
     // the list streams: no art. A cold start gets it only if the wait turns
     // out to be real.
-    if(!initialParams.has("q"))scheduleBootScreen(1200);
+    if(!initialParams.has("q")&&!backgroundListProgress)scheduleBootScreen(1200);
     dictTotal=0;
   }
   const rows=[];
@@ -3970,6 +3982,11 @@ async function loadDicts(rescan){
         articleCacheGroupID=newArticleResultCacheID();articleCacheGroupCount=Math.max(1,(msg.slots||[]).length);
         if(beginMs<0)beginMs=Math.round(performance.now()-listStarted);
         sawBegin=true;dictTotal=msg.total||0;
+        // On desktop, switch from the native WebView startup splash to the
+        // actual app as soon as the streamed dictionary read begins. This
+        // makes the shared status-bar stripe visible while the remaining rows
+        // arrive, instead of hiding it behind the splash until the list ends.
+        if(blocking&&window.wudictWindowsShell)finishDesktopStartup();
         if(blocking)setBootProgress(0,dictTotal,"reading");
       }else if(msg.t==="dict"&&msg.dict){
         if(firstRowMs<0)firstRowMs=Math.round(performance.now()-listStarted);
@@ -4011,7 +4028,7 @@ async function loadDicts(rescan){
     return false;
   }finally{
     clearTimeout(watchdog);
-    if(browseReturnLoad)maskTaskFinish("dictionary-list");
+    if(backgroundListProgress){maskTaskFinish("dictionary-list");bootListTaskActive=false}
     if(blocking&&globalStopAction===stopBoot)clearGlobalStop();
     // A reindex can finish while its follow-up dictionary refresh is still
     // settling. Re-render the shared notice after that refresh so a completed
@@ -4038,6 +4055,10 @@ async function loadDicts(rescan){
   const renderStarted=performance.now();
   refreshDictUI(true);
   const renderMs=Math.round(performance.now()-renderStarted);
+  if(!startupDictionaryListReported&&new URLSearchParams(location.search).get("shell_startup_timing")==="1"){
+    startupDictionaryListReported=true;
+    try{window.prompt("wudict:startup-timing","dictionary_list_ready")}catch(_){}
+  }
   if(listDiagnostics)sendBrowseDiagnostic({event:"dictionary_list_client",words:dicts.length,fetchMs:Math.max(0,beginMs),
     wordsMs:Math.max(0,firstRowMs),totalMs:streamMs,stripBuildMs:renderMs});
   setPhase("ready");
@@ -5690,7 +5711,7 @@ function systemSettingsDiagnosticsControl(enabled){
 async function showSystemSettings(){
   const dialog=$("systemSettingsDialog"),body=$("systemSettingsBody");
   const renderToken=++systemSettingsRenderToken;
-  let diagnosticControl=null;
+  let diagnosticControl=null,startupTimingControl=null;
   try{
   if(!dialog.open)dialog.showModal();
   const systemSettingsSource=$("sysSettings");
@@ -5708,6 +5729,13 @@ async function showSystemSettings(){
     try{enabled=!!JSON.parse(diagnosticState||"{}").enabled}catch(_){}
     diagnosticControl=systemSettingsDiagnosticsControl(enabled);
     body.append(diagnosticControl.row,diagnosticControl.hint);
+    let startupTimingsEnabled=false;
+    try{
+      const raw=window.prompt("wudict:startup-timing-settings",JSON.stringify({action:"get"}));
+      startupTimingsEnabled=!!JSON.parse(raw||"{}").enabled;
+    }catch(_){}
+    startupTimingControl=startupTimingsControl(startupTimingsEnabled);
+    body.append(startupTimingControl.row,startupTimingControl.hint);
   }
   // Normalize the checkbox rows before caching their containers below. The
   // first normalization replaces label rows with div rows; caching their old
@@ -5755,6 +5783,7 @@ async function showSystemSettings(){
     const failure=document.createElement("p");failure.className="sys-hint";failure.textContent=tx("system.desktopLoadFailed");body.append(failure);return;
   }
   if(diagnosticControl){diagnosticControl.hint.remove();diagnosticControl.row.remove()}
+  if(startupTimingControl){startupTimingControl.hint.remove();startupTimingControl.row.remove()}
   const hint=document.createElement("p");hint.className="sys-hint";
   hint.textContent=tx("system.desktopHint");body.append(hint);
   if(window.wudictAndroidShell){
@@ -5852,6 +5881,7 @@ async function showSystemSettings(){
   body.append(systemSettingsNodes.logEnabled,systemSettingsNodes.logBase,systemSettingsNodes.logWeb,
     systemSettingsNodes.logDownload,systemSettingsNodes.logSearch,systemSettingsNodes.searchArticleDiagnostics,systemSettingsNodes.articlePageCacheDiagnostics);
   if(diagnosticControl)body.append(diagnosticControl.row,diagnosticControl.hint);
+  if(startupTimingControl)body.append(startupTimingControl.row,startupTimingControl.hint);
   const desktopLog=desktopSystemLogOptions();
   if(!window.wudictAndroidShell){
     $("sysLogEnabled").checked=desktopLog.enabled;
@@ -5916,6 +5946,20 @@ async function showSystemSettings(){
       body.append(failure);
     }
   }
+}
+
+function startupTimingsControl(enabled){
+  const row=document.createElement("label");row.className="sys-row";
+  const check=document.createElement("input");check.type="checkbox";check.className="panel-checkbox";check.checked=!!enabled;
+  check.addEventListener("change",()=>{
+    let answer=null;
+    try{answer=window.prompt("wudict:startup-timing-settings",JSON.stringify({action:"set",enabled:check.checked}))}catch(_){}
+    if(answer!=="ok")check.checked=!check.checked;
+  });
+  const label=document.createElement("span");label.className="sys-label";label.textContent=tx("system.startupTimings");
+  row.append(check,label);
+  const hint=document.createElement("p");hint.className="sys-hint";hint.textContent=tx("system.startupTimingsHint");
+  return {row,hint};
 }
 $("editSysSettings").onclick=()=>showSystemSettings();
 $("systemSettingsClose").onclick=()=>$("systemSettingsDialog").close();

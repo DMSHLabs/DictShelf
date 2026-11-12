@@ -56,7 +56,7 @@ final class GoBridge {
     private static native String nativeConfigSummary(String path, String flagsJSON);
     private static native boolean nativeInstallBusyObserver();
     private static native int nativeRuntimeStart(String path, String flagsJSON,
-                                                  String version);
+                                                  String version, boolean startupTimings);
     private static native int nativeRuntimeStop();
     private static native String nativeConfigSnapshot();
     private static native String nativePrefsSnapshot();
@@ -472,7 +472,8 @@ final class GoBridge {
             flags.put("USE_CACHED", "1");
             flags.put("NO_BROWSER", "1");
             File path = new File(new File(home, ".dmshlabs/dictshelf"), "dictshelf.toml");
-            return nativeRuntimeStart(path.getAbsolutePath(), flags.toString(), BuildConfig.VERSION_NAME);
+            return nativeRuntimeStart(path.getAbsolutePath(), flags.toString(), BuildConfig.VERSION_NAME,
+                    SystemLog.startupTimings());
         } catch (Exception | UnsatisfiedLinkError error) {
             Log.e(TAG, "Go runtime start failed", error);
             return -9;

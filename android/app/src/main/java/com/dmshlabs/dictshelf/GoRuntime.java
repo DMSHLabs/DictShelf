@@ -159,7 +159,9 @@ class GoRuntime {
     }
 
     private void run(Listener listener) {
+        SystemLog.recordStartupTiming("go_start_requested");
         GoBridge.initialize(app);
+        SystemLog.recordStartupTiming("go_bridge_initialized");
         SystemLog.record("Go runtime startup requested");
         int bridgeProtocol = GoBridge.protocol();
         SystemLog.record("Go bridge protocol=" + bridgeProtocol);
@@ -175,10 +177,16 @@ class GoRuntime {
         File home = AppDirs.home(app);
         File dbDir = AppDirs.dbDir(app);
         File[] dicts = Storage.dictDirs(app);
+        SystemLog.recordStartupTiming("go_paths_resolved");
         seedConfig(home, dicts);
+        SystemLog.recordStartupTiming("go_config_seeded");
         GoBridge.checkConfig(home, dbDir, ShellPrefs.env(app));
+        SystemLog.recordStartupTiming("go_config_checked");
 
+        long nativeStart = android.os.SystemClock.elapsedRealtime();
         int result = GoBridge.startRuntime(app, home, dbDir);
+        SystemLog.recordStartupTiming("go_jni_start_returned_duration_ms="
+                + Math.max(0, android.os.SystemClock.elapsedRealtime() - nativeStart));
         if (result != 1) {
             SystemLog.record("in-process Go startup failed code=" + result);
             Log.e(TAG, "in-process Go startup failed code=" + result);
@@ -187,6 +195,7 @@ class GoRuntime {
         }
         nativeOwned = true;
         if (waitUntilReady(app)) {
+            SystemLog.recordStartupTiming("go_runtime_ready");
             Shell.prepareOrigin(app);
             SystemLog.record("in-process Go runtime ready");
             Log.i(TAG, "in-process Go runtime ready");
@@ -196,6 +205,7 @@ class GoRuntime {
             PowerSignal.runtimeReady();
             listener.onReady();
         } else {
+            SystemLog.recordStartupTiming("go_runtime_timeout");
             GoBridge.stopRuntime();
             IndexService.busy(app, false);
             Log.e(TAG, "in-process Go runtime did not become ready");

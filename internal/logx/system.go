@@ -33,6 +33,9 @@ var systemLogBaseEvents = true
 var systemLogWebEvents = true
 var systemLogDownloadEvents bool
 var systemLogSearchEvents bool
+var systemLogStartupTimings bool
+var systemStartupMarks []string
+var systemStartupOnce map[string]bool
 var systemHasErrors bool
 var systemErrorStatusKnown bool
 
@@ -87,6 +90,54 @@ func ConfigureSystemLogSearchEvents(enabled bool) {
 	systemMu.Lock()
 	systemLogSearchEvents = enabled
 	systemMu.Unlock()
+}
+
+// ConfigureSystemStartupTimings controls the narrow Android cold-start trace.
+// It is independent of the regular event categories so profiling does not
+// require enabling unrelated WebView, download or search diagnostics.
+func ConfigureSystemStartupTimings(enabled bool) {
+	systemMu.Lock()
+	systemLogStartupTimings = enabled
+	systemStartupMarks = nil
+	systemStartupOnce = nil
+	systemMu.Unlock()
+}
+
+// SystemStartupTiming buffers one stage only when the Android startup switch
+// and the master System Log switch are enabled. FlushSystemStartupTimings
+// writes the stages as one record so logging does not slow the measured work.
+func SystemStartupTiming(format string, args ...any) {
+	systemMu.Lock()
+	if systemLogStartupTimings && systemLogEnabled {
+		systemStartupMarks = append(systemStartupMarks, fmt.Sprintf(format, args...))
+	}
+	systemMu.Unlock()
+}
+
+func FlushSystemStartupTimings() {
+	systemMu.Lock()
+	marks := systemStartupMarks
+	systemStartupMarks = nil
+	enabled := systemLogStartupTimings && systemLogEnabled
+	systemMu.Unlock()
+	if enabled && len(marks) > 0 {
+		writeSystem(false, true, false, "startup_timing_go %s", strings.Join(marks, " "))
+	}
+}
+
+// SystemStartupTimingOnce buffers one named stage once per process, for work
+// such as the initial dictionary-list request that may also run later again.
+func SystemStartupTimingOnce(key, format string, args ...any) {
+	systemMu.Lock()
+	defer systemMu.Unlock()
+	if !systemLogStartupTimings || !systemLogEnabled || systemStartupOnce[key] {
+		return
+	}
+	if systemStartupOnce == nil {
+		systemStartupOnce = make(map[string]bool)
+	}
+	systemStartupOnce[key] = true
+	systemStartupMarks = append(systemStartupMarks, fmt.Sprintf(format, args...))
 }
 
 func SystemLogSearchEventsEnabled() bool {

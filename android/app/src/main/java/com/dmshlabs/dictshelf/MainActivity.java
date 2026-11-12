@@ -57,12 +57,17 @@ public class MainActivity extends Activity {
     private boolean runtimeRetained;
     private Object backCallback;     // OnBackInvokedCallback (API 33+), registered only while canGoBack()
     private boolean wantAutoFocus;   // this load is a cold start onto an empty screen
+    private boolean startupPageFinished;
+    private boolean startupViewsReady;
+    private boolean startupRuntimeReady;
+    private String startupRuntimeFailure;
     private String pendingQuery;     // arrived from LookupActivity (D67, D100)
     private String pendingMode;
     private String pendingDict;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        SystemLog.recordStartupTiming("main_activity_on_create");
         // The manifest's translucent startup theme suppresses the system's
         // opaque preview. Only startup is transparent; our views use the
         // normal day/night theme and the saved background from the first frame.
@@ -79,6 +84,7 @@ public class MainActivity extends Activity {
         }
         LauncherIcon.apply(this);
         Shell.clearWebCacheAfterUpdate(this);
+        SystemLog.recordStartupTiming("main_activity_shell_setup");
 
         // Paint before setContentView, including the optional Sepia override.
         getWindow().setBackgroundDrawable(WindowBackground.drawable(this, ShellPrefs.pageBg(this)));
@@ -104,27 +110,13 @@ public class MainActivity extends Activity {
 		root.addView(status, new FrameLayout.LayoutParams(
 				FrameLayout.LayoutParams.MATCH_PARENT,
 				FrameLayout.LayoutParams.MATCH_PARENT));
-        web = new WebView(this);
-        // The PAGE's background, not the window's: this is the surface the
-        // document lands on, and a user whose theme disagrees with their phone
-        // would otherwise get one frame of the other one (D141).
-        web.setBackgroundColor(WindowBackground.active(this) ? android.graphics.Color.TRANSPARENT : ShellPrefs.pageBg(this)); // no white flash before first paint
-        Shell.configure(web);
-        Ime.hideOnScroll(web);
-        speech = new Speech(this, web);
-        web.setWebViewClient(new ShellWebViewClient());
-        web.setWebChromeClient(Shell.windows(this));
-        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
-
         setContentView(root);
-        applyWindowInsets();
-        applyEdges();
-        applyBars();
         // Where dictionaries come from is the one thing that differs between
         // the FOSS and Play builds (D62), and it lives entirely in Storage -
         // a class that exists once per flavour and never in this source set.
         watchThermal();
         Storage.ensureAccess(this);
+        SystemLog.recordStartupTiming("main_activity_storage_ready");
         // Launched by a share or an "open with", possibly. Intake takes it
         // only when it carries an archive; everything else is the flavour's.
         //
@@ -146,9 +138,48 @@ public class MainActivity extends Activity {
 
         GoRuntime.retain();
         runtimeRetained = true;
+        SystemLog.recordStartupTiming("main_activity_runtime_requested");
         GoRuntime.ensure(this, new GoRuntime.Listener() {
-            @Override public void onReady() { showPage(); }
-            @Override public void onFailed(String message) { showFailure(message); }
+            @Override public void onReady() { startupRuntimeReady(); }
+            @Override public void onFailed(String message) { startupRuntimeFailed(message); }
+        });
+
+        // Let native startup overlap WebView construction. GoRuntime can answer
+        // synchronously when another app window already owns a ready runtime,
+        // so the callbacks above are held until this Activity's views exist.
+        web = new WebView(this);
+        // The PAGE's background, not the window's: this is the surface the
+        // document lands on, and a user whose theme disagrees with their phone
+        // would otherwise get one frame of the other one (D141).
+        web.setBackgroundColor(WindowBackground.active(this) ? android.graphics.Color.TRANSPARENT : ShellPrefs.pageBg(this)); // no white flash before first paint
+        Shell.configure(web);
+        Ime.hideOnScroll(web);
+        speech = new Speech(this, web);
+        web.setWebViewClient(new ShellWebViewClient());
+        web.setWebChromeClient(Shell.windows(this));
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
+        applyWindowInsets();
+        applyEdges();
+        applyBars();
+        startupViewsReady = true;
+        SystemLog.recordStartupTiming("main_activity_views_ready");
+        if (startupRuntimeReady) showPage();
+        else if (startupRuntimeFailure != null) showFailure(startupRuntimeFailure);
+    }
+
+    private void startupRuntimeReady() {
+        runOnUiThread(() -> {
+            if (gone) return;
+            startupRuntimeReady = true;
+            if (startupViewsReady) showPage();
+        });
+    }
+
+    private void startupRuntimeFailed(String message) {
+        runOnUiThread(() -> {
+            if (gone) return;
+            startupRuntimeFailure = message;
+            if (startupViewsReady) showFailure(message);
         });
     }
 
@@ -492,6 +523,7 @@ public class MainActivity extends Activity {
         // Only on gain: asking while the window is losing focus is asking on
         // behalf of whatever is taking it.
         if (hasFocus && web != null) {
+            SystemLog.recordStartupTiming("main_window_focused");
             WebViewDiagnostics.install(web);
             applyBars();
             // The settings window is another activity, so a changed edge mode
@@ -562,6 +594,10 @@ public class MainActivity extends Activity {
 
         @Override
         public void onPageFinished(WebView view, String url) {
+            if (!startupPageFinished) {
+                startupPageFinished = true;
+                SystemLog.recordStartupTiming("web_page_finished");
+            }
             pageLoading = false;
             WebViewDiagnostics.page("main", "finished", url);
             WebViewDiagnostics.install(view);
@@ -771,6 +807,7 @@ public class MainActivity extends Activity {
     private void showPage() {
         runOnUiThread(() -> {
             if (gone) return; // the activity died while the server was starting
+            SystemLog.recordStartupTiming("web_page_load_requested");
             if (web.getParent() == null) {
                 root.removeAllViews();
                 root.addView(web, new FrameLayout.LayoutParams(

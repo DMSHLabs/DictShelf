@@ -348,15 +348,22 @@ func (r *Registry) queueNewDictionaries() error {
 			// under another path - a library carried from another machine - holds
 			// the index already. Asking here as well as below is what keeps a
 			// pending entry from a previous run from rebuilding that data.
-			if !hasBrowseIndex(other.Path) {
+			// Use the same current, receipt-backed metadata as the dictionary
+			// list where possible. Startup's index check needs the prepared plan,
+			// not a second SQLite inspection of every already-valid database.
+			prepared, preparedOK := rowPrepared(other.Path)
+			browseIndex := hasBrowseIndexPrepared(prepared, preparedOK)
+			if !browseIndex {
 				store.ResolveDir(other.Path)
+				prepared, preparedOK = rowPrepared(other.Path)
+				browseIndex = hasBrowseIndexPrepared(prepared, preparedOK)
 			}
 			if wanted, pending := f.DSLPending[key]; pending {
 				// A pending receipt may have been written before the user enabled
 				// optional indexes. Keep existing features and add the current
 				// defaults so a rescan can finish the requested setup.
-				if hasBrowseIndex(other.Path) {
-					if prepared, ok := preparedInfo(other.Path); ok {
+				if browseIndex {
+					if preparedOK {
 						wanted.Contains = wanted.Contains || prepared.Plan.Contains || defaults.Contains
 						wanted.FullText = wanted.FullText || prepared.Plan.FullText || defaults.FullText
 						if f.DSLPending[key] != wanted {
@@ -365,7 +372,7 @@ func (r *Registry) queueNewDictionaries() error {
 						}
 					}
 				}
-				if preparedHasIndexes(other.Path, wanted) {
+				if preparedHasIndexesPrepared(other.Path, prepared, preparedOK, wanted) {
 					delete(f.DSLPending, key)
 					delete(f.DSLRemoved, key)
 					changed = true
@@ -375,18 +382,17 @@ func (r *Registry) queueNewDictionaries() error {
 			// A dictionary with no index is queued, whether it never had one or
 			// had one that is now gone: the headword index is mandatory, so
 			// "there is no index" is a state to leave, never a state to respect.
-			if hasBrowseIndex(other.Path) {
+			if browseIndex {
 				// The base headword index already exists. Queue only the missing
 				// optional indexes, and leave the working base index available
 				// while they are built incrementally.
-				prepared, ok := preparedInfo(other.Path)
-				if !ok {
+				if !preparedOK {
 					continue
 				}
 				wanted := defaults
 				wanted.Contains = wanted.Contains || prepared.Plan.Contains
 				wanted.FullText = wanted.FullText || prepared.Plan.FullText
-				if preparedHasIndexes(other.Path, wanted) {
+				if preparedHasIndexesPrepared(other.Path, prepared, preparedOK, wanted) {
 					// The index is complete: whatever the marker said about this
 					// dictionary, there is an index now, so nothing is pending.
 					if f.DSLRemoved[key] {
@@ -422,8 +428,7 @@ func (r *Registry) queueNewDictionaries() error {
 // A finished database can outlive a queued receipt when the process stops
 // between index completion and saving preferences. Reuse it when it already
 // contains every requested index; an incomplete plan remains queued.
-func preparedHasIndexes(path string, wanted indexOptions) bool {
-	prepared, ok := preparedInfo(path)
+func preparedHasIndexesPrepared(path string, prepared store.Prepared, ok bool, wanted indexOptions) bool {
 	if !ok || prepared.Meta == nil {
 		return false
 	}
@@ -438,6 +443,16 @@ func preparedHasIndexes(path string, wanted indexOptions) bool {
 	}
 	return (!wanted.Contains || prepared.Plan.Contains) &&
 		(!wanted.FullText || prepared.Plan.FullText)
+}
+
+func hasBrowseIndexPrepared(prepared store.Prepared, ok bool) bool {
+	if !ok || prepared.Meta == nil {
+		return false
+	}
+	if !strings.EqualFold(prepared.Meta["format"], "zim") {
+		return true
+	}
+	return zimPreparedHeadwords(prepared)
 }
 
 func (r *Registry) prepareNewDictionaries(parent ...*job) {

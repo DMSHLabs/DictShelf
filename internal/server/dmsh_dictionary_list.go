@@ -10,9 +10,11 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/facet"
 	"github.com/DMSHLabs/DictShelf/internal/fsx"
+	"github.com/DMSHLabs/DictShelf/internal/logx"
 	"github.com/DMSHLabs/DictShelf/internal/search"
 	"github.com/DMSHLabs/DictShelf/internal/store"
 )
@@ -25,6 +27,7 @@ type dictionaryListResult struct {
 // HTTP. Both the HTTP adapter and the Windows bridge use this operation.
 // A matching validator returns before emitting any events.
 func (s *Server) listDictionaries(parent context.Context, ifNoneMatch string, emit func(dictMsg) error, showProgress ...bool) (dictionaryListResult, error) {
+	listStarted := time.Now()
 	if emit == nil {
 		return dictionaryListResult{}, errors.New("dictionary list event callback is required")
 	}
@@ -74,10 +77,14 @@ func (s *Server) listDictionaries(parent context.Context, ifNoneMatch string, em
 		return dictionaryListResult{}, err
 	}
 
-	sem := make(chan struct{}, search.Workers())
+	workers := search.Workers()
+	sem := make(chan struct{}, workers)
 	var wg sync.WaitGroup
 	var keepable atomic.Bool
+	var rowWorkNanos atomic.Int64
+	var firstRowNanos atomic.Int64
 	keepable.Store(true)
+	rowPhaseStarted := time.Now()
 	for i, e := range entries {
 		wg.Add(1)
 		go func(i int, e *entry) {
@@ -96,9 +103,12 @@ func (s *Server) listDictionaries(parent context.Context, ifNoneMatch string, em
 				key = rowKey(e, global)
 				keys[i] = key
 			}
+			rowStarted := time.Now()
 			info, held := s.dictInfoFor(e, global, key)
 			noteArchiveFullText(&info)
 			s.attachEstimate(&info)
+			rowWorkNanos.Add(time.Since(rowStarted).Nanoseconds())
+			firstRowNanos.CompareAndSwap(0, time.Since(rowPhaseStarted).Nanoseconds())
 			if !held || info.Error != "" || info.Job != nil {
 				keepable.Store(false)
 			}
@@ -106,6 +116,7 @@ func (s *Server) listDictionaries(parent context.Context, ifNoneMatch string, em
 		}(i, e)
 	}
 	wg.Wait()
+	rowWall := time.Since(rowPhaseStarted)
 	emitMu.Lock()
 	defer emitMu.Unlock()
 	if emitErr != nil {
@@ -121,6 +132,7 @@ func (s *Server) listDictionaries(parent context.Context, ifNoneMatch string, em
 	// Free space rides on the list rather than on a route of its own: it is one
 	// number, the page that needs it already has this response in hand, and a
 	// separate call would only add a way for the two to disagree.
+	freeSpaceStarted := time.Now()
 	if dir := store.DefaultDBDir(); dir != "" {
 		if free, ok := fsx.FreeSpace(dir); ok {
 			end.FreeBytes = free
@@ -132,5 +144,12 @@ func (s *Server) listDictionaries(parent context.Context, ifNoneMatch string, em
 		cancel()
 		return dictionaryListResult{}, err
 	}
+	firstRow := firstRowNanos.Load()
+	logx.SystemStartupTimingOnce("dictionary_list",
+		"stage=dictionary_list_backend dictionaries=%d workers=%d prepare_ms=%d first_row_ms=%d row_wall_ms=%d row_work_sum_ms=%d free_space_ms=%d total_ms=%d",
+		len(entries), workers, rowPhaseStarted.Sub(listStarted).Milliseconds(), time.Duration(firstRow).Milliseconds(),
+		rowWall.Milliseconds(), time.Duration(rowWorkNanos.Load()).Milliseconds(),
+		time.Since(freeSpaceStarted).Milliseconds(), time.Since(listStarted).Milliseconds())
+	logx.FlushSystemStartupTimings()
 	return dictionaryListResult{}, nil
 }

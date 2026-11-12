@@ -1276,6 +1276,8 @@
   "system.logSearch": "Log search events",
   "system.logSystemSettings": "Log System Settings diagnostics",
   "system.logSystemSettingsHint": "The log file must be enabled to record opening attempts and loading errors.",
+  "system.startupTimings": "Record application startup timings",
+  "system.startupTimingsHint": "Records elapsed time from process start through Go startup, first page load and dictionary list. Enable the log file, then fully close and reopen the app.",
   "system.logHint": "Basic events and errors are recorded separately. Enable Download to record dictionary download steps, reproduce the issue, then save the log file.",
   "system.searchArticleDiagnostics": "Record search results and article opening",
   "system.articlePageCacheDiagnostics": "Record article page cache activity",

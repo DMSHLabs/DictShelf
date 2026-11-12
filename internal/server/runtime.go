@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/config"
 	"github.com/DMSHLabs/DictShelf/internal/favorites"
@@ -32,6 +33,12 @@ type Runtime struct {
 // transports must share this Runtime rather than opening a second registry.
 // ConfigureLibrary and RecoverLibrary run first, in that order.
 func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime, error) {
+	started := time.Now()
+	markStartup := func(stage string, since time.Time) {
+		logx.SystemStartupTiming("stage=%s duration_ms=%d elapsed_ms=%d", stage,
+			time.Since(since).Milliseconds(), time.Since(started).Milliseconds())
+	}
+	stageStarted := time.Now()
 	if configPath != "" {
 		if absolute, err := filepath.Abs(configPath); err == nil {
 			configPath = absolute
@@ -86,6 +93,8 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 		dslRepairs = saved
 	}
 	dslformat.SetTitleRepairs(dslRepairs)
+	markStartup("runtime_user_state", stageStarted)
+	stageStarted = time.Now()
 	name := "Favourites"
 	if prefs.ResolvedLanguage("") == "ru" {
 		name = "Избранное"
@@ -106,11 +115,15 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 		}
 		builtins = append(builtins, Builtin{ID: collection.ID, Path: set.Path()})
 	}
+	markStartup("runtime_favourites", stageStarted)
+	stageStarted = time.Now()
 	reg, err := NewRegistry(cfg.DictDirs, cfg.UseCached,
 		WithPrefs(prefs), WithBuiltin(builtins...))
 	if err != nil {
 		return nil, err
 	}
+	markStartup("runtime_registry", stageStarted)
+	stageStarted = time.Now()
 	reg.SetPreviewBudget(cfg.PreviewMemory)
 	s := New(reg)
 	s.favSets = favSets
@@ -132,6 +145,7 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 	if err := s.recordUserStorageAppVersion(); err != nil {
 		logx.Warn("could not record app version in %s and %s: %v", SettingsFile, SearchHistoryFile, err)
 	}
+	markStartup("runtime_services", stageStarted)
 	s.DictDirOrigin = cfg.Origin("DICT_DIR")
 	s.DictDirEditable = cfg.EditableInFile("DICT_DIR")
 	s.ConfigProblems = cfg.Problems

@@ -966,6 +966,7 @@ type Root struct {
 }
 
 func NewRegistry(dictDirs []string, useCached bool, opts ...Option) (*Registry, error) {
+	registryStarted := time.Now()
 	r := &Registry{
 		dictDirs:  dict.DedupeDirs(dictDirs),
 		useCached: useCached,
@@ -976,14 +977,28 @@ func NewRegistry(dictDirs []string, useCached bool, opts ...Option) (*Registry, 
 	for _, o := range opts {
 		o(r)
 	}
+	rescanStarted := time.Now()
 	if err := r.Rescan(); err != nil {
 		return r, err
 	}
+	logx.SystemStartupTimingOnce("registry_rescan",
+		"stage=registry_rescan duration_ms=%d", time.Since(rescanStarted).Milliseconds())
+	stageStarted := time.Now()
 	r.Warm()
+	logx.SystemStartupTimingOnce("registry_warm_schedule",
+		"stage=registry_warm_schedule duration_ms=%d", time.Since(stageStarted).Milliseconds())
+	stageStarted = time.Now()
 	r.upgradeAbbrev()
+	logx.SystemStartupTimingOnce("registry_abbrev_schedule",
+		"stage=registry_abbrev_schedule duration_ms=%d", time.Since(stageStarted).Milliseconds())
 	r.startJanitor()
 	r.startTempSweep()
+	logx.SystemStartupTimingOnce("registry_pre_receipt",
+		"stage=registry_pre_receipt elapsed_ms=%d", time.Since(registryStarted).Milliseconds())
+	stageStarted = time.Now()
 	r.upgradeReceipts()
+	logx.SystemStartupTimingOnce("registry_receipt_upgrade",
+		"stage=registry_receipt_upgrade duration_ms=%d", time.Since(stageStarted).Milliseconds())
 	r.startSiblingCleanup()
 	return r, nil
 }
@@ -1161,18 +1176,23 @@ func (r *Registry) Rescan() error {
 }
 
 func (r *Registry) rescan(prepare bool) error {
+	rescanStarted := time.Now()
 	r.mu.RLock()
 	dirs := append([]string(nil), r.dictDirs...)
 	useCached := r.useCached
 	r.mu.RUnlock()
 	damaged := r.prefs.damagedSources()
+	stageStarted := time.Now()
 	paths, perRoot, err := dict.DiscoverAll(dirs)
+	logx.SystemStartupTimingOnce("registry_discover",
+		"stage=registry_discover duration_ms=%d", time.Since(stageStarted).Milliseconds())
 	if err != nil {
 		logx.V("scanning dictionary folders: %v", err)
 	}
 	// A dictionary file that was moved, not deleted, takes its prepared folder
 	// with it (D156) - before anything below lists that folder on its own or
 	// prepares the file again from scratch.
+	stageStarted = time.Now()
 	relinked := store.Relink(paths)
 	relinked = append(relinked, store.RelinkUnlisted(paths)...)
 	if home := os.Getenv("WUDICT_PORTABLE_HOME"); home != "" {
@@ -1186,6 +1206,8 @@ func (r *Registry) rescan(prepare bool) error {
 		}
 		relinked = append(relinked, store.RelinkCopies(internal)...)
 	}
+	logx.SystemStartupTimingOnce("registry_relink",
+		"stage=registry_relink duration_ms=%d", time.Since(stageStarted).Milliseconds())
 	for _, rl := range relinked {
 		logx.V("rescan: prepared data now follows source %s -> %s", rl.From, rl.To)
 	}
@@ -1325,9 +1347,12 @@ func (r *Registry) rescan(prepare bool) error {
 	// and holding the write lock across that would stall every search for the
 	// duration of a filesystem walk. The lists are private to this call, and
 	// each entry's own state is guarded by its own locks.
+	stageStarted = time.Now()
 	for _, e := range kept {
 		e.revalidate()
 	}
+	logx.SystemStartupTimingOnce("registry_revalidate",
+		"stage=registry_revalidate count=%d duration_ms=%d", len(kept), time.Since(stageStarted).Milliseconds())
 	for _, e := range gone {
 		// A removed comparison entry must release its file even when a
 		// janitor or ingest held ingestMu at discovery. drop's TryLock may
@@ -1346,19 +1371,28 @@ func (r *Registry) rescan(prepare bool) error {
 		releaseSuperseded(e)
 	}
 	if !prepare {
+		logx.SystemStartupTimingOnce("registry_scan_total",
+			"stage=registry_scan_total duration_ms=%d", time.Since(rescanStarted).Milliseconds())
 		return nil
 	}
+	stageStarted = time.Now()
 	if err := r.queueNewDictionaries(); err != nil {
 		return err
 	}
 	f, _ := r.prefs.data()
-	if len(f.DSLPending) != 0 {
+	pendingCount := len(f.DSLPending)
+	if pendingCount != 0 {
 		r.indexQueueMu.Lock()
 		r.jobs.start("initial-index-queue", 0, jobStatus{}, func(j *job) {
 			r.prepareNewDictionaries(j)
 		})
 		r.indexQueueMu.Unlock()
 	}
+	logx.SystemStartupTimingOnce("registry_initial_queue",
+		"stage=registry_initial_queue pending=%d duration_ms=%d",
+		pendingCount, time.Since(stageStarted).Milliseconds())
+	logx.SystemStartupTimingOnce("registry_scan_total",
+		"stage=registry_scan_total duration_ms=%d", time.Since(rescanStarted).Milliseconds())
 	return nil
 }
 

@@ -922,11 +922,21 @@ var nativeRuntime struct {
 // A single process must never open the prepared library twice.
 //
 //export WudictGoBridgeRuntimeStart
-func WudictGoBridgeRuntimeStart(path, flagsJSON, version *C.char) C.int {
+func WudictGoBridgeRuntimeStart(path, flagsJSON, version *C.char, startupTimings C.int) C.int {
 	nativeRuntime.Lock()
 	defer nativeRuntime.Unlock()
 	if nativeRuntime.app != nil {
 		return 0
+	}
+	started := time.Now()
+	startupTrace := startupTimings != 0
+	logx.ConfigureSystemStartupTimings(startupTrace)
+	mark := func(stage string, since time.Time) {
+		if !startupTrace {
+			return
+		}
+		logx.SystemStartupTiming("stage=%s duration_ms=%d elapsed_ms=%d", stage,
+			time.Since(since).Milliseconds(), time.Since(started).Milliseconds())
 	}
 	flags := map[string]string{}
 	if err := json.Unmarshal([]byte(C.GoString(flagsJSON)), &flags); err != nil {
@@ -938,30 +948,42 @@ func WudictGoBridgeRuntimeStart(path, flagsJSON, version *C.char) C.int {
 	if err := os.Setenv("HOME", filepath.Dir(filepath.Dir(configPath))); err != nil {
 		return -8
 	}
+	stageStarted := time.Now()
 	cfg, err := config.Load(configPath, flags)
 	if err != nil {
 		return -2
 	}
+	mark("config_load", stageStarted)
 	// The phone's shell starts the server in this process rather than through
 	// the CLI, so the MAX_* bounds have to be put in force here too, before the
 	// library is scanned or anything is imported.
 	limits.Set(cfg.Limits)
+	stageStarted = time.Now()
 	if _, err = server.ConfigureLibrary(cfg); err != nil {
 		return -3
 	}
+	mark("library_configure", stageStarted)
+	stageStarted = time.Now()
 	if err := logx.StartSystemLogSession(); err != nil {
 		logx.Warn("could not start system log session: %v", err)
 	}
 	if err := logx.ConfigureCrashLog(); err != nil {
 		logx.Warn("could not configure crash output: %v", err)
 	}
+	mark("system_log_setup", stageStarted)
+	stageStarted = time.Now()
 	if _, err = server.RecoverLibrary(cfg); err != nil {
 		logx.Warn("could not tidy the library: %v", err)
 	}
+	mark("library_recovery", stageStarted)
+	stageStarted = time.Now()
 	app, err := server.NewRuntime(cfg, configPath, "", C.GoString(version))
 	if err != nil {
+		logx.FlushSystemStartupTimings()
 		return -5
 	}
+	mark("server_new_runtime", stageStarted)
+	logx.FlushSystemStartupTimings()
 	nativeRuntime.app = app
 	return 1
 }

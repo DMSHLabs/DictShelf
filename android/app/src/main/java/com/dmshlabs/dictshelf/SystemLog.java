@@ -6,6 +6,7 @@ package com.dmshlabs.dictshelf;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Build;
+import android.os.SystemClock;
 import android.util.Log;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -13,6 +14,8 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /** Android owns these files; the Go child owns a separate log. */
 final class SystemLog {
@@ -20,6 +23,11 @@ final class SystemLog {
     private static final int LIMIT = 1024 * 1024;
     private static final int FILES = 5;
     private static final String PREFS = "system-log-options";
+    private static final ExecutorService DIAGNOSTIC_WRITER = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "wudict-diagnostic-log");
+        thread.setDaemon(true);
+        return thread;
+    });
     private static File root;
     private static volatile boolean enabled = true;
     private static volatile boolean baseEvents = true;
@@ -27,6 +35,8 @@ final class SystemLog {
     private static volatile boolean downloadEvents;
     private static volatile boolean searchEvents;
     private static volatile boolean systemSettingsDiagnostics;
+    private static volatile boolean startupTimings;
+    private static long processStartElapsed;
 
     static void initialize(Context app) {
         synchronized (LOCK) {
@@ -39,6 +49,8 @@ final class SystemLog {
             downloadEvents = prefs.getBoolean("download-events", false);
             searchEvents = prefs.getBoolean("search-events", false);
             systemSettingsDiagnostics = prefs.getBoolean("system-settings-diagnostics", false);
+            startupTimings = prefs.getBoolean("startup-timings", false);
+            processStartElapsed = SystemClock.elapsedRealtime();
         }
         record("application start build=" + BuildConfig.VERSION_NAME
                 + " android_release=" + Build.VERSION.RELEASE
@@ -85,6 +97,22 @@ final class SystemLog {
 
     static boolean systemSettingsDiagnostics() { return systemSettingsDiagnostics; }
 
+    static boolean startupTimings() { return startupTimings; }
+
+    static void setStartupTimings(Context app, boolean value) {
+        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putBoolean("startup-timings", value).apply();
+        startupTimings = value;
+        if (value) recordStartupTiming("diagnostics_enabled");
+    }
+
+    /** A monotonic, opt-in trace from Application.onCreate through first results. */
+    static void recordStartupTiming(String stage) {
+        if (!enabled || !startupTimings) return;
+        long elapsed = Math.max(0, SystemClock.elapsedRealtime() - processStartElapsed);
+        recordDiagnostic("startup_timing stage=" + stage + " elapsed_ms=" + elapsed);
+    }
+
     static void setSystemSettingsDiagnostics(Context app, boolean value) {
         app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putBoolean("system-settings-diagnostics", value).apply();
@@ -95,7 +123,7 @@ final class SystemLog {
     /** Records timings explicitly enabled by a diagnostic switch in the page. */
     static void recordDiagnostic(String message) {
         if (!enabled) return;
-        new Thread(() -> write(message), "wudict-diagnostic-log").start();
+        DIAGNOSTIC_WRITER.execute(() -> write(message));
     }
 
     static boolean enabled() { return enabled; }

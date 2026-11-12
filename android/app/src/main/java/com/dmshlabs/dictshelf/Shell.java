@@ -174,7 +174,8 @@ final class Shell {
                 // One inversion, here and nowhere else: the settings screen
                 // stores what the user chose to SEE, the page is told what to
                 // SUPPRESS.
-                + "&shell_quiet=" + (ShellPrefs.infoMessages(c) ? "0" : "1");
+                + "&shell_quiet=" + (ShellPrefs.infoMessages(c) ? "0" : "1")
+                + "&shell_startup_timing=" + (SystemLog.startupTimings() ? "1" : "0");
     }
 
     static void applyBackground(WebView web) {
@@ -756,6 +757,29 @@ final class Shell {
                     } catch (org.json.JSONException bad) {
                         result.confirm("error");
                     }
+                    return true;
+                }
+                if ("wudict:startup-timing-settings".equals(message)) {
+                    try {
+                        org.json.JSONObject request = new org.json.JSONObject(defaultValue);
+                        String action = request.optString("action", "get");
+                        if ("get".equals(action)) {
+                            result.confirm(new org.json.JSONObject()
+                                    .put("enabled", SystemLog.startupTimings()).toString());
+                        } else if ("set".equals(action)) {
+                            SystemLog.setStartupTimings(a, request.getBoolean("enabled"));
+                            result.confirm("ok");
+                        } else {
+                            result.confirm("error");
+                        }
+                    } catch (org.json.JSONException bad) {
+                        result.confirm("error");
+                    }
+                    return true;
+                }
+                if ("wudict:startup-timing".equals(message)) {
+                    SystemLog.recordStartupTiming(defaultValue == null ? "page_stage" : defaultValue);
+                    result.confirm("ok");
                     return true;
                 }
                 if ("wudict:save-article".equals(message)) {
