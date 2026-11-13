@@ -267,6 +267,9 @@ final class Shell {
         reply.put("link", ShellPrefs.opensApp(c, ShellPrefs.LINK));
         reply.put("reader", ShellPrefs.opensApp(c, ShellPrefs.READER));
         reply.put("readerMode", ShellPrefs.readerMode(c));
+        reply.put("readerWindowSize", ShellPrefs.readerWindowSize(c));
+        reply.put("readerWindowWidth", ShellPrefs.readerWindowWidth(c));
+        reply.put("readerWindowHeight", ShellPrefs.readerWindowHeight(c));
         reply.put("info", ShellPrefs.infoMessages(c));
         reply.put("serverAvailable", false);
         org.json.JSONObject prefs = new org.json.JSONObject(GoBridge.prefsSnapshot());
@@ -976,6 +979,11 @@ final class Shell {
                                 ShellPrefs.set(a, ShellPrefs.READER, request.getBoolean("value"));
                             } else if ("readerMode".equals(field)) {
                                 ShellPrefs.setReaderMode(a, request.getString("value"));
+                            } else if ("readerWindow".equals(field)) {
+                                org.json.JSONObject size = request.getJSONObject("value");
+                                ShellPrefs.setReaderWindow(a, size.getString("size"),
+                                        size.optInt("width", 90), size.optInt("height", 65));
+                                if (a instanceof LookupActivity) ((LookupActivity) a).refreshWindowSize();
                             } else if ("info".equals(field)) {
                                 ShellPrefs.set(a, ShellPrefs.INFO_MESSAGES, request.getBoolean("value"));
                             } else if ("updateChannel".equals(field)) {

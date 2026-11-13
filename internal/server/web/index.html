@@ -951,6 +951,15 @@ window.wudictFontScale=(function(){
     </select></span>
   </div>
   <p class="panel-update-status">{{T:system.readerModeHint}}</p>
+  <div class="facts update-channel-row">
+    <label class="rowlabel" for="integrationWindowSize">{{T:system.readerWindowSize}}</label>
+    <span class="panel-select-wrap panel-dropdown"><select id="integrationWindowSize">
+      <option value="small">{{T:system.readerWindowSmall}}</option>
+      <option value="medium">{{T:system.readerWindowMedium}}</option>
+      <option value="custom">{{T:system.readerWindowCustom}}</option>
+    </select></span>
+  </div>
+  <button type="button" class="btn" id="integrationWindowAdjust" hidden>{{T:system.readerWindowAdjust}}</button>
   <p class="panel-update-status" id="integrationStatus" role="status" aria-live="polite" hidden></p>
 </details>
 
@@ -1178,6 +1187,13 @@ window.wudictFontScale=(function(){
   </div>
 </dialog>
 
+<dialog id="readerWindowDialog" class="group-dialog panel-card" aria-labelledby="readerWindowTitle">
+  <h2 id="readerWindowTitle">{{T:system.readerWindowAdjust}}</h2>
+  <p>{{T:system.readerWindowHint}}</p>
+  <div id="readerWindowStage"><div id="readerWindowPreview"><button type="button" class="btn" id="readerWindowApply">{{T:panel.apply}}</button><span id="readerWindowHandle" aria-hidden="true"></span></div></div>
+  <div class="reader-window-values"><label>{{T:system.readerWindowWidth}} <input id="readerWindowWidth" type="range" min="35" max="95" step="1"></label><label>{{T:system.readerWindowHeight}} <input id="readerWindowHeight" type="range" min="25" max="90" step="1"></label></div>
+  <button type="button" class="btn" id="readerWindowCancel">{{T:panel.cancel}}</button>
+</dialog>
 <dialog id="systemLogSavedDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="systemLogSavedTitle">
   <h2 id="systemLogSavedTitle">{{T:panel.systemLogSavedTitle}}</h2>
   <p id="systemLogSavedText"></p>
@@ -5272,6 +5288,8 @@ function integrationPaint(state){
   $("integrationReader").checked=!!state.reader;
   const mode=state.readerMode||"exactLemma";
   $("integrationReaderMode").value=[...$("integrationReaderMode").options].some(option=>option.value===mode)?mode:"exactLemma";
+  $("integrationWindowSize").value=state.readerWindowSize||"medium";
+  $("integrationWindowAdjust").hidden=state.readerWindowSize!=="custom";
 }
 window.wudictAndroidIntegrationReady=()=>{
   const section=$("integrationSection");
@@ -6014,6 +6032,40 @@ $("integrationShare").addEventListener("change",e=>integrationSet("share",e.targ
 $("integrationLink").addEventListener("change",e=>integrationSet("link",e.target.checked));
 $("integrationReader").addEventListener("change",e=>integrationSet("reader",e.target.checked));
 $("integrationReaderMode").addEventListener("change",e=>integrationSet("readerMode",e.target.value));
+const readerWindowDialog=$("readerWindowDialog"),readerWindowPreview=$("readerWindowPreview");
+function readerWindowPreviewPaint(){
+  readerWindowPreview.style.width=$("readerWindowWidth").value+"%";
+  readerWindowPreview.style.height=$("readerWindowHeight").value+"%";
+}
+function readerWindowOpen(){
+  $("readerWindowWidth").value=String(sysState?.readerWindowWidth||90);
+  $("readerWindowHeight").value=String(sysState?.readerWindowHeight||65);
+  readerWindowPreviewPaint();readerWindowDialog.showModal();
+}
+$("integrationWindowSize").addEventListener("change",e=>{
+  if(e.target.value==="custom"){readerWindowOpen();return}
+  integrationSet("readerWindow",{size:e.target.value,width:sysState?.readerWindowWidth||90,height:sysState?.readerWindowHeight||65});
+});
+$("integrationWindowAdjust").addEventListener("click",readerWindowOpen);
+for(const id of ["readerWindowWidth","readerWindowHeight"])
+  $(id).addEventListener("input",readerWindowPreviewPaint);
+$("readerWindowHandle").addEventListener("pointerdown",e=>{
+  e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);
+});
+$("readerWindowHandle").addEventListener("pointermove",e=>{
+  if(!e.currentTarget.hasPointerCapture(e.pointerId))return;
+  const r=$("readerWindowStage").getBoundingClientRect();
+  $("readerWindowWidth").value=String(Math.round(200*(e.clientX-r.left-r.width/2)/r.width));
+  $("readerWindowHeight").value=String(Math.round(200*(e.clientY-r.top-r.height/2)/r.height));
+  readerWindowPreviewPaint();
+});
+$("readerWindowCancel").addEventListener("click",()=>readerWindowDialog.close());
+readerWindowDialog.addEventListener("close",()=>integrationPaint(sysState));
+$("readerWindowApply").addEventListener("click",()=>{
+  const value={size:"custom",width:Number($("readerWindowWidth").value),height:Number($("readerWindowHeight").value)};
+  integrationSet("readerWindow",value);
+  if(sysState?.readerWindowSize==="custom")readerWindowDialog.close();
+});
 function updateAvailableKey(channel=updateChannel){return "dictshelf_update_available_"+channel}
 function updateDownloadedKey(version){return "dictshelf_update_downloaded_"+version}
 function syncUpdateControls(){

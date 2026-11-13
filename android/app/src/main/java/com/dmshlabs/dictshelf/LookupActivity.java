@@ -552,9 +552,25 @@ public class LookupActivity extends Activity {
         Rect bounds = windowBounds();
         int max = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP,
                 DIALOG_MAX_WIDTH_DP, getResources().getDisplayMetrics());
-        winW = Math.min((int) (bounds.width() * 0.95f), max);
-        winH = (int) (bounds.height() * 0.70f);
+        String size = ShellPrefs.readerWindowSize(this);
+        int widthPercent = "custom".equals(size) ? ShellPrefs.readerWindowWidth(this) : 95;
+        int heightPercent = "small".equals(size) ? 35
+                : "custom".equals(size) ? ShellPrefs.readerWindowHeight(this) : 70;
+        winW = (int) (bounds.width() * widthPercent / 100f);
+        if (!"custom".equals(size)) winW = Math.min(winW, max);
+        winH = (int) (bounds.height() * heightPercent / 100f);
         getWindow().setLayout(winW, winH);
+    }
+
+    void refreshWindowSize() {
+        if (root == null || gone) return;
+        sizeWindow();
+        ViewGroup.LayoutParams lp = root.getLayoutParams();
+        if (lp != null) {
+            lp.width = winW;
+            lp.height = winH;
+            root.setLayoutParams(lp);
+        }
     }
 
     // The window we are actually in, which on a foldable or in split-screen is
@@ -646,6 +662,7 @@ public class LookupActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        refreshWindowSize();
         SystemLog.reader("lookup new intent task=" + getTaskId() + " instance=" + System.identityHashCode(this)
                 + " ready=" + pageReady + " action=" + (intent == null ? "null" : intent.getAction()));
         setIntent(intent);

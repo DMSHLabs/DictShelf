@@ -2515,3 +2515,9 @@ html:is([data-shell-sepia],[data-shell-image]) .list-search-input{background-col
 .favourite-source-value{overflow-wrap:anywhere;color:var(--fg)}
 .favourite-source-open{margin-top:.35em}
 .favourite-source-unavailable{margin-top:.35em;color:var(--label-quiet)}
+#readerWindowDialog{max-width:min(92vw,430px);width:100%;gap:.7em}
+#readerWindowDialog p{margin:0}
+#readerWindowStage{position:relative;width:min(70vw,300px);height:min(62vh,460px);margin:auto;border:2px solid var(--line,#888);border-radius:1em;background:color-mix(in srgb,var(--bg) 55%,var(--ink) 8%);touch-action:none}
+#readerWindowPreview{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);box-sizing:border-box;display:flex;align-items:center;justify-content:center;border:2px solid var(--accent,#008f84);border-radius:.8em;background:var(--paper-bg,var(--bg));min-width:35%;min-height:25%}
+#readerWindowHandle{position:absolute;right:-10px;bottom:-10px;width:30px;height:30px;border-radius:50%;background:var(--accent,#008f84);cursor:nwse-resize;touch-action:none}
+.reader-window-values{display:grid;gap:.4em}.reader-window-values label{display:flex;align-items:center;justify-content:space-between;gap:.7em}.reader-window-values input{flex:1;min-width:0}

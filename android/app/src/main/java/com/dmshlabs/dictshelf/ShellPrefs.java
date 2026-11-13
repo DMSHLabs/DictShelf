@@ -203,6 +203,9 @@ final class ShellPrefs {
     static final String LINK = "lookup_link_in_app";
     static final String READER = "lookup_reader_in_app";
     static final String READER_MODE = "lookup_reader_mode";
+    private static final String READER_WINDOW_SIZE = "reader_window_size";
+    private static final String READER_WINDOW_WIDTH = "reader_window_width";
+    private static final String READER_WINDOW_HEIGHT = "reader_window_height";
 
     private static final String DEFAULT_READER_MODE = "exactLemma";
 
@@ -214,6 +217,27 @@ final class ShellPrefs {
     static void setReaderMode(Context c, String value) {
         if (!LookupActivity.isSupportedMode(value)) value = DEFAULT_READER_MODE;
         of(c).edit().putString(READER_MODE, value).apply();
+    }
+
+    static String readerWindowSize(Context c) {
+        String value = of(c).getString(READER_WINDOW_SIZE, "medium");
+        return "small".equals(value) || "custom".equals(value) ? value : "medium";
+    }
+
+    static int readerWindowWidth(Context c) {
+        return Math.max(35, Math.min(95, of(c).getInt(READER_WINDOW_WIDTH, 90)));
+    }
+
+    static int readerWindowHeight(Context c) {
+        return Math.max(25, Math.min(90, of(c).getInt(READER_WINDOW_HEIGHT, 65)));
+    }
+
+    static void setReaderWindow(Context c, String size, int width, int height) {
+        if (!"small".equals(size) && !"medium".equals(size) && !"custom".equals(size))
+            throw new IllegalArgumentException("Unknown reader window size");
+        of(c).edit().putString(READER_WINDOW_SIZE, size)
+                .putInt(READER_WINDOW_WIDTH, Math.max(35, Math.min(95, width)))
+                .putInt(READER_WINDOW_HEIGHT, Math.max(25, Math.min(90, height))).apply();
     }
 
     // ── the information messages (2026-09-27) ────────────────────────────────
