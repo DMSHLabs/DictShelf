@@ -205,12 +205,13 @@
         const row=document.createElement('div');row.className='work-task-row';
         const label=document.createElement('span');label.className='work-task-label';
         const name=document.createElement('span');name.className='work-task-name';name.textContent=task.label||taskText(task.parent);label.append(name);
-        if(Number.isFinite(task.percent)){const count=document.createElement('span');count.className='work-task-count';count.textContent=`${Math.round(task.percent)}%`;label.append(count)}
+        if(task.active===false||Number.isFinite(task.percent)){const count=document.createElement('span');count.className='work-task-count';count.textContent=`${task.active===false?0:Math.round(task.percent)}%`;label.append(count)}
         else if(task.total>0||task.done>0||task.elapsedMs>0){const count=document.createElement('span');count.className='work-task-count';const progressText=task.total>0?`${window.wudictI18n.number(task.done)} ${t('dictUI.progressOf',{total:window.wudictI18n.number(task.total)})}`:task.done?window.wudictI18n.number(task.done):'';count.textContent=[progressText,task.elapsedMs?t('dictUI.elapsed',{time:elapsedTime(task.elapsedMs)}):''].filter(Boolean).join(' · ');label.append(count)}
         row.append(label);
         const track=document.createElement('div');track.className='work-task-progress';
-        const bar=document.createElement('span');bar.style.width=Number.isFinite(task.percent)?`${task.percent}%`:task.total>0?`${Math.max(0,Math.min(100,task.done*100/task.total))}%`:'100%';
-        if(!Number.isFinite(task.percent)&&task.total<=0)bar.dataset.indeterminate='';track.append(bar);row.append(track);
+        const bar=document.createElement('span'),waiting=task.active===false;
+        bar.style.width=waiting?'0%':Number.isFinite(task.percent)?`${task.percent}%`:task.total>0?`${Math.max(0,Math.min(100,task.done*100/task.total))}%`:'100%';
+        if(!waiting&&!Number.isFinite(task.percent)&&task.total<=0)bar.dataset.indeterminate='';track.append(bar);row.append(track);
         if(task.stop){const stop=document.createElement('button');stop.type='button';stop.className='work-task-stop';stop.textContent=t(task.stopRequested?'dictUI.bulkStopping':'dictUI.stop');stop.disabled=task.stopRequested;stop.onclick=()=>taskStopChild(task);row.append(stop)}
         return row;
         }));
