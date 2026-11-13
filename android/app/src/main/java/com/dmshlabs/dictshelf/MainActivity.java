@@ -55,7 +55,7 @@ public class MainActivity extends Activity {
 
     private volatile boolean gone;   // onDestroy ran: late runtime callbacks must not touch the views
     private boolean runtimeRetained;
-    private Object backCallback;     // OnBackInvokedCallback (API 33+), registered only while canGoBack()
+    private Object backCallback;     // OnBackInvokedCallback (API 33+), for page history or an external lookup
     private boolean wantAutoFocus;   // this load is a cold start onto an empty screen
     private boolean startupPageFinished;
     private boolean startupViewsReady;
@@ -64,6 +64,7 @@ public class MainActivity extends Activity {
     private String pendingQuery;     // arrived from LookupActivity (D67, D100)
     private String pendingMode;
     private String pendingDict;
+    private boolean externalLookup; // a word handed over by LookupActivity
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -657,15 +658,20 @@ public class MainActivity extends Activity {
     // for those onBackPressed() is NO LONGER CALLED - the plain override below
     // is dead code on any modern device, which would make the button exit the
     // app instead of walking the SPA's history. Registering the callback
-    // only while there is history to walk keeps the system's own
-    // predictive-back-to-home animation for the last press.
+    // while there is history to walk or a reader lookup to return from.
     private void syncBackCallback() {
         if (Build.VERSION.SDK_INT < 33) return;
-        boolean want = web.getParent() != null && web.canGoBack();
+        boolean want = web.getParent() != null && (web.canGoBack() || externalLookup);
         if (want == (backCallback != null)) return;
         OnBackInvokedDispatcher d = getOnBackInvokedDispatcher();
         if (want) {
-            OnBackInvokedCallback cb = () -> web.goBack();
+            OnBackInvokedCallback cb = () -> {
+                if (web.canGoBack()) web.goBack();
+                else if (externalLookup) {
+                    SystemLog.reader("main back to reader task=" + getTaskId());
+                    moveTaskToBack(true);
+                }
+            };
             d.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, cb);
             backCallback = cb;
         } else {
@@ -679,6 +685,9 @@ public class MainActivity extends Activity {
     public void onBackPressed() { // API 26–32 only; see syncBackCallback
         if (web.getParent() != null && web.canGoBack()) {
             web.goBack(); // the SPA keeps its own history per search
+        } else if (externalLookup) {
+            SystemLog.reader("main back to reader task=" + getTaskId());
+            moveTaskToBack(true);
         } else {
             super.onBackPressed();
         }
@@ -851,6 +860,7 @@ public class MainActivity extends Activity {
         if (intent == null) return false;
         String q = intent.getStringExtra(EXTRA_QUERY);
         if (q == null) return false;
+        externalLookup = true;
         pendingQuery = q;
         pendingMode = intent.getStringExtra(EXTRA_MODE);
         pendingDict = intent.getStringExtra(EXTRA_DICT);
@@ -922,6 +932,11 @@ public class MainActivity extends Activity {
                 + " ready=" + startupPageFinished + " loading=" + pageLoading
                 + " action=" + (intent == null ? "null" : intent.getAction()));
         setIntent(intent);
+        if (intent != null && Intent.ACTION_MAIN.equals(intent.getAction())
+                && intent.hasCategory(Intent.CATEGORY_LAUNCHER)) {
+            externalLookup = false;
+            syncBackCallback();
+        }
         if (!Intake.onNewIntent(this, intent)) Storage.onNewIntent(this, intent);
         // "Clear browser cache" in the settings screen emptied what this page
         // was last loaded from: load it again rather than leave the window
@@ -933,6 +948,7 @@ public class MainActivity extends Activity {
         // Only what THIS intent brought: an unrelated intent must not fire a
         // query left pending by an earlier one - showPage owns that.
         if (takeQuery(intent)) {
+            syncBackCallback();
             if (web == null || web.getParent() == null) return; // showPage owns this query
             // Handed over by LookupActivity, so the app is very likely already
             // up and showing something else; if it is not, showPage takes it.

@@ -10713,6 +10713,7 @@ async function doSearch(ev){
   const searchDiagStarted=performance.now();
   let searchDiagSlots=[];
   let searchDiagFirstPaint=false;
+  let readerFirstResponseLogged=false;
   const searchDiagLog=(stage,fields={})=>{
     if(!searchDiag)return;
     const safeFields={...fields};
@@ -10888,7 +10889,10 @@ async function doSearch(ev){
         clearStatusForResults();
         refreshLivePicker();
       }else if(msg.t==="hit"){
-        if(!anyShown)readerTiming("first_response",(msg.results||[]).length);
+        if(!readerFirstResponseLogged){
+          readerFirstResponseLogged=true;
+          readerTiming("first_response",(msg.results||[]).length);
+        }
         if(browseReturnRouteContext&&!browseReturnRouteContext.firstHit){
           browseReturnRouteContext.firstHit=true;
           logBrowseReturnRoute("first_search_hit",{dict:msg.dict||"",resultCount:(msg.results||[]).length,error:msg.error||"",skipped:!!msg.skipped});
