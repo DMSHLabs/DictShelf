@@ -12,6 +12,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.concurrent.ExecutorService;
@@ -37,11 +38,13 @@ final class SystemLog {
     private static volatile boolean systemSettingsDiagnostics;
     private static volatile boolean startupTimings;
     private static long processStartElapsed;
+    private static final String PREVIOUS = "android.previous-launch.log";
 
     static void initialize(Context app) {
         synchronized (LOCK) {
             if (root != null) return;
             root = new File(app.getFilesDir(), "system-log");
+            preservePreviousLaunch();
             SharedPreferences prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
             enabled = prefs.getBoolean("enabled", true);
             baseEvents = prefs.getBoolean("base-events", true);
@@ -126,6 +129,15 @@ final class SystemLog {
         DIAGNOSTIC_WRITER.execute(() -> write(message));
     }
 
+    /** Reader breadcrumbs remain available even when optional timing switches are off. */
+    static void reader(String event) {
+        if (!enabled) return;
+        String line = "reader elapsed_ms=" + Math.max(0, SystemClock.elapsedRealtime() - processStartElapsed)
+                + " pid=" + android.os.Process.myPid() + " " + event;
+        write(line);
+        Log.i("DictShelfReader", line);
+    }
+
     static boolean enabled() { return enabled; }
     static boolean detailedEnabled() { return enabled && detailedEvents; }
     static boolean baseEvents() { return baseEvents; }
@@ -182,16 +194,58 @@ final class SystemLog {
         synchronized (LOCK) {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             if (root == null) return bytes.toByteArray();
+            File previous = new File(root, PREVIOUS);
+            if (previous.exists()) {
+                bytes.write("--- Previous Android launch ---\n".getBytes(StandardCharsets.UTF_8));
+                append(bytes, previous);
+                bytes.write("--- Current Android launch ---\n".getBytes(StandardCharsets.UTF_8));
+            }
             for (int i = FILES - 1; i >= 0; i--) {
                 String name = "android.log" + (i == 0 ? "" : "." + i);
                 File file = new File(root, name);
                 if (!file.exists()) continue;
-                try (FileInputStream in = new FileInputStream(file)) {
-                    byte[] buffer = new byte[8192];
-                    for (int n; (n = in.read(buffer)) != -1;) bytes.write(buffer, 0, n);
-                }
+                append(bytes, file);
             }
             return bytes.toByteArray();
+        }
+    }
+
+    private static void append(ByteArrayOutputStream bytes, File file) throws IOException {
+        try (FileInputStream in = new FileInputStream(file)) {
+            byte[] buffer = new byte[8192];
+            for (int n; (n = in.read(buffer)) != -1;) bytes.write(buffer, 0, n);
+        }
+    }
+
+    private static void preservePreviousLaunch() {
+        if (!root.isDirectory()) return;
+        boolean hasCurrent = false;
+        for (int i = 0; i < FILES; i++) {
+            if (new File(root, "android.log" + (i == 0 ? "" : "." + i)).exists()) hasCurrent = true;
+        }
+        if (!hasCurrent) return;
+        File target = new File(root, PREVIOUS);
+        File temp = new File(root, PREVIOUS + ".tmp");
+        try (FileOutputStream out = new FileOutputStream(temp)) {
+            for (int i = FILES - 1; i >= 0; i--) {
+                File file = new File(root, "android.log" + (i == 0 ? "" : "." + i));
+                if (!file.exists()) continue;
+                try (FileInputStream in = new FileInputStream(file)) {
+                    byte[] buffer = new byte[8192];
+                    for (int n; (n = in.read(buffer)) != -1;) out.write(buffer, 0, n);
+                }
+            }
+            out.getFD().sync();
+            if (target.exists() && !target.delete()) return;
+            if (!temp.renameTo(target)) return;
+            for (int i = FILES - 1; i >= 0; i--) {
+                File file = new File(root, "android.log" + (i == 0 ? "" : "." + i));
+                if (file.exists() && !file.delete()) return;
+            }
+        } catch (IOException ignored) {
+            // Diagnostics cannot prevent the app from starting.
+        } finally {
+            if (temp.exists()) temp.delete();
         }
     }
 }

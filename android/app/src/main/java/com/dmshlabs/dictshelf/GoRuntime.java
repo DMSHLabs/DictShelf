@@ -60,6 +60,7 @@ class GoRuntime {
      * ready path, which answers inline.
      */
     static synchronized void ensure(Context ctx, Listener l) {
+        SystemLog.reader("runtime ensure state=" + state + " holders=" + holders + " generation=" + generation);
         if (state == READY) {
             l.onReady();
             return;
@@ -80,6 +81,7 @@ class GoRuntime {
         synchronized (GoRuntime.class) {
             if (gen != generation) return; // this runtime was stopped
             state = newState;
+            SystemLog.reader("runtime settle state=" + state + " holders=" + holders + " generation=" + generation);
             pending = new ArrayList<>(waiting);
             waiting.clear();
         }
@@ -100,6 +102,7 @@ class GoRuntime {
     /** A window that needs the runtime is alive. Paired with {@link #release}. */
     static synchronized void retain() {
         holders++;
+        SystemLog.reader("runtime retain holders=" + holders + " state=" + state);
         stopWhenIdle = false;
     }
 
@@ -113,6 +116,7 @@ class GoRuntime {
      */
     static synchronized void release(boolean mayStop) {
         if (holders > 0) holders--;
+        SystemLog.reader("runtime release holders=" + holders + " state=" + state + " may_stop=" + mayStop);
         if (!mayStop || holders > 0) return;
         // A task swipe finishes its activities just like an explicit exit.
         // Keep the Go runtime alive while its foreground service protects

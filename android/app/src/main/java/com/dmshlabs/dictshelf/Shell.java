@@ -788,6 +788,12 @@ final class Shell {
                     result.confirm("ok");
                     return true;
                 }
+                if ("wudict:reader-timing".equals(message)) {
+                    if (defaultValue != null && defaultValue.matches("[a-z_]+ elapsed_ms=[0-9]+ count=[0-9]+"))
+                        SystemLog.reader(defaultValue);
+                    result.confirm("ok");
+                    return true;
+                }
                 if ("wudict:save-article".equals(message)) {
                     try {
                         SystemLogExport.startArticle(a, defaultValue == null ? "{}" : defaultValue);

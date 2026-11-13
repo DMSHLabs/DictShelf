@@ -132,6 +132,9 @@ public class LookupActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         Intent i = getIntent();
+        SystemLog.reader("lookup create task=" + getTaskId() + " instance=" + System.identityHashCode(this)
+                + " saved=" + (savedInstanceState != null) + " action=" + (i == null ? "null" : i.getAction())
+                + " flags=" + (i == null ? 0 : i.getFlags()) + " reader=" + fromReader(i));
         // Read once: text() walks every extra a caller might use, and both the
         // word and the link test below want the same raw string.
         CharSequence raw = text(i);
@@ -178,6 +181,7 @@ public class LookupActivity extends Activity {
         // MainActivity does its own. Nothing below this line has run, so there
         // is no WebView to tear down and no server call to cancel.
         if (opensApp(i, data)) {
+            SystemLog.reader("lookup forward reason=setting task=" + getTaskId());
             forward();
             return;
         }
@@ -221,6 +225,7 @@ public class LookupActivity extends Activity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 pageReady = false;
+                SystemLog.reader("lookup page started task=" + getTaskId());
                 WebViewDiagnostics.page("lookup", "started", url);
                 // Where the bridge's prompts will come from: the address a
                 // stored port change can move out from under them, and the
@@ -230,6 +235,7 @@ public class LookupActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
+                SystemLog.reader("lookup page finished task=" + getTaskId() + " pending=" + lookupPending);
                 WebViewDiagnostics.page("lookup", "finished", url);
                 WebViewDiagnostics.install(view);
                 Shell.applyBackground(view);
@@ -275,7 +281,7 @@ public class LookupActivity extends Activity {
         retained = true;
         GoRuntime.retain();
         GoRuntime.ensure(this, new GoRuntime.Listener() {
-            @Override public void onReady() { showPage(); }
+            @Override public void onReady() { SystemLog.reader("lookup runtime ready task=" + getTaskId()); showPage(); }
             @Override public void onFailed(String message) { showFailure(message); }
         });
     }
@@ -533,6 +539,7 @@ public class LookupActivity extends Activity {
     private void showPage() {
         runOnUiThread(() -> {
             if (gone) return; // dismissed while the server was starting
+            SystemLog.reader("lookup load page task=" + getTaskId() + " attached=" + (web.getParent() != null));
             if (web.getParent() == null) {
                 root.removeAllViews();
                 LinearLayout col = new LinearLayout(this);
@@ -552,6 +559,7 @@ public class LookupActivity extends Activity {
 
     private void dispatchLookup() {
         if (gone || web == null || !pageReady) return;
+        SystemLog.reader("lookup dispatch in-place task=" + getTaskId());
         String script = "window.wudictAndroidLookup&&window.wudictAndroidLookup("
                 + org.json.JSONObject.quote(query) + ","
                 + (mode == null ? "null" : org.json.JSONObject.quote(mode)) + ","
@@ -589,6 +597,8 @@ public class LookupActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        SystemLog.reader("lookup new intent task=" + getTaskId() + " instance=" + System.identityHashCode(this)
+                + " ready=" + pageReady + " action=" + (intent == null ? "null" : intent.getAction()));
         setIntent(intent);
         setFinishOnTouchOutside(!fromReader(intent));
         String q = clean(text(intent));
@@ -626,6 +636,7 @@ public class LookupActivity extends Activity {
     @Override
     protected void onStop() {
         super.onStop();
+        SystemLog.reader("lookup stop task=" + getTaskId() + " finishing=" + isFinishing());
         Power.exit(this);
         Notif.gone(this);
         if (speech != null) speech.stop();
@@ -642,6 +653,7 @@ public class LookupActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        SystemLog.reader("lookup destroy task=" + getTaskId() + " finishing=" + isFinishing());
         SystemLog.record("lookup destroy finishing=" + isFinishing() + " web=" + (web != null));
         gone = true;
         // false, always: a popup closing never stops the server (D67). It goes

@@ -10703,6 +10703,12 @@ async function doSearch(ev){
   // an id the <select> does not have leaves .value empty, and a saved id or a
   // ?dict= from an older library can do exactly that.
   const dictSel=scope||$("dict").value||"all",seq=++searchSeq;
+  const readerStarted=performance.now();
+  const readerTiming=(stage,count=0)=>{
+    if(!window.wudictAndroidGo)return;
+    try{window.prompt("wudict:reader-timing",`${stage} elapsed_ms=${Math.round(performance.now()-readerStarted)} count=${count}`)}catch(_){}
+  };
+  readerTiming("search_start");
   const searchDiag=searchArticleDiagnosticsEnabled();
   const searchDiagStarted=performance.now();
   let searchDiagSlots=[];
@@ -10768,8 +10774,8 @@ async function doSearch(ev){
       return;
     }
     dictParam=ids.join(",");
-    perDict=5;
-  }else{dictParam=dictSel;perDict=5}
+    perDict=1;
+  }else{dictParam=dictSel;perDict=1}
   articleCacheGroupID=replayReturnCacheID||newArticleResultCacheID();
   articleCacheGroupCount=Math.max(1,dictParam.split(",").length);
   const out=$("out");
@@ -10854,6 +10860,7 @@ async function doSearch(ev){
     await fetchStream("/api/search?"+searchParams.toString(),msg=>{
       if(seq!==searchSeq)return; // superseded by a newer search
       if(msg.t==="begin"){
+        readerTiming("stream_begin",(msg.slots||[]).length);
         searchNavDictionaries=(msg.slots||[]).map(slot=>slot.dict).filter(Boolean);
         searchNavHitOrders=[];
         if(browseReturnRouteContext)logBrowseReturnRoute("search_stream_begin",{slots:(msg.slots||[]).length});
@@ -10881,6 +10888,7 @@ async function doSearch(ev){
         clearStatusForResults();
         refreshLivePicker();
       }else if(msg.t==="hit"){
+        if(!anyShown)readerTiming("first_response",(msg.results||[]).length);
         if(browseReturnRouteContext&&!browseReturnRouteContext.firstHit){
           browseReturnRouteContext.firstHit=true;
           logBrowseReturnRoute("first_search_hit",{dict:msg.dict||"",resultCount:(msg.results||[]).length,error:msg.error||"",skipped:!!msg.skipped});
@@ -10903,6 +10911,9 @@ async function doSearch(ev){
           searchDiagFirstPaint=true;
           const paintedDict=msg.dict||diagSlot?.dict||"",paintedName=msg.name||diagSlot?.name||"",paintedCount=(msg.results||[]).length;
           requestAnimationFrame(()=>requestAnimationFrame(()=>searchDiagLog("first_article_painted",{dict:paintedDict,name:paintedName,resultCount:paintedCount})));
+        }
+        if(res.results&&!anyResults){
+          requestAnimationFrame(()=>requestAnimationFrame(()=>readerTiming("first_article_painted",(msg.results||[]).length)));
         }
         if(browseArticleDiagContext&&res.results&&!browseArticleDiagContext.firstArticle){
           browseArticleDiagContext.firstArticle=true;
@@ -11060,7 +11071,9 @@ async function fetchSearchPortion(det,start,options={}){
   const box=det.parentElement,mode=det.dataset.searchMode||"prefix",query=det.dataset.searchQuery||"",id=det.dataset.searchDict||"";
   const initial=Number(det.dataset.searchInitial)||5;
   const configuredSize=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
-  const size=normalizedSearchPortionSize(options.size??configuredSize);
+  // The first answer is one article; keep that request at one even though
+  // user-configured navigation portions start at five.
+  const size=options.size===1?1:normalizedSearchPortionSize(options.size??configuredSize);
   const pageSize=normalizedSearchPortionSize(options.pageSize??configuredSize);
   const cached=articleResultCaches.get(id);
   const savedFirstPageSize=Math.max(0,Number(options.firstPageSize??det.dataset.searchFirstPageSize)||0);

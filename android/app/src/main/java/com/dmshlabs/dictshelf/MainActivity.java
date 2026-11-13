@@ -73,6 +73,8 @@ public class MainActivity extends Activity {
         // normal day/night theme and the saved background from the first frame.
         setTheme(R.style.Theme_WuWeiDict);
         super.onCreate(savedInstanceState);
+        SystemLog.reader("main create task=" + getTaskId() + " instance=" + System.identityHashCode(this)
+                + " saved=" + (savedInstanceState != null) + " action=" + (getIntent() == null ? "null" : getIntent().getAction()));
         // Exit may finish the launcher while a floating Settings window is
         // still being removed from the same task. Android can then recreate
         // the launcher from that task's base intent; do not start the server
@@ -168,6 +170,7 @@ public class MainActivity extends Activity {
     }
 
     private void startupRuntimeReady() {
+        SystemLog.reader("main runtime ready task=" + getTaskId());
         runOnUiThread(() -> {
             if (gone) return;
             startupRuntimeReady = true;
@@ -586,6 +589,7 @@ public class MainActivity extends Activity {
         @Override
         public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
             pageLoading = true;
+            SystemLog.reader("main page started task=" + getTaskId());
             WebViewDiagnostics.page("main", "started", url);
             // Where the bridge's prompts will come from: the address a stored
             // port change can move out from under them (Shell.pageOrigin).
@@ -594,6 +598,7 @@ public class MainActivity extends Activity {
 
         @Override
         public void onPageFinished(WebView view, String url) {
+            SystemLog.reader("main page finished task=" + getTaskId());
             if (!startupPageFinished) {
                 startupPageFinished = true;
                 SystemLog.recordStartupTiming("web_page_finished");
@@ -900,6 +905,7 @@ public class MainActivity extends Activity {
     }
 
     private void dispatchLookup(String query, String mode, String dict) {
+        SystemLog.reader("main dispatch in-place task=" + getTaskId());
         String script = "window.wudictAndroidLookup&&window.wudictAndroidLookup("
                 + org.json.JSONObject.quote(query) + ","
                 + (mode == null ? "null" : org.json.JSONObject.quote(mode)) + ","
@@ -912,6 +918,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        SystemLog.reader("main new intent task=" + getTaskId() + " instance=" + System.identityHashCode(this)
+                + " ready=" + startupPageFinished + " loading=" + pageLoading
+                + " action=" + (intent == null ? "null" : intent.getAction()));
         setIntent(intent);
         if (!Intake.onNewIntent(this, intent)) Storage.onNewIntent(this, intent);
         // "Clear browser cache" in the settings screen emptied what this page
@@ -931,7 +940,10 @@ public class MainActivity extends Activity {
             String m = pendingMode, d = pendingDict;
             pendingQuery = pendingMode = pendingDict = null;
             if (startupPageFinished && !pageLoading) dispatchLookup(q, m, d);
-            else navigate(Shell.searchUrl(this, q, m, d));
+            else {
+                SystemLog.reader("main navigate queued task=" + getTaskId());
+                navigate(Shell.searchUrl(this, q, m, d));
+            }
         }
     }
 
@@ -946,6 +958,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        SystemLog.reader("main destroy task=" + getTaskId() + " finishing=" + isFinishing());
         SystemLog.record("main destroy finishing=" + isFinishing() + " web=" + (web != null)
                 + " runtimeRetained=" + runtimeRetained);
         gone = true;
