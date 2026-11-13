@@ -8,7 +8,7 @@
       <h2 id="filtersDialogTitle">{{T:filters.title}}</h2>
       <button type="button" class="btn" id="filtersDialogClose" aria-label="{{T:pages.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
     </div>
-    <p>{{T:filters.hint}}</p>
+    <details class="filters-dialog-hint fold-hint"><summary><span>{{T:filters.hint}}</span></summary></details>
     <p class="filters-dialog-quiet"><code>Mine = oxford, collins</code> &nbsp; <code>Mine = `^regex$`</code></p>
     <textarea id="filtersDialogText" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="groups.ini"></textarea>
     <ul class="filters-dialog-probs" id="filtersDialogProblems"></ul>
