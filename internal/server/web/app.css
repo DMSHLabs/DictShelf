@@ -1105,10 +1105,11 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
 #hotkeysSection .hotkey-row input{box-sizing:border-box;width:100%;height:calc(var(--ui-control-height) * 1em);font:inherit;padding:0 .6em;
   color:var(--fg);background-color:var(--paper-bg,var(--bg));background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%;border:1px solid var(--line);border-radius:5px}
 html:not([data-shell-image]) #hotkeysSection .hotkey-row input{background-image:linear-gradient(#ffffff24,#ffffff24)}
-#systemSettingsBody .sys-row.sys-switch-ready{justify-content:flex-start;gap:.8em}
+#systemSettingsBody .sys-row.sys-switch-ready{justify-content:flex-start;align-items:flex-start;gap:.8em}
+#systemSettingsBody .sys-row.sys-switch-ready>input[type="checkbox"]{margin-top:.2em}
 #systemSettingsBody .sys-row.sys-switch-ready>.sys-label{
   box-sizing:border-box;flex:0 1 var(--sys-switch-label-width,auto);width:var(--sys-switch-label-width,auto);
-  max-width:calc(100% - 3.5em);min-width:0;white-space:nowrap}
+  max-width:calc(100% - 3.5em);min-width:0;white-space:normal}
 #panel #examplesExtraRow+.facts{margin-top:calc(var(--ui-row-gap) * 1em)}
 #panel .appearance-row:has(#appearanceColorOn){flex-wrap:wrap}
 #panel .appearance-row:has(#appearanceColorOn)>.color-box{flex:1 1 12em}
