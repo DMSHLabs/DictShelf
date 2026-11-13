@@ -103,13 +103,24 @@ public class LookupActivity extends Activity {
             "article.word",                                 // Dictan
     };
     private static final String EXTRA_FULLSCREEN = "EXTRA_FULLSCREEN";
+    private static final String KNOWN_READER_PACKAGE = "org.knownreader.premium";
 
     /** Whether this launch came through a reading app's dictionary API. */
     static boolean fromReader(Intent i) {
         String action = i == null ? null : i.getAction();
         if (action == null) return false;
         if (READER_ACTIONS.contains(action)) return true;
-        return Intent.ACTION_VIEW.equals(action) && i.hasCategory(CATEGORY_DICTAN);
+        if (Intent.ACTION_VIEW.equals(action) && i.hasCategory(CATEGORY_DICTAN)) return true;
+        // KnownReader sends its dictionary selection through ACTION_SEND, the
+        // same action as the Android share sheet. Use the activity referrer to
+        // select the reader-specific destination preference for that caller.
+        return Intent.ACTION_SEND.equals(action) && KNOWN_READER_PACKAGE.equals(referrerPackage(i));
+    }
+
+    private static String referrerPackage(Intent intent) {
+        if (intent == null || intent.getParcelableExtra(Intent.EXTRA_REFERRER) == null) return null;
+        Uri referrer = intent.getParcelableExtra(Intent.EXTRA_REFERRER);
+        return "android-app".equals(referrer.getScheme()) ? referrer.getAuthority() : null;
     }
 
     private FrameLayout root;
