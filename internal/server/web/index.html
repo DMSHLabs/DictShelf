@@ -4057,6 +4057,10 @@ async function loadDicts(rescan){
     logBrowseReturnRoute("dictionary_list_ready_apply_url",{query:initialParams.get("q")||""});
     applyURL();
   }
+  if(window.wudictAndroidPendingLookup){
+    const pending=window.wudictAndroidPendingLookup;window.wudictAndroidPendingLookup=null;
+    window.wudictAndroidLookup(...pending);
+  }
   const streamMs=Math.round(performance.now()-listStarted);
   const renderStarted=performance.now();
   refreshDictUI(true);
@@ -12395,6 +12399,7 @@ let commitOnce=false;
 window.wudictAndroidLookup=(query,mode,dict)=>{
   const term=String(query||"").trim();
   if(!term)return;
+  if(!dictsSettled){window.wudictAndroidPendingLookup=[term,mode,dict];return}
   if(maskBusyJobs.size||$("mode").value==="wildcards")maskInvalidate();
   if(mode)setSearchMode(mode);
   if(dict!==null&&dict!==undefined&&dict!=="")$("dict").value=dict;
