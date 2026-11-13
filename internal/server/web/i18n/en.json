@@ -1032,6 +1032,7 @@
   "search.suffix": "suffix",
   "search.wholeWord": "whole word",
   "search.wholeWordLemma": "whole word + lemma",
+  "search.readerWordLemma": "word + lemma",
   "search.exactLemma": "exact + lemma",
   "search.articles": "The article text",
   "search.fullTextDescription": "Search the text",

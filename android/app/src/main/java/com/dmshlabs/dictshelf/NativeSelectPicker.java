@@ -6,6 +6,10 @@ package com.dmshlabs.dictshelf;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.graphics.Typeface;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
+import android.text.style.TabStopSpan;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.JsPromptResult;
@@ -22,10 +26,12 @@ final class NativeSelectPicker {
         try {
             JSONObject data = new JSONObject(payload);
             boolean examples = "stylerPreset".equals(data.optString("kind"));
+            boolean readerMode = "readerMode".equals(data.optString("kind"));
             boolean plain = examples;
             JSONArray rows = data.getJSONArray("rows");
             if (rows.length() == 0) { result.cancel(); return; }
             String[] labels = new String[rows.length()];
+            String[] descriptions = new String[rows.length()];
             String[] accessibilityLabels = new String[rows.length()];
             int[] indices = new int[rows.length()];
             boolean[] disabled = new boolean[rows.length()];
@@ -33,6 +39,7 @@ final class NativeSelectPicker {
             for (int i = 0; i < rows.length(); i++) {
                 JSONObject row = rows.getJSONObject(i);
                 labels[i] = row.getString("label");
+                descriptions[i] = row.optString("description", "");
                 accessibilityLabels[i] = row.optString("accessibilityLabel", labels[i]);
                 indices[i] = row.getInt("index");
                 disabled[i] = row.optBoolean("disabled") || indices[i] < 0;
@@ -58,6 +65,19 @@ final class NativeSelectPicker {
                         text.setText(labels[position]);
                     } else {
                         text = (TextView) super.getView(position, recycled, parent);
+                        if (readerMode && !descriptions[position].isEmpty()) {
+                            String description = descriptions[position];
+                            SpannableStringBuilder line = new SpannableStringBuilder(labels[position])
+                                    .append('\t').append(description);
+                            int tabPosition = (int)(88 * activity.getResources().getDisplayMetrics().density);
+                            int descriptionStart = labels[position].length() + 1;
+                            line.setSpan(new TabStopSpan.Standard(tabPosition), 0, line.length(),
+                                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                            int secondaryColor = (textColor & 0x00FFFFFF) | 0x99000000;
+                            line.setSpan(new ForegroundColorSpan(secondaryColor), descriptionStart,
+                                    line.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                            text.setText(line);
+                        }
                         if (examples) {
                             int indent = (int)(32 * activity.getResources().getDisplayMetrics().density);
                             text.setPaddingRelative(indent, text.getPaddingTop(),
@@ -89,9 +109,10 @@ final class NativeSelectPicker {
             dialog.setCanceledOnTouchOutside(true);
             dialog.show();
             dialog.getWindow().setBackgroundDrawable(WindowBackground.dialogDrawable(activity, color));
-            if (examples || "mode".equals(data.optString("kind"))) {
+            if (examples || "mode".equals(data.optString("kind")) || readerMode) {
                 android.util.DisplayMetrics metrics = activity.getResources().getDisplayMetrics();
-                int width = Math.min((int)(260 * metrics.density), (int)(metrics.widthPixels * .9f));
+                int widthDp = readerMode ? 320 : 260;
+                int width = Math.min((int)(widthDp * metrics.density), (int)(metrics.widthPixels * .9f));
                 dialog.getWindow().setLayout(width, android.view.WindowManager.LayoutParams.WRAP_CONTENT);
             }
             if (dialog.getListView() != null) dialog.getListView().setBackgroundColor(android.graphics.Color.TRANSPARENT);

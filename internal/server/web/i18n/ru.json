@@ -1046,6 +1046,7 @@
   "search.suffix": "суффикс",
   "search.wholeWord": "целое слово",
   "search.wholeWordLemma": "целое слово + лемма",
+  "search.readerWordLemma": "слово + лемма",
   "search.exactLemma": "точно + лемма",
   "search.articles": "Текст статей",
   "search.fullTextDescription": "Искать в тексте",

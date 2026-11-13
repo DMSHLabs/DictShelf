@@ -321,13 +321,17 @@ final class Shell {
                     rows.push({label: parent.label, index: -1, disabled: true});
                   }
                   group = parent;
+                  const description = option.getAttribute('aria-label') || option.title || option.textContent;
                   rows.push({label: option.textContent,
-                    accessibilityLabel: option.getAttribute('aria-label') || option.title || option.textContent, index,
+                    accessibilityLabel: description,
+                    description: id === 'integrationReaderMode'
+                      ? option.getAttribute('data-description') || description : '', index,
                     disabled: option.disabled || (parent.tagName === 'OPTGROUP' && parent.disabled)});
                 }
                 const answer = window.prompt('wudict:native-select-picker',
                   JSON.stringify({rows, selected: select.selectedIndex,
-                    kind: ['articleFindMode','integrationReaderMode'].includes(id) ? 'mode' : id}));
+                    kind: id === 'integrationReaderMode' ? 'readerMode'
+                      : id === 'articleFindMode' ? 'mode' : id}));
                 if (answer === null) return;
                 const index = Number(answer);
                 if (!Number.isInteger(index) || !options[index]) return;
