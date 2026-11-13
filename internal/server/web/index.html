@@ -12389,6 +12389,24 @@ let searchModeOnce=null,lastSearchMode="";
    one tap away rather than one yank away. Same one-shot idiom as navRecord:
    set by the act, consumed by the next doSearch. */
 let commitOnce=false;
+// Android's floating reader window keeps this document alive between word
+// selections. Update its search state in place instead of reloading the whole
+// app page (and reinitializing dictionaries, history and the WebView).
+window.wudictAndroidLookup=(query,mode,dict)=>{
+  const term=String(query||"").trim();
+  if(!term)return;
+  if(maskBusyJobs.size||$("mode").value==="wildcards")maskInvalidate();
+  if(mode)setSearchMode(mode);
+  if(dict!==null&&dict!==undefined&&dict!=="")$("dict").value=dict;
+  else $("dict").value="all";
+  syncChips();
+  $("q").value=term;
+  scopeOnce=null;anchorOnce=null;restoreArticleDict=null;restoreSearchReturnCacheID=null;
+  browseReturn="";browseHistoryReturn=false;maskReturn="";
+  navRecord="replace";commitOnce=true;
+  if($("mode").value==="wildcards")maskSubmitRequested=true;
+  doSearch();
+};
 function applyURL(){
   const p=new URLSearchParams(location.search);
   restoreArticleDict=p.get("q")?p.get("openDict")||null:null;

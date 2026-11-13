@@ -122,6 +122,8 @@ public class LookupActivity extends Activity {
     private String query;
     private String mode;
     private String dict;
+    private boolean pageReady;
+    private boolean lookupPending;
     private boolean retained;
     private volatile boolean gone;
 
@@ -216,6 +218,7 @@ public class LookupActivity extends Activity {
         web.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                pageReady = false;
                 WebViewDiagnostics.page("lookup", "started", url);
                 // Where the bridge's prompts will come from: the address a
                 // stored port change can move out from under them, and the
@@ -231,6 +234,11 @@ public class LookupActivity extends Activity {
                 // Per document, the same rule as the app window: the WebView's
                 // own speechSynthesis has no voices, so the shell supplies one.
                 speech.inject(view, url);
+                pageReady = true;
+                if (lookupPending) {
+                    lookupPending = false;
+                    dispatchLookup();
+                }
             }
 
             @Override
@@ -540,6 +548,15 @@ public class LookupActivity extends Activity {
         });
     }
 
+    private void dispatchLookup() {
+        if (gone || web == null || !pageReady) return;
+        String script = "window.wudictAndroidLookup&&window.wudictAndroidLookup("
+                + org.json.JSONObject.quote(query) + ","
+                + (mode == null ? "null" : org.json.JSONObject.quote(mode)) + ","
+                + (dict == null ? "null" : org.json.JSONObject.quote(dict)) + ")";
+        web.evaluateJavascript(script, null);
+    }
+
     /**
      * For when a quick answer turns into real reading: hand the same query to
      * the app proper and get out of the way. MainActivity is singleTask, so
@@ -585,7 +602,8 @@ public class LookupActivity extends Activity {
             return;
         }
         if (!gone && web != null && web.getParent() != null) {
-            web.loadUrl(Shell.searchUrl(this, query, mode, dict));
+            if (pageReady) dispatchLookup();
+            else lookupPending = true;
         }
     }
 
