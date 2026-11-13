@@ -931,22 +931,23 @@ window.wudictFontScale=(function(){
 
 <details class="sect" id="integrationSection" hidden data-panel-section="integration" open>
   <summary class="sect-h">{{T:panel.integration}}</summary>
+  <p class="panel-update-status"><strong>{{T:system.lookup}}</strong></p>
   <p class="panel-update-status">{{T:system.lookupHint}}</p>
   <div class="facts update-notifications-row"><label class="rowlabel" for="integrationToolbar"><input class="panel-checkbox" type="checkbox" id="integrationToolbar"> {{T:system.selection}}</label></div>
   <div class="facts update-notifications-row"><label class="rowlabel" for="integrationShare"><input class="panel-checkbox" type="checkbox" id="integrationShare"> {{T:system.share}}</label></div>
   <div class="facts update-notifications-row"><label class="rowlabel" for="integrationLink"><input class="panel-checkbox" type="checkbox" id="integrationLink"> {{T:system.links}}</label></div>
-  <div class="facts update-notifications-row"><label class="rowlabel" for="integrationReader"><input class="panel-checkbox" type="checkbox" id="integrationReader"> {{T:system.reader}}</label></div>
+  <div class="facts update-notifications-row"><label class="rowlabel" for="integrationReader"><input class="panel-checkbox" type="checkbox" id="integrationReader"> {{T:system.readerFullApp}}</label></div>
   <div class="facts update-channel-row">
     <label class="rowlabel" for="integrationReaderMode">{{T:system.readerMode}}</label>
     <span class="panel-select-wrap panel-dropdown"><select id="integrationReaderMode" aria-label="{{T:system.readerMode}}">
-      <option value="prefix">{{T:search.prefix}} (ab→)</option>
-      <option value="suffix">{{T:search.suffix}} (→ab)</option>
-      <option value="contains">{{T:search.contains}} (ab)</option>
-      <option value="word">{{T:search.wholeWord}} (·ab·)</option>
-      <option value="wordLemma">{{T:search.wholeWordLemma}} (·ab·+)</option>
-      <option value="exact">{{T:search.exact}} (=)</option>
-      <option value="exactLemma">{{T:search.exactLemma}} (=+)</option>
-      <option value="wildcards">{{T:search.wildcards}} (*?)</option>
+      <option value="prefix" aria-label="{{T:search.prefix}}" title="{{T:search.prefix}}">ab→</option>
+      <option value="suffix" aria-label="{{T:search.suffix}}" title="{{T:search.suffix}}">→ab</option>
+      <option value="contains" aria-label="{{T:search.contains}}" title="{{T:search.contains}}">ab</option>
+      <option value="word" aria-label="{{T:search.wholeWord}}" title="{{T:search.wholeWord}}">·ab·</option>
+      <option value="wordLemma" aria-label="{{T:search.wholeWordLemma}}" title="{{T:search.wholeWordLemma}}">·ab·+</option>
+      <option value="exact" aria-label="{{T:search.exact}}" title="{{T:search.exact}}">=</option>
+      <option value="exactLemma" aria-label="{{T:search.exactLemma}}" title="{{T:search.exactLemma}}">=+</option>
+      <option value="wildcards" aria-label="{{T:search.wildcards}}" title="{{T:search.wildcards}}">*?</option>
     </select></span>
   </div>
   <p class="panel-update-status">{{T:system.readerModeHint}}</p>

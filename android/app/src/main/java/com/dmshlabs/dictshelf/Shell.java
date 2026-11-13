@@ -321,7 +321,8 @@ final class Shell {
                     rows.push({label: parent.label, index: -1, disabled: true});
                   }
                   group = parent;
-                  rows.push({label: option.textContent, index,
+                  rows.push({label: option.textContent,
+                    accessibilityLabel: option.getAttribute('aria-label') || option.title || option.textContent, index,
                     disabled: option.disabled || (parent.tagName === 'OPTGROUP' && parent.disabled)});
                 }
                 const answer = window.prompt('wudict:native-select-picker',

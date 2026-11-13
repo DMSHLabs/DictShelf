@@ -26,12 +26,14 @@ final class NativeSelectPicker {
             JSONArray rows = data.getJSONArray("rows");
             if (rows.length() == 0) { result.cancel(); return; }
             String[] labels = new String[rows.length()];
+            String[] accessibilityLabels = new String[rows.length()];
             int[] indices = new int[rows.length()];
             boolean[] disabled = new boolean[rows.length()];
             int checked = -1;
             for (int i = 0; i < rows.length(); i++) {
                 JSONObject row = rows.getJSONObject(i);
                 labels[i] = row.getString("label");
+                accessibilityLabels[i] = row.optString("accessibilityLabel", labels[i]);
                 indices[i] = row.getInt("index");
                 disabled[i] = row.optBoolean("disabled") || indices[i] < 0;
                 if (indices[i] >= 0 && indices[i] == data.optInt("selected", -1)) checked = i;
@@ -63,6 +65,7 @@ final class NativeSelectPicker {
                         }
                     }
                     text.setTextColor(textColor);
+                    text.setContentDescription(accessibilityLabels[position]);
                     text.setAlpha(disabled[position] && indices[position] >= 0 ? .5f : 1f);
                     return text;
                 }
