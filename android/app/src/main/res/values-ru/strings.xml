@@ -17,8 +17,8 @@
     <string name="settings_title">Настройки DictShelf</string>
     <string name="settings_moved_hint">Большинство настроек находится в приложении: ☰ → «Системные настройки». Здесь находятся интеграция с читалками и системный журнал.</string>
     <string name="settings_integration">Интеграция</string>
-    <string name="settings_reader_full_app">Открывать вызов из читалки в полном приложении</string>
-    <string name="settings_reader_full_app_hint">Если включено, выбранное в читалке слово откроется в DictShelf вместо плавающего окна.</string>
+    <string name="settings_reader_full_app">Открывать вызовы из читалки на весь экран</string>
+    <string name="settings_reader_full_app_hint">Выключено — плавающее окно. Включено — полное приложение DictShelf.</string>
     <string name="settings_reader_mode">Режим поиска для читалки</string>
     <string name="settings_reader_mode_hint">Выберите, как искать слова, выбранные в читалке.</string>
     <string-array name="settings_reader_modes">

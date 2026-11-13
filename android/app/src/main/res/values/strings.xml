@@ -60,8 +60,8 @@
 	-->
 	<string name="settings_moved_hint">Most settings are in the app under ☰ → System Settings. Reader integration and the system log are here.</string>
 	<string name="settings_integration">Integration</string>
-	<string name="settings_reader_full_app">Open reader lookups in the full app</string>
-	<string name="settings_reader_full_app_hint">When enabled, a word selected in a reading app opens DictShelf instead of the floating lookup.</string>
+	<string name="settings_reader_full_app">Open reader lookups full-screen</string>
+	<string name="settings_reader_full_app_hint">Off opens the floating window. On opens the full DictShelf app.</string>
 	<string name="settings_reader_mode">Reader lookup mode</string>
 	<string name="settings_reader_mode_hint">Choose how DictShelf searches for words selected in a reading app.</string>
 	<string-array name="settings_reader_modes">
