@@ -1022,6 +1022,8 @@
   "pages.memory": "~{number} MB RAM",
   "search.pin": "Pin search bar",
   "search.unpin": "Unpin search bar",
+  "search.showSearchBar": "Show search bar",
+  "search.hideSearchBar": "Hide search bar",
   "search.input": "Search…",
   "search.term": "Search term",
   "search.history": "Recent searches",

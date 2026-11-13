@@ -286,9 +286,8 @@ public class LookupActivity extends Activity {
                 WebViewDiagnostics.page("lookup", "finished", url);
                 WebViewDiagnostics.install(view);
                 Shell.applyBackground(view);
-                view.evaluateJavascript("document.body.classList.add('android-lookup-window');"
-                        + "document.getElementById('sbarOpenApp').hidden=false;"
-                        + "if(typeof sbarPaint==='function')sbarPaint()", null);
+                view.evaluateJavascript("if(typeof window.wudictAndroidLookupWindowReady==='function')"
+                        + "window.wudictAndroidLookupWindowReady()", null);
                 // Per document, the same rule as the app window: the WebView's
                 // own speechSynthesis has no voices, so the shell supplies one.
                 speech.inject(view, url);

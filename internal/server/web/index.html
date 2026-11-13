@@ -289,6 +289,7 @@ window.wudictFontScale=(function(){
 <button type="button" class="btn tools" id="panelBtn" title="{{T:panel.settings}}" aria-label="{{T:panel.settings}}">☰<span id="panelUpdateBadge" class="panel-update-badge" aria-hidden="true" hidden>!</span></button>
 </form>
 </header>
+<button type="button" id="lookupBarToggle" aria-label="{{T:search.showSearchBar}}" aria-expanded="false" aria-controls="bar" hidden><span aria-hidden="true">⌄</span></button>
 
 <main class="col container">
 <!-- Three levels, one job each: #status is the collapsing grid, .msg is the
@@ -11938,7 +11939,8 @@ function revealFirstMark(det){
    offsetHeight while the bar is off-screen left a bar-sized hole above the
    thing we scrolled to. Read it, do not assume it: the walk is deliberately
    allowed to run with the bar in either state. */
-function barH(){const b=$("bar");return b.classList.contains("hidden")?0:b.offsetHeight}
+function barH(){const b=$("bar");return (document.body.classList.contains("android-lookup-window")?$("lookupBarToggle").offsetHeight:0)
+  +(b.classList.contains("hidden")?0:b.offsetHeight)}
 /* Suspends the auto-hide for the duration of a scroll we started. Cleared by
    scrollend where it exists, by the timer where it does not, and immediately
    by a wheel or a drag — a user who takes over mid-flight is scrolling for
@@ -12446,6 +12448,7 @@ sbarPaint();
 let prevScroll=window.pageYOffset;
 addEventListener("scroll",()=>{
   const cur=window.pageYOffset;
+  if(document.body.classList.contains("android-lookup-window")){prevScroll=cur;return}
   /* A scroll WE started is not the user scrolling away from the bar, and
      treating it as one would break the ‹ n/N › walk (D118): each press scrolls
      down, the bar hides, body.barhidden collapses --stick to 0, and every
@@ -12458,19 +12461,34 @@ addEventListener("scroll",()=>{
   setBarHidden(cur>80&&cur>prevScroll);
   prevScroll=cur;
 });
-function setBarHidden(hide){
-  if(barPinned)hide=false;
+function setBarHidden(hide,explicit=false){
+  const lookup=document.body.classList.contains("android-lookup-window");
+  if(lookup&&!explicit)return;
+  if(barPinned&&!lookup)hide=false;
   $("bar").classList.toggle("hidden",hide);
   document.body.classList.toggle("barhidden",hide);
+  if(lookup){
+    $("lookupBarToggle").setAttribute("aria-expanded",hide?"false":"true");
+    $("lookupBarToggle").setAttribute("aria-label",tx(hide?"search.showSearchBar":"search.hideSearchBar"));
+  }
 }
+$('lookupBarToggle').addEventListener('click',()=>setBarHidden(!$('bar').classList.contains('hidden'),true));
+window.wudictAndroidLookupWindowReady=()=>{
+  document.body.classList.add('android-lookup-window');
+  $('lookupBarToggle').hidden=false;
+  $('sbarOpenApp').hidden=false;
+  if(document.activeElement===$('q'))$('q').blur();
+  setBarHidden(true,true);
+  sbarPaint();
+};
 /* The box is never worked in while out of sight. .bar.hidden only translates
    the bar, so focus() — from "/", a stray printable key, a key forwarded out
    of an article, Escape — lands in an invisible field and scrolls nothing
    that would bring it back. Showing it on `focus` covers every one of those
    routes at once; `input` covers the box that already had focus when a
    scroll hid it, where the keystroke never reaches the document listener. */
-$("q").addEventListener("focus",()=>setBarHidden(false));
-$("q").addEventListener("input",()=>setBarHidden(false));
+$("q").addEventListener("focus",()=>setBarHidden(false,true));
+$("q").addEventListener("input",()=>setBarHidden(false,true));
 
 /* Shareable links AND working browser navigation: ?q=…&mode=…&dict=…
    Typing and navigating must record history differently. `doSearch` runs on a

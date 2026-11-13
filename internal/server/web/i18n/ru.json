@@ -1036,6 +1036,8 @@
   "pages.memory": "~{number} МБ ОЗУ",
   "search.pin": "Закрепить строку поиска",
   "search.unpin": "Открепить строку поиска",
+  "search.showSearchBar": "Показать строку поиска",
+  "search.hideSearchBar": "Скрыть строку поиска",
   "search.input": "Поиск…",
   "search.term": "Поисковый запрос",
   "search.history": "Недавние запросы",
