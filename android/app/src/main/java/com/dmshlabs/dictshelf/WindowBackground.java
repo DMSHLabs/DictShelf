@@ -98,16 +98,26 @@ final class WindowBackground {
 
     /** A slightly lighter surface, with a rounded outline separating dialogs from the page. */
     static Drawable dialogDrawable(Context c, int color) {
+        return dialogDrawable(c, color, true);
+    }
+
+    static Drawable squareDialogDrawable(Context c, int color) {
+        return dialogDrawable(c, color, false);
+    }
+
+    private static Drawable dialogDrawable(Context c, int color, boolean rounded) {
         Drawable base = drawable(c, color);
         float density = c.getResources().getDisplayMetrics().density;
         return new Drawable() {
             private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
             @Override public void draw(Canvas canvas) {
                 android.graphics.RectF area = new android.graphics.RectF(getBounds());
-                android.graphics.Path clip = new android.graphics.Path();
-                clip.addRoundRect(area, 12 * density, 12 * density, android.graphics.Path.Direction.CW);
                 int saved = canvas.save();
-                canvas.clipPath(clip);
+                if (rounded) {
+                    android.graphics.Path clip = new android.graphics.Path();
+                    clip.addRoundRect(area, 12 * density, 12 * density, android.graphics.Path.Direction.CW);
+                    canvas.clipPath(clip);
+                }
                 base.setBounds(getBounds());
                 base.draw(canvas);
                 canvas.drawColor(0x24FFFFFF);
@@ -116,7 +126,8 @@ final class WindowBackground {
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(density);
                 paint.setColor(ShellPrefs.darkIcons(color) ? 0x66594B38 : 0x669F9586);
-                canvas.drawRoundRect(area, 12 * density, 12 * density, paint);
+                if (rounded) canvas.drawRoundRect(area, 12 * density, 12 * density, paint);
+                else canvas.drawRect(area, paint);
             }
             @Override public void setAlpha(int alpha) { base.setAlpha(alpha); }
             @Override public void setColorFilter(ColorFilter filter) { base.setColorFilter(filter); }

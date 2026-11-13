@@ -264,7 +264,7 @@ html[data-webview2] #barBackWords:not([hidden]){display:inline-flex;align-items:
   border-top:1px solid var(--line);padding:var(--sp-1) 0;
   padding-bottom:var(--sp-1)}
 .sbar[hidden]{display:none}
-#sbarOpenApp{flex:none;display:inline-flex;align-items:center;justify-content:center;padding:.25em;min-width:var(--sbar-sq,2.2em)}
+#sbarOpenApp{flex:none;display:inline-flex;align-items:center;justify-content:center;padding:.25em;min-width:var(--sbar-sq,2.2em);margin-inline-end:var(--sp-2)}
 #sbarOpenApp[hidden]{display:none}
 #sbarOpenApp svg{width:1.35em;height:1.35em}
 body.android-lookup-window details.dict>summary{position:static;top:auto}

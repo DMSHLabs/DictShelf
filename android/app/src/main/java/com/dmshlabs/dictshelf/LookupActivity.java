@@ -237,11 +237,11 @@ public class LookupActivity extends Activity {
         updateReaderBack(i);
         Shell.clearWebCacheAfterUpdate(this);
 		final int pageBg = ShellPrefs.pageBg(this);
-		getWindow().setBackgroundDrawable(WindowBackground.dialogDrawable(this, pageBg));
+		getWindow().setBackgroundDrawable(WindowBackground.squareDialogDrawable(this, pageBg));
         sizeWindow();
 
         root = new FrameLayout(this);
-        root.setBackground(WindowBackground.dialogDrawable(this, pageBg));
+        root.setBackground(WindowBackground.squareDialogDrawable(this, pageBg));
         status = new TextView(this);
 		status.setTextColor(ShellPrefs.darkIcons(pageBg) ? 0xDE000000 : 0xFFFFFFFF);
         // The popup's half of the same switch as the app window's "Starting
@@ -344,16 +344,16 @@ public class LookupActivity extends Activity {
         if (!focused || root == null || web == null) return;
         WebViewDiagnostics.install(web);
         int color = ShellPrefs.pageBg(this);
-        getWindow().setBackgroundDrawable(WindowBackground.dialogDrawable(this, color));
-        root.setBackground(WindowBackground.dialogDrawable(this, color));
+        getWindow().setBackgroundDrawable(WindowBackground.squareDialogDrawable(this, color));
+        root.setBackground(WindowBackground.squareDialogDrawable(this, color));
         status.setTextColor(ShellPrefs.darkIcons(color) ? 0xDE000000 : 0xFFFFFFFF);
         Shell.applyBackground(web);
     }
 
     void refreshAppearance() {
         int color = ShellPrefs.pageBg(this);
-        getWindow().setBackgroundDrawable(WindowBackground.dialogDrawable(this, color));
-        root.setBackground(WindowBackground.dialogDrawable(this, color));
+        getWindow().setBackgroundDrawable(WindowBackground.squareDialogDrawable(this, color));
+        root.setBackground(WindowBackground.squareDialogDrawable(this, color));
         status.setTextColor(ShellPrefs.darkIcons(color) ? 0xDE000000 : 0xFFFFFFFF);
         Shell.applyBackground(web);
     }
