@@ -181,11 +181,13 @@ public class LookupActivity extends Activity {
             forward();
             return;
         }
+        // Reader lookups are a quick-switch companion: moving focus back to
+        // the reader must not dismiss the floating window with an outside tap.
+        setFinishOnTouchOutside(!fromReader(i));
         Shell.clearWebCacheAfterUpdate(this);
 		final int pageBg = ShellPrefs.pageBg(this);
 		getWindow().setBackgroundDrawable(WindowBackground.dialogDrawable(this, pageBg));
         sizeWindow();
-        setFinishOnTouchOutside(true);
 
         root = new FrameLayout(this);
         root.setBackground(WindowBackground.dialogDrawable(this, pageBg));
@@ -588,6 +590,7 @@ public class LookupActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        setFinishOnTouchOutside(!fromReader(intent));
         String q = clean(text(intent));
         if (q == null) return;
         query = q;
