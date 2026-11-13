@@ -124,8 +124,12 @@ public class LookupActivity extends Activity {
         if (fromReader(intent)) return true;
         if (intent == null || !Intent.ACTION_SEND.equals(intent.getAction())) return false;
         // A reader can use the share action for its dictionary button. Android
-        // knows the launching package even when the intent has no referrer.
-        return knownReader(intent);
+        // can hide both caller identity and referrer for this dispatch. A
+        // single selected word is a lookup; longer shared text stays a share.
+        if (knownReader(intent)) return true;
+        String selected = clean(text(intent));
+        return selected != null && selected.length() <= 100
+                && !selected.matches(".*\\s.*") && link(selected) == null;
     }
 
     private boolean knownReader(Intent intent) {
@@ -459,7 +463,7 @@ public class LookupActivity extends Activity {
      */
     private boolean opensApp(Intent i, Uri data) {
         Boolean once = full(param(data, "full"));
-        if (once == null && fullscreen(i) && !knownReader(i)) once = Boolean.TRUE;
+        if (once == null && fullscreen(i) && !readerCall(i)) once = Boolean.TRUE;
         return once != null ? once : ShellPrefs.opensApp(this, ShellPrefs.sourceKey(i, readerCall(i)));
     }
 
