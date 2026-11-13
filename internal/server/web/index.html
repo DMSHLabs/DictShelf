@@ -1234,12 +1234,19 @@ window.wudictFontScale=(function(){
     <h3 class="sys-head">{{T:system.logFile}}</h3>
     <p class="sys-hint">{{T:system.logHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysLogEnabled"><span class="sys-label">{{T:system.logEnable}}</span></label>
+    <p class="sys-hint">{{T:system.logEnableHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysLogBase"><span class="sys-label">{{T:system.logBase}}</span></label>
+    <p class="sys-hint">{{T:system.logBaseHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysLogWeb"><span class="sys-label">{{T:system.logWeb}}</span></label>
+    <p class="sys-hint">{{T:system.logWebHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysLogDownload"><span class="sys-label">{{T:system.logDownload}}</span></label>
+    <p class="sys-hint">{{T:system.logDownloadHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysLogSearch"><span class="sys-label">{{T:system.logSearch}}</span></label>
+    <p class="sys-hint">{{T:system.logSearchHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysSearchArticleDiagnostics"><span class="sys-label">{{T:system.searchArticleDiagnostics}}</span></label>
+    <p class="sys-hint">{{T:system.searchArticleDiagnosticsHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysArticlePageCacheDiagnostics"><span class="sys-label">{{T:system.articlePageCacheDiagnostics}}</span></label>
+    <p class="sys-hint">{{T:system.articlePageCacheDiagnosticsHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysBrowseArticleDiagnostics"><span class="sys-label">{{T:system.browseArticleDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysBrowseDiagnostics"><span class="sys-label">{{T:system.browseDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysDictionaryListDiagnostics"><span class="sys-label">{{T:system.dictionaryListDiagnostics}}</span></label>
@@ -5707,6 +5714,15 @@ function systemSettingsDiagnosticsControl(enabled){
   const hint=document.createElement("p");hint.className="sys-hint";hint.textContent=tx("system.logSystemSettingsHint");
   return {row,hint};
 }
+function systemSettingsCheckboxControl(labelKey,hintKey,enabled,onChange){
+  const row=document.createElement("label");row.className="sys-row";
+  const check=document.createElement("input");check.type="checkbox";check.checked=!!enabled;
+  check.addEventListener("change",()=>onChange(check.checked));
+  const label=document.createElement("span");label.className="sys-label";label.textContent=tx(labelKey);
+  row.append(check,label);
+  const hint=document.createElement("p");hint.className="sys-hint";hint.textContent=tx(hintKey);
+  return {row,hint};
+}
 
 async function showSystemSettings(){
   const dialog=$("systemSettingsDialog"),body=$("systemSettingsBody");
@@ -5763,12 +5779,19 @@ async function showSystemSettings(){
     searchThreads:$("sysSearchThreads").parentElement,
     searchThreadsHint:$("sysSearchThreadsHint"),
     logEnabled:$("sysLogEnabled").parentElement,
+    logEnabledHint:$("sysLogEnabled").parentElement.nextElementSibling,
     logBase:$("sysLogBase").parentElement,
+    logBaseHint:$("sysLogBase").parentElement.nextElementSibling,
     logWeb:$("sysLogWeb").parentElement,
+    logWebHint:$("sysLogWeb").parentElement.nextElementSibling,
     logDownload:$("sysLogDownload").parentElement,
+    logDownloadHint:$("sysLogDownload").parentElement.nextElementSibling,
     logSearch:$("sysLogSearch").parentElement,
+    logSearchHint:$("sysLogSearch").parentElement.nextElementSibling,
     searchArticleDiagnostics:$("sysSearchArticleDiagnostics").parentElement,
-    articlePageCacheDiagnostics:$("sysArticlePageCacheDiagnostics").parentElement
+    searchArticleDiagnosticsHint:$("sysSearchArticleDiagnostics").parentElement.nextElementSibling,
+    articlePageCacheDiagnostics:$("sysArticlePageCacheDiagnostics").parentElement,
+    articlePageCacheDiagnosticsHint:$("sysArticlePageCacheDiagnostics").parentElement.nextElementSibling
   };
   if(window.wudictAndroidShell){
     systemSettingsDiagnostic("shell_state_start");
@@ -5878,8 +5901,13 @@ async function showSystemSettings(){
   logHeading.textContent=tx("system.logFile");body.append(logHeading);
   const logHint=document.createElement("p");logHint.className="sys-hint";
   logHint.textContent=tx("system.logHint");body.append(logHint);
-  body.append(systemSettingsNodes.logEnabled,systemSettingsNodes.logBase,systemSettingsNodes.logWeb,
-    systemSettingsNodes.logDownload,systemSettingsNodes.logSearch,systemSettingsNodes.searchArticleDiagnostics,systemSettingsNodes.articlePageCacheDiagnostics);
+  body.append(systemSettingsNodes.logEnabled,systemSettingsNodes.logEnabledHint,
+    systemSettingsNodes.logBase,systemSettingsNodes.logBaseHint,
+    systemSettingsNodes.logWeb,systemSettingsNodes.logWebHint,
+    systemSettingsNodes.logDownload,systemSettingsNodes.logDownloadHint,
+    systemSettingsNodes.logSearch,systemSettingsNodes.logSearchHint,
+    systemSettingsNodes.searchArticleDiagnostics,systemSettingsNodes.searchArticleDiagnosticsHint,
+    systemSettingsNodes.articlePageCacheDiagnostics,systemSettingsNodes.articlePageCacheDiagnosticsHint);
   if(diagnosticControl)body.append(diagnosticControl.row,diagnosticControl.hint);
   if(startupTimingControl)body.append(startupTimingControl.row,startupTimingControl.hint);
   const desktopLog=desktopSystemLogOptions();
@@ -5896,41 +5924,20 @@ async function showSystemSettings(){
   }
   $("sysSearchArticleDiagnostics").checked=searchArticleDiagnosticsEnabled();
   $("sysArticlePageCacheDiagnostics").checked=articlePageCacheDiagnosticsEnabled();
-  const diagnosticsLabel=document.createElement("label");diagnosticsLabel.className="sys-row";
-  const diagnostics=document.createElement("input");diagnostics.type="checkbox";diagnostics.checked=browseDiagnosticsEnabled();
-  diagnostics.addEventListener("change",()=>setBrowseDiagnostics(diagnostics.checked));
-  const diagnosticsText=document.createElement("span");diagnosticsText.className="sys-label";diagnosticsText.textContent=tx("system.browseDiagnostics");
-  diagnosticsLabel.append(diagnostics,diagnosticsText);body.append(diagnosticsLabel);
-  const articleDiagnosticsLabel=document.createElement("label");articleDiagnosticsLabel.className="sys-row";
-  const articleDiagnostics=document.createElement("input");articleDiagnostics.type="checkbox";articleDiagnostics.checked=browseArticleDiagnosticsEnabled();
-  articleDiagnostics.addEventListener("change",()=>setBrowseArticleDiagnostics(articleDiagnostics.checked));
-  const articleDiagnosticsText=document.createElement("span");articleDiagnosticsText.className="sys-label";articleDiagnosticsText.textContent=tx("system.browseArticleDiagnostics");
-  articleDiagnosticsLabel.append(articleDiagnostics,articleDiagnosticsText);body.append(articleDiagnosticsLabel);
-  const indexParallelismLabel=document.createElement("label");indexParallelismLabel.className="sys-row";
-  const indexParallelismDiagnostics=document.createElement("input");indexParallelismDiagnostics.type="checkbox";indexParallelismDiagnostics.checked=indexParallelismDiagnosticsEnabled();
-  indexParallelismDiagnostics.addEventListener("change",()=>setIndexParallelismDiagnostics(indexParallelismDiagnostics.checked));
-  const indexParallelismText=document.createElement("span");indexParallelismText.className="sys-label";indexParallelismText.textContent=tx("system.indexParallelismDiagnostics");
-  indexParallelismLabel.append(indexParallelismDiagnostics,indexParallelismText);body.append(indexParallelismLabel);
-  const searchParallelismLabel=document.createElement("label");searchParallelismLabel.className="sys-row";
-  const searchParallelismDiagnostics=document.createElement("input");searchParallelismDiagnostics.type="checkbox";searchParallelismDiagnostics.checked=searchParallelismDiagnosticsEnabled();
-  searchParallelismDiagnostics.addEventListener("change",()=>setSearchParallelismDiagnostics(searchParallelismDiagnostics.checked));
-  const searchParallelismText=document.createElement("span");searchParallelismText.className="sys-label";searchParallelismText.textContent=tx("system.searchParallelismDiagnostics");
-  searchParallelismLabel.append(searchParallelismDiagnostics,searchParallelismText);body.append(searchParallelismLabel);
-  const dictionaryListLabel=document.createElement("label");dictionaryListLabel.className="sys-row";
-  const dictionaryListDiagnostics=document.createElement("input");dictionaryListDiagnostics.type="checkbox";dictionaryListDiagnostics.checked=dictionaryListDiagnosticsEnabled();
-  dictionaryListDiagnostics.addEventListener("change",()=>setDictionaryListDiagnostics(dictionaryListDiagnostics.checked));
-  const dictionaryListText=document.createElement("span");dictionaryListText.className="sys-label";dictionaryListText.textContent=tx("system.dictionaryListDiagnostics");
-  dictionaryListLabel.append(dictionaryListDiagnostics,dictionaryListText);body.append(dictionaryListLabel);
-  const dictionaryCacheLabel=document.createElement("label");dictionaryCacheLabel.className="sys-row";
-  const dictionaryCacheDiagnostics=document.createElement("input");dictionaryCacheDiagnostics.type="checkbox";dictionaryCacheDiagnostics.checked=dictionaryCacheDiagnosticsEnabled();
-  dictionaryCacheDiagnostics.addEventListener("change",()=>setDictionaryCacheDiagnostics(dictionaryCacheDiagnostics.checked));
-  const dictionaryCacheText=document.createElement("span");dictionaryCacheText.className="sys-label";dictionaryCacheText.textContent=tx("system.dictionaryCacheDiagnostics");
-  dictionaryCacheLabel.append(dictionaryCacheDiagnostics,dictionaryCacheText);body.append(dictionaryCacheLabel);
-  const folderLabel=document.createElement("label");folderLabel.className="sys-row";
-  const folderDiagnostics=document.createElement("input");folderDiagnostics.type="checkbox";folderDiagnostics.checked=folderDiagnosticsEnabled();
-  folderDiagnostics.addEventListener("change",()=>setFolderDiagnostics(folderDiagnostics.checked));
-  const folderText=document.createElement("span");folderText.className="sys-label";folderText.textContent=tx("system.folderDiagnostics");
-  folderLabel.append(folderDiagnostics,folderText);body.append(folderLabel);
+  const diagnostics=systemSettingsCheckboxControl("system.browseDiagnostics","system.browseDiagnosticsHint",browseDiagnosticsEnabled(),setBrowseDiagnostics);
+  body.append(diagnostics.row,diagnostics.hint);
+  const articleDiagnostics=systemSettingsCheckboxControl("system.browseArticleDiagnostics","system.browseArticleDiagnosticsHint",browseArticleDiagnosticsEnabled(),setBrowseArticleDiagnostics);
+  body.append(articleDiagnostics.row,articleDiagnostics.hint);
+  const indexParallelism=systemSettingsCheckboxControl("system.indexParallelismDiagnostics","system.indexParallelismDiagnosticsHint",indexParallelismDiagnosticsEnabled(),setIndexParallelismDiagnostics);
+  body.append(indexParallelism.row,indexParallelism.hint);
+  const searchParallelism=systemSettingsCheckboxControl("system.searchParallelismDiagnostics","system.searchParallelismDiagnosticsHint",searchParallelismDiagnosticsEnabled(),setSearchParallelismDiagnostics);
+  body.append(searchParallelism.row,searchParallelism.hint);
+  const dictionaryList=systemSettingsCheckboxControl("system.dictionaryListDiagnostics","system.dictionaryListDiagnosticsHint",dictionaryListDiagnosticsEnabled(),setDictionaryListDiagnostics);
+  body.append(dictionaryList.row,dictionaryList.hint);
+  const dictionaryCache=systemSettingsCheckboxControl("system.dictionaryCacheDiagnostics","system.dictionaryCacheDiagnosticsHint",dictionaryCacheDiagnosticsEnabled(),setDictionaryCacheDiagnostics);
+  body.append(dictionaryCache.row,dictionaryCache.hint);
+  const folder=systemSettingsCheckboxControl("system.folderDiagnostics","system.folderDiagnosticsHint",folderDiagnosticsEnabled(),setFolderDiagnostics);
+  body.append(folder.row,folder.hint);
   const desktopNote=document.createElement("p");desktopNote.className="sys-note";desktopNote.id="systemSettingsNote";desktopNote.setAttribute("aria-live","polite");body.append(desktopNote);
   systemSettingsFoldSections(body);
   syncSystemSettingSwitches(body);

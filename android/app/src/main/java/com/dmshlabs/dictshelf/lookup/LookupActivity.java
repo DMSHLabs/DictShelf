@@ -1,1 +1,8 @@
-// Copyright (C) 2026 DmShAl (Shepeta Dmitry)\r\n// SPDX-License-Identifier: GPL-3.0-or-later\r\n\r\npackage com.dmshlabs.dictshelf.lookup;\r\n\r\n/** Distinct exported component for external readers. */\r\npublic class LookupActivity extends com.dmshlabs.dictshelf.LookupActivity {\r\n}\r\n
+// Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package com.dmshlabs.dictshelf.lookup;
+
+/** Distinct exported component for external readers. */
+public class LookupActivity extends com.dmshlabs.dictshelf.LookupActivity {
+}
