@@ -1233,6 +1233,7 @@
   "system.readerWindowHint": "Потяните за угол или используйте ползунки, затем нажмите «Применить».",
   "system.readerWindowWidth": "Ширина",
   "system.readerWindowHeight": "Высота",
+  "system.openFullApp": "Открыть в DictShelf",
   "system.selection": "Из меню выделенного текста",
   "system.share": "Из меню «Поделиться»",
   "system.links": "По ссылкам и из средств автоматизации",

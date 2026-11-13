@@ -32,7 +32,6 @@ import android.app.Activity;
 import android.app.SearchManager;
 import android.content.Intent;
 import android.content.res.Configuration;
-import android.graphics.Color;
 import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
@@ -47,7 +46,6 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.graphics.drawable.ColorDrawable;
@@ -288,6 +286,9 @@ public class LookupActivity extends Activity {
                 WebViewDiagnostics.page("lookup", "finished", url);
                 WebViewDiagnostics.install(view);
                 Shell.applyBackground(view);
+                view.evaluateJavascript("document.body.classList.add('android-lookup-window');"
+                        + "document.getElementById('sbarOpenApp').hidden=false;"
+                        + "if(typeof sbarPaint==='function')sbarPaint()", null);
                 // Per document, the same rule as the app window: the WebView's
                 // own speechSynthesis has no voices, so the shell supplies one.
                 speech.inject(view, url);
@@ -607,14 +608,7 @@ public class LookupActivity extends Activity {
             SystemLog.reader("lookup load page task=" + getTaskId() + " attached=" + (web.getParent() != null));
             if (web.getParent() == null) {
                 root.removeAllViews();
-                LinearLayout col = new LinearLayout(this);
-                col.setOrientation(LinearLayout.VERTICAL);
-                col.addView(web, new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-                col.addView(handoff(), new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.WRAP_CONTENT));
-                root.addView(col, new FrameLayout.LayoutParams(
+                root.addView(web, new FrameLayout.LayoutParams(
                         FrameLayout.LayoutParams.MATCH_PARENT,
                         FrameLayout.LayoutParams.MATCH_PARENT));
             }
@@ -632,23 +626,7 @@ public class LookupActivity extends Activity {
         web.evaluateJavascript(script, null);
     }
 
-    /**
-     * For when a quick answer turns into real reading: hand the same query to
-     * the app proper and get out of the way. MainActivity is singleTask, so
-     * this reaches the existing instance if there is one.
-     */
-    private TextView handoff() {
-        TextView t = new TextView(this);
-        t.setText(R.string.lookup_open_app);
-        t.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
-        t.setTextColor(getColor(R.color.accent));
-        t.setBackgroundColor(Color.TRANSPARENT);
-        int pad = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 12,
-                getResources().getDisplayMetrics());
-        t.setPadding(pad, pad, pad, pad);
-        t.setOnClickListener(v -> forward());
-        return t;
-    }
+    void openFullApp() { forward(); }
 
     private void showFailure(String message) {
         runOnUiThread(() -> {

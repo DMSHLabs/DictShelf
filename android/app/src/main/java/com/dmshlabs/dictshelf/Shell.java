@@ -797,6 +797,11 @@ final class Shell {
                     result.confirm("ok");
                     return true;
                 }
+                if ("wudict:lookup-open-app".equals(message) && a instanceof LookupActivity) {
+                    result.confirm("ok");
+                    a.runOnUiThread(() -> ((LookupActivity) a).openFullApp());
+                    return true;
+                }
                 if ("wudict:save-article".equals(message)) {
                     try {
                         SystemLogExport.startArticle(a, defaultValue == null ? "{}" : defaultValue);

@@ -383,6 +383,7 @@ window.wudictFontScale=(function(){
      handle shortens itself - see app.css), never the spacing around it. -->
 <div class="sbar" id="sbar">
   <span class="rpad edge" aria-hidden="true"></span>
+  <button type="button" class="btn" id="sbarOpenApp" aria-label="{{T:system.openFullApp}}" title="{{T:system.openFullApp}}" hidden><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5.2c-2.7-1.4-5.6-1.6-8.5-.7v14c2.9-.9 5.8-.7 8.5.7 2.7-1.4 5.6-1.6 8.5-.7v-14c-2.9-.9-5.8-.7-8.5.7Zm0 0v14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
   <button type="button" class="btn" id="sbarArticlePrev" aria-label="{{T:search.previousArticle}}" title="{{T:search.jumpArticleAbove}}">↑</button>
   <span class="rpad arrow-gap" aria-hidden="true"></span>
   <button type="button" class="btn" id="sbarArticleNext" aria-label="{{T:search.nextArticle}}" title="{{T:search.jumpArticleBelow}}">↓</button>
@@ -12396,6 +12397,9 @@ function sbarArticleGo(step){
   jumpToArticle(list[to]);
 }
 $("sbarArticlePrev").onclick=()=>sbarArticleGo(-1);
+$("sbarOpenApp").onclick=()=>{
+  try{window.prompt("wudict:lookup-open-app","")}catch(error){console.warn("open full app:",error)}
+};
 $("sbarArticleNext").onclick=()=>sbarArticleGo(1);
 $("sbarDictPrev").onclick=()=>sbarGo(-1);
 $("sbarDictNext").onclick=()=>sbarGo(1);

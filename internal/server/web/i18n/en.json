@@ -1215,6 +1215,7 @@
   "system.readerWindowHint": "Drag the corner or use the sliders, then tap Apply.",
   "system.readerWindowWidth": "Width",
   "system.readerWindowHeight": "Height",
+  "system.openFullApp": "Open in DictShelf",
   "system.selection": "From the text selection menu",
   "system.share": "From the share menu",
   "system.links": "From links and automation",

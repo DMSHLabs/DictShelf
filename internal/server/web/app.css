@@ -264,6 +264,10 @@ html[data-webview2] #barBackWords:not([hidden]){display:inline-flex;align-items:
   border-top:1px solid var(--line);padding:var(--sp-1) 0;
   padding-bottom:var(--sp-1)}
 .sbar[hidden]{display:none}
+#sbarOpenApp{flex:none;display:inline-flex;align-items:center;justify-content:center;padding:.25em;min-width:var(--sbar-sq,2.2em)}
+#sbarOpenApp[hidden]{display:none}
+#sbarOpenApp svg{width:1.35em;height:1.35em}
+body.android-lookup-window details.dict>summary{position:static;top:auto}
 #sbarBackWords{display:inline-flex;align-items:center;justify-content:center;gap:.35em;flex:none;margin-right:.35em;white-space:nowrap;text-decoration:none;font-size:calc(var(--ui-font-addition) * 1rem);line-height:1}
 #sbarBackWords svg{display:block;flex:none;width:1.15em;height:1.15em}
 #sbarBackWords[hidden]{display:none}
