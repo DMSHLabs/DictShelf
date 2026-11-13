@@ -94,7 +94,34 @@ public class SettingsActivity extends Activity {
         String[] modes = getResources().getStringArray(R.array.settings_reader_modes);
         String[] values = {"prefix", "suffix", "contains", "word", "wordLemma", "exact", "exactLemma", "wildcards"};
         Spinner modePicker = new Spinner(this);
-        modePicker.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, modes));
+        int pickerBg = ShellPrefs.pageBg(this);
+        int pickerText = ShellPrefs.darkIcons(pickerBg) ? 0xDE000000 : 0xDEFFFFFF;
+        ArrayAdapter<String> modeAdapter = new ArrayAdapter<String>(this,
+                android.R.layout.simple_spinner_item, modes) {
+            private TextView style(View convertView, android.view.ViewGroup parent, int position, boolean dropDown) {
+                TextView item = (TextView) (dropDown
+                        ? super.getDropDownView(position, convertView, parent)
+                        : super.getView(position, convertView, parent));
+                item.setTextColor(pickerText);
+                if (dropDown) {
+                    item.setBackgroundColor(Color.TRANSPARENT);
+                    item.setPadding(dp(SP_4), dp(SP_3), dp(SP_4), dp(SP_3));
+                    item.setMinHeight(dp(ROW_MIN));
+                }
+                return item;
+            }
+
+            @Override public View getView(int position, View convertView, android.view.ViewGroup parent) {
+                return style(convertView, parent, position, false);
+            }
+
+            @Override public View getDropDownView(int position, View convertView, android.view.ViewGroup parent) {
+                return style(convertView, parent, position, true);
+            }
+        };
+        modeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        modePicker.setAdapter(modeAdapter);
+        modePicker.setPopupBackgroundDrawable(WindowBackground.dialogDrawable(this, pickerBg));
         String selectedMode = ShellPrefs.readerMode(this);
         for (int n = 0; n < values.length; n++) if (values[n].equals(selectedMode)) modePicker.setSelection(n);
         modePicker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
