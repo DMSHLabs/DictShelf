@@ -51,6 +51,8 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.graphics.drawable.ColorDrawable;
+import android.window.OnBackInvokedCallback;
+import android.window.OnBackInvokedDispatcher;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -104,6 +106,7 @@ public class LookupActivity extends Activity {
     };
     private static final String EXTRA_FULLSCREEN = "EXTRA_FULLSCREEN";
     private static final String KNOWN_READER_PACKAGE = "org.knownreader.premium";
+    private static LookupActivity resident;
 
     /** Whether this launch came through a reading app's dictionary API. */
     static boolean fromReader(Intent i) {
@@ -155,6 +158,7 @@ public class LookupActivity extends Activity {
     private boolean lookupPending;
     private boolean retained;
     private volatile boolean gone;
+    private OnBackInvokedCallback readerBack;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -200,6 +204,18 @@ public class LookupActivity extends Activity {
             return;
         }
 
+        if (readerCall(i) && !opensApp(i, i == null ? null : i.getData())
+                && resident != null && resident != this && !resident.gone
+                && !resident.isFinishing() && !resident.isDestroyed()) {
+            Intent reuse = new Intent(i).setComponent(resident.getComponentName());
+            reuse.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            SystemLog.reader("lookup reuse task=" + resident.getTaskId() + " from=" + getTaskId());
+            setResult(RESULT_OK);
+            resident.startActivity(reuse);
+            finish();
+            return;
+        }
+
         Uri data = i == null ? null : i.getData();
         mode = mode(param(data, "mode"));
         // Reader integrations should find the selected inflected form as well
@@ -219,6 +235,8 @@ public class LookupActivity extends Activity {
         // Reader lookups are a quick-switch companion: moving focus back to
         // the reader must not dismiss the floating window with an outside tap.
         setFinishOnTouchOutside(!readerCall(i));
+        resident = this;
+        updateReaderBack(i);
         Shell.clearWebCacheAfterUpdate(this);
 		final int pageBg = ShellPrefs.pageBg(this);
 		getWindow().setBackgroundDrawable(WindowBackground.dialogDrawable(this, pageBg));
@@ -631,6 +649,7 @@ public class LookupActivity extends Activity {
         SystemLog.reader("lookup new intent task=" + getTaskId() + " instance=" + System.identityHashCode(this)
                 + " ready=" + pageReady + " action=" + (intent == null ? "null" : intent.getAction()));
         setIntent(intent);
+        updateReaderBack(intent);
         setFinishOnTouchOutside(!readerCall(intent));
         String q = clean(text(intent));
         if (q == null) return;
@@ -653,9 +672,30 @@ public class LookupActivity extends Activity {
     }
 
     // ── lifecycle ────────────────────────────────────────────────────────
-    // Back is left to the platform: it dismisses the popup rather than walking
-    // the SPA's history. A lookup window is one answer to one selection, and
-    // the user's way back to what they were reading has to be the obvious one.
+    private void updateReaderBack(Intent intent) {
+        if (Build.VERSION.SDK_INT < 33) return;
+        OnBackInvokedDispatcher dispatcher = getOnBackInvokedDispatcher();
+        if (readerBack != null) {
+            dispatcher.unregisterOnBackInvokedCallback(readerBack);
+            readerBack = null;
+        }
+        if (readerCall(intent)) {
+            readerBack = () -> {
+                SystemLog.reader("lookup back to reader task=" + getTaskId());
+                moveTaskToBack(true);
+            };
+            dispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, readerBack);
+        }
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public void onBackPressed() {
+        if (readerCall(getIntent())) {
+            SystemLog.reader("lookup back to reader task=" + getTaskId());
+            moveTaskToBack(true);
+        } else super.onBackPressed();
+    }
 
     @Override
     protected void onStart() {
@@ -685,6 +725,9 @@ public class LookupActivity extends Activity {
     @Override
     protected void onDestroy() {
         SystemLog.reader("lookup destroy task=" + getTaskId() + " finishing=" + isFinishing());
+        if (resident == this) resident = null;
+        if (Build.VERSION.SDK_INT >= 33 && readerBack != null)
+            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(readerBack);
         SystemLog.record("lookup destroy finishing=" + isFinishing() + " web=" + (web != null));
         gone = true;
         // false, always: a popup closing never stops the server (D67). It goes
