@@ -506,9 +506,9 @@ final class ShellPrefs {
      * TOOLBAR, whose default is the floating window: an unrecognised caller
      * gets the least intrusive outcome rather than a hijacked task.
      */
-    static String sourceKey(Intent i) {
+    static String sourceKey(Intent i, boolean reader) {
         // Before VIEW: Dictan's dispatcher is a VIEW told apart by its category.
-        if (LookupActivity.fromReader(i)) return READER;
+        if (reader) return READER;
         String action = i == null ? null : i.getAction();
         if (Intent.ACTION_SEND.equals(action)) return SHARE;
         if (Intent.ACTION_VIEW.equals(action)) return LINK;

@@ -111,16 +111,30 @@ public class LookupActivity extends Activity {
         if (action == null) return false;
         if (READER_ACTIONS.contains(action)) return true;
         if (Intent.ACTION_VIEW.equals(action) && i.hasCategory(CATEGORY_DICTAN)) return true;
-        // KnownReader sends its dictionary selection through ACTION_SEND, the
-        // same action as the Android share sheet. Use the activity referrer to
-        // select the reader-specific destination preference for that caller.
-        return Intent.ACTION_SEND.equals(action) && KNOWN_READER_PACKAGE.equals(referrerPackage(i));
+        return false;
     }
 
     private static String referrerPackage(Intent intent) {
         if (intent == null || intent.getParcelableExtra(Intent.EXTRA_REFERRER) == null) return null;
         Uri referrer = intent.getParcelableExtra(Intent.EXTRA_REFERRER);
         return "android-app".equals(referrer.getScheme()) ? referrer.getAuthority() : null;
+    }
+
+    private boolean readerCall(Intent intent) {
+        if (fromReader(intent)) return true;
+        if (intent == null || !Intent.ACTION_SEND.equals(intent.getAction())) return false;
+        // A reader can use the share action for its dictionary button. Android
+        // knows the launching package even when the intent has no referrer.
+        return knownReader(intent);
+    }
+
+    private boolean knownReader(Intent intent) {
+        return KNOWN_READER_PACKAGE.equals(launchedFromPackage())
+                || KNOWN_READER_PACKAGE.equals(referrerPackage(intent));
+    }
+
+    private String launchedFromPackage() {
+        return Build.VERSION.SDK_INT >= 35 ? getLaunchedFromPackage() : getCallingPackage();
     }
 
     private FrameLayout root;
@@ -145,7 +159,9 @@ public class LookupActivity extends Activity {
         Intent i = getIntent();
         SystemLog.reader("lookup create task=" + getTaskId() + " instance=" + System.identityHashCode(this)
                 + " saved=" + (savedInstanceState != null) + " action=" + (i == null ? "null" : i.getAction())
-                + " flags=" + (i == null ? 0 : i.getFlags()) + " reader=" + fromReader(i));
+                + " flags=" + (i == null ? 0 : i.getFlags()) + " reader=" + readerCall(i)
+                + " caller=" + launchedFromPackage() + " referrer=" + referrerPackage(i)
+                + " fullscreen=" + fullscreen(i));
         // Read once: text() walks every extra a caller might use, and both the
         // word and the link test below want the same raw string.
         CharSequence raw = text(i);
@@ -184,7 +200,7 @@ public class LookupActivity extends Activity {
         mode = mode(param(data, "mode"));
         // Reader integrations should find the selected inflected form as well
         // as its lemma. An explicit mode in a dictshelf:// request still wins.
-        if (mode == null && fromReader(i)) mode = ShellPrefs.readerMode(this);
+        if (mode == null && readerCall(i)) mode = ShellPrefs.readerMode(this);
         dict = clean(param(data, "dict"));
 
         // Before any window work, and before GoRuntime.retain(): the
@@ -198,7 +214,7 @@ public class LookupActivity extends Activity {
         }
         // Reader lookups are a quick-switch companion: moving focus back to
         // the reader must not dismiss the floating window with an outside tap.
-        setFinishOnTouchOutside(!fromReader(i));
+        setFinishOnTouchOutside(!readerCall(i));
         Shell.clearWebCacheAfterUpdate(this);
 		final int pageBg = ShellPrefs.pageBg(this);
 		getWindow().setBackgroundDrawable(WindowBackground.dialogDrawable(this, pageBg));
@@ -443,8 +459,8 @@ public class LookupActivity extends Activity {
      */
     private boolean opensApp(Intent i, Uri data) {
         Boolean once = full(param(data, "full"));
-        if (once == null && fullscreen(i)) once = Boolean.TRUE;
-        return once != null ? once : ShellPrefs.opensApp(this, ShellPrefs.sourceKey(i));
+        if (once == null && fullscreen(i) && !knownReader(i)) once = Boolean.TRUE;
+        return once != null ? once : ShellPrefs.opensApp(this, ShellPrefs.sourceKey(i, readerCall(i)));
     }
 
     /**
@@ -611,13 +627,13 @@ public class LookupActivity extends Activity {
         SystemLog.reader("lookup new intent task=" + getTaskId() + " instance=" + System.identityHashCode(this)
                 + " ready=" + pageReady + " action=" + (intent == null ? "null" : intent.getAction()));
         setIntent(intent);
-        setFinishOnTouchOutside(!fromReader(intent));
+        setFinishOnTouchOutside(!readerCall(intent));
         String q = clean(text(intent));
         if (q == null) return;
         query = q;
         Uri data = intent.getData();
         mode = mode(param(data, "mode"));
-        if (mode == null && fromReader(intent)) mode = ShellPrefs.readerMode(this);
+        if (mode == null && readerCall(intent)) mode = ShellPrefs.readerMode(this);
         dict = clean(param(data, "dict"));
         // The setting is about this lookup, not about the window that happens
         // to be open: a second selection from an entry point that says "in app"
