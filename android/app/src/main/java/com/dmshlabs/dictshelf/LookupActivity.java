@@ -168,7 +168,7 @@ public class LookupActivity extends Activity {
         mode = mode(param(data, "mode"));
         // Reader integrations should find the selected inflected form as well
         // as its lemma. An explicit mode in a dictshelf:// request still wins.
-        if (mode == null && fromReader(i)) mode = "wordLemma";
+        if (mode == null && fromReader(i)) mode = ShellPrefs.readerMode(this);
         dict = clean(param(data, "dict"));
 
         // Before any window work, and before GoRuntime.retain(): the
@@ -385,15 +385,24 @@ public class LookupActivity extends Activity {
     /** Supported page modes (index.html #mode); anything else is the caller's typo. */
     private static String mode(String m) {
         if (m == null) return null;
+        return isSupportedMode(m) ? m : null;
+    }
+
+    static boolean isSupportedMode(String m) {
+        if (m == null) return false;
         switch (m) {
             case "exact":
             case "prefix":
+            case "suffix":
             case "contains":
+            case "word":
+            case "exactLemma":
+            case "wildcards":
             case "fts":
             case "wordLemma":
-                return m;
+                return true;
             default:
-                return null; // leave the page on its own default
+                return false;
         }
     }
 

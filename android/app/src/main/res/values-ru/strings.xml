@@ -15,7 +15,15 @@
     <string name="index_download_text">Загрузка продолжится, пока вы пользуетесь другими приложениями.</string>
     <string name="settings_short_label">Настройки</string>
     <string name="settings_title">Настройки DictShelf</string>
-    <string name="settings_moved_hint">Большинство настроек находится в приложении: нажмите ☰ и откройте «Системные настройки». Здесь можно сохранить системный журнал или сбросить параметры приложения.</string>
+    <string name="settings_moved_hint">Большинство настроек находится в приложении: ☰ → «Системные настройки». Здесь находятся интеграция с читалками и системный журнал.</string>
+    <string name="settings_integration">Интеграция</string>
+    <string name="settings_reader_full_app">Открывать вызов из читалки в полном приложении</string>
+    <string name="settings_reader_full_app_hint">Если включено, выбранное в читалке слово откроется в DictShelf вместо плавающего окна.</string>
+    <string name="settings_reader_mode">Режим поиска для читалки</string>
+    <string name="settings_reader_mode_hint">Выберите, как искать слова, выбранные в читалке.</string>
+    <string-array name="settings_reader_modes">
+        <item>Префикс (ab→)</item><item>Суффикс (→ab)</item><item>Содержит (ab)</item><item>Целое слово (·ab·)</item><item>Целое слово + лемма (·ab·+)</item><item>Точное (=)</item><item>Точное + лемма (=+)</item><item>Шаблоны (*?)</item>
+    </string-array>
     <string name="settings_index_workers">Словарей индексируется одновременно</string>
     <string name="settings_index_workers_hint">Выберите Auto или число от 1 до количества ядер процессора. Auto использует на одно ядро меньше, но не меньше одного. Больше потоков могут ускорить индексацию, но увеличивают расход энергии и нагрев.</string>
     <string name="settings_workers_auto">Auto</string>

@@ -1197,7 +1197,6 @@ window.wudictFontScale=(function(){
     <label class="sys-row"><input type="checkbox" id="sysToolbar"><span class="sys-label">{{T:system.selection}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysShare"><span class="sys-label">{{T:system.share}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysLink"><span class="sys-label">{{T:system.links}}</span></label>
-    <label class="sys-row"><input type="checkbox" id="sysReader"><span class="sys-label">{{T:system.reader}}</span></label>
 
     <h3 class="sys-head">{{T:system.messages}}</h3>
     <p class="sys-hint">{{T:system.messagesHint}}</p>
@@ -5285,7 +5284,7 @@ function sysPaint(state){
   if(typeof state.updateNotifications==="boolean")updateNotifications=state.updateNotifications;
   syncUpdateControls();
   for(const pair of [["sysToolbar",state.toolbar],["sysShare",state.share],
-      ["sysLink",state.link],["sysReader",state.reader],["sysInfo",state.info],["sysKey",state.key]]){
+      ["sysLink",state.link],["sysInfo",state.info],["sysKey",state.key]]){
     $(pair[0]).checked=!!pair[1];
   }
   for(const pair of [["sysLogEnabled",state.logEnabled],["sysLogBase",state.logBaseEvents],
@@ -5762,7 +5761,6 @@ async function showSystemSettings(){
     toolbar:$("sysToolbar").parentElement,
     share:$("sysShare").parentElement,
     link:$("sysLink").parentElement,
-    reader:$("sysReader").parentElement,
     info:$("sysInfo").parentElement,
     resultCacheHeading:$("sysResultCacheHeading"),
     resultCacheHint:$("sysResultCacheHint"),
@@ -5812,7 +5810,7 @@ async function showSystemSettings(){
   if(window.wudictAndroidShell){
     const lookupHeading=document.createElement("h3");lookupHeading.className="sys-head";lookupHeading.textContent=tx("system.lookup");body.append(lookupHeading);
     const lookupHint=document.createElement("p");lookupHint.className="sys-hint";lookupHint.textContent=tx("system.lookupHint");body.append(lookupHint);
-    body.append(systemSettingsNodes.toolbar,systemSettingsNodes.share,systemSettingsNodes.link,systemSettingsNodes.reader);
+    body.append(systemSettingsNodes.toolbar,systemSettingsNodes.share,systemSettingsNodes.link);
     const iconHeading=document.createElement("h3");iconHeading.className="sys-head";iconHeading.textContent=tx("system.appIcon");body.append(iconHeading);
     const iconPicker=document.createElement("div");iconPicker.className="icon-choice-grid android-icon-choice-grid";iconPicker.setAttribute("role","group");iconPicker.setAttribute("aria-label",tx("system.appIcon"));
     let family=localStorage.getItem("wudict_android_icon_choice");
@@ -5974,7 +5972,6 @@ $("systemSettingsDialog").addEventListener("close",()=>{systemSettingsRenderToke
 $("sysToolbar").addEventListener("change",e=>sysSwitch("toolbar",e.target.checked));
 $("sysShare").addEventListener("change",e=>sysSwitch("share",e.target.checked));
 $("sysLink").addEventListener("change",e=>sysSwitch("link",e.target.checked));
-$("sysReader").addEventListener("change",e=>sysSwitch("reader",e.target.checked));
 function updateAvailableKey(channel=updateChannel){return "dictshelf_update_available_"+channel}
 function updateDownloadedKey(version){return "dictshelf_update_downloaded_"+version}
 function syncUpdateControls(){

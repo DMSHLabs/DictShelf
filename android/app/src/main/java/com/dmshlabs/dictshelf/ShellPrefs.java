@@ -202,6 +202,19 @@ final class ShellPrefs {
     static final String SHARE = "lookup_share_in_app";
     static final String LINK = "lookup_link_in_app";
     static final String READER = "lookup_reader_in_app";
+    static final String READER_MODE = "lookup_reader_mode";
+
+    private static final String DEFAULT_READER_MODE = "exactLemma";
+
+    static String readerMode(Context c) {
+        String value = of(c).getString(READER_MODE, DEFAULT_READER_MODE);
+        return LookupActivity.isSupportedMode(value) ? value : DEFAULT_READER_MODE;
+    }
+
+    static void setReaderMode(Context c, String value) {
+        if (!LookupActivity.isSupportedMode(value)) value = DEFAULT_READER_MODE;
+        of(c).edit().putString(READER_MODE, value).apply();
+    }
 
     // ── the information messages (2026-09-27) ────────────────────────────────
     //

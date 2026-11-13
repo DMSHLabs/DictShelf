@@ -58,7 +58,15 @@
           launcher's long-press menu, so a reader who remembers the full screen
           arrives here.
 	-->
-	<string name="settings_moved_hint">Most settings are in the app now — tap ☰ and open System Settings. This screen keeps the system log and a way to restore the app’s tuning settings.</string>
+	<string name="settings_moved_hint">Most settings are in the app under ☰ → System Settings. Reader integration and the system log are here.</string>
+	<string name="settings_integration">Integration</string>
+	<string name="settings_reader_full_app">Open reader lookups in the full app</string>
+	<string name="settings_reader_full_app_hint">When enabled, a word selected in a reading app opens DictShelf instead of the floating lookup.</string>
+	<string name="settings_reader_mode">Reader lookup mode</string>
+	<string name="settings_reader_mode_hint">Choose how DictShelf searches for words selected in a reading app.</string>
+	<string-array name="settings_reader_modes">
+		<item>Prefix (ab→)</item><item>Suffix (→ab)</item><item>Contains (ab)</item><item>Whole word (·ab·)</item><item>Whole word + lemma (·ab·+)</item><item>Exact (=)</item><item>Exact + lemma (=+)</item><item>Wildcards (*?)</item>
+	</string-array>
 	<!--
  Screen (D141): how the margins around the page are painted, and which
           bars hide while reading. Those two rows are NOT here any more - they
