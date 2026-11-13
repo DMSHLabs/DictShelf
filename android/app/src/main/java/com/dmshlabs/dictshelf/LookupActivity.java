@@ -596,6 +596,7 @@ public class LookupActivity extends Activity {
         query = q;
         Uri data = intent.getData();
         mode = mode(param(data, "mode"));
+        if (mode == null && fromReader(intent)) mode = ShellPrefs.readerMode(this);
         dict = clean(param(data, "dict"));
         // The setting is about this lookup, not about the window that happens
         // to be open: a second selection from an entry point that says "in app"

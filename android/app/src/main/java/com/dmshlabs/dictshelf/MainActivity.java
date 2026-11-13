@@ -899,6 +899,14 @@ public class MainActivity extends Activity {
         else web.loadUrl(url);
     }
 
+    private void dispatchLookup(String query, String mode, String dict) {
+        String script = "window.wudictAndroidLookup&&window.wudictAndroidLookup("
+                + org.json.JSONObject.quote(query) + ","
+                + (mode == null ? "null" : org.json.JSONObject.quote(mode)) + ","
+                + (dict == null ? "null" : org.json.JSONObject.quote(dict)) + ")";
+        web.evaluateJavascript(script, null);
+    }
+
     // The activity is singleTask, so a share arriving while it is already up
     // comes here rather than through onCreate.
     @Override
@@ -916,12 +924,14 @@ public class MainActivity extends Activity {
         // Only what THIS intent brought: an unrelated intent must not fire a
         // query left pending by an earlier one - showPage owns that.
         if (takeQuery(intent)) {
+            if (web == null || web.getParent() == null) return; // showPage owns this query
             // Handed over by LookupActivity, so the app is very likely already
             // up and showing something else; if it is not, showPage takes it.
             String q = pendingQuery;
             String m = pendingMode, d = pendingDict;
             pendingQuery = pendingMode = pendingDict = null;
-            navigate(Shell.searchUrl(this, q, m, d));
+            if (startupPageFinished && !pageLoading) dispatchLookup(q, m, d);
+            else navigate(Shell.searchUrl(this, q, m, d));
         }
     }
 
