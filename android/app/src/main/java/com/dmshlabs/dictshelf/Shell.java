@@ -201,14 +201,14 @@ final class Shell {
                 + ")", null);
         // wudictNativeShell exposes the page's native controls; the Android
         // marker reserves the wudict:appearance prompt bridge for this host.
-        // The flag first, then the two calls that need it: the page reports the
-        // paper an enabled preset paints only where a shell answers, and the
-        // report is what keeps the standalone pages and the native windows in
-        // step with the app page. It is asked for here rather than left to the
-        // page's own boot push because the flag arrives at onPageFinished,
-        // which either side of that push can win.
+        // The flag first, then the page's Android-only settings hook and the
+        // preset-paper report. The report is what keeps standalone pages and
+        // native windows in step with the app page. These hooks run here rather
+        // than relying on boot pushes because this marker arrives at
+        // onPageFinished, and either side of the page's own push can win.
         web.evaluateJavascript("window.wudictAndroidShell=1;window.wudictNativeShell=1;"
                 + "window.wudictAndroidUpdaterAvailable=" + AndroidUpdate.available() + ";"
+                + "if(typeof window.wudictAndroidIntegrationReady==='function')window.wudictAndroidIntegrationReady();"
                 + "if(typeof wudictPresetPaper==='function')wudictPresetPaper();"
                 + "if(typeof appearanceRead==='function' && document.getElementById('styler')"
                 + " && document.getElementById('styler').classList.contains('show')) appearanceRead();"
@@ -266,6 +266,7 @@ final class Shell {
         reply.put("share", ShellPrefs.opensApp(c, ShellPrefs.SHARE));
         reply.put("link", ShellPrefs.opensApp(c, ShellPrefs.LINK));
         reply.put("reader", ShellPrefs.opensApp(c, ShellPrefs.READER));
+        reply.put("readerMode", ShellPrefs.readerMode(c));
         reply.put("info", ShellPrefs.infoMessages(c));
         reply.put("serverAvailable", false);
         org.json.JSONObject prefs = new org.json.JSONObject(GoBridge.prefsSnapshot());
@@ -304,7 +305,7 @@ final class Shell {
     static final String NATIVE_SELECT_PICKER_JS = """
             (() => {
               function installPickers() {
-              for (const select of document.querySelectorAll('#mode, #articleFindMode, #stylerPreset, #groupSelect, #groupAvailableFilter, #sysAdvanced select, #bulkIndexes select')) {
+              for (const select of document.querySelectorAll('#mode, #articleFindMode, #integrationReaderMode, #stylerPreset, #groupSelect, #groupAvailableFilter, #sysAdvanced select, #bulkIndexes select')) {
               const id = select.id || 'bulkIndexAction';
               if (!select || select.dataset.shellPicker) continue;
               select.dataset.shellPicker = '1';
@@ -325,7 +326,7 @@ final class Shell {
                 }
                 const answer = window.prompt('wudict:native-select-picker',
                   JSON.stringify({rows, selected: select.selectedIndex,
-                    kind: id === 'articleFindMode' ? 'mode' : id}));
+                    kind: ['articleFindMode','integrationReaderMode'].includes(id) ? 'mode' : id}));
                 if (answer === null) return;
                 const index = Number(answer);
                 if (!Number.isInteger(index) || !options[index]) return;
@@ -962,6 +963,8 @@ final class Shell {
                                 ShellPrefs.set(a, ShellPrefs.LINK, request.getBoolean("value"));
                             } else if ("reader".equals(field)) {
                                 ShellPrefs.set(a, ShellPrefs.READER, request.getBoolean("value"));
+                            } else if ("readerMode".equals(field)) {
+                                ShellPrefs.setReaderMode(a, request.getString("value"));
                             } else if ("info".equals(field)) {
                                 ShellPrefs.set(a, ShellPrefs.INFO_MESSAGES, request.getBoolean("value"));
                             } else if ("updateChannel".equals(field)) {

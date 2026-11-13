@@ -929,6 +929,30 @@ window.wudictFontScale=(function(){
   <div class="facts update-check-row"><button type="button" class="btn" id="checkUpdates">{{T:system.checkUpdates}}</button></div>
 </details>
 
+<details class="sect" id="integrationSection" hidden data-panel-section="integration" open>
+  <summary class="sect-h">{{T:panel.integration}}</summary>
+  <p class="panel-update-status">{{T:system.lookupHint}}</p>
+  <div class="facts update-notifications-row"><label class="rowlabel" for="integrationToolbar"><input class="panel-checkbox" type="checkbox" id="integrationToolbar"> {{T:system.selection}}</label></div>
+  <div class="facts update-notifications-row"><label class="rowlabel" for="integrationShare"><input class="panel-checkbox" type="checkbox" id="integrationShare"> {{T:system.share}}</label></div>
+  <div class="facts update-notifications-row"><label class="rowlabel" for="integrationLink"><input class="panel-checkbox" type="checkbox" id="integrationLink"> {{T:system.links}}</label></div>
+  <div class="facts update-notifications-row"><label class="rowlabel" for="integrationReader"><input class="panel-checkbox" type="checkbox" id="integrationReader"> {{T:system.reader}}</label></div>
+  <div class="facts update-channel-row">
+    <label class="rowlabel" for="integrationReaderMode">{{T:system.readerMode}}</label>
+    <span class="panel-select-wrap panel-dropdown"><select id="integrationReaderMode" aria-label="{{T:system.readerMode}}">
+      <option value="prefix">{{T:search.prefix}} (ab→)</option>
+      <option value="suffix">{{T:search.suffix}} (→ab)</option>
+      <option value="contains">{{T:search.contains}} (ab)</option>
+      <option value="word">{{T:search.wholeWord}} (·ab·)</option>
+      <option value="wordLemma">{{T:search.wholeWordLemma}} (·ab·+)</option>
+      <option value="exact">{{T:search.exact}} (=)</option>
+      <option value="exactLemma">{{T:search.exactLemma}} (=+)</option>
+      <option value="wildcards">{{T:search.wildcards}} (*?)</option>
+    </select></span>
+  </div>
+  <p class="panel-update-status">{{T:system.readerModeHint}}</p>
+  <p class="panel-update-status" id="integrationStatus" role="status" aria-live="polite" hidden></p>
+</details>
+
 <details class="sect" id="sysSection" hidden data-panel-section="system" open>
   <summary class="sect-h">{{T:panel.system}}</summary>
   <!-- The shell's own settings, which until now lived only on the screen the
@@ -1192,12 +1216,6 @@ window.wudictFontScale=(function(){
     <!-- This closed dialog is a source for the shared controls that are moved
          into #systemSettingsDialog. It is never shown; keeping the controls
          here preserves their existing native bridge bindings and state IDs. -->
-    <h3 class="sys-head">{{T:system.lookup}}</h3>
-    <p class="sys-hint">{{T:system.lookupHint}}</p>
-    <label class="sys-row"><input type="checkbox" id="sysToolbar"><span class="sys-label">{{T:system.selection}}</span></label>
-    <label class="sys-row"><input type="checkbox" id="sysShare"><span class="sys-label">{{T:system.share}}</span></label>
-    <label class="sys-row"><input type="checkbox" id="sysLink"><span class="sys-label">{{T:system.links}}</span></label>
-
     <h3 class="sys-head">{{T:system.messages}}</h3>
     <p class="sys-hint">{{T:system.messagesHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysInfo"><span class="sys-label">{{T:system.showInfo}}</span></label>
@@ -4620,7 +4638,7 @@ function reissueIfCorpusMoved(){
    script, and nothing paints in between, so the reader never sees it. */
 const panelSectionsKey="wudict_panel_sections";
 const panelSectionsSaved=loadJSON(panelSectionsKey,{});
-const panelSectionsOpenByDefault=new Set(["dictionaries","results"]);
+const panelSectionsOpenByDefault=new Set(["dictionaries","results","integration"]);
 for(const sect of $("panel").querySelectorAll("details[data-panel-section]")){
   const key=sect.dataset.panelSection;
   sect.open=Object.prototype.hasOwnProperty.call(panelSectionsSaved||{},key)
@@ -5245,6 +5263,28 @@ function sysRequest(request){
     return answer===null?null:JSON.parse(answer);
   }catch(e){console.warn("system bridge:",e);return null}
 }
+function integrationPaint(state){
+  if(!state||!$("integrationSection"))return;
+  $("integrationToolbar").checked=!!state.toolbar;
+  $("integrationShare").checked=!!state.share;
+  $("integrationLink").checked=!!state.link;
+  $("integrationReader").checked=!!state.reader;
+  const mode=state.readerMode||"exactLemma";
+  $("integrationReaderMode").value=[...$("integrationReaderMode").options].some(option=>option.value===mode)?mode:"exactLemma";
+}
+window.wudictAndroidIntegrationReady=()=>{
+  const section=$("integrationSection");
+  if(!section)return;
+  section.hidden=false;
+  const state=sysRequest({action:"get"});
+  if(state){sysState=state;integrationPaint(state)}
+  if(section.open&&$("panel").classList.contains("show"))panelRowColumns();
+};
+function integrationSet(field,value){
+  const state=sysSet({action:"set",field,value});
+  const note=$("integrationStatus");
+  if(note){note.hidden=!!state;note.textContent=state?"":tx("panel.settingFailed")}
+}
 function androidLauncherIconChanged(){
   try{
     const answer=window.prompt("wudict:launcher-icon",JSON.stringify({family:localStorage.getItem("wudict_android_icon_choice")||"icon2_transparent"}));
@@ -5287,8 +5327,8 @@ function sysPaint(state){
   updateChannel=state.updateChannel||updateChannel;
   if(typeof state.updateNotifications==="boolean")updateNotifications=state.updateNotifications;
   syncUpdateControls();
-  for(const pair of [["sysToolbar",state.toolbar],["sysShare",state.share],
-      ["sysLink",state.link],["sysInfo",state.info],["sysKey",state.key]]){
+  integrationPaint(state);
+  for(const pair of [["sysInfo",state.info],["sysKey",state.key]]){
     $(pair[0]).checked=!!pair[1];
   }
   for(const pair of [["sysLogEnabled",state.logEnabled],["sysLogBase",state.logBaseEvents],
@@ -5569,6 +5609,7 @@ function sysSet(request){
   sysState=state;
   sysNote();
   sysPaint(state);
+  integrationPaint(state);
   return state;
 }
 function sysSwitch(field,on){return sysSet({action:"set",field,value:on})}
@@ -5762,9 +5803,6 @@ async function showSystemSettings(){
   // opens.
   syncSystemSettingSwitches($("sysSettings"));
   if(!systemSettingsNodes)systemSettingsNodes={
-    toolbar:$("sysToolbar").parentElement,
-    share:$("sysShare").parentElement,
-    link:$("sysLink").parentElement,
     info:$("sysInfo").parentElement,
     resultCacheHeading:$("sysResultCacheHeading"),
     resultCacheHint:$("sysResultCacheHint"),
@@ -5812,9 +5850,6 @@ async function showSystemSettings(){
   const hint=document.createElement("p");hint.className="sys-hint";
   hint.textContent=tx("system.desktopHint");body.append(hint);
   if(window.wudictAndroidShell){
-    const lookupHeading=document.createElement("h3");lookupHeading.className="sys-head";lookupHeading.textContent=tx("system.lookup");body.append(lookupHeading);
-    const lookupHint=document.createElement("p");lookupHint.className="sys-hint";lookupHint.textContent=tx("system.lookupHint");body.append(lookupHint);
-    body.append(systemSettingsNodes.toolbar,systemSettingsNodes.share,systemSettingsNodes.link);
     const iconHeading=document.createElement("h3");iconHeading.className="sys-head";iconHeading.textContent=tx("system.appIcon");body.append(iconHeading);
     const iconPicker=document.createElement("div");iconPicker.className="icon-choice-grid android-icon-choice-grid";iconPicker.setAttribute("role","group");iconPicker.setAttribute("aria-label",tx("system.appIcon"));
     let family=localStorage.getItem("wudict_android_icon_choice");
@@ -5973,9 +6008,11 @@ function startupTimingsControl(enabled){
 $("editSysSettings").onclick=()=>showSystemSettings();
 $("systemSettingsClose").onclick=()=>$("systemSettingsDialog").close();
 $("systemSettingsDialog").addEventListener("close",()=>{systemSettingsRenderToken++;$("editSysSettings").focus()});
-$("sysToolbar").addEventListener("change",e=>sysSwitch("toolbar",e.target.checked));
-$("sysShare").addEventListener("change",e=>sysSwitch("share",e.target.checked));
-$("sysLink").addEventListener("change",e=>sysSwitch("link",e.target.checked));
+$("integrationToolbar").addEventListener("change",e=>integrationSet("toolbar",e.target.checked));
+$("integrationShare").addEventListener("change",e=>integrationSet("share",e.target.checked));
+$("integrationLink").addEventListener("change",e=>integrationSet("link",e.target.checked));
+$("integrationReader").addEventListener("change",e=>integrationSet("reader",e.target.checked));
+$("integrationReaderMode").addEventListener("change",e=>integrationSet("readerMode",e.target.value));
 function updateAvailableKey(channel=updateChannel){return "dictshelf_update_available_"+channel}
 function updateDownloadedKey(version){return "dictshelf_update_downloaded_"+version}
 function syncUpdateControls(){

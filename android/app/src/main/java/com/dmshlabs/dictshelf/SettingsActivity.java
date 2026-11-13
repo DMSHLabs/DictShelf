@@ -32,10 +32,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.ArrayAdapter;
 import android.widget.LinearLayout;
-import android.widget.Spinner;
-import android.widget.Switch;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -70,68 +67,6 @@ public class SettingsActivity extends Activity {
 
         // This shortcut remains in the launcher's long-press menu.
         col.addView(caption(getString(R.string.settings_moved_hint), 0, SP_4));
-
-        TextView integration = new TextView(this);
-        integration.setText(R.string.settings_integration);
-        integration.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f);
-        integration.setPadding(0, dp(SP_4), 0, dp(SP_3));
-        col.addView(integration, wide(0));
-
-        Switch fullApp = new Switch(this);
-        fullApp.setText(R.string.settings_reader_full_app);
-        fullApp.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);
-        fullApp.setMinHeight(dp(ROW_MIN));
-        fullApp.setChecked(ShellPrefs.opensApp(this, ShellPrefs.READER));
-        fullApp.setOnCheckedChangeListener((button, checked) -> ShellPrefs.set(this, ShellPrefs.READER, checked));
-        col.addView(fullApp, wide(0));
-        col.addView(caption(getString(R.string.settings_reader_full_app_hint), 0, SP_3));
-
-        TextView modeLabel = new TextView(this);
-        modeLabel.setText(R.string.settings_reader_mode);
-        modeLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);
-        col.addView(modeLabel, wide(SP_3));
-
-        String[] modes = getResources().getStringArray(R.array.settings_reader_modes);
-        String[] values = {"prefix", "suffix", "contains", "word", "wordLemma", "exact", "exactLemma", "wildcards"};
-        Spinner modePicker = new Spinner(this);
-        int pickerBg = ShellPrefs.pageBg(this);
-        int pickerText = ShellPrefs.darkIcons(pickerBg) ? 0xDE000000 : 0xDEFFFFFF;
-        ArrayAdapter<String> modeAdapter = new ArrayAdapter<String>(this,
-                android.R.layout.simple_spinner_item, modes) {
-            private TextView style(View convertView, android.view.ViewGroup parent, int position, boolean dropDown) {
-                TextView item = (TextView) (dropDown
-                        ? super.getDropDownView(position, convertView, parent)
-                        : super.getView(position, convertView, parent));
-                item.setTextColor(pickerText);
-                if (dropDown) {
-                    item.setBackgroundColor(Color.TRANSPARENT);
-                    item.setPadding(dp(SP_4), dp(SP_3), dp(SP_4), dp(SP_3));
-                    item.setMinHeight(dp(ROW_MIN));
-                }
-                return item;
-            }
-
-            @Override public View getView(int position, View convertView, android.view.ViewGroup parent) {
-                return style(convertView, parent, position, false);
-            }
-
-            @Override public View getDropDownView(int position, View convertView, android.view.ViewGroup parent) {
-                return style(convertView, parent, position, true);
-            }
-        };
-        modeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        modePicker.setAdapter(modeAdapter);
-        modePicker.setPopupBackgroundDrawable(WindowBackground.dialogDrawable(this, pickerBg));
-        String selectedMode = ShellPrefs.readerMode(this);
-        for (int n = 0; n < values.length; n++) if (values[n].equals(selectedMode)) modePicker.setSelection(n);
-        modePicker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
-                if (position >= 0 && position < values.length) ShellPrefs.setReaderMode(SettingsActivity.this, values[position]);
-            }
-            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) {}
-        });
-        col.addView(modePicker, wide(0));
-        col.addView(caption(getString(R.string.settings_reader_mode_hint), 0, SP_4));
 
         Button saveLog = new Button(this);
         styleBackgroundButton(saveLog);
