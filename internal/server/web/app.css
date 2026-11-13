@@ -220,14 +220,15 @@ body.barhidden{--stick:0px}
 body.barpinned .bar{transform:none!important}
 body.barpinned{--stick:var(--barh)}
 #lookupBarToggle[hidden]{display:none}
-body.android-lookup-window{--lookup-handle-h:25px;padding-top:calc(var(--lookup-handle-h) + var(--barh))}
-body.android-lookup-window.barhidden{padding-top:var(--lookup-handle-h)}
-body.android-lookup-window #out{min-height:calc(100dvh - var(--lookup-handle-h) - var(--barh) - var(--sbarh,0px))}
-body.android-lookup-window.barhidden #out{min-height:calc(100dvh - var(--lookup-handle-h) - var(--sbarh,0px))}
-body.android-lookup-window .bar{top:var(--lookup-handle-h)}
+body.android-lookup-window{padding-top:var(--barh)}
+body.android-lookup-window.barhidden{padding-top:0}
+body.android-lookup-window #out{min-height:calc(100dvh - var(--barh) - var(--sbarh,0px))}
+body.android-lookup-window.barhidden #out{min-height:calc(100dvh - var(--sbarh,0px))}
+body.android-lookup-window .bar{top:0}
 body.android-lookup-window.barpinned .bar.hidden{transform:translateY(-100%)!important}
 body.android-lookup-window #pinBtn{display:none}
-body.android-lookup-window #lookupBarToggle{position:fixed;z-index:102;top:0;left:0;width:100%;height:var(--lookup-handle-h);border:0;border-bottom:1px solid var(--line);background:var(--bg-bar);color:var(--fg);padding:0;cursor:pointer;line-height:1}
+body.android-lookup-window #lookupBarToggle{position:fixed;z-index:102;top:0;left:50%;transform:translateX(-50%);width:56px;height:34px;border:1px solid var(--line);border-top:0;border-radius:0 0 28px 28px;background:color-mix(in srgb,var(--bg-bar) 72%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:var(--fg);padding:0;cursor:pointer;line-height:1;transition:top .28s ease}
+body.android-lookup-window #lookupBarToggle[aria-expanded="true"]{top:var(--barh)}
 body.android-lookup-window #lookupBarToggle span{display:inline-block;font-size:22px;transition:transform .2s ease}
 body.android-lookup-window #lookupBarToggle[aria-expanded="true"] span{transform:rotate(180deg)}
 /* geometry comes from .col; this rule only arranges what is inside it */

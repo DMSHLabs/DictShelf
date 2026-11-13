@@ -11939,8 +11939,7 @@ function revealFirstMark(det){
    offsetHeight while the bar is off-screen left a bar-sized hole above the
    thing we scrolled to. Read it, do not assume it: the walk is deliberately
    allowed to run with the bar in either state. */
-function barH(){const b=$("bar");return (document.body.classList.contains("android-lookup-window")?$("lookupBarToggle").offsetHeight:0)
-  +(b.classList.contains("hidden")?0:b.offsetHeight)}
+function barH(){const b=$("bar");return b.classList.contains("hidden")?0:b.offsetHeight}
 /* Suspends the auto-hide for the duration of a scroll we started. Cleared by
    scrollend where it exists, by the timer where it does not, and immediately
    by a wheel or a drag — a user who takes over mid-flight is scrolling for
