@@ -40,6 +40,9 @@ import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceResponse;
@@ -261,11 +264,16 @@ public class LookupActivity extends Activity {
                 Gravity.CENTER));
         // Explicit pixels, not MATCH_PARENT: see sizeWindow.
         setContentView(root, new ViewGroup.LayoutParams(winW, winH));
+        applyWindowOffset();
 
         web = new WebView(this);
         //web.setBackgroundColor(getColor(R.color.window_bg));
 		web.setBackgroundColor(WindowBackground.active(this) ? android.graphics.Color.TRANSPARENT : pageBg);
         Shell.configure(web);
+        // The window's own handle: the page's top strip reports how far the
+        // reader dragged it, and this moves the dialog. Nothing else in the
+        // shell takes pointer input, so it is a bridge of one pair of verbs.
+        web.addJavascriptInterface(new WindowDrag(), "wudictLookupWindow");
         Ime.hideOnScroll(web);
         speech = new Speech(this, web);
         web.setWebViewClient(new WebViewClient() {
@@ -562,6 +570,67 @@ public class LookupActivity extends Activity {
         getWindow().setLayout(winW, winH);
     }
 
+    // The theme centres the dialog, so the window's x/y are offsets from that
+    // centre. Dragging changes them; the place the reader left the window is
+    // where the next lookup opens, and a size change clamps it again.
+    private void applyWindowOffset() {
+        Window w = getWindow();
+        WindowManager.LayoutParams lp = w.getAttributes();
+        lp.x = ShellPrefs.readerWindowX(this);
+        lp.y = ShellPrefs.readerWindowY(this);
+        clampOffset(lp);
+        w.setAttributes(lp);
+    }
+
+    private void clampOffset(WindowManager.LayoutParams lp) {
+        Rect bounds = windowBounds();
+        int maxX = Math.max(0, (bounds.width() - winW) / 2);
+        int maxY = Math.max(0, (bounds.height() - winH) / 2);
+        lp.x = Math.max(-maxX, Math.min(maxX, lp.x));
+        lp.y = Math.max(-maxY, Math.min(maxY, lp.y));
+    }
+
+    private void dragWindowBy(float dx, float dy) {
+        runOnUiThread(() -> {
+            if (gone) return;
+            Window w = getWindow();
+            WindowManager.LayoutParams lp = w.getAttributes();
+            lp.x += Math.round(dx);
+            lp.y += Math.round(dy);
+            clampOffset(lp);
+            w.setAttributes(lp);
+        });
+    }
+
+    private void saveWindowOffset() {
+        runOnUiThread(() -> {
+            if (gone) return;
+            WindowManager.LayoutParams lp = getWindow().getAttributes();
+            ShellPrefs.setReaderWindowOffset(this, lp.x, lp.y);
+        });
+    }
+
+    /** The page's half of the window: the grip drags it, the cross closes it. */
+    public final class WindowDrag {
+        @JavascriptInterface public void by(float dx, float dy) { dragWindowBy(dx, dy); }
+        // The mode chosen in the window is the app's mode: it is stored where
+        // Settings → Integration reads it, so a new word opens with it.
+        @JavascriptInterface public void mode(String value) {
+            runOnUiThread(() -> ShellPrefs.setReaderMode(LookupActivity.this, value));
+        }
+        @JavascriptInterface public void end() { saveWindowOffset(); }
+        // The cross leaves the window the way Back and a swipe do: the task goes
+        // to the back and this activity stays resident, so the reader's next word
+        // lands in the same WebView instead of building one from scratch.
+        @JavascriptInterface public void close() {
+            runOnUiThread(() -> {
+                if (gone) return;
+                if (readerCall(getIntent())) moveTaskToBack(true);
+                else finish();
+            });
+        }
+    }
+
     void refreshWindowSize() {
         if (root == null || gone) return;
         sizeWindow();
@@ -571,6 +640,7 @@ public class LookupActivity extends Activity {
             lp.height = winH;
             root.setLayoutParams(lp);
         }
+        applyWindowOffset();
     }
 
     // The window we are actually in, which on a foldable or in split-screen is

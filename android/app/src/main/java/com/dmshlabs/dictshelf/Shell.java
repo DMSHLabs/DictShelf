@@ -308,7 +308,7 @@ final class Shell {
     static final String NATIVE_SELECT_PICKER_JS = """
             (() => {
               function installPickers() {
-              for (const select of document.querySelectorAll('#mode, #articleFindMode, #integrationReaderMode, #stylerPreset, #groupSelect, #groupAvailableFilter, #sysAdvanced select, #bulkIndexes select')) {
+              for (const select of document.querySelectorAll('#mode, #articleFindMode, #stylerPreset, #groupSelect, #groupAvailableFilter, #sysAdvanced select, #bulkIndexes select')) {
               const id = select.id || 'bulkIndexAction';
               if (!select || select.dataset.shellPicker) continue;
               select.dataset.shellPicker = '1';

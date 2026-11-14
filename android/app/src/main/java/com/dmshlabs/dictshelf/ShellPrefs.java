@@ -206,6 +206,8 @@ final class ShellPrefs {
     private static final String READER_WINDOW_SIZE = "reader_window_size";
     private static final String READER_WINDOW_WIDTH = "reader_window_width";
     private static final String READER_WINDOW_HEIGHT = "reader_window_height";
+    private static final String READER_WINDOW_X = "reader_window_x";
+    private static final String READER_WINDOW_Y = "reader_window_y";
 
     private static final String DEFAULT_READER_MODE = "exactLemma";
 
@@ -230,6 +232,16 @@ final class ShellPrefs {
 
     static int readerWindowHeight(Context c) {
         return Math.max(25, Math.min(90, of(c).getInt(READER_WINDOW_HEIGHT, 65)));
+    }
+
+    // Offsets from the centred position the dialog theme gives the window; the
+    // reader drags by its top strip, and this is where they left it.
+    static int readerWindowX(Context c) { return of(c).getInt(READER_WINDOW_X, 0); }
+
+    static int readerWindowY(Context c) { return of(c).getInt(READER_WINDOW_Y, 0); }
+
+    static void setReaderWindowOffset(Context c, int x, int y) {
+        of(c).edit().putInt(READER_WINDOW_X, x).putInt(READER_WINDOW_Y, y).apply();
     }
 
     static void setReaderWindow(Context c, String size, int width, int height) {

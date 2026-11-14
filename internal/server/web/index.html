@@ -289,7 +289,7 @@ window.wudictFontScale=(function(){
 <button type="button" class="btn tools" id="panelBtn" title="{{T:panel.settings}}" aria-label="{{T:panel.settings}}">☰<span id="panelUpdateBadge" class="panel-update-badge" aria-hidden="true" hidden>!</span></button>
 </form>
 </header>
-<button type="button" id="lookupBarToggle" aria-label="{{T:search.showSearchBar}}" aria-expanded="false" aria-controls="bar" hidden><span aria-hidden="true">⌄</span></button>
+<button type="button" id="lookupBarToggle" aria-label="{{T:search.showSearchBar}}" aria-expanded="false" aria-controls="bar" hidden><span aria-hidden="true">▼</span></button>
 
 <main class="col container">
 <!-- Three levels, one job each: #status is the collapsing grid, .msg is the
@@ -941,16 +941,19 @@ window.wudictFontScale=(function(){
   <div class="facts update-notifications-row"><label class="rowlabel" for="integrationReader"><input class="panel-checkbox" type="checkbox" id="integrationReader"> {{T:system.readerFullApp}}</label></div>
   <div class="facts update-channel-row">
     <label class="rowlabel" for="integrationReaderMode">{{T:system.readerMode}}</label>
-    <span class="panel-select-wrap panel-dropdown"><select id="integrationReaderMode" aria-label="{{T:system.readerMode}}">
-      <option value="prefix" aria-label="{{T:search.prefix}}" title="{{T:search.prefix}}">ab→</option>
-      <option value="suffix" aria-label="{{T:search.suffix}}" title="{{T:search.suffix}}">→ab</option>
-      <option value="contains" aria-label="{{T:search.contains}}" title="{{T:search.contains}}">ab</option>
-      <option value="word" aria-label="{{T:search.wholeWord}}" title="{{T:search.wholeWord}}">·ab·</option>
-      <option value="wordLemma" aria-label="{{T:search.wholeWordLemma}}" title="{{T:search.wholeWordLemma}}" data-description="{{T:search.readerWordLemma}}">·ab·+</option>
-      <option value="exact" aria-label="{{T:search.exact}}" title="{{T:search.exact}}">=</option>
-      <option value="exactLemma" aria-label="{{T:search.exactLemma}}" title="{{T:search.exactLemma}}">=+</option>
-      <option value="wildcards" aria-label="{{T:search.wildcards}}" title="{{T:search.wildcards}}">*?</option>
-    </select></span>
+    <span class="panel-mode-pick">
+      <select id="integrationReaderMode" data-mode-menu="1" tabindex="-1" aria-label="{{T:system.readerMode}}">
+        <option value="prefix">ab→</option>
+        <option value="suffix">→ab</option>
+        <option value="contains">ab</option>
+        <option value="word">·ab·</option>
+        <option value="wordLemma">·ab·+</option>
+        <option value="exact">=</option>
+        <option value="exactLemma">=+</option>
+      </select>
+      <button type="button" class="choice-btn themed-select-btn" id="integrationReaderModeBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="{{T:system.readerMode}}"></button>
+      <span class="choice-menu menu-card themed-select-menu" id="integrationReaderModeMenu" role="listbox" aria-label="{{T:system.readerMode}}" data-w="wide" hidden></span>
+    </span>
   </div>
   <p class="panel-update-status">{{T:system.readerModeHint}}</p>
   <div class="facts update-channel-row">
@@ -1485,6 +1488,7 @@ window.wudictFontScale=(function(){
 "use strict";
 const SEARCH_DEBOUNCE_MS={{SEARCH_DEBOUNCE_MS}};
 const $=id=>document.getElementById(id);
+const firstStagePerDictionary=5;
 const SEARCH_PORTION_SIZE_KEY="wudict_search_portion_size";
 const SEARCH_RESULT_LIMIT=501;
 const articleResultCaches=new Map();
@@ -1595,6 +1599,7 @@ function queueArticleResultCache(msg,mode,displayQuery,seq){
   if(state.background){articleCacheQueue.push(state);articleCacheTotal++}
 }
 function finishArticleCacheInitialPage(state){
+  if(inLookupWindow())return;
   if(!articleCacheSearchSettled||state.seq!==searchSeq||!state.done||state.error||state.initialPageRequested)return;
   const det=[...document.querySelectorAll("details.dict")].find(node=>
     node.dataset.searchDict===state.dict&&node.dataset.searchMode===state.mode&&
@@ -2556,6 +2561,26 @@ $("wideBtn").onclick=()=>{
 };
 applyWide(localStorage.getItem("wudict_wide")==="1");
 
+/* The bar's tongue is shown where a strip exists for it: the floating window,
+   and the full app's pinned bar. Everywhere else the bar hides on scroll and a
+   second switch would only compete with the first. */
+function updateBarEar(){
+  const b=$("lookupBarToggle");
+  if(!b)return;
+  const wanted=document.body.classList.contains("android-lookup-window")||
+    document.body.classList.contains("barpinned");
+  b.hidden=!wanted;
+  if(wanted)barEarPaint(!document.body.classList.contains("barhidden"));
+}
+let barHiddenState=null;
+function barEarPaint(shown){
+  const b=$("lookupBarToggle");
+  if(!b)return;
+  const value=shown?"true":"false";
+  if(b.getAttribute("aria-expanded")===value)return;
+  b.setAttribute("aria-expanded",value);
+  b.setAttribute("aria-label",tx(shown?"search.hideSearchBar":"search.showSearchBar"));
+}
 /* pin bar toggle: when pinned, the search bar stays fixed and never hides */
 let barPinned=false;
 function applyBarPinned(on){
@@ -2565,6 +2590,11 @@ function applyBarPinned(on){
   const label=on?tx("search.unpin"):tx("search.pin");
   b.title=label;
   b.setAttribute("aria-label",label);
+  // Pinning is what buys the bar its strip, and the strip is where the tongue
+  // lives. Unpinning takes both away, so a bar left tucked has to come back
+  // with them or the only way back would be gone.
+  if(!on&&document.body.classList.contains("barhidden"))setBarHidden(false,true);
+  updateBarEar();
 }
 $("pinBtn").onclick=()=>{
   barPinned=!barPinned;
@@ -4167,6 +4197,14 @@ const canonicalSearchMode=mode=>mode==="mask"?"wildcards":mode;
    "Phrase" and reloading dropped the reader back to the first option, silently,
    while the menu still offered the mode. A list beside the select is one more
    thing to forget; the select is the one thing there is. */
+/* The floating window is known by its bridge, not by the body class: the bridge
+   is registered before the page loads, while `android-lookup-window` is added at
+   onPageFinished — after the first search has already drawn its cards. Reading
+   the class made the first cards wear the full app's header (and its pager) and
+   the later ones the window's. */
+function inLookupWindow(){
+  return !!window.wudictLookupWindow||document.body.classList.contains("android-lookup-window");
+}
 function searchModeExists(mode){
   for(const option of $("mode").options)if(option.value===mode)return true;
   return false;
@@ -4183,6 +4221,12 @@ function setSearchMode(mode,viewMode=mode){
   document.body.classList.toggle("mask-view-active",showMaskView);
   window.wuSearchHistory?.modeChanged();
   try{localStorage.setItem(SEARCH_MODE_KEY,mode)}catch(_){}
+  // The floating window's mode is the app's mode, not a copy of it: the shell
+  // keeps it (Settings → Integration reads the same value), so the next lookup
+  // opens with the mode this one was left in.
+  if(window.wudictLookupWindow&&window.wudictLookupWindow.mode){
+    try{window.wudictLookupWindow.mode(mode)}catch(_){}
+  }
 }
 try{setSearchMode(localStorage.getItem(SEARCH_MODE_KEY))}catch(_){}
 /* The user-facing name of each index switch (docs/STYLE.md), shared by the
@@ -5290,6 +5334,7 @@ function integrationPaint(state){
   $("integrationReader").checked=!!state.reader;
   const mode=state.readerMode||"exactLemma";
   $("integrationReaderMode").value=[...$("integrationReaderMode").options].some(option=>option.value===mode)?mode:"exactLemma";
+  window.wudictThemedSelects?.integrationReaderMode?.sync();
   $("integrationWindowSize").value=state.readerWindowSize||"medium";
   $("integrationWindowAdjust").hidden=state.readerWindowSize!=="custom";
 }
@@ -8816,8 +8861,14 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null,deferAfter=-1,deferAl
   }
   if(!h.results?.length)return{};
   const det=document.createElement("details");det.className="dict";
+  /* The floating reader window is a glance, not a walk: five answers per
+     dictionary, no pager and no Browse — the book in the status bar is the way
+     to the rest. Whether more exist is not known here (the second stage never
+     runs), so the count says "5+" once the first stage came back full rather
+     than claiming a total it never counted. */
+  const lookupWindow=inLookupWindow();
   const pageSize=paging?.size||searchPortionSize();
-  const more=!paging&&h.results.length>=perDict?`<button type="button" class="priority-index" data-id="${escAttr(h.dict)}" title="${escAttr(tx("search.indexingPriority"))}">${window.wudictI18n.number(perDict)}+</button>`:"";
+  const more=!lookupWindow&&!paging&&h.results.length>=perDict?`<button type="button" class="priority-index" data-id="${escAttr(h.dict)}" title="${escAttr(tx("search.indexingPriority"))}">${window.wudictI18n.number(perDict)}+</button>`:"";
   const browseReturnURL=new URL(location.href);browseReturnURL.pathname="/";
   browseReturnURL.searchParams.set("openDict",h.dict);
   if(articleCacheGroupID)browseReturnURL.searchParams.set("returnCacheID",articleCacheGroupID);
@@ -8826,8 +8877,8 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null,deferAfter=-1,deferAl
     browseURL.searchParams.set("find",q);browseURL.searchParams.set("filter","1");browseURL.searchParams.set("findmode",mode);
   }
   browseURL.searchParams.set("return",browseReturnURL.pathname+browseReturnURL.search+browseReturnURL.hash);
-  const browse=`<a class="search-browse" href="${escAttr(browseURL.pathname+browseURL.search)}">${esc(tx("search.browseAllHeadwords"))}</a>`;
-  const pageControls=paging?(()=>{
+  const browse=lookupWindow?"":`<a class="search-browse" href="${escAttr(browseURL.pathname+browseURL.search)}">${esc(tx("search.browseAllHeadwords"))}</a>`;
+  const pageControls=lookupWindow?"":paging?(()=>{
     const start=paging.start||0,end=start+h.results.length,total=paging.total;
     const totalText=paging.exact?window.wudictI18n.number(total):window.wudictI18n.number(Math.max(end,paging.lowerBound||end))+"+";
     return `<span class="search-pages"><button type="button" class="result-page-action" data-dir="prev" aria-label="${escAttr(tx("search.previousArticleBlock"))}" title="${escAttr(tx("search.previousArticleBlock"))}" ${start<=0?"disabled":""}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 4-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`+
@@ -8847,7 +8898,9 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null,deferAfter=-1,deferAl
      announced - there is no relaxation to explain, and the header shows the count.
      The reading rides on the hit only far enough to mark the words that were
      searched for. (The wire still carries a rung for the log; the page ignores it.) */
-  const countLabel=paging?``:more
+  const countLabel=lookupWindow
+    ?`<span class="count">(${window.wudictI18n.number(h.results.length)}${h.results.length>=perDict&&!paging?"+":""})</span>`
+    :paging?``:more
     ?`<span class="count">${more} ${esc(tx("search.results",{count:perDict,number:""}).trim())}</span>`
     :`<span class="count">${esc(tx("search.results",{count:h.results.length,number:window.wudictI18n.number(h.results.length)}))}</span>`;
   const dictionary=dicts.find(item=>item.id===h.dict),displayName=dictionary?dictLabel(dictionary):h.name;
@@ -10734,7 +10787,7 @@ async function doSearch(ev){
      exactly the ones where a visible "5 of 500+" would be the puzzle. The work
      is interruptible at any moment - a new search calls stopArticleResultCaches
      and aborts the stream - which is what the preference used to stand in for. */
-  activeSearchCountsInBackground=true;
+  activeSearchCountsInBackground=!inLookupWindow();
   stopArticleResultCaches();
   if(mode==="wildcards"){
     restoreSearchReturnCacheID=null;
@@ -10796,9 +10849,12 @@ async function doSearch(ev){
   // No "Searching…" text: the spinner alone says it, and saying it twice
   // cost a permanently reserved line above the results.
   setBusy(true);
-  // "All" queries every dictionary in preference order (fewer results each);
-  // a specific pick queries just that one (more results).
-  let dictParam,perDict;
+  // The first stage asks every dictionary in the fan-out for at most five
+  // answers. Those five are the block a dictionary shows first; the second
+  // stage is what pages the rest in the reader's block size. One answer here
+  // made the first block a single article and shifted every following range by
+  // one. */
+  let dictParam,perDict=firstStagePerDictionary;
   // A group resolves to a LIST of ids here and is sent as one, exactly like
   // "all": the server has no notion of a group, and giving it one would mean
   // versioning a taxonomy across two processes to save a join over 105 rows.
@@ -10829,8 +10885,7 @@ async function doSearch(ev){
       return;
     }
     dictParam=ids.join(",");
-    perDict=1;
-  }else{dictParam=dictSel;perDict=1}
+  }else{dictParam=dictSel}
   articleCacheGroupID=replayReturnCacheID||newArticleResultCacheID();
   articleCacheGroupCount=Math.max(1,dictParam.split(",").length);
   const out=$("out");
@@ -10858,7 +10913,11 @@ async function doSearch(ev){
   const openSlot=i=>{
     const det=ready[i];
     if(!det||det.open)return false;
-    det.open=true;openedIdx=i;promote(boxes,i);
+    det.open=true;openedIdx=i;
+    // The floating window keeps the reader's order and its scroll: promoting a
+    // late answer above the cards already on screen moved the page under the
+    // reader's eye every time a slow dictionary spoke.
+    if(!inLookupWindow())promote(boxes,i);
     const slot=searchDiagSlots[i];
     searchDiagLog("article_open",{dict:slot?.dict||"",name:slot?.name||"",page:i,completed:searchProgressDone,total:searchProgressTotal,resultCount:slot?.results??0});
     if(slot?.dict===preferredOpenDict){
@@ -11938,8 +11997,16 @@ function revealFirstMark(det){
    full height either way — .bar.hidden only translates it — so aiming at
    offsetHeight while the bar is off-screen left a bar-sized hole above the
    thing we scrolled to. Read it, do not assume it: the walk is deliberately
-   allowed to run with the bar in either state. */
-function barH(){const b=$("bar");return b.classList.contains("hidden")?0:b.offsetHeight}
+   allowed to run with the bar in either state.
+   In the lookup window the tongue hangs below that edge: shown, the bar plus
+   the tongue's --tabh strip; hidden, the strip alone. Reading --tabh from
+   app.css keeps the number in one file; it is unset everywhere else and adds
+   nothing. */
+function barH(){
+  const b=$("bar");
+  const t=parseFloat(getComputedStyle(document.body).getPropertyValue("--tabh"))||0;
+  return b.classList.contains("hidden")?t:b.offsetHeight+t;
+}
 /* Suspends the auto-hide for the duration of a scroll we started. Cleared by
    scrollend where it exists, by the timer where it does not, and immediately
    by a wheel or a drag — a user who takes over mid-flight is scrolling for
@@ -12463,21 +12530,131 @@ addEventListener("scroll",()=>{
 function setBarHidden(hide,explicit=false){
   const lookup=document.body.classList.contains("android-lookup-window");
   if(lookup&&!explicit)return;
-  if(barPinned&&!lookup)hide=false;
+  if(barPinned&&!lookup&&!explicit)hide=false;
   $("bar").classList.toggle("hidden",hide);
   document.body.classList.toggle("barhidden",hide);
-  if(lookup){
-    $("lookupBarToggle").setAttribute("aria-expanded",hide?"false":"true");
-    $("lookupBarToggle").setAttribute("aria-label",tx(hide?"search.showSearchBar":"search.hideSearchBar"));
-  }
+  barEarPaint(!hide);
+  // The scroll handler calls this on every event; only a real change is worth a
+  // write, and localStorage on a scroll throttles the frame it lands in.
+  if(hide===barHiddenState)return;
+  barHiddenState=hide;
+  try{localStorage.setItem(lookup?"wudict_lookup_bar_hidden":"wudict_bar_hidden",hide?"1":"0")}catch(_){}
 }
 $('lookupBarToggle').addEventListener('click',()=>setBarHidden(!$('bar').classList.contains('hidden'),true));
+/* The floating window's own three controls, all built here so the full app
+   never sees them: a grip that drags the window (the strip the tongue lives in
+   is too narrow to find on purpose), the cross that closes it in place of the
+   ☰ that would open a panel this window cannot use, and a shorter mode list —
+   the word-level and headword-level modes make sense for one looked-up word,
+   the wildcard and article modes do not. */
+function makeDraggable(el){
+  if(!window.wudictLookupWindow)return;
+  let last=null;
+  el.addEventListener("pointerdown",e=>{
+    if(e.pointerType==="mouse"&&e.button!==0)return;
+    last={x:e.screenX,y:e.screenY};
+    try{el.setPointerCapture(e.pointerId)}catch(_){}
+    e.preventDefault();
+  },{passive:false});
+  el.addEventListener("pointermove",e=>{
+    if(!last)return;
+    const dpr=window.devicePixelRatio||1;
+    // Screen coordinates, not client ones: the window moves under the finger,
+    // so its own viewport origin moves too, and a delta measured against it
+    // feeds the move back into the next one and shakes the window.
+    const dx=(e.screenX-last.x)*dpr,dy=(e.screenY-last.y)*dpr;
+    if(dx||dy){
+      last={x:e.screenX,y:e.screenY};
+      try{window.wudictLookupWindow.by(dx,dy)}catch(_){}
+    }
+    e.preventDefault();
+  },{passive:false});
+  const stop=()=>{
+    if(!last)return;
+    last=null;
+    try{window.wudictLookupWindow.end()}catch(_){}
+  };
+  el.addEventListener("pointerup",stop);
+  el.addEventListener("pointercancel",stop);
+}
+const LOOKUP_HIDDEN_MODES=["wildcards","phrase","near","fts"];
+function bindLookupChrome(){
+  const panel=$("panelBtn");
+  if(panel&&window.wudictLookupWindow){
+    panel.onclick=()=>{try{window.wudictLookupWindow.close()}catch(_){}};
+    if(panel.firstChild&&panel.firstChild.nodeType===3)panel.firstChild.nodeValue="✕";
+    const label=tx("system.closeWindow");
+    panel.title=label;panel.setAttribute("aria-label",label);
+    const badge=$("panelUpdateBadge");
+    if(badge)badge.style.display="none";
+  }
+  const select=$("mode");
+  if(select)for(const value of LOOKUP_HIDDEN_MODES){
+    const option=select.querySelector('option[value="'+value+'"]');
+    // The current mode stays: dropping the option the chip is showing would
+    // leave the control naming a mode it no longer lists.
+    if(option&&select.value!==value)option.remove();
+  }
+  if(!$("lookupGrip")&&window.wudictLookupWindow){
+    const grip=document.createElement("button");
+    grip.type="button";grip.id="lookupGrip";
+    grip.setAttribute("aria-label",tx("system.moveWindow"));
+    grip.title=tx("system.moveWindow");
+    grip.innerHTML='<span aria-hidden="true">☰</span>';
+    document.body.append(grip);
+    makeDraggable(grip);
+  }
+}
+/* The bottom bar's own switch, the top tongue turned upside down. It is built
+   on demand because the bar itself lives inside the dock work-progress.js
+   assembles (#bottomDock) — inserted before the bar, it hangs above it. Hiding
+   the bar collapses that dock to the tongue alone, which is how the reading
+   area gets the bar's height back: the dock measures itself (--bottomdockh) and
+   the page follows. Both switches remember their last state in localStorage, so
+   a word opened tomorrow arrives with the reader's own layout, not the default.
+   The dock is assembled by a deferred script, so the first attempt waits for
+   DOMContentLoaded; the lookup window's ready hook runs later and just finds it. */
+function ensureSbarToggle(){
+  if($("sbarToggle")||!$("sbar")||!$("sbar").parentNode)return;
+  const b=document.createElement("button");
+  b.type="button";b.id="sbarToggle";
+  b.setAttribute("aria-controls","sbar");b.setAttribute("aria-expanded","true");
+  b.setAttribute("aria-label",tx("system.hideStatusBar"));
+  b.innerHTML='<span aria-hidden="true">▼</span>';
+  b.addEventListener("click",()=>setSbarHidden(!$("sbar").hidden));
+  $("sbar").parentNode.insertBefore(b,$("sbar"));
+}
+function setSbarHidden(hide){
+  $("sbar").hidden=hide;
+  document.body.classList.toggle("sbarhidden",hide);
+  $("sbarToggle").setAttribute("aria-expanded",hide?"false":"true");
+  $("sbarToggle").setAttribute("aria-label",tx(hide?"system.showStatusBar":"system.hideStatusBar"));
+  sbarMeasure();
+  try{localStorage.setItem("wudict_sbar_hidden",hide?"1":"0")}catch(_){}
+}
+function restoreBarTongues(){
+  ensureSbarToggle();
+  if(document.body.classList.contains("barpinned")){
+    let tucked=false;
+    try{tucked=localStorage.getItem("wudict_bar_hidden")==="1"}catch(_){}
+    if(tucked&&!document.body.classList.contains("barhidden"))setBarHidden(true,true);
+  }
+  if(!$("sbarToggle"))return;
+  let hide=false;
+  try{hide=localStorage.getItem("wudict_sbar_hidden")==="1"}catch(_){}
+  if(hide&&!$("sbar").hidden)setSbarHidden(true);
+}
+addEventListener("DOMContentLoaded",restoreBarTongues);
 window.wudictAndroidLookupWindowReady=()=>{
   document.body.classList.add('android-lookup-window');
   $('lookupBarToggle').hidden=false;
   $('sbarOpenApp').hidden=false;
   if(document.activeElement===$('q'))$('q').blur();
-  setBarHidden(true,true);
+  restoreBarTongues();
+  bindLookupChrome();
+  let barHidden=true;
+  try{barHidden=localStorage.getItem("wudict_lookup_bar_hidden")!=="0"}catch(_){}
+  setBarHidden(barHidden,true);
   sbarPaint();
 };
 /* The box is never worked in while out of sight. .bar.hidden only translates
@@ -13773,7 +13950,11 @@ function themedSelect(select,button,menu){
     // the same measurement the other menus use (headword-control.js). Not in
     // the fill callback: that runs while the menu is still hidden, and a hidden
     // element measures nothing.
-    if(select.id==="mode"){menu.replaceChildren(...modeMenuNodes(ctl));return true}
+    /* The search row's own menu is the one the reader means everywhere a mode
+       is picked, so a select can ask for it by attribute — Settings does, and a
+       bare menu has no pruning gear and no hidden modes of its own. */
+    if(select.id==="mode"||select.dataset.modeMenu==="1"){
+      menu.replaceChildren(...modeMenuNodes(ctl,select.dataset.modeMenu==="1"));return true}
     const nodes=[];let group=null;
     for(const option of select.options){
       if(option.hidden)continue;
@@ -13898,25 +14079,25 @@ function themedSelect(select,button,menu){
   /* Rebuilt on every open, so a set changed in another window is already in
      force the next time the menu is shown. In the editing state nothing is
      filtered out - the reader must see every command to put it back. */
-  function modeMenuNodes(ctl){
+  function modeMenuNodes(ctl,bare=false){
     const prefs=modeMenuPrefs();
     const hidden=modeMenuCustomizing?modeMenuDraftModes:prefs.hiddenModes();
     const hiddenHeadings=modeMenuCustomizing?modeMenuDraftHeadings:prefs.hiddenHeadings();
     const options=[...select.options];
-    const shownSet=modeMenuCustomizing?null:new Set(prefs.visibleModes(options.map(option=>option.value),hidden));
+    const shownSet=bare||modeMenuCustomizing?null:new Set(prefs.visibleModes(options.map(option=>option.value),hidden));
     const groups=[];let group=null;
     for(const option of options){
       if(MODE_MENU_GROUP[option.value]||!group){group={key:MODE_MENU_GROUP[option.value]||null,options:[]};groups.push(group)}
       group.options.push(option);
     }
-    const nodes=[modeMenuBar(ctl)];
+    const nodes=bare?[]:[modeMenuBar(ctl)];
     for(const section of groups){
-      const rows=modeMenuCustomizing?section.options:section.options.filter(option=>shownSet.has(option.value));
+      const rows=bare||modeMenuCustomizing?section.options:section.options.filter(option=>shownSet.has(option.value));
       if(!rows.length)continue;
       const block=document.createElement("div");block.className="headword-control-find-group";
       if(section.key){
         if(modeMenuCustomizing)block.append(modeMenuHeadingRow(section.key,hiddenHeadings,ctl));
-        else if(!hiddenHeadings.has(section.key)){
+        else if(bare||!hiddenHeadings.has(section.key)){
           const heading=document.createElement("div");heading.className="headword-control-find-group-title";
           heading.textContent=MODE_MENU_HEADING[section.key];block.append(heading);
         }
@@ -13929,7 +14110,7 @@ function themedSelect(select,button,menu){
   /* The mode button wears the mode's mark, so the mode's own name moves to the
      tooltip and the accessible name - without it the control would announce a
      pattern. Every other menu button keeps its option's text. */
-  const markedButton=select.id==="mode"||select.id==="articleFindMode",controlName=select.getAttribute("aria-label")||"";
+  const markedButton=select.id==="mode"||select.id==="articleFindMode"||select.dataset.modeMenu==="1",controlName=select.getAttribute("aria-label")||"";
   function sync(){
     const option=select.selectedOptions[0];
     if(markedButton&&option){
@@ -13983,6 +14164,9 @@ function themedSelectCreate(select){
 }
 window.wudictThemedSelects={
   mode:themedSelect($("mode"),$("modeMenuBtn"),$("modeMenu")),
+  // Settings' reader mode is the same menu as the search row's, without the
+  // pruning gear: it is a setting of one value, not a list to curate.
+  integrationReaderMode:$("integrationReaderMode")?themedSelect($("integrationReaderMode"),$("integrationReaderModeBtn"),$("integrationReaderModeMenu")):null,
   pickerGroup:themedSelect($("webPickerGroup"),$("webPickerGroupBtn"),$("webPickerGroupMenu"))
 };
 $("webDictionaryPicker").addEventListener("close",()=>window.wudictThemedSelects.pickerGroup.hide());

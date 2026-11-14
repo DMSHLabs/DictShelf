@@ -71,6 +71,15 @@ html[data-desktop-image] { background-color:var(--paper-bg) !important;
      it must aim at --barh, never at a --stick that is momentarily 0. */
   --barh:3.1em;
   --stick:var(--barh);
+  /* The bar's own strip for its tongue. Zero everywhere the tongue is not
+     wanted, and every geometry below is written as --barh + --tabh so one
+     number adds or removes the strip: the floating window's top bar and the
+     full app's pinned bar own it, nothing else does. */
+  --tabh:0px;
+  /* The height of a bar's tongue — the switch that tucks the bar away. The top
+     bar's tongue is --tabh, set by the floating window's block below; this one
+     is the bottom bar's, and it is global because that bar is. */
+  --tongue:24px;
   /* The article surface, as two values rather than two literals in four
      places. Custom properties are the only thing that crosses `all:initial`
      into a shadow root, so overriding these once in the user's own app.css
@@ -160,7 +169,7 @@ html[data-theme="dark"]{color-scheme:dark}
    bar's lower edge with its header pinned under the hairline. One measured
    value is right at every width, and the phone's own copy of this rule said so
    already; there is now only one. */
-body{margin:0;padding-top:var(--barh);
+body{margin:0;padding-top:calc(var(--barh) + var(--tabh));
   background:var(--bg);color:var(--fg);
   font-family:var(--font);line-height:var(--fi)}
 /* The result area owns the space between the two bars, empty or full. The
@@ -169,7 +178,7 @@ body{margin:0;padding-top:var(--barh);
    third, and the first painted article dropped it to the bottom. Measured
    bars, not guessed ones: --barh and --sbarh are published by the page, and
    --sbarh is absent while the bar is hidden. */
-#out{min-height:calc(100dvh - var(--barh) - var(--sbarh,0px))}
+#out{min-height:calc(100dvh - var(--barh) - var(--tabh) - var(--sbarh,0px))}
 /* ── the content column ─────────────────────────────────────────────
    One geometry, worn by the toolbar and the results alike, so their edges
    cannot drift apart. They used to be described separately: both capped at
@@ -218,19 +227,85 @@ body.barhidden{--stick:0px}
    a toggle between hiding and not hiding; it is a mode switch that disables
    the auto-hide behaviour entirely while keeping the bar fixed in place. */
 body.barpinned .bar{transform:none!important}
-body.barpinned{--stick:var(--barh)}
+body.barpinned .bar.hidden{transform:translateY(-100%)!important}
+body.barpinned.barhidden{--stick:0px;padding-top:var(--tabh)}
+body.barpinned{--tabh:24px}
 #lookupBarToggle[hidden]{display:none}
-body.android-lookup-window{padding-top:var(--barh)}
-body.android-lookup-window.barhidden{padding-top:0}
+/* The lookup window's switch for the search row: one filled triangle, the same
+   mark the status bar uses for its dictionary jumps, on a small tongue that
+   hangs from the edge it belongs to. Collapsed, the tongue hangs from the
+   window's top edge over a --tabh strip of body padding, so the results start
+   below it and the mark never lands on the pager row. Expanded, it hangs from
+   the row's lower border — below it, never over it — over the same strip, so
+   the row's hairline stays whole and the results start under the tongue.
+   The tongue is the page's own colour at 55% over a 6 px blur with a hairline
+   on its sides and its lower edge (the row's own border closes the top): on
+   paper it reads as a tab, over the article it softens the lines under the
+   mark instead of painting a white patch there.
+   Collapsed the mark points down (the row comes down from it) and expanded the
+   same mark is rotated to point up. */
+body.android-lookup-window{--tabh:24px;padding-top:var(--barh)}
+/* A stuck header rests against the bar's own lower edge — the block the tongue
+   protrudes from. With that block away it comes to rest at the window's top
+   edge, in the strip the tongue owns: body.barhidden's --stick:0 already says
+   so, and the strip is the tongue's row rather than a band to stop under. */
+/* With the search row out, the results sit flush against its lower border and
+   the tongue simply protrudes over their first line: the strip is the tongue's
+   own space only while there is no row to belong to. */
 body.android-lookup-window #out{min-height:calc(100dvh - var(--barh) - var(--sbarh,0px))}
-body.android-lookup-window.barhidden #out{min-height:calc(100dvh - var(--sbarh,0px))}
+body.android-lookup-window.barhidden{padding-top:var(--tabh)}
+body.android-lookup-window.barhidden #out{min-height:calc(100dvh - var(--tabh) - var(--sbarh,0px))}
 body.android-lookup-window .bar{top:0}
 body.android-lookup-window.barpinned .bar.hidden{transform:translateY(-100%)!important}
 body.android-lookup-window #pinBtn{display:none}
-body.android-lookup-window #lookupBarToggle{position:fixed;z-index:102;top:0;left:50%;transform:translateX(-50%);width:56px;height:34px;border:1px solid var(--line);border-top:0;border-radius:0 0 28px 28px;background:color-mix(in srgb,var(--bg-bar) 72%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:var(--fg);padding:0;cursor:pointer;line-height:1;transition:top .28s ease}
-body.android-lookup-window #lookupBarToggle[aria-expanded="true"]{top:var(--barh)}
-body.android-lookup-window #lookupBarToggle span{display:inline-block;font-size:22px;transition:transform .2s ease}
-body.android-lookup-window #lookupBarToggle[aria-expanded="true"] span{transform:rotate(180deg)}
+/* The switch itself belongs to whichever bar owns a strip: this window's top
+   bar, and the full app's pinned one. It hangs from the bar's lower edge and
+   drops to the window's top edge when the bar is away. */
+#lookupBarToggle{position:fixed;z-index:102;top:var(--barh);left:50%;transform:translateX(-50%);width:60px;height:var(--tabh);border:1px solid var(--line);border-top:0;background:color-mix(in srgb,var(--bg) 55%,transparent);border-radius:0 0 10px 10px;color:var(--fg);padding:0;cursor:pointer;line-height:1;-webkit-tap-highlight-color:transparent;transition:top .28s ease}
+body.barhidden #lookupBarToggle{top:0}
+#lookupBarToggle span{display:inline-block;font-size:16px;line-height:1;transition:transform .2s ease}
+#lookupBarToggle[aria-expanded="true"] span{transform:rotate(180deg)}
+/* One line per dictionary header in this window: the name takes what is left
+   and ends in an ellipsis, the count sits at the right in brackets. The full
+   app may wrap the controls onto a second line when a title is long; here that
+   would change the header's height as answers arrive and move the page. */
+body.android-lookup-window summary.search-result-summary{flex-wrap:nowrap}
+body.android-lookup-window summary .search-dict-identity{flex:1 1 auto;min-width:0;white-space:nowrap}
+body.android-lookup-window summary .search-dict-name{min-width:0}
+body.android-lookup-window summary .search-dict-controls,
+body.android-lookup-window summary[data-controls-wrapped="true"] .search-dict-controls{flex:0 0 auto;margin-left:auto;padding:0;border:0;white-space:nowrap}
+body.android-lookup-window summary .search-dict-controls .search-pages{display:none}
+/* The window's grip: three stripes in the bar's left end, before the field —
+   the bar's own row is the one place a thumb reaches without aiming. The row is
+   inset by its width so the grip never sits on the field, and with the row away
+   the same control stays at the window's top edge. */
+body.android-lookup-window .bar form{padding-left:56px}
+body.android-lookup-window #lookupGrip{position:fixed;z-index:103;left:0;top:calc((var(--barh) - var(--tabh)) / 2);width:44px;height:var(--tabh);border:1px solid var(--line);border-left:0;border-radius:0 10px 10px 0;background:color-mix(in srgb,var(--bg) 55%,transparent);color:var(--fg);padding:0;cursor:grab;line-height:1;font-size:16px;touch-action:none;-webkit-tap-highlight-color:transparent}
+body.android-lookup-window.barhidden #lookupGrip{top:0}
+/* A section scrolled into view stops below the whole top chrome; with the strip
+   away that is the bar alone. */
+body.barhidden details.dict{scroll-margin-top:var(--tabh)}
+/* The bottom bar's switch, the top tongue turned upside down: it hangs above
+   the status bar, over the dock's glass, with a hairline on its sides and its
+   upper edge and none on its lower one, because the bar's own border closes it
+   there. Tapped, the bar leaves — the dock then holds the tongue alone, which
+   is how the reading area gets the bar's height back — and the mark turns to
+   point up. It belongs to the bar, not to the floating window: the same control
+   serves the full app, and both remember the last choice. */
+#sbarToggle{display:block;box-sizing:border-box;width:60px;height:var(--tongue);margin:0 auto;border:1px solid var(--line);border-bottom:0;border-radius:10px 10px 0 0;background:color-mix(in srgb,var(--bg) 55%,transparent);color:var(--fg);padding:0;cursor:pointer;line-height:1;font-size:11px;-webkit-tap-highlight-color:transparent}
+#sbarToggle span{display:inline-block;line-height:1;font-size:16px;transition:transform .2s ease}
+#sbarToggle[aria-expanded="false"] span{transform:rotate(180deg)}
+/* Tucked away, the bar takes its dock's glass with it: the tongue is the only
+   thing left at the bottom edge, and it must read as a protrusion over the
+   article rather than as a slot in a bar. */
+body.android-lookup-window #bottomDock,body.sbarhidden #bottomDock{background:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+/* …but the bar standing in that dock is the same glass it always was: the dock
+   is transparent only so the tongue's own row above it can be. */
+body.android-lookup-window #bottomDock .sbar{background:var(--bg-bar);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+/* The floating window's frame: the hairline the search field wears, drawn over
+   the page's own edge. The native outline sits behind the WebView, so without
+   this the square window ends in nothing at all. */
+body.android-lookup-window::after{content:"";position:fixed;inset:0;border:1px solid var(--line);pointer-events:none;z-index:400}
 /* geometry comes from .col; this rule only arranges what is inside it */
 .bar form{display:flex;align-items:center;gap:var(--sp-1);flex-wrap:wrap;
   justify-content:center}
@@ -279,7 +354,6 @@ html[data-webview2] #barBackWords:not([hidden]){display:inline-flex;align-items:
 #sbarOpenApp{flex:none;display:inline-flex;align-items:center;justify-content:center;padding:.25em;min-width:var(--sbar-sq,2.2em);margin-inline-end:var(--sp-2)}
 #sbarOpenApp[hidden]{display:none}
 #sbarOpenApp svg{width:1.35em;height:1.35em}
-body.android-lookup-window details.dict>summary{position:static;top:auto}
 #sbarBackWords{display:inline-flex;align-items:center;justify-content:center;gap:.35em;flex:none;margin-right:.35em;white-space:nowrap;text-decoration:none;font-size:calc(var(--ui-font-addition) * 1rem);line-height:1}
 #sbarBackWords svg{display:block;flex:none;width:1.15em;height:1.15em}
 #sbarBackWords[hidden]{display:none}
@@ -653,7 +727,7 @@ details.dict{margin-top:var(--sp-2);background:var(--bg-card);border:1px solid v
   border-radius:10px;box-shadow:var(--shadow);overflow:clip;
   /* so scrollIntoView lands the section below the bar instead of under it,
      with no arithmetic and no re-derivation when the bar rewraps */
-  scroll-margin-top:var(--barh)}
+  scroll-margin-top:calc(var(--barh) + var(--tabh))}
 /* The first section is flush against the bar (2026-09-27, the reader's call
    after the top edge was fixed): the header of the first dictionary sits under
    the bar exactly where every other section's header sits once it sticks, so
@@ -1179,6 +1253,14 @@ html:not([data-shell-image]) #hotkeysSection .hotkey-row input{background-image:
    only tune the appearance drawer's local spacing. */
 .appearance-row input[type=checkbox]{--ds-checkbox-margin:0}
 #panel .panel-checkbox{--ds-checkbox-margin:0 .5em 0 0}
+
+/* The reader mode's picker: a real <select> for the value and the accessible
+   name, and the search row's own menu on top of it. The select stays in the
+   document — its options are what the menu is built from — but it takes no
+   pointer and draws nothing. */
+.panel-mode-pick{position:relative;display:inline-flex;align-items:center;min-width:0}
+.panel-mode-pick>select{position:absolute;inset:0;opacity:0;pointer-events:none}
+.panel-mode-pick>.themed-select-btn{min-width:4.6em}
 #panel .examples-extra .panel-checkbox{--ds-checkbox-margin:.2em 0 0}
 #panel .facts.panel-setting-checkbox{align-items:center;gap:calc(var(--ui-control-gap) * 1em);width:100%;cursor:pointer}
 #panel .facts.panel-setting-checkbox>.panel-checkbox{--ds-checkbox-margin:0}
