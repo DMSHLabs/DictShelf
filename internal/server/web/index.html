@@ -289,7 +289,7 @@ window.wudictFontScale=(function(){
 <button type="button" class="btn tools" id="panelBtn" title="{{T:panel.settings}}" aria-label="{{T:panel.settings}}">☰<span id="panelUpdateBadge" class="panel-update-badge" aria-hidden="true" hidden>!</span></button>
 </form>
 </header>
-<button type="button" id="lookupBarToggle" aria-label="{{T:search.showSearchBar}}" aria-expanded="false" aria-controls="bar" hidden><span aria-hidden="true">▼</span></button>
+<button type="button" id="lookupBarToggle" aria-label="{{T:search.showSearchBar}}" aria-expanded="false" aria-controls="bar" hidden><span aria-hidden="true"></span></button>
 
 <main class="col container">
 <!-- Three levels, one job each: #status is the collapsing grid, .msg is the
@@ -10993,7 +10993,11 @@ async function doSearch(ev){
         liveSearchBoxes=boxes;
         openedIdx=null; // re-arm the latch: a new generation, a new decision
         resolved=boxes.map(()=>false);ready=boxes.map(()=>null);frontier=0;
-        limit=openAll?Infinity:openN;opened=0;
+        // The floating window is a glance at every dictionary, so every section
+        // that answered opens itself there; the reader's "open N" is a full-app
+        // preference (the article HTML is already in the DOM, and an open card's
+        // dl is content-visibility:auto, so this costs the visible rows only).
+        limit=openAll||inLookupWindow()?Infinity:openN;opened=0;
         clearTimeout(barrier);barrier=null;
         // Only where it can bite: the count is satisfied by any prefix
         // immediately, and under expand-all there is no latch to hold back.
@@ -11998,14 +12002,13 @@ function revealFirstMark(det){
    offsetHeight while the bar is off-screen left a bar-sized hole above the
    thing we scrolled to. Read it, do not assume it: the walk is deliberately
    allowed to run with the bar in either state.
-   In the lookup window the tongue hangs below that edge: shown, the bar plus
-   the tongue's --tabh strip; hidden, the strip alone. Reading --tabh from
-   app.css keeps the number in one file; it is unset everywhere else and adds
-   nothing. */
+   The switch sits inside the bar, so a visible bar is the whole chrome; with the bar away
+only the thin strip (--tabh) is left, and that is what the page is inset by then. Reading
+--tabh from app.css keeps the number in one file. */
 function barH(){
   const b=$("bar");
-  const t=parseFloat(getComputedStyle(document.body).getPropertyValue("--tabh"))||0;
-  return b.classList.contains("hidden")?t:b.offsetHeight+t;
+  if(!b.classList.contains("hidden"))return b.offsetHeight;
+  return parseFloat(getComputedStyle(document.body).getPropertyValue("--tabh"))||0;
 }
 /* Suspends the auto-hide for the duration of a scroll we started. Cleared by
    scrollend where it exists, by the timer where it does not, and immediately
@@ -12540,7 +12543,14 @@ function setBarHidden(hide,explicit=false){
   barHiddenState=hide;
   try{localStorage.setItem(lookup?"wudict_lookup_bar_hidden":"wudict_bar_hidden",hide?"1":"0")}catch(_){}
 }
-$('lookupBarToggle').addEventListener('click',()=>setBarHidden(!$('bar').classList.contains('hidden'),true));
+/* The bar's handle does two things, as the pill shape promises: a tap toggles
+   the row, a pull moves the window. The threshold is what tells them apart, and
+   a pull swallows the click that follows it. */
+let barToggleDragged=false;
+$('lookupBarToggle').addEventListener('click',()=>{
+  if(barToggleDragged){barToggleDragged=false;return}
+  setBarHidden(!$('bar').classList.contains('hidden'),true);
+});
 /* The floating window's own three controls, all built here so the full app
    never sees them: a grip that drags the window (the strip the tongue lives in
    is too narrow to find on purpose), the cross that closes it in place of the
@@ -12549,15 +12559,19 @@ $('lookupBarToggle').addEventListener('click',()=>setBarHidden(!$('bar').classLi
    the wildcard and article modes do not. */
 function makeDraggable(el){
   if(!window.wudictLookupWindow)return;
-  let last=null;
+  const THRESHOLD=8; // CSS px of travel before a press counts as a pull
+  let start=null,last=null,pulling=false;
   el.addEventListener("pointerdown",e=>{
     if(e.pointerType==="mouse"&&e.button!==0)return;
-    last={x:e.screenX,y:e.screenY};
+    start={x:e.screenX,y:e.screenY};last=start;pulling=false;
     try{el.setPointerCapture(e.pointerId)}catch(_){}
-    e.preventDefault();
-  },{passive:false});
+  });
   el.addEventListener("pointermove",e=>{
-    if(!last)return;
+    if(!start)return;
+    if(!pulling){
+      if(Math.hypot(e.screenX-start.x,e.screenY-start.y)<THRESHOLD)return;
+      pulling=true;
+    }
     const dpr=window.devicePixelRatio||1;
     // Screen coordinates, not client ones: the window moves under the finger,
     // so its own viewport origin moves too, and a delta measured against it
@@ -12570,8 +12584,11 @@ function makeDraggable(el){
     e.preventDefault();
   },{passive:false});
   const stop=()=>{
-    if(!last)return;
-    last=null;
+    if(!start)return;
+    const pulled=pulling;
+    start=null;last=null;pulling=false;
+    if(!pulled)return;
+    barToggleDragged=true;
     try{window.wudictLookupWindow.end()}catch(_){}
   };
   el.addEventListener("pointerup",stop);
@@ -12595,15 +12612,9 @@ function bindLookupChrome(){
     // leave the control naming a mode it no longer lists.
     if(option&&select.value!==value)option.remove();
   }
-  if(!$("lookupGrip")&&window.wudictLookupWindow){
-    const grip=document.createElement("button");
-    grip.type="button";grip.id="lookupGrip";
-    grip.setAttribute("aria-label",tx("system.moveWindow"));
-    grip.title=tx("system.moveWindow");
-    grip.innerHTML='<span aria-hidden="true">☰</span>';
-    document.body.append(grip);
-    makeDraggable(grip);
-  }
+  // The pill is the handle: it drags in this window and only toggles elsewhere,
+  // because the full app has no window to move.
+  makeDraggable($("lookupBarToggle"));
 }
 /* The bottom bar's own switch, the top tongue turned upside down. It is built
    on demand because the bar itself lives inside the dock work-progress.js
@@ -12620,7 +12631,7 @@ function ensureSbarToggle(){
   b.type="button";b.id="sbarToggle";
   b.setAttribute("aria-controls","sbar");b.setAttribute("aria-expanded","true");
   b.setAttribute("aria-label",tx("system.hideStatusBar"));
-  b.innerHTML='<span aria-hidden="true">▼</span>';
+  b.innerHTML='<span aria-hidden="true"></span>';
   b.addEventListener("click",()=>setSbarHidden(!$("sbar").hidden));
   $("sbar").parentNode.insertBefore(b,$("sbar"));
 }
@@ -12716,6 +12727,9 @@ window.wudictAndroidLookup=(query,mode,dict)=>{
   navRecord="replace";commitOnce=true;
   if($("mode").value==="wildcards")maskSubmitRequested=true;
   doSearch();
+  // A new word is a new answer: the window starts at its own top, never at the
+  // scroll the previous word left behind.
+  try{scrollTo({top:0,behavior:"auto"});prevScroll=0}catch(_){}
 };
 function applyURL(){
   const p=new URLSearchParams(location.search);
