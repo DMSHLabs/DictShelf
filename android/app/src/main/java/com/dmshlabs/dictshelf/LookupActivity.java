@@ -39,6 +39,7 @@ import android.os.Bundle;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
@@ -233,8 +234,13 @@ public class LookupActivity extends Activity {
             forward();
             return;
         }
-        // Reader lookups are a quick-switch companion: moving focus back to
-        // the reader must not dismiss the floating window with an outside tap.
+        // Reader lookups are a quick-switch companion: an outside tap is the
+        // swipe that puts the window away, so it must not destroy the activity.
+        // Watching outside touches lets the tap do what Back and the cross do -
+        // the task goes to the back and the next word reuses this WebView.
+        if (readerCall(i)) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH);
+        }
         setFinishOnTouchOutside(!readerCall(i));
         resident = this;
         updateReaderBack(i);
@@ -733,6 +739,18 @@ public class LookupActivity extends Activity {
             if (pageReady) dispatchLookup();
             else lookupPending = true;
         }
+    }
+
+    /* An outside tap is the reader's swipe: the window leaves the way Back and
+       the cross leave it, and the activity stays resident for the next word. */
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (event.getActionMasked() == MotionEvent.ACTION_OUTSIDE && readerCall(getIntent())) {
+            SystemLog.reader("lookup outside tap to reader task=" + getTaskId());
+            moveTaskToBack(true);
+            return true;
+        }
+        return super.dispatchTouchEvent(event);
     }
 
     // ── lifecycle ────────────────────────────────────────────────────────
