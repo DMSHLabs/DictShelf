@@ -234,12 +234,13 @@ body.android-lookup-window .bar{padding-bottom:24px}
    tucked strip is the drag handle. The threshold between a tap and a pull
    lives in makeDraggable(). */
 #lookupBarToggle{position:fixed;z-index:102;top:calc(var(--barh) - 24px);left:50%;transform:translateX(-50%);width:96px;height:24px;display:grid;place-items:center;border:0;background:none;padding:0;cursor:grab;line-height:1;-webkit-tap-highlight-color:transparent;touch-action:none;transition:top .28s ease}
-body.barhidden #lookupBarToggle{top:0;left:0;transform:none;width:100%;height:var(--tabh);place-items:center;padding-bottom:0;background:color-mix(in srgb,var(--bg) 55%,transparent);border-bottom:1px solid var(--line)}
+body.barhidden #lookupBarToggle{top:0;left:0;transform:none;width:100%;height:var(--tabh);place-items:center;padding-bottom:0;background:none;border:0}
+body.barhidden #lookupBarToggle::after{content:"";position:absolute;z-index:0;top:0;left:50%;transform:translateX(-50%);width:72px;height:100%;box-sizing:border-box;background:var(--bg);border-bottom:1px solid var(--line);border-radius:0 0 12px 12px}
 body.android-lookup-window.barhidden{--stick:var(--tabh);padding-top:var(--tabh)}
 body.android-lookup-window.barhidden #out{min-height:calc(100dvh - var(--tabh) - var(--sbarh,0px))}
-body.android-lookup-window.barhidden #lookupBarToggle{background:var(--bg)}
-html[data-shell-image] body.android-lookup-window.barhidden #lookupBarToggle{background:var(--paper-bg)}
+html[data-shell-image] body.barhidden #lookupBarToggle::after{background:var(--paper-bg)}
 #lookupBarToggle::before{content:"";border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:7px solid var(--fg-soft);transition:transform .2s ease}
+body.barhidden #lookupBarToggle::before{position:relative;z-index:1}
 #lookupBarToggle[aria-expanded="false"]::before{transform:rotate(180deg)}
 /* One line per dictionary header in this window: the name takes what is left
    and ends in an ellipsis, the count sits at the right in brackets. The full
@@ -258,13 +259,16 @@ body.barhidden details.dict{scroll-margin-top:var(--tabh)}
    the same thin strip when the bar is away. It is in flow inside the dock, so
    the strip is what the dock holds then. */
 #sbarToggle{position:relative;z-index:2;display:grid;place-items:center;width:100%;height:28px;margin:0 auto -16px;border:0;background:none;padding:0;cursor:pointer;line-height:1;-webkit-tap-highlight-color:transparent}
-body.sbarhidden #sbarToggle{height:var(--tabh);margin-bottom:0;background:color-mix(in srgb,var(--bg) 55%,transparent);border-top:1px solid var(--line)}
+body.sbarhidden #sbarToggle{height:var(--tabh);margin-bottom:0;background:none;border:0;position:relative}
+body.sbarhidden #sbarToggle::after{content:"";position:absolute;z-index:0;bottom:0;left:50%;transform:translateX(-50%);width:72px;height:100%;box-sizing:border-box;background:var(--bg);border-top:1px solid var(--line);border-radius:12px 12px 0 0}
+body.sbarhidden #sbarToggle::before{position:relative;z-index:1}
+html[data-shell-image] body.sbarhidden #sbarToggle::after{background:var(--paper-bg)}
 #sbarToggle::before{content:"";border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid var(--fg-soft);transition:transform .2s ease}
 #sbarToggle[aria-expanded="false"]::before{transform:rotate(180deg)}
 body.sbarhidden #bottomDock{background:none;backdrop-filter:none;-webkit-backdrop-filter:none}
 /* …but the bar standing in that dock is the same glass it always was: the dock
    is transparent only so the tongue's own row above it can be. */
-body.android-lookup-window #bottomDock .sbar{background:var(--bg-bar);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+body.android-lookup-window #bottomDock .sbar{backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 /* The floating window's frame: the hairline the search field wears, drawn over
    the page's own edge. The native outline sits behind the WebView, so without
    this the square window ends in nothing at all. */
