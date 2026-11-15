@@ -225,17 +225,20 @@ body.barpinned .bar{transform:none!important}
 body.barpinned .bar.hidden{transform:translateY(-100%)!important}
 body.barpinned.barhidden{--stick:0px;padding-top:var(--tabh)}
 #lookupBarToggle[hidden]{display:none}
-/* The mark needs a home that is not the field: ten pixels of the bar's lower
-   padding are its band, above the hairline and below the input. */
-body.android-lookup-window .bar{padding-bottom:10px}
-/* The switch is a mark, not a plate. With the bar in place the triangle sits
-   inside the bar's own lower edge — it belongs to the panel and covers
-   nothing; with the bar away the same triangle is centred in the thin strip
-   (--tabh) that is all that remains, and that strip is also the drag handle of
-   the floating window. The threshold between a tap and a pull lives in
-   makeDraggable(). */
-#lookupBarToggle{position:fixed;z-index:102;top:calc(var(--barh) - 28px);left:50%;transform:translateX(-50%);width:96px;height:28px;display:grid;place-items:end center;border:0;background:none;padding:0 0 3px;cursor:grab;line-height:1;-webkit-tap-highlight-color:transparent;touch-action:none;transition:top .28s ease}
+/* The mark needs a home that is not the field: 24px of lower padding make a
+   separate band below the input and above the bar's hairline. */
+body.android-lookup-window .bar{padding-bottom:24px}
+/* With the search row open, the triangle sits in its own lower band, below the
+   field. When the row is tucked, the opaque strip stays at the top; its height
+   is also reserved in the page so the first dictionary header joins it. The
+   tucked strip is the drag handle. The threshold between a tap and a pull
+   lives in makeDraggable(). */
+#lookupBarToggle{position:fixed;z-index:102;top:calc(var(--barh) - 24px);left:50%;transform:translateX(-50%);width:96px;height:24px;display:grid;place-items:center;border:0;background:none;padding:0;cursor:grab;line-height:1;-webkit-tap-highlight-color:transparent;touch-action:none;transition:top .28s ease}
 body.barhidden #lookupBarToggle{top:0;left:0;transform:none;width:100%;height:var(--tabh);place-items:center;padding-bottom:0;background:color-mix(in srgb,var(--bg) 55%,transparent);border-bottom:1px solid var(--line)}
+body.android-lookup-window.barhidden{--stick:var(--tabh);padding-top:var(--tabh)}
+body.android-lookup-window.barhidden #out{min-height:calc(100dvh - var(--tabh) - var(--sbarh,0px))}
+body.android-lookup-window.barhidden #lookupBarToggle{background:var(--bg)}
+html[data-shell-image] body.android-lookup-window.barhidden #lookupBarToggle{background:var(--paper-bg)}
 #lookupBarToggle::before{content:"";border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:7px solid var(--fg-soft);transition:transform .2s ease}
 #lookupBarToggle[aria-expanded="false"]::before{transform:rotate(180deg)}
 /* One line per dictionary header in this window: the name takes what is left
