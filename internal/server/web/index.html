@@ -1910,10 +1910,16 @@ const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
    attribute and turns the rest of the path into markup. */
 const escAttr=s=>esc(s).replace(/"/g,"&quot;");
 let dicts=[],lastQuery=null,searchSeq=0,searchAC=null;
-// A floating lookup is hidden while the reader is foregrounded. Keep the
-// already-rendered answer, but stop its 45-dictionary fan-out so it cannot
-// compete with the next in-place lookup.
-window.wudictCancelLookupSearch=()=>{if(searchAC)searchAC.abort()};
+// A floating lookup is hidden while the reader is foregrounded. Stop its
+// fan-out and clear the old word before hiding, so reopening for a different
+// selection never flashes the previous article.
+window.wudictCancelLookupSearch=()=>{
+  if(searchAC)searchAC.abort();
+  searchSeq++;
+  $("out").replaceChildren();liveSearchBoxes=null;livePickerSearching=false;
+  $("q").value="";
+  clearStatusForResults();hideSearchProgress();setBusy(false);
+};
 let favouriteCollections=[],selectedFavourite="";
 function favouriteCollectionLabel(id){
   const d=dicts.find(item=>item.id===id),collection=favouriteCollections.find(item=>item.id===id);
@@ -12759,6 +12765,11 @@ let commitOnce=false;
 window.wudictAndroidLookup=(query,mode,dict,receivedAt)=>{
   const term=String(query||"").trim();
   if(!term)return;
+  // A new reader selection is a new answer. The full app keeps its previous
+  // answer while searching, but a floating popup must never show the wrong word.
+  $("out").replaceChildren();liveSearchBoxes=null;
+  clearStatusForResults();
+  $("q").value=term;
   const started=receivedAt||performance.now();
   const readerLookupStage=stage=>{
     if(!window.wudictAndroidGo)return;
