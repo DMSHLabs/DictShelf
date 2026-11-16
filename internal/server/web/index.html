@@ -8867,6 +8867,7 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null,deferAfter=-1,deferAl
      runs), so the count says "5+" once the first stage came back full rather
      than claiming a total it never counted. */
   const lookupWindow=inLookupWindow();
+  const visibleResults=lookupWindow?h.results.slice(0,firstStagePerDictionary):h.results;
   const pageSize=paging?.size||searchPortionSize();
   const more=!lookupWindow&&!paging&&h.results.length>=perDict?`<button type="button" class="priority-index" data-id="${escAttr(h.dict)}" title="${escAttr(tx("search.indexingPriority"))}">${window.wudictI18n.number(perDict)}+</button>`:"";
   const browseReturnURL=new URL(location.href);browseReturnURL.pathname="/";
@@ -8899,15 +8900,15 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null,deferAfter=-1,deferAl
      The reading rides on the hit only far enough to mark the words that were
      searched for. (The wire still carries a rung for the log; the page ignores it.) */
   const countLabel=lookupWindow
-    ?`<span class="count">(${window.wudictI18n.number(h.results.length)}${h.results.length>=perDict&&!paging?"+":""})</span>`
+    ?`<span class="count">(${window.wudictI18n.number(visibleResults.length)}${h.results.length>firstStagePerDictionary?"+":""})</span>`
     :paging?``:more
     ?`<span class="count">${more} ${esc(tx("search.results",{count:perDict,number:""}).trim())}</span>`
     :`<span class="count">${esc(tx("search.results",{count:h.results.length,number:window.wudictI18n.number(h.results.length)}))}</span>`;
   const dictionary=dicts.find(item=>item.id===h.dict),displayName=dictionary?dictLabel(dictionary):h.name;
   det.innerHTML=`<summary class="search-result-summary"><span class="search-dict-identity">${dictIconHTML(h.dict)}<span class="search-dict-name dict-info-name" data-dict="${escAttr(h.dict)}">${esc(displayName)}</span></span><span class="search-dict-controls">${pageControls}${countLabel}${browse}</span></summary>`;
   const dl=document.createElement("dl"),roots=[],pendingRows=[];
-  for(let resultIndex=0;resultIndex<h.results.length;resultIndex++){
-    const r=h.results[resultIndex];
+  for(let resultIndex=0;resultIndex<visibleResults.length;resultIndex++){
+    const r=visibleResults[resultIndex];
     const dt=document.createElement("dt");
     dt.innerHTML=mode==="wildcards"?highlightMaskHeadword(r.Headword,q):esc(r.Headword);
     const dd=document.createElement("dd");dd.dataset.dict=h.dict;
@@ -10821,6 +10822,8 @@ async function doSearch(ev){
   let searchDiagSlots=[];
   let searchDiagFirstPaint=false;
   let readerFirstResponseLogged=false;
+  let readerFirstDOMLogged=false;
+  let readerFirstSwapLogged=false;
   const searchDiagLog=(stage,fields={})=>{
     if(!searchDiag)return;
     const safeFields={...fields};
@@ -10854,7 +10857,11 @@ async function doSearch(ev){
   // stage is what pages the rest in the reader's block size. One answer here
   // made the first block a single article and shifted every following range by
   // one. */
+  const readerLookup=inLookupWindow();
   let dictParam,perDict=firstStagePerDictionary;
+  // Keep the displayed block at five, but request a sixth answer so “5+” is
+  // only shown when the dictionary really has more than five matches.
+  if(readerLookup)perDict++;
   // A group resolves to a LIST of ids here and is sent as one, exactly like
   // "all": the server has no notion of a group, and giving it one would mean
   // versioning a taxonomy across two processes to save a join over 105 rows.
@@ -11006,6 +11013,7 @@ async function doSearch(ev){
           barrier=setTimeout(()=>{barrier=null;if(seq===searchSeq)settle()},OPEN_BARRIER_MS);
         clearStatusForResults();
         refreshLivePicker();
+        readerTiming("begin_ui_ready",(msg.slots||[]).length);
       }else if(msg.t==="hit"){
         if(!readerFirstResponseLogged){
           readerFirstResponseLogged=true;
@@ -11028,6 +11036,10 @@ async function doSearch(ev){
         // dictionaries and mode. Full-text hits are articles matched by body.
         if(!anyShown)clearStatusForResults();
         const res=renderSlot(box,msg,mode,q,perDict,boxes.length>1);
+        if(res.results&&!readerFirstDOMLogged){
+          readerFirstDOMLogged=true;
+          readerTiming("first_result_dom_ready",(msg.results||[]).length);
+        }
         if(res.results)queueArticleResultCache(msg,mode,q,seq);
         if(res.results&&searchDiag&&!searchDiagFirstPaint){
           searchDiagFirstPaint=true;
@@ -11042,8 +11054,12 @@ async function doSearch(ev){
           const sinceSearch=browseArticleDiagContext.searchStartedAt?performance.now()-browseArticleDiagContext.searchStartedAt:0;
           requestAnimationFrame(()=>requestAnimationFrame(()=>logBrowseArticleTransition("first_article_painted",sinceSearch)));
         }
-        if(res.shown&&stale)readerTiming("first_result_swap",(msg.results||[]).length);
-        if(res.shown)swap(); // including the grouped line: it is this generation's first paint
+        const replacesStale=!!(res.shown&&stale);
+        if(res.shown)swap(); // including the grouped line: this generation's first paint
+        if(replacesStale&&!readerFirstSwapLogged){
+          readerFirstSwapLogged=true;
+          readerTiming("first_result_swap",(msg.results||[]).length);
+        } // including the grouped line: it is this generation's first paint
         if(res.noIndex){noIdx=noIndexRow(noIdx,out,res.noIndex);noIdxCount++}
         else if(res.shown)anyShown=true;
         if(res.results)anyResults=true;
