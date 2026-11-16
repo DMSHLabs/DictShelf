@@ -11035,7 +11035,11 @@ async function doSearch(ev){
         // These are the same headwords the current search found in the selected
         // dictionaries and mode. Full-text hits are articles matched by body.
         if(!anyShown)clearStatusForResults();
-        const res=renderSlot(box,msg,mode,q,perDict,boxes.length>1);
+        // The floating reader needs its first article immediately. Parse the
+        // rest only when the WebView is idle or the reader scrolls near them;
+        // their result rows already have measured-height placeholders.
+        const deferAfter=inLookupWindow()?0:-1;
+        const res=renderSlot(box,msg,mode,q,perDict,boxes.length>1,null,deferAfter,false);
         if(res.results&&!readerFirstDOMLogged){
           readerFirstDOMLogged=true;
           readerTiming("first_result_dom_ready",(msg.results||[]).length);
