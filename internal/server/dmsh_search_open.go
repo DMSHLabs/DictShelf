@@ -4,7 +4,10 @@
 
 package server
 
-import "github.com/DMSHLabs/DictShelf/internal/dict"
+import (
+	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"github.com/DMSHLabs/DictShelf/internal/store"
+)
 
 // searchOpen opens one dictionary for a search, refusing one whose index is not
 // there yet.
@@ -25,7 +28,18 @@ import "github.com/DMSHLabs/DictShelf/internal/dict"
 // them costs no more than searching a prepared one.
 func (e *entry) searchOpen() (dict.Dictionary, error) {
 	if !entryHasSelfIndex(e) {
-		if _, ok := validPrepared(e.Path); !ok {
+		// Search asks this once per dictionary on every lookup. Prefer the
+		// prepared folder's receipt so the hot path can validate the source
+		// without opening text.db just to read its meta; keep the full check as
+		// a fallback for older libraries whose receipt is incomplete.
+		prepared := store.IsTextDB(e.Path)
+		if !prepared {
+			_, prepared = store.FindPreparedFromReceipt(e.Path)
+			if !prepared {
+				_, prepared = validPrepared(e.Path)
+			}
+		}
+		if !prepared {
 			return nil, errIndexNotReady
 		}
 	}
