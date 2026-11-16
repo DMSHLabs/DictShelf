@@ -295,33 +295,6 @@ func StreamOpen(ctx context.Context, openers []Opener, mode Mode, term string, p
 func StreamOpenWithTerms(ctx context.Context, openers []Opener, mode Mode, term string, perDict int, termFor func(int, dict.Meta, string) string, emit func(i int, h Hit)) {
 	rung, hasRung := rungFor(mode, term)
 	var wg sync.WaitGroup
-	var mu sync.Mutex
-	// emit does the caller's rendering - reference rewriting, highlighting,
-	// encoding - and it does it HERE, on the worker's own goroutine. That is
-	// the one place a panic is not the HTTP handler's to recover: net/http
-	// guards the goroutine it created, this is not that goroutine, and Go's
-	// rule that a panic can only be recovered where it runs means the process
-	// dies and every other request with it. The same rule query() applies to
-	// the parsers one layer down therefore has to hold one layer up: one bad
-	// article costs one row.
-	//
-	// The replacement hit carries no results, so the rendering that failed is
-	// not attempted again on the way out; the inner recover is there because a
-	// caller whose emit panicked once may panic reporting it, and a panic in a
-	// deferred report would defeat the whole guard.
-	send := func(i int, h Hit) {
-		mu.Lock()
-		defer mu.Unlock()
-		defer func() {
-			r := recover()
-			if r == nil {
-				return
-			}
-			defer func() { _ = recover() }()
-			emit(i, Hit{Meta: h.Meta, Term: h.Term, Err: dict.PanicError(h.Meta.Path, r)})
-		}()
-		emit(i, h)
-	}
 	type searchJob struct {
 		index  int
 		open   Opener
@@ -333,6 +306,19 @@ func StreamOpenWithTerms(ctx context.Context, openers []Opener, mode Mode, term 
 	}
 	close(jobs)
 	workerCount := min(Workers(), len(openers))
+	type completedSearch struct {
+		index int
+		hit   Hit
+	}
+	// Keep result handoff bounded. Workers can continue querying while the
+	// caller serially renders and sends a few completed hits, without retaining
+	// the full result set (article bodies included) in memory.
+	results := make(chan completedSearch, workerCount)
+	send := func(i int, h Hit) time.Time {
+		started := time.Now()
+		results <- completedSearch{index: i, hit: h}
+		return time.Now()
+	}
 	for range workerCount {
 		wg.Add(1)
 		go func() {
@@ -351,7 +337,7 @@ func StreamOpenWithTerms(ctx context.Context, openers []Opener, mode Mode, term 
 							}
 							return end.Sub(begin).Milliseconds()
 						}
-						logx.SystemDiagnosticIf(diagEnabled, "search_fanout index=%d dict=%q mode=%s workers=%d elapsed_ms=%d queue_ms=%d open_ms=%d query_ms=%d emit_ms=%d error=%q",
+						logx.SystemDiagnosticIf(diagEnabled, "search_fanout index=%d dict=%q mode=%s workers=%d elapsed_ms=%d queue_ms=%d open_ms=%d query_ms=%d handoff_ms=%d error=%q",
 							i, dictName, mode, Workers(), time.Since(started).Milliseconds(),
 							stageMS(started, admitted), stageMS(admitted, opened), stageMS(opened, queried), stageMS(queried, emitted), errText)
 					}()
@@ -408,7 +394,31 @@ func StreamOpenWithTerms(ctx context.Context, openers []Opener, mode Mode, term 
 			}
 		}()
 	}
-	wg.Wait()
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+	for completed := range results {
+		i, h := completed.index, completed.hit
+		diagEnabled := diagnostics.Load() || logx.SystemLogSearchEventsEnabled()
+		deliveryStarted := time.Now()
+		// Keep the panic boundary around rendering on the receiving goroutine:
+		// a malformed article must still become one failed row, not abort the
+		// entire lookup or escape a worker goroutine.
+		func() {
+			defer func() {
+				r := recover()
+				if r == nil {
+					return
+				}
+				defer func() { _ = recover() }()
+				emit(i, Hit{Meta: h.Meta, Term: h.Term, Err: dict.PanicError(h.Meta.Path, r)})
+			}()
+			emit(i, h)
+		}()
+		logx.SystemDiagnosticIf(diagEnabled, "search_delivery index=%d dict=%q mode=%s results=%d elapsed_ms=%d",
+			i, h.Meta.Name, mode, len(h.Results), time.Since(deliveryStarted).Milliseconds())
+	}
 }
 
 func safeTermFor(resolve func(int, dict.Meta, string) string, i int, d dict.Dictionary, term string) (value string, meta dict.Meta, err error) {
