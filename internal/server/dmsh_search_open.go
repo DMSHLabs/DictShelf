@@ -47,16 +47,9 @@ func (e *entry) searchOpen() (dict.Dictionary, error) {
 			e.lastUse.Store(time.Now().UnixNano())
 			return cached, nil
 		}
-		// Search asks this once per dictionary on every lookup. Prefer the
-		// prepared folder's receipt to validate a source that has not been
-		// opened yet; keep the full check as a fallback for older receipts.
-		prepared := store.IsTextDB(e.Path)
-		if !prepared {
-			_, prepared = store.FindPreparedFromReceipt(e.Path)
-			if !prepared {
-				_, prepared = validPrepared(e.Path)
-			}
-		}
+		// Startup and explicit Rescan validate the source once. While the app
+		// is running, search only needs to know that the prepared index exists.
+		prepared := store.IsTextDB(e.Path) || backingDB(e.Path) != ""
 		if !prepared {
 			return nil, errIndexNotReady
 		}

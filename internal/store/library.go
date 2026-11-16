@@ -436,7 +436,13 @@ func sourceChangedMeta(meta map[string]string, srcPath string) bool {
 	if want == "" {
 		return false // nothing recorded to compare against
 	}
-	return fsx.HashSample(srcPath) != want
+	if fsx.HashSample(srcPath) != want {
+		return true
+	}
+	if wantTail := meta["source_sha256_tail"]; wantTail != "" {
+		return fsx.HashTail(srcPath) != wantTail
+	}
+	return false
 }
 
 // AbbrevChanged reports whether the abbreviation glossary a text.db was built
