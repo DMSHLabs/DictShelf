@@ -29,9 +29,8 @@ var searchThreadsPref atomic.Int32
 //     keep a core;
 //   - the Go scheduler's current allowance, which is what carries Android's
 //     battery-saver and thermal demotions (applyProcs lowers GOMAXPROCS);
-//   - the platform baseline when one exists - Android's "half the cores, at
-//     most four" - so a user setting can narrow the fan-out but never widen it
-//     past the policy the phone was given.
+//   - the latest platform baseline when one exists, refreshed when Android
+//     promotes the process to the foreground.
 func searchFanoutCeiling() int {
 	logical := currentIndexCPUCount()
 	if logical < 1 {
@@ -60,12 +59,8 @@ func (s *Server) applySearchParallelismPrefs() {
 	applySearchWorkers()
 }
 
-// defaultSearchThreads is the width automatic mode asks for. Measured over a
-// 110-dictionary Wildcards build on a 24-core desktop, widening the fan-out past
-// this changed the run time by nothing that survived the noise: the wall clock
-// is set by the slowest dictionary and by how the work distributes, not by the
-// cap. Five is where the curve flattens, so that is what "automatic" means -
-// still narrowed by the ceiling below, which is what keeps a phone at four.
+// Desktop automatic mode retains the width measured for large multi-dictionary
+// searches. Android automatic mode uses its live CPU ceiling below.
 const defaultSearchThreads = 5
 
 // applySearchWorkers sizes the fan-out from the saved setting, clamped to what
@@ -75,6 +70,9 @@ func applySearchWorkers() {
 	n := int(searchThreadsPref.Load())
 	if n <= 0 {
 		n = defaultSearchThreads
+		if runtime.GOOS == "android" {
+			n = searchFanoutCeiling()
+		}
 	}
 	search.SetWorkers(min(n, searchFanoutCeiling()))
 }

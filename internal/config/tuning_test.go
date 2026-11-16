@@ -18,8 +18,13 @@ func TestTuningDefaults(t *testing.T) {
 	android := runtime.GOOS == "android"
 
 	if got := MaxProcs(); android {
-		if got < 2 || got > 4 {
-			t.Errorf("MaxProcs() = %d, want 2..4 on android", got)
+		logical := AllowedCPUs()
+		if logical < 1 {
+			logical = runtime.NumCPU()
+		}
+		want := max(1, logical-1)
+		if got != want {
+			t.Errorf("MaxProcs() = %d, want allowed CPUs minus one (%d)", got, want)
 		}
 	} else if got != 0 {
 		t.Errorf("MaxProcs() = %d, want 0 (the runtime's own default) off android", got)

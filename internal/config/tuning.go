@@ -28,26 +28,53 @@ import (
 // exactly the same behaviour.
 
 // MaxProcs is the parallelism ceiling for this platform, or 0 for "leave the
-// runtime's own default alone".
-//
-// Half the cores, at most four. Phone core counts describe a big.LITTLE
-// arrangement, not four-to-eight equally useful CPUs: saturating all of them
-// pulls in the big cores, which is where the heat and the battery go. Half
-// keeps the work on what is typically the efficiency cluster while leaving the
-// device responsive, and the app has almost no CPU-bound work outside indexing
-// anyway.
+// runtime's own default alone". Android's runtime.NumCPU is a startup
+// snapshot and can be smaller than the CPU set granted to the process later;
+// use the current affinity and leave one allowed CPU for the rest of the app.
 func MaxProcs() int {
 	if runtime.GOOS != "android" {
 		return 0
 	}
-	n := runtime.NumCPU() / 2
-	if n < 2 {
-		n = 2
+	n := AllowedCPUs()
+	if n < 1 {
+		n = runtime.NumCPU()
 	}
-	if n > 4 {
-		n = 4
+	return max(1, n-1)
+}
+
+// AllowedCPUs counts the CPUs currently allowed by this process's affinity.
+// The value can change while an Android process is alive, so callers that
+// make scheduling decisions should sample it when the work is about to run.
+// Zero means the platform did not expose a readable CPU list.
+func AllowedCPUs() int {
+	data, err := os.ReadFile("/proc/self/status")
+	if err != nil {
+		return 0
 	}
-	return n
+	for _, line := range strings.Split(string(data), "\n") {
+		value, ok := strings.CutPrefix(line, "Cpus_allowed_list:")
+		if !ok {
+			continue
+		}
+		count := 0
+		for _, part := range strings.Split(strings.TrimSpace(value), ",") {
+			ends := strings.SplitN(part, "-", 2)
+			first, err := strconv.Atoi(ends[0])
+			if err != nil || first < 0 {
+				return 0
+			}
+			last := first
+			if len(ends) == 2 {
+				last, err = strconv.Atoi(ends[1])
+				if err != nil || last < first {
+					return 0
+				}
+			}
+			count += last - first + 1
+		}
+		return count
+	}
+	return 0
 }
 
 // previewMemoryDefault caps what unprepared dictionaries may hold open.

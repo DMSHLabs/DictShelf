@@ -5,10 +5,7 @@ package server
 
 import (
 	"context"
-	"os"
 	"runtime"
-	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -71,7 +68,13 @@ var (
 )
 
 func init() {
-	indexLogicalCPUs.Store(int32(max(1, runtime.NumCPU())))
+	logical := runtime.NumCPU()
+	if runtime.GOOS == "android" {
+		if n := config.AllowedCPUs(); n > 0 {
+			logical = n
+		}
+	}
+	indexLogicalCPUs.Store(int32(max(1, logical)))
 }
 
 // refreshIndexParallelism samples Android's current process CPU affinity at
@@ -80,12 +83,14 @@ func init() {
 func refreshIndexParallelism() int {
 	logical := runtime.NumCPU()
 	if runtime.GOOS == "android" {
-		if n := processAllowedCPUs(); n > 0 {
+		if n := config.AllowedCPUs(); n > 0 {
 			logical = n
 		}
 		indexLogicalCPUs.Store(int32(max(1, logical)))
 		store.SetIngestParallelismCPUCount(logical)
-		SetActiveProcs(min(max(1, logical-1), config.MaxProcs())) // keep the Android half-core ceiling
+		procs := config.MaxProcs()
+		searchWorkersBaseline = procs
+		SetActiveProcs(procs)
 		return logical
 	}
 	indexLimit.SetLimit(indexconst.IndexDictionaryLimit(logical))
@@ -112,37 +117,6 @@ func currentIndexCPUCount() int {
 		return n
 	}
 	return max(1, runtime.NumCPU())
-}
-
-func processAllowedCPUs() int {
-	data, err := os.ReadFile("/proc/self/status")
-	if err != nil {
-		return 0
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		value, ok := strings.CutPrefix(line, "Cpus_allowed_list:")
-		if !ok {
-			continue
-		}
-		count := 0
-		for _, part := range strings.Split(strings.TrimSpace(value), ",") {
-			ends := strings.SplitN(part, "-", 2)
-			first, err := strconv.Atoi(ends[0])
-			if err != nil || first < 0 {
-				return 0
-			}
-			last := first
-			if len(ends) == 2 {
-				last, err = strconv.Atoi(ends[1])
-				if err != nil || last < first {
-					return 0
-				}
-			}
-			count += last - first + 1
-		}
-		return count
-	}
-	return 0
 }
 
 func currentIndexLimit() *indexSemaphore {
