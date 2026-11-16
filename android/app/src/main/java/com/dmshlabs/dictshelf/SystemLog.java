@@ -138,6 +138,17 @@ final class SystemLog {
         Log.i("DictShelfReader", line);
     }
 
+    /** Page timing is reported on the WebView UI thread. Queue its durable
+     * write so a log marker cannot delay the first article it measures. */
+    static void readerTiming(String event) {
+        if (!enabled) return;
+        String line = "reader elapsed_ms=" + Math.max(0, SystemClock.elapsedRealtime() - processStartElapsed)
+                + " pid=" + android.os.Process.myPid() + " " + event;
+        Instant occurredAt = Instant.now();
+        DIAGNOSTIC_WRITER.execute(() -> write(occurredAt, line));
+        Log.i("DictShelfReader", line);
+    }
+
     static boolean enabled() { return enabled; }
     static boolean detailedEnabled() { return enabled && detailedEvents; }
     static boolean baseEvents() { return baseEvents; }
@@ -160,6 +171,10 @@ final class SystemLog {
     }
 
     private static void write(String message) {
+        write(Instant.now(), message);
+    }
+
+    private static void write(Instant occurredAt, String message) {
         // URLs may contain access keys or credentials; keep host and path only.
         message = message.replaceAll("(https?://)[^/\\s]+@", "$1")
                 .replaceAll("(https?://[^\\s?\"<>#]+)[?#][^\\s\"<>]*", "$1[redacted]")
@@ -167,7 +182,7 @@ final class SystemLog {
         if (message.length() > 4096) message = message.substring(0, 4096) + " [truncated]";
         synchronized (LOCK) {
             if (root == null) return;
-            byte[] bytes = (Instant.now() + " " + message + "\n").getBytes(StandardCharsets.UTF_8);
+            byte[] bytes = (occurredAt + " " + message + "\n").getBytes(StandardCharsets.UTF_8);
             try {
                 if (!root.isDirectory() && !root.mkdirs()) return;
                 File current = new File(root, "android.log");

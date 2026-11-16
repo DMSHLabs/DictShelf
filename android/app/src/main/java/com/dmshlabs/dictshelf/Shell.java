@@ -793,7 +793,7 @@ final class Shell {
                 }
                 if ("wudict:reader-timing".equals(message)) {
                     if (defaultValue != null && defaultValue.matches("[a-z_]+ elapsed_ms=[0-9]+ count=[0-9]+"))
-                        SystemLog.reader(defaultValue);
+                        SystemLog.readerTiming(defaultValue);
                     result.confirm("ok");
                     return true;
                 }
