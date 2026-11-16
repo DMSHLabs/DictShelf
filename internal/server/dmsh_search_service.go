@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/ftsq"
@@ -446,6 +447,13 @@ func (s *Server) searchTermFor(entries []*entry, mode search.Mode, q string) fun
 			code = "en"
 		}
 		if !s.Morph.Supports(code) {
+			return typed
+		}
+		// Android keeps one lemma pack resident. Loading the 65 MB Russian
+		// pack for a Latin-only reader word cannot produce a Russian lemma,
+		// and evicts the English pack before the next dictionary asks for it.
+		// Still search the typed word in this dictionary as usual.
+		if code == "ru" && !strings.ContainsFunc(typed, func(r rune) bool { return unicode.Is(unicode.Cyrillic, r) }) {
 			return typed
 		}
 		lemma, ok := s.Morph.Lemma(code, typed)
