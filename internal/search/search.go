@@ -393,6 +393,12 @@ func StreamOpenWithTerms(ctx context.Context, openers []Opener, mode Mode, term 
 					if hit.Meta.Name != "" {
 						dictName = hit.Meta.Name
 					}
+					if diagEnabled {
+						for rank := 1; rank <= min(5, len(hit.Results)); rank++ {
+							logx.SystemDiagnostic("search_result_batch_item index=%d dict=%q mode=%s rank=%d total=%d query_elapsed_ms=%d delivery=batch",
+								i, dictName, mode, rank, len(hit.Results), queried.Sub(admitted).Milliseconds())
+						}
+					}
 					if hit.Err != nil {
 						errText = hit.Err.Error()
 					}
