@@ -294,7 +294,6 @@ func StreamOpen(ctx context.Context, openers []Opener, mode Mode, term string, p
 // after the dictionary's language metadata is available in the worker.
 func StreamOpenWithTerms(ctx context.Context, openers []Opener, mode Mode, term string, perDict int, termFor func(int, dict.Meta, string) string, emit func(i int, h Hit)) {
 	rung, hasRung := rungFor(mode, term)
-	sem := make(chan struct{}, Workers())
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	// emit does the caller's rendering - reference rewriting, highlighting,
@@ -323,92 +322,85 @@ func StreamOpenWithTerms(ctx context.Context, openers []Opener, mode Mode, term 
 		}()
 		emit(i, h)
 	}
+	type searchJob struct {
+		index  int
+		open   Opener
+		queued time.Time
+	}
+	jobs := make(chan searchJob, len(openers))
 	for i, open := range openers {
+		jobs <- searchJob{index: i, open: open, queued: time.Now()}
+	}
+	close(jobs)
+	workerCount := min(Workers(), len(openers))
+	for range workerCount {
 		wg.Add(1)
-		go func(i int, open Opener) {
+		go func() {
 			defer wg.Done()
-			started := time.Now()
-			diagEnabled := diagnostics.Load() || logx.SystemLogSearchEventsEnabled()
-			var admitted, opened, queried, emitted time.Time
-			var dictName, errText string
-			defer func() {
-				stageMS := func(begin, end time.Time) int64 {
-					if begin.IsZero() || end.IsZero() {
-						return -1
+			for job := range jobs {
+				i, open := job.index, job.open
+				started := job.queued
+				diagEnabled := diagnostics.Load() || logx.SystemLogSearchEventsEnabled()
+				var admitted, opened, queried, emitted time.Time
+				var dictName, errText string
+				func() {
+					defer func() {
+						stageMS := func(begin, end time.Time) int64 {
+							if begin.IsZero() || end.IsZero() {
+								return -1
+							}
+							return end.Sub(begin).Milliseconds()
+						}
+						logx.SystemDiagnosticIf(diagEnabled, "search_fanout index=%d dict=%q mode=%s workers=%d elapsed_ms=%d queue_ms=%d open_ms=%d query_ms=%d emit_ms=%d error=%q",
+							i, dictName, mode, Workers(), time.Since(started).Milliseconds(),
+							stageMS(started, admitted), stageMS(admitted, opened), stageMS(opened, queried), stageMS(queried, emitted), errText)
+					}()
+					admitted = time.Now()
+					// The ordered job channel assigns the earliest dictionary slots first;
+					// cancellation is checked before any dictionary is opened.
+					if err := ctx.Err(); err != nil {
+						errText = err.Error()
+						send(i, Hit{Err: err})
+						return
 					}
-					return end.Sub(begin).Milliseconds()
-				}
-				logx.SystemDiagnosticIf(diagEnabled, "search_fanout index=%d dict=%q mode=%s workers=%d elapsed_ms=%d queue_ms=%d open_ms=%d query_ms=%d emit_ms=%d error=%q",
-					i, dictName, mode, Workers(), time.Since(started).Milliseconds(),
-					stageMS(started, admitted), stageMS(admitted, opened), stageMS(opened, queried), stageMS(queried, emitted), errText)
-			}()
-			select {
-			case sem <- struct{}{}:
-				defer func() { <-sem }()
-				admitted = time.Now()
-			case <-ctx.Done():
-				errText = ctx.Err().Error()
-				send(i, Hit{Err: ctx.Err()})
-				return
+					d, err := safeOpen(open)
+					opened = time.Now()
+					if err != nil {
+						errText = err.Error()
+						send(i, Hit{Err: err})
+						return
+					}
+					if diagEnabled {
+						dictName = d.Meta().Name
+					}
+					if err := ctx.Err(); err != nil {
+						errText = err.Error()
+						send(i, Hit{Err: err})
+						return
+					}
+					queryTerm := term
+					if termFor != nil {
+						var meta dict.Meta
+						queryTerm, meta, err = safeTermFor(termFor, i, d, term)
+						if err != nil {
+							dictName, errText = meta.Name, err.Error()
+							send(i, Hit{Meta: meta, Term: term, Err: err})
+							return
+						}
+					}
+					hit := runQuery(ctx, d, mode, queryTerm, rung, hasRung, perDict)
+					queried = time.Now()
+					if hit.Meta.Name != "" {
+						dictName = hit.Meta.Name
+					}
+					if hit.Err != nil {
+						errText = hit.Err.Error()
+					}
+					send(i, hit)
+					emitted = time.Now()
+				}()
 			}
-			// Re-check after the wait. Acquiring the semaphore says only that a
-			// slot came free, not that the answer is still wanted: the queue is
-			// long (every dictionary at once) and the slots are few, so by the
-			// time a worker is admitted the request that asked for it may be
-			// minutes dead. The web UI aborts the in-flight fetch on every
-			// keystroke (index.html, searchAC), which makes "the caller has
-			// gone" the common case rather than the exceptional one.
-			//
-			// What it costs to miss this is not a wasted CPU slice. open() on a
-			// direct backend materialises that dictionary's whole in-memory
-			// index - measured on a phone (docs.local/PERF.md §8.7), three abandoned
-			// fan-outs over 24 preview dictionaries took 90s each and drove RSS
-			// to 1.0 GB, all of it for output nobody would read. Stopping here
-			// bounds the damage of a cancelled search to the opens already in
-			// flight.
-			if err := ctx.Err(); err != nil {
-				errText = err.Error()
-				send(i, Hit{Err: err})
-				return
-			}
-			d, err := safeOpen(open)
-			opened = time.Now()
-			if err != nil {
-				errText = err.Error()
-				send(i, Hit{Err: err})
-				return
-			}
-			if diagEnabled {
-				dictName = d.Meta().Name
-			}
-			if err := ctx.Err(); err != nil {
-				// Cancelled during the open. The dictionary is now materialised
-				// either way; skip only the query, and let the janitor shed it.
-				errText = err.Error()
-				send(i, Hit{Err: err})
-				return
-			}
-			queryTerm := term
-			if termFor != nil {
-				var meta dict.Meta
-				queryTerm, meta, err = safeTermFor(termFor, i, d, term)
-				if err != nil {
-					dictName, errText = meta.Name, err.Error()
-					send(i, Hit{Meta: meta, Term: term, Err: err})
-					return
-				}
-			}
-			hit := runQuery(ctx, d, mode, queryTerm, rung, hasRung, perDict)
-			queried = time.Now()
-			if hit.Meta.Name != "" {
-				dictName = hit.Meta.Name
-			}
-			if hit.Err != nil {
-				errText = hit.Err.Error()
-			}
-			send(i, hit)
-			emitted = time.Now()
-		}(i, open)
+		}()
 	}
 	wg.Wait()
 }
