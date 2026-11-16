@@ -126,6 +126,7 @@ final class GoBridge {
 
     static int startSearchStream(String origin, String request) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
+        refreshPowerForWork();
         return nativeSearchStreamStart(or(origin), or(request));
     }
 

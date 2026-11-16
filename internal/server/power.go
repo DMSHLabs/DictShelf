@@ -367,11 +367,19 @@ func adjustLimit() {
 // background indexer's willingness to start anything.
 func (r *Registry) SetPower(p Power) {
 	prev := Power(powerState.Swap(int32(p)))
+	if p == PowerActive && runtime.GOOS == "android" {
+		// The runtime may have started while Android allowed only its background
+		// CPUs. Sample the foreground affinity even when the state was already
+		// active; a lookup can be the first work after the window appears.
+		refreshIndexParallelism()
+	}
 	if prev == p {
 		return
 	}
 	logx.V("power: %s → %s", prev, p)
-	applyProcs(p)
+	if p != PowerActive || runtime.GOOS != "android" {
+		applyProcs(p)
+	}
 	if p == PowerActive {
 		r.nudge() // the janitor may have work again once things reopen
 		return

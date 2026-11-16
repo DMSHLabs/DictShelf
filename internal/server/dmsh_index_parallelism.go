@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/DMSHLabs/DictShelf/internal/config"
 	"github.com/DMSHLabs/DictShelf/internal/indexconst"
 	"github.com/DMSHLabs/DictShelf/internal/store"
 )
@@ -84,7 +85,7 @@ func refreshIndexParallelism() int {
 		}
 		indexLogicalCPUs.Store(int32(max(1, logical)))
 		store.SetIngestParallelismCPUCount(logical)
-		SetActiveProcs(max(1, logical-1)) // leave one allowed CPU for Android and the reader
+		SetActiveProcs(min(max(1, logical-1), config.MaxProcs())) // keep the Android half-core ceiling
 		return logical
 	}
 	indexLimit.SetLimit(indexconst.IndexDictionaryLimit(logical))
