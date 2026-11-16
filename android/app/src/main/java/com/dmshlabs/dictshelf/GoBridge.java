@@ -5,6 +5,7 @@ package com.dmshlabs.dictshelf;
 
 import android.util.Log;
 import android.content.Context;
+import android.os.SystemClock;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -126,8 +127,13 @@ final class GoBridge {
 
     static int startSearchStream(String origin, String request) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
+        long started = SystemClock.elapsedRealtime();
         refreshPowerForWork();
-        return nativeSearchStreamStart(or(origin), or(request));
+        long powerReady = SystemClock.elapsedRealtime();
+        int id = nativeSearchStreamStart(or(origin), or(request));
+        if (SystemLog.searchEvents()) SystemLog.readerTiming("search_bridge power_ms="
+                + (powerReady - started) + " start_ms=" + (SystemClock.elapsedRealtime() - powerReady));
+        return id;
     }
 
     static int startBrowseStream(String method, String query) {

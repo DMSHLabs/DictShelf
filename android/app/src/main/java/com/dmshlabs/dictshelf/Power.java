@@ -22,8 +22,17 @@ package com.dmshlabs.dictshelf;
 import android.content.Context;
 import android.os.BatteryManager;
 import android.os.PowerManager;
+import android.os.Handler;
+import android.os.Looper;
 
 final class Power {
+
+    // A reader often calls the popup again within seconds. Its search is
+    // cancelled before hiding, so keep the already-open dictionaries through
+    // that short gap instead of shedding and reopening them for every word.
+    private static final long READER_BACKGROUND_GRACE_MS = 3000;
+    private static final Handler MAIN = new Handler(Looper.getMainLooper());
+    private static Runnable pendingReaderBackground;
 
     // Both mutated from the main thread only (activity lifecycle, and the
     // thermal listener posted to the main executor), so no locking; volatile
@@ -36,6 +45,10 @@ final class Power {
 
     /** A window became visible (onStart). */
     static void enter(Context c) {
+        if (pendingReaderBackground != null) {
+            MAIN.removeCallbacks(pendingReaderBackground);
+            pendingReaderBackground = null;
+        }
         windows++;
         apply(c);
     }
@@ -44,6 +57,22 @@ final class Power {
     static void exit(Context c) {
         if (windows > 0) windows--;
         apply(c);
+    }
+
+    /** Delay only the reader popup's background transition. A new visible
+     * window cancels it; the main app keeps its ordinary immediate policy. */
+    static void exitReader(Context c) {
+        if (windows > 0) windows--;
+        if (windows != 0) {
+            apply(c);
+            return;
+        }
+        Context app = c.getApplicationContext();
+        pendingReaderBackground = () -> {
+            pendingReaderBackground = null;
+            if (windows == 0) apply(app);
+        };
+        MAIN.postDelayed(pendingReaderBackground, READER_BACKGROUND_GRACE_MS);
     }
 
     static void thermal(Context c, int status) {

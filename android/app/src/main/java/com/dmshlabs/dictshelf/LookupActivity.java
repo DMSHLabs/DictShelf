@@ -828,7 +828,8 @@ public class LookupActivity extends Activity {
     protected void onStop() {
         super.onStop();
         SystemLog.reader("lookup stop task=" + getTaskId() + " finishing=" + isFinishing());
-        Power.exit(this);
+        if (readerCall(getIntent())) Power.exitReader(this);
+        else Power.exit(this);
         Notif.gone(this);
         if (speech != null) speech.stop();
     }
