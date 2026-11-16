@@ -86,11 +86,13 @@ type SearchSlot struct {
 // SearchEvent is one progressively delivered search result event:
 //
 //	{"t":"begin","slots":[{dict,name}…]}   ordered slot layout
-//	{"t":"hit","i":N,dict,name,results…}   one dictionary's results
+//	{"t":"resolved","indices":[…]}         slots with no matches
+//	{"t":"hit","i":N,dict,name,results…}   one dictionary's results/outcome
 //	{"t":"end"}                            all dictionaries done
 type SearchEvent struct {
 	T       string        `json:"t"`
 	Slots   []SearchSlot  `json:"slots,omitempty"`
+	Indices []int         `json:"indices,omitempty"`
 	I       int           `json:"i"`
 	Dict    string        `json:"dict,omitempty"`
 	Name    string        `json:"name,omitempty"`
@@ -322,9 +324,36 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	if emitErr != nil {
 		return emitErr
 	}
+	// A plain miss only resolves a slot; it has no article to render. Batch
+	// these slot indices so the UI can advance its progress/frontier without
+	// receiving one empty hit event for every dictionary.
+	misses := make([]int, 0, 8)
+	var renderHit func(int, search.Hit) SearchEvent
+	flushMisses := func() {
+		if len(misses) == 0 {
+			return
+		}
+		indices := append([]int(nil), misses...)
+		misses = misses[:0]
+		writeLine(SearchEvent{T: "resolved", Indices: indices})
+		if request.SearchDiagnostics {
+			logx.SystemDiagnostic("search resolved_empty count=%d indices=%v", len(indices), indices)
+		}
+	}
+	deliverHit := func(i int, h search.Hit) {
+		if len(h.Results) == 0 && h.Err == nil && !h.Skipped && !h.NeedsIndex {
+			misses = append(misses, i)
+			if len(misses) >= cap(misses) {
+				flushMisses()
+			}
+			return
+		}
+		flushMisses()
+		writeLine(renderHit(i, h))
+	}
 
 	// renderHit turns one dictionary's answer into its result event.
-	renderHit := func(i int, h search.Hit) SearchEvent {
+	renderHit = func(i int, h search.Hit) SearchEvent {
 		id := entries[i].ID
 		name := h.Meta.Name
 		if name == "" {
@@ -409,13 +438,14 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	// indexconst for why the fan-out clock is gone and what replaces it.
 	if request.Suggestions && mode == search.Wildcards {
 		search.StreamHeadwordSuggestions(ctx, openers, q, n, func(i int, h search.Hit) {
-			writeLine(renderHit(i, h))
+			deliverHit(i, h)
 		})
 	} else {
 		search.StreamOpenWithTerms(ctx, openers, mode, q, n, s.searchTermFor(entries, mode, q), func(i int, h search.Hit) {
-			writeLine(renderHit(i, h))
+			deliverHit(i, h)
 		})
 	}
+	flushMisses()
 	writeLine(SearchEvent{T: "end"})
 	if request.SearchDiagnostics {
 		logx.SystemDiagnostic("search stage=server_complete transport=%q query=%q mode=%q scope=%q cancelled=%t", request.Transport, q, mode, dictParam, parent.Err() != nil)

@@ -119,20 +119,21 @@ Captured from a running server, verbatim:
 ```
 {"t":"begin","slots":[{"dict":"6e0594a94deb","name":"6e0594a94deb"},{"dict":"bd07910f6552","name":"bd07910f6552"}],"i":0}
 {"t":"hit","i":1,"dict":"bd07910f6552","name":"Cambridge English Dictionary Online.mdx","skipped":true}
-{"t":"hit","i":0,"dict":"6e0594a94deb","name":"Babylon English-Spanish","skipped":true}
+{"t":"resolved","indices":[0]}
 {"t":"end","i":0}
 ```
 
 **`i` is present on every frame and meaningful only on `hit`.** The encoder
-emits it unconditionally, so `begin` and `end` both carry a meaningless `"i":0`.
-Do not use the presence of `i` to decide anything — switch on `t` first.
+emits it unconditionally, so `begin`, `resolved`, and `end` carry a meaningless
+`"i":0`. Do not use the presence of `i` to decide anything — switch on `t` first.
 
-`t` is one of exactly three values:
+`t` is one of four values:
 
 | `t` | fields | meaning |
 |---|---|---|
 | `begin` | `slots[]` | the layout, in the order you asked for. Always first, exactly once. |
-| `hit` | `i`, `dict`, `name`, and then `results[]` **or** `skipped` **or** `error` | one dictionary has finished. Exactly one per slot. |
+| `resolved` | `indices[]` | these slots finished with no matches. Misses are grouped to avoid one empty event per dictionary. |
+| `hit` | `i`, `dict`, `name`, and then `results[]` **or** `skipped` **or** `error` | one dictionary found results, skipped the mode, or failed. |
 | `end` | — | the stream is complete. Always last, exactly once. |
 
 `i` indexes into `begin.slots`. **Hits arrive in completion order, not request
@@ -140,10 +141,11 @@ order** — a small dictionary answers before a large one. Render into slots by
 `i` and the display order is the order you asked for, with no sorting and no
 waiting for the slowest dictionary.
 
-### A `hit` is not always a result
+### A `hit` carries a dictionary outcome
 
-Every slot produces exactly one `hit`, which is the slot's terminator whatever
-it carries. Three mutually exclusive outcomes:
+`hit` is sent for results and non-empty outcomes. Plain misses are sent in
+`resolved` batches, which also let the client advance progress and resolve the
+corresponding slots. Outcomes in `hit`:
 
 - **`results[]`** — found. Uses Go field names, capitalised: `Headword`, `Body`.
 - **`"skipped":true`, no `results`** — this dictionary cannot answer this
@@ -152,8 +154,7 @@ it carries. Three mutually exclusive outcomes:
 - **`"error":"…"`, no `results`** — this dictionary failed. The others are
   unaffected and the stream continues.
 
-A `hit` with none of the three is a dictionary that answered with no matches.
-Treat all four as "slot `i` is done".
+Treat each index in `resolved.indices` and each `hit.i` as a completed slot.
 
 `slots[].name` is **the id again, not the dictionary's name.** The real name
 arrives on the `hit`, because naming a dictionary means opening it and `begin`

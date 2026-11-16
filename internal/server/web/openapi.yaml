@@ -415,13 +415,14 @@ paths:
               schema:
                 oneOf:
                   - $ref: '#/components/schemas/SearchBegin'
+                  - $ref: '#/components/schemas/SearchResolved'
                   - $ref: '#/components/schemas/SearchHit'
                   - $ref: '#/components/schemas/StreamEnd'
                 discriminator: { propertyName: t }
               example: |
                 {"t":"begin","i":0,"slots":[{"dict":"oxford","name":"oxford"},{"dict":"webster","name":"webster"}]}
                 {"t":"hit","i":1,"dict":"webster","name":"Webster's Revised Unabridged","results":[{"Headword":"flight","Body":"<div>…</div>"}]}
-                {"t":"hit","i":0,"dict":"oxford","name":"Oxford Advanced Learner's","results":[]}
+                {"t":"resolved","i":0,"indices":[0]}
                 {"t":"end","i":0}
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3612,6 +3613,18 @@ components:
           type: string
           description: This dictionary failed. The others still answered.
       required: [t, i]
+
+    SearchResolved:
+      type: object
+      description: Slot indices whose dictionaries completed with no matches.
+      properties:
+        t: { const: resolved }
+        i: { type: integer, description: Always 0 here. }
+        indices:
+          type: array
+          items: { type: integer, minimum: 0 }
+          description: Indices into the begin line's slots array.
+      required: [t, indices]
 
     DictsBegin:
       type: object

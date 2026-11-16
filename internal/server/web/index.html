@@ -8432,9 +8432,9 @@ function beginSearchProgress(seq,total){
       searchAC?.abort();finishSearchProgress(seq);
     },{done:0,total,background:true});
 }
-function advanceSearchProgress(seq){
+function advanceSearchProgress(seq,count=1){
   if(searchProgressGeneration!==seq)return;
-  searchProgressDone=Math.min(searchProgressTotal,searchProgressDone+1);
+  searchProgressDone=Math.min(searchProgressTotal,searchProgressDone+Math.max(0,Number(count)||0));
   maskTaskUpdate("search",tx("search.progress",{
     done:window.wudictI18n.number(searchProgressDone),total:window.wudictI18n.number(searchProgressTotal)}),searchProgressDone,searchProgressTotal);
 }
@@ -11043,6 +11043,18 @@ async function doSearch(ev){
         clearStatusForResults();
         refreshLivePicker();
         readerTiming("begin_ui_ready",(msg.slots||[]).length);
+      }else if(msg.t==="resolved"){
+        const indices=Array.isArray(msg.indices)?msg.indices:[];
+        if(!indices.length)return;
+        advanceSearchProgress(seq,indices.length);
+        for(const value of indices){
+          const i=Number(value);
+          if(!Number.isInteger(i)||i<0||i>=boxes.length)continue;
+          resolved[i]=true;
+          if(i===preferredSlot)preferredDone=true;
+        }
+        searchDiagLog("dictionary_miss_batch",{count:indices.length,indices:indices.join(","),completed:searchProgressDone,total:searchProgressTotal});
+        settle();
       }else if(msg.t==="hit"){
         if(!readerFirstResponseLogged){
           readerFirstResponseLogged=true;
