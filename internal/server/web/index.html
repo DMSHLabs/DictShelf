@@ -12360,7 +12360,10 @@ function sbarPaint(){
   // The chip is placed FIRST: its words are the label the dictionary pair is
   // measured against, and a stale label would measure the wrong row.
   placeDictSeg();
-  $("sbarArticlePrev").hidden=$("sbarArticleNext").hidden=articles.length<2;
+  const articleBlocks=sbarSections();
+  const articlePageWalk=articleBlocks.some(section=>
+    window.wudictArticleBlockHasMore?.(section,-1)||window.wudictArticleBlockHasMore?.(section,1));
+  $("sbarArticlePrev").hidden=$("sbarArticleNext").hidden=articles.length<2&&!articlePageWalk;
   // The row measures itself and undresses in ONE order: the fold's word for a
   // mark, the chip's name for its book, and only then the dictionary pair -
   // the arrows go last because the chip alone still reaches every dictionary
@@ -12573,6 +12576,24 @@ async function sbarArticleGo(step){
   return {moved:true,from:sbarArticlePosition(current),to:sbarArticlePosition(target),crossedBlock:false};
 }
 window.wudictStepSearchArticle=sbarArticleGo;
+window.wudictClickSearchArticleArrow=async step=>{
+  const from=sbarArticlePosition(sbarArticleCurrent());
+  const button=$(step<0?"sbarArticlePrev":"sbarArticleNext");
+  if(!from)return {moved:false,reason:"no_current_article"};
+  if(!button||button.hidden)return {moved:false,reason:"arrow_hidden",from};
+  button.click();
+  const started=performance.now(),before=`${from.dict}:${from.index}`;
+  while(performance.now()-started<30000){
+    const to=sbarArticlePosition(sbarArticleCurrent());
+    if(to&&`${to.dict}:${to.index}`!==before){
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      return {moved:true,from,to,crossedBlock:to.dict===from.dict&&to.start!==from.start};
+    }
+    if(!sbarArticleBusy)return {moved:false,reason:"end",from};
+    await new Promise(resolve=>setTimeout(resolve,20));
+  }
+  return {moved:false,reason:"timeout",from};
+};
 window.wudictSearchArticleCurrent=()=>sbarArticlePosition(sbarArticleCurrent());
 window.wudictSearchArticleTotals=()=>{
   const rows=[...document.querySelectorAll("details.dict[data-search-dict]")];

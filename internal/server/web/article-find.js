@@ -1006,10 +1006,8 @@ async function traceWaitForPosition(expected,timeout=5000){
 }
 async function runSearchArticleWalkTrace(){
   if(remoteFindTraceActive||!remoteFindTraceAvailable())return;
-  const origin=window.wudictSearchArticleCurrent?.();
-  if(!origin)return;
-  const expected=window.wudictSearchArticleTotals?.()||{exact:false,count:0};
   remoteFindTraceActive=true;remoteFindTraceStop=false;
+  syncRemoteFindTraceButton();
   const record={diagnosticRun:++remoteFindDiagnosticRun,diagnosticStarted:performance.now(),traceRun:++remoteFindTraceRun};
   const forward=[],backward=[];let reason="done",steps=0;
   const key=position=>position?`${position.dict}:${position.index}`:"";
@@ -1018,7 +1016,7 @@ async function runSearchArticleWalkTrace(){
     await remoteFindDiagnostic(record,"navigation_trace_articles_start",{
       detail:`trace=${record.traceRun}; run=${name}; from=${key(window.wudictSearchArticleCurrent?.())}`});
     while(!remoteFindTraceStop&&steps<100000){
-      const t0=performance.now(),move=await window.wudictStepSearchArticle?.(direction);
+      const t0=performance.now(),move=await window.wudictClickSearchArticleArrow?.(direction);
       if(!move?.moved){
         if(move?.reason!=="end")reason=move?.reason||"navigation_unavailable";
         break;
@@ -1035,8 +1033,20 @@ async function runSearchArticleWalkTrace(){
       completed:sequence.length,detail:`trace=${record.traceRun}; run=${name}; steps=${sequence.length}; reason=${reason}`});
   };
   try{
+    const current=window.wudictSearchArticleCurrent?.();
+    if(!current){
+      reason="no_articles";
+      await remoteFindDiagnostic(record,"navigation_trace_articles_error",{
+        detail:`trace=${record.traceRun}; reason=no_current_article`});
+      return;
+    }
     const first=window.wudictSearchArticleEdge?.(1);
-    if(!first){reason="no_articles";return}
+    if(!first){
+      reason="no_articles";
+      await remoteFindDiagnostic(record,"navigation_trace_articles_error",{
+        detail:`trace=${record.traceRun}; reason=no_first_article`});
+      return;
+    }
     forward.push(first);
     await walk(1,forward);
     if(reason==="done"&&!remoteFindTraceStop){
@@ -1051,19 +1061,21 @@ async function runSearchArticleWalkTrace(){
     const agreement=mismatch<0&&reversed.length===back.length?"same":
       mismatch<0?`length_${reversed.length}_${back.length}`:`at_${mismatch+1}_${reversed[mismatch]}_${back[mismatch]}`;
     const duplicates=sequence=>sequence.length-new Set(sequence.map(key)).size;
-    const boundaries=forward.slice(1).filter((item,index)=>item.dict!==forward[index].dict||item.start!==forward[index].start).length;
+    const boundaries=forward.slice(1).filter((item,index)=>
+      item.dict===forward[index].dict&&item.start!==forward[index].start).length;
+    const dictionaries=forward.slice(1).filter((item,index)=>item.dict!==forward[index].dict).length;
+    const expected=window.wudictSearchArticleTotals?.()||{exact:false,count:0};
     const coverage=expected.exact
       ?forward.length===expected.count&&backward.length===expected.count?"complete":"incomplete"
       :"unknown";
     await remoteFindDiagnostic(record,"navigation_trace_articles_summary",{
       completed:Math.min(100000,forward.length+backward.length),
-      detail:`trace=${record.traceRun}; expected=${expected.exact?expected.count:"unknown"}; coverage=${coverage}; forward=${forward.length}; backward=${backward.length}; boundaries=${boundaries}; duplicate_forward=${duplicates(forward)}; duplicate_backward=${duplicates(backward)}; agreement=${agreement}; reason=${reason}`});
+      detail:`trace=${record.traceRun}; expected=${expected.exact?expected.count:"unknown"}; coverage=${coverage}; forward=${forward.length}; backward=${backward.length}; block_boundaries=${boundaries}; dictionaries=${dictionaries}; duplicate_forward=${duplicates(forward)}; duplicate_backward=${duplicates(backward)}; agreement=${agreement}; reason=${reason}`});
   }catch(error){
     reason="error";
     await remoteFindDiagnostic(record,"navigation_trace_articles_error",{
       detail:`trace=${record.traceRun}; error=${String(error?.message||error).slice(0,700)}`});
   }finally{
-    if(!remoteFindTraceStop)await window.wudictRestoreSearchArticle?.(origin);
     remoteFindTraceActive=false;remoteFindTraceStop=false;syncRemoteFindTraceButton();
   }
 }
