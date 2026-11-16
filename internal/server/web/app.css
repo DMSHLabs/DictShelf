@@ -222,24 +222,26 @@ body.barhidden{--stick:0px}
    a toggle between hiding and not hiding; it is a mode switch that disables
    the auto-hide behaviour entirely while keeping the bar fixed in place. */
 body.barpinned .bar{transform:none!important}
-body.barpinned .bar.hidden{transform:translateY(-100%)!important}
+body.barpinned.barhidden .bar.hidden,
+body.android-lookup-window.barhidden .bar.hidden{transform:translateY(calc(-100% + var(--tabh)))!important}
 body.barpinned.barhidden{--stick:0px;padding-top:var(--tabh)}
 #lookupBarToggle[hidden]{display:none}
 /* The mark needs a home that is not the field: 16px of lower padding make a
    separate band below the input and above the bar's hairline. */
-body.android-lookup-window .bar{padding-bottom:16px}
+body.barpinned .bar,body.android-lookup-window .bar{padding-bottom:16px}
+body.barpinned.barhidden .bar,body.android-lookup-window.barhidden .bar{padding-bottom:var(--tabh)}
 /* With the search row open, the triangle sits in its own lower band, below the
    field. When the row is tucked, the opaque strip stays at the top; its height
    is also reserved in the page so the first dictionary header joins it. The
    tucked strip is the drag handle. The threshold between a tap and a pull
    lives in makeDraggable(). */
-#lookupBarToggle{position:fixed;z-index:102;top:calc(var(--barh) - 16px);left:0;transform:none;width:100%;height:16px;display:grid;place-items:center;border:0;background:none;padding:0;cursor:grab;line-height:1;-webkit-tap-highlight-color:transparent;touch-action:none}
-body.barhidden #lookupBarToggle{top:0;height:var(--tabh);place-items:center;padding-bottom:0;background:none;border:0}
+#lookupBarToggle{position:absolute;z-index:1;bottom:0;left:0;width:100%;height:16px;display:grid;place-items:center;border:0;background:none;padding:0;cursor:grab;line-height:0;-webkit-tap-highlight-color:transparent;touch-action:none}
+body.barhidden #lookupBarToggle{height:var(--tabh);background:none;border:0}
 body.barhidden #lookupBarToggle::after{content:"";position:absolute;z-index:0;inset:0;background:var(--bg);border-bottom:1px solid var(--line)}
 body.android-lookup-window.barhidden{--stick:var(--tabh);padding-top:var(--tabh)}
 body.android-lookup-window.barhidden #out{min-height:calc(100dvh - var(--tabh) - var(--sbarh,0px))}
 html[data-shell-image] body.barhidden #lookupBarToggle::after{background:var(--paper-bg)}
-#lookupBarToggle::before{content:"";border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:7px solid var(--fg-soft)}
+#lookupBarToggle::before{content:"";display:block;width:0;height:0;line-height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:7px solid var(--fg-soft)}
 body.barhidden #lookupBarToggle::before{position:relative;z-index:1}
 #lookupBarToggle[aria-expanded="false"]::before{transform:rotate(180deg)}
 /* One line per dictionary header in this window: the name takes what is left
@@ -258,12 +260,12 @@ body.barhidden details.dict{scroll-margin-top:var(--tabh)}
 /* The status bar's switch: the same triangle inside the bar's upper edge, and
    the same thin strip when the bar is away. It is in flow inside the dock, so
    the strip is what the dock holds then. */
-#sbarToggle{position:relative;z-index:2;display:grid;place-items:center;width:100%;height:16px;margin:0 auto;border:0;background:none;padding:0;cursor:pointer;line-height:1;-webkit-tap-highlight-color:transparent}
+#sbarToggle{position:relative;z-index:2;display:grid;place-items:center;width:100%;height:16px;margin:0 auto;border:0;background:none;padding:0;cursor:pointer;line-height:0;-webkit-tap-highlight-color:transparent}
 body.sbarhidden #sbarToggle{height:var(--tabh);margin-bottom:0;background:none;border:0;position:relative}
 body.sbarhidden #sbarToggle::after{content:"";position:absolute;z-index:0;inset:0;background:var(--bg);border-top:1px solid var(--line)}
 body.sbarhidden #sbarToggle::before{position:relative;z-index:1}
 html[data-shell-image] body.sbarhidden #sbarToggle::after{background:var(--paper-bg)}
-#sbarToggle::before{content:"";border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid var(--fg-soft)}
+#sbarToggle::before{content:"";display:block;width:0;height:0;line-height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid var(--fg-soft)}
 #sbarToggle[aria-expanded="false"]::before{transform:rotate(180deg)}
 body.sbarhidden #bottomDock{background:none;backdrop-filter:none;-webkit-backdrop-filter:none}
 /* …but the bar standing in that dock is the same glass it always was: the dock
