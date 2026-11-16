@@ -328,14 +328,24 @@ func StreamOpenWithTerms(ctx context.Context, openers []Opener, mode Mode, term 
 		go func(i int, open Opener) {
 			defer wg.Done()
 			started := time.Now()
+			diagEnabled := diagnostics.Load() || logx.SystemLogSearchEventsEnabled()
+			var admitted, opened, queried, emitted time.Time
 			var dictName, errText string
 			defer func() {
-				logx.SystemDiagnosticIf(diagnostics.Load(), "search_fanout index=%d dict=%q mode=%s workers=%d elapsed_ms=%d error=%q",
-					i, dictName, mode, Workers(), time.Since(started).Milliseconds(), errText)
+				stageMS := func(begin, end time.Time) int64 {
+					if begin.IsZero() || end.IsZero() {
+						return -1
+					}
+					return end.Sub(begin).Milliseconds()
+				}
+				logx.SystemDiagnosticIf(diagEnabled, "search_fanout index=%d dict=%q mode=%s workers=%d elapsed_ms=%d queue_ms=%d open_ms=%d query_ms=%d emit_ms=%d error=%q",
+					i, dictName, mode, Workers(), time.Since(started).Milliseconds(),
+					stageMS(started, admitted), stageMS(admitted, opened), stageMS(opened, queried), stageMS(queried, emitted), errText)
 			}()
 			select {
 			case sem <- struct{}{}:
 				defer func() { <-sem }()
+				admitted = time.Now()
 			case <-ctx.Done():
 				errText = ctx.Err().Error()
 				send(i, Hit{Err: ctx.Err()})
@@ -362,12 +372,13 @@ func StreamOpenWithTerms(ctx context.Context, openers []Opener, mode Mode, term 
 				return
 			}
 			d, err := safeOpen(open)
+			opened = time.Now()
 			if err != nil {
 				errText = err.Error()
 				send(i, Hit{Err: err})
 				return
 			}
-			if diagnostics.Load() {
+			if diagEnabled {
 				dictName = d.Meta().Name
 			}
 			if err := ctx.Err(); err != nil {
@@ -388,6 +399,7 @@ func StreamOpenWithTerms(ctx context.Context, openers []Opener, mode Mode, term 
 				}
 			}
 			hit := runQuery(ctx, d, mode, queryTerm, rung, hasRung, perDict)
+			queried = time.Now()
 			if hit.Meta.Name != "" {
 				dictName = hit.Meta.Name
 			}
@@ -395,6 +407,7 @@ func StreamOpenWithTerms(ctx context.Context, openers []Opener, mode Mode, term 
 				errText = hit.Err.Error()
 			}
 			send(i, hit)
+			emitted = time.Now()
 		}(i, open)
 	}
 	wg.Wait()

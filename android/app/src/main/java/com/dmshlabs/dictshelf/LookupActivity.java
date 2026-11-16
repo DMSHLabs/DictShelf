@@ -36,6 +36,7 @@ import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -694,11 +695,13 @@ public class LookupActivity extends Activity {
     private void dispatchLookup() {
         if (gone || web == null || !pageReady) return;
         SystemLog.reader("lookup dispatch in-place task=" + getTaskId());
+        long dispatchedAt = SystemClock.elapsedRealtime();
         String script = "window.wudictAndroidLookup&&window.wudictAndroidLookup("
                 + org.json.JSONObject.quote(query) + ","
                 + (mode == null ? "null" : org.json.JSONObject.quote(mode)) + ","
                 + (dict == null ? "null" : org.json.JSONObject.quote(dict)) + ")";
-        web.evaluateJavascript(script, null);
+        web.evaluateJavascript(script, ignored -> SystemLog.reader("lookup javascript returned task="
+                + getTaskId() + " elapsed_ms=" + (SystemClock.elapsedRealtime() - dispatchedAt)));
     }
 
     void openFullApp() { forward(); }
@@ -715,9 +718,12 @@ public class LookupActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        long receivedAt = SystemClock.elapsedRealtime();
+        SystemLog.reader("lookup new intent received task=" + getTaskId() + " instance="
+                + System.identityHashCode(this) + " ready=" + pageReady);
         refreshWindowSize();
-        SystemLog.reader("lookup new intent task=" + getTaskId() + " instance=" + System.identityHashCode(this)
-                + " ready=" + pageReady + " action=" + (intent == null ? "null" : intent.getAction()));
+        SystemLog.reader("lookup window refreshed task=" + getTaskId() + " elapsed_ms="
+                + (SystemClock.elapsedRealtime() - receivedAt));
         setIntent(intent);
         updateReaderBack(intent);
         setFinishOnTouchOutside(!readerCall(intent));

@@ -10971,6 +10971,7 @@ async function doSearch(ev){
   try{
     const searchParams=new URLSearchParams({q,mode,hl:hlOn?"1":"0",dict:dictParam,n:String(perDict),returnCacheID:articleCacheGroupID,returnCacheStorage:searchReturnCacheStorage,ignoreDiacritics:ignoreDiacritics?"1":"0",pageCacheDiagnostics:articlePageCacheDiagnosticsEnabled()?"1":"0",searchDiagnostics:searchArticleDiagnosticsEnabled()?"1":"0"});
     if(replayReturnCacheID){searchParams.set("cacheAction","returnReplay");searchParams.set("cacheID",replayReturnCacheID)}
+    readerTiming("search_request");
     await fetchStream("/api/search?"+searchParams.toString(),msg=>{
       if(seq!==searchSeq)return; // superseded by a newer search
       if(msg.t==="begin"){
@@ -11041,6 +11042,7 @@ async function doSearch(ev){
           const sinceSearch=browseArticleDiagContext.searchStartedAt?performance.now()-browseArticleDiagContext.searchStartedAt:0;
           requestAnimationFrame(()=>requestAnimationFrame(()=>logBrowseArticleTransition("first_article_painted",sinceSearch)));
         }
+        if(res.shown&&stale)readerTiming("first_result_swap",(msg.results||[]).length);
         if(res.shown)swap(); // including the grouped line: it is this generation's first paint
         if(res.noIndex){noIdx=noIndexRow(noIdx,out,res.noIndex);noIdxCount++}
         else if(res.shown)anyShown=true;
@@ -12711,20 +12713,28 @@ let commitOnce=false;
 // Android's floating reader window keeps this document alive between word
 // selections. Update its search state in place instead of reloading the whole
 // app page (and reinitializing dictionaries, history and the WebView).
-window.wudictAndroidLookup=(query,mode,dict)=>{
+window.wudictAndroidLookup=(query,mode,dict,receivedAt)=>{
   const term=String(query||"").trim();
   if(!term)return;
-  if(!dictsSettled){window.wudictAndroidPendingLookup=[term,mode,dict];return}
+  const started=receivedAt||performance.now();
+  const readerLookupStage=stage=>{
+    if(!window.wudictAndroidGo)return;
+    try{window.prompt("wudict:reader-timing",`${stage} elapsed_ms=${Math.round(performance.now()-started)} count=${term.length}`)}catch(_){}
+  };
+  readerLookupStage(receivedAt?"lookup_resumed":"lookup_received");
+  if(!dictsSettled){window.wudictAndroidPendingLookup=[term,mode,dict,started];readerLookupStage("lookup_wait_dicts");return}
   if(maskBusyJobs.size||$("mode").value==="wildcards")maskInvalidate();
   if(mode)setSearchMode(mode);
   if(dict!==null&&dict!==undefined&&dict!=="")$("dict").value=dict;
   else $("dict").value="all";
   syncChips();
   $("q").value=term;
+  readerLookupStage("lookup_input_set");
   scopeOnce=null;anchorOnce=null;restoreArticleDict=null;restoreSearchReturnCacheID=null;
   browseReturn="";browseHistoryReturn=false;maskReturn="";
   navRecord="replace";commitOnce=true;
   if($("mode").value==="wildcards")maskSubmitRequested=true;
+  readerLookupStage("lookup_search_call");
   doSearch();
   // A new word is a new answer: the window starts at its own top, never at the
   // scroll the previous word left behind.
