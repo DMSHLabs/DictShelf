@@ -28,6 +28,22 @@ var errHeadwordSearchComplete = errors.New("headword search limit reached")
 // It uses the same optional FTS/trigram candidates and base-index fallback as
 // Browse, but stops once the main search has enough results.
 func (s *Store) SearchHeadwordsMode(ctx context.Context, query, mode string, limit int) ([]dict.Result, error) {
+	started := time.Now()
+	searchDiagnostics := logx.SystemLogSearchEventsEnabled()
+	type occurrenceMark struct {
+		stage   string
+		rank    int
+		elapsed int64
+	}
+	var occurrenceMarks []occurrenceMark
+	if searchDiagnostics {
+		defer func() {
+			for _, mark := range occurrenceMarks {
+				logx.SystemDiagnostic("search_occurrence stage=%s dictionary=%q mode=%q rank=%d elapsed_ms=%d",
+					mark.stage, s.meta.Name, mode, mark.rank, mark.elapsed)
+			}
+		}()
+	}
 	limit = clamp(limit)
 	words := make([]string, 0, limit)
 	matches := headwordSearchMatcher(ctx, query, mode)
@@ -37,6 +53,11 @@ func (s *Store) SearchHeadwordsMode(ctx context.Context, query, mode string, lim
 				continue
 			}
 			words = append(words, word)
+			if searchDiagnostics {
+				occurrenceMarks = append(occurrenceMarks, occurrenceMark{
+					stage: "headword_ready", rank: len(words), elapsed: time.Since(started).Milliseconds(),
+				})
+			}
 			if len(words) >= limit {
 				return errHeadwordSearchComplete
 			}
@@ -55,7 +76,16 @@ func (s *Store) SearchHeadwordsMode(ctx context.Context, query, mode string, lim
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, results...)
+		if searchDiagnostics {
+			for _, result := range results {
+				occurrenceMarks = append(occurrenceMarks, occurrenceMark{
+					stage: "article_ready", rank: len(out) + 1, elapsed: time.Since(started).Milliseconds(),
+				})
+				out = append(out, result)
+			}
+		} else {
+			out = append(out, results...)
+		}
 		if len(out) >= limit {
 			break
 		}
