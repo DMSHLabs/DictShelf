@@ -69,6 +69,14 @@ final class PowerSignal {
     static void setNow(String state) {
         boolean startPump = false;
         synchronized (LOCK) {
+            // Searches call applyForWork before entering Go. Once Go has
+            // acknowledged this exact state, repeating the synchronous JNI
+            // round-trip only delays the search; lifecycle and thermal changes
+            // still go through set() and invalidate this fast path.
+            if (state.equals(delivered) && pending == null) {
+                requested = state;
+                return;
+            }
             requested = state;
             pending = state;
             LOCK.notifyAll();
