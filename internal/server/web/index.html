@@ -288,7 +288,7 @@ window.wudictFontScale=(function(){
 <button type="button" class="btn tools" id="expandBtn" title="{{T:search.expand}}" aria-label="{{T:search.expand}}" aria-pressed="false">⊞</button>
 <button type="button" class="btn tools" id="panelBtn" title="{{T:panel.settings}}" aria-label="{{T:panel.settings}}">☰<span id="panelUpdateBadge" class="panel-update-badge" aria-hidden="true" hidden>!</span></button>
 </form>
-<button type="button" id="lookupBarToggle" aria-label="{{T:search.showSearchBar}}" aria-expanded="false" aria-controls="bar" hidden><span aria-hidden="true"></span></button>
+<button type="button" id="lookupBarToggle" aria-label="{{T:search.showSearchBar}}" aria-expanded="false" aria-controls="bar" hidden></button>
 </header>
 
 <main class="col container">
@@ -12631,7 +12631,6 @@ function ensureSbarToggle(){
   b.type="button";b.id="sbarToggle";
   b.setAttribute("aria-controls","sbar");b.setAttribute("aria-expanded","true");
   b.setAttribute("aria-label",tx("system.hideStatusBar"));
-  b.innerHTML='<span aria-hidden="true"></span>';
   b.addEventListener("click",()=>setSbarHidden(!$("sbar").hidden));
   $("sbar").parentNode.insertBefore(b,$("sbar"));
 }
