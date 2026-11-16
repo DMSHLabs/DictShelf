@@ -158,6 +158,23 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: mark
+          in: query
+          description: |
+            Words to mark inside each article body in place of the query's own,
+            wrapped in `<mark class="wu-hl">`. Read in every mode and without
+            `hl`: the answer is still the one `q` gives, and only what is
+            marked in it changes. wudict's own UI uses it to find a word
+            inside the articles of a section that is already open.
+
+            The words are one phrase: adjacent and in order, every word whole
+            but the last, which matches as a prefix. Case and diacritics are
+            ignored, and a phrase is followed across inline markup. A single
+            letter of a spaced script marks nothing. The 500-mark cap of `hl`
+            applies. Longer than 200 characters is a 400.
+          schema:
+            type: string
+            maxLength: 200
         - name: format
           in: query
           description: |
@@ -1974,6 +1991,77 @@ paths:
                   indexing: { type: boolean, description: "Preparation is running right now." }
         '500':
           $ref: '#/components/responses/ServerError'
+  /api/suggest:
+    get:
+      tags: [internal]
+      operationId: suggest
+      x-internal: true
+      summary: The headwords a search would match, as one list
+      description: >
+        What wudict's own page lists under the search box while a word is
+        typed: the headwords of all the dictionaries asked, merged into one
+        list. No article is read or returned. An indexed dictionary answers
+        from its headword index; one that is not indexed is searched through
+        its own format, as `/api/search` does.
+
+
+        The list is in dictionary order - case and accents ignored, the word
+        typed in full before the words it starts - and holds a word once
+        whatever its capitals. It is at most 20 words long. A dictionary that
+        has not answered within 2 seconds is left out of the list.
+
+
+        Same-origin only, as `/api/browse`: it is not part of the client API a
+        browser extension reaches (D69).
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: The text typed. Blank is a 400.
+          schema: { type: string }
+          example: banan
+        - name: mode
+          in: query
+          description: >
+            `prefix` lists the headwords, and the other spellings an entry
+            lists, that start with `q`. `wildcard` lists the headwords the
+            pattern `q` matches, in indexed dictionaries only. Any other mode
+            is a 400: nothing matches a half-typed word exactly, and a
+            full-text match is not a headword.
+          schema:
+            type: string
+            enum: [prefix, wildcard]
+            default: prefix
+        - name: dict
+          in: query
+          description: >
+            `all`, one dictionary id, or a comma-separated list of ids, as in
+            `/api/search`. A list where no id resolves is a 404.
+          schema: { type: string, default: all }
+      x-codeSamples:
+        - lang: Shell
+          label: curl
+          source: |
+            curl -s 'http://127.0.0.1:6888/api/suggest?q=banan'
+      responses:
+        '200':
+          description: The list. Empty when nothing matches.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [words]
+                properties:
+                  words:
+                    type: array
+                    maxItems: 20
+                    items: { type: string }
+              example:
+                words: [banana, banana boat, banana republic, bananas]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/reveal:
     get:
       tags: [internal]
@@ -2436,6 +2524,20 @@ components:
             response may answer on different rungs. Absent outside `fts`. Show
             it: a result on `near` or `words` means the phrase itself was not
             found.
+        partial:
+          type: boolean
+          description: >
+            Only beside rung, and only from a dictionary searched through a
+            full-text index its own file carries (`ownText`): a stricter
+            reading than `rung` was looked for in the best-ranked candidate
+            articles only, so it was not found among those rather than not
+            found.
+        more:
+          type: boolean
+          description: >
+            Only beside rung, from the same dictionaries: this reading was
+            itself answered from the best-ranked candidates only, so there
+            may be results beyond these.
         error:
           type: string
           description: This dictionary failed. The others still answered.
@@ -2513,6 +2615,18 @@ components:
             article text is stored with another compression than COMPRESSION,
             or it cannot be read. Never set when the source is gone. Reported only;
             `POST /api/reindex` rebuilds every such dictionary.
+        ftsSize:
+          type: integer
+          description: >
+            Bytes of the full-text index, a `fulltext.db` beside the text.
+            Absent without one, and for a dictionary prepared before that
+            file existed, whose index is part of `dbSize`.
+        ownText:
+          type: boolean
+          description: >
+            Full text is answered from an index the dictionary's own file
+            carries (a ZIM archive's), so `caps.FTS` is set with no full-text
+            index built, and there is none to build or remove.
         source: { type: string, description: 'The original file, if still on disk.' }
         mediaSrc:
           type: array
@@ -2769,6 +2883,14 @@ components:
             Stops recording looked-up words in history.txt. Absent keeps
             history. The server reads it too: while it is set, adding to
             history through /api/words does nothing.
+        listWords:
+          type: boolean
+          description: >
+            Typing in the search box lists the matching headwords under it
+            (`/api/suggest`), and the search waits for Enter or a word picked
+            from that list. Absent is the default: a search of what is typed,
+            as it is typed. Remembered state for wudict's own UI - the search
+            endpoint never reads it.
 
     Words:
       type: object

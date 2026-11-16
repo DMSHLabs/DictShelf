@@ -13,7 +13,7 @@ will move without notice.
   a supported way to hand a lookup to a browser tab (§9). Its HTML is not.
 - **Private — do not depend on:** every other route, for example `/api/prefs`,
   `/api/config`, `/api/ingest`, `/api/setup`, `/api/library`, `/api/rescan`,
-  `/api/reveal`, `/api/about`, `/api/browse`, `/api/groups`, `/api/lemmas`,
+  `/api/reveal`, `/api/about`, `/api/browse`, `/api/suggest`, `/api/groups`, `/api/lemmas`,
   `/api/intake`, `/api/reindex`, `/setup`, `/browse`, `/assets/…`
 
 Default origin `http://127.0.0.1:6888`. Both parts are user-configurable
@@ -147,6 +147,7 @@ The only endpoint a lookup needs.
 | `n` | max results **per dictionary** | default **20**, capped at 500 — too many for hover; send it explicitly |
 | `format` | `raw`, `clean`, `text` | default `raw`; see §8 |
 | `hl` | `1` to mark the query's words in each article | read only with `mode=fts`; default off; see §8 |
+| `mark` | words to mark in each article in place of the query's | every mode, no `hl` needed; one phrase, last word a prefix; at most 200 characters |
 
 A search is cut off after **30 s**, or after 5 minutes when it covers exactly
 one dictionary.
@@ -211,6 +212,13 @@ hit is final at once, and a miss is final only at `end`.
 `query` (an operator expression, answered as written). It is per dictionary,
 so two slots in one response can answer on different rungs. Show it when it is
 not `phrase`: the phrase itself was not found there.
+
+A dictionary searched through a full-text index its own file carries (a ZIM
+archive; `ownText` in its `/api/dicts` row) can add two flags beside `rung`.
+That index does not record where words stand, so a phrase or a proximity is
+checked in the text of the best-ranked candidate articles only: `partial`
+says a stricter reading than `rung` was not found *among those*, and `more`
+says `rung` itself was answered from them, so there may be further results.
 
 `slots[].name` is **the id again, not the dictionary's name.** The real name
 arrives on the `hit`, because naming a dictionary means opening it and `begin`

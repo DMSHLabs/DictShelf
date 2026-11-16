@@ -198,9 +198,10 @@ input[type=search]::placeholder{color:var(--fg-soft);opacity:1}
 .qbox.hasq .qstar{visibility:visible}
 .qstar:hover,.qstar[aria-pressed="true"]{color:var(--accent)}
 .qstar[aria-pressed="true"] path{fill:currentColor}
-/* Favourites, then history, under the EMPTY box, on a click or ↓ - never by
-   itself, never while typing (live search is already the completion). An
-   overlay: opening it moves nothing below. */
+/* Under the EMPTY box, on a click or ↓: favourites, then history. Under a box
+   with text: the headwords that match it (D199) - on ↓, or by itself while
+   typing when the reader chose "List headwords". An overlay: opening it moves
+   nothing below. */
 #recall{position:absolute;top:calc(100% + 4px);left:0;right:0;min-width:12em;
   max-height:min(60vh,24em);overflow-y:auto;margin:0;padding:.25em 0;list-style:none;
   background:var(--bg-card);border:1px solid var(--line);border-radius:8px;
@@ -337,7 +338,8 @@ summary .mbtn:active{color:var(--accent)}
 summary .mpos{font-size:11px;color:var(--fg-faint);min-width:2.8em;text-align:center;
   font-variant-numeric:tabular-nums}
 /* Brief and full view (fullSet): the toggle for Lingvo's secondary zone, DSL
-   [*], which the article carries as wu-sec. It sits LAST in the row because
+   [*], which the article carries as wu-sec, and for the <details> blocks of
+   every other format. It sits LAST in the row because
    that is the one place nothing else moves it - the match walker comes and
    goes, the count changes width - and the one a right thumb reaches without
    looking. The glyph is the article in miniature: two sense lines and an
@@ -352,6 +354,30 @@ summary .fbtn:hover{color:var(--fg);background:var(--bg)}
 summary .fbtn[aria-pressed="true"]{color:var(--accent)}
 summary .fbtn[aria-pressed="true"] .brief,summary .fbtn[aria-pressed="false"] .full{display:none}
 @media (pointer:coarse){summary .fbtn{padding:14px 12px;margin:-14px -8px -14px 0}}
+/* Find in the section you are reading (findOpen, D198). The button is in the
+   header for the reason the match walker is: it is the one surface still on
+   screen halfway down an article, and a control inside the section needs no
+   label saying which section it searches. Only the OPEN section shows it - a
+   closed one has no articles to find in. Pressed, the field takes the place of
+   the name and the count, so the row keeps its one line at any width; the
+   walker and the full-view switch stay where they are. */
+summary .sbtn{flex:0 0 auto;display:none;cursor:pointer;color:var(--fg-soft);
+  padding:9px 7px;margin:-9px 0;border-radius:5px;user-select:none;
+  -webkit-tap-highlight-color:transparent}
+details.dict[open]>summary .sbtn{display:inline-flex}
+summary .sbtn svg{width:16px;height:16px;display:block}
+summary .sbtn:hover{color:var(--fg);background:var(--bg)}
+@media (pointer:coarse){summary .sbtn{padding:14px 10px;margin:-14px 0}}
+details.dict.finding>summary>:is(.dname,.count,.more,.sbtn){display:none}
+summary .find{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:2px;
+  margin:-2px 0;font-weight:400}
+summary .find input{flex:1 1 auto;min-width:0;width:100%;font:inherit;color:var(--fg);
+  background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:1px 6px;outline:0}
+summary .find input:focus{border-color:var(--focus)}
+/* nothing found: said by the field itself, where the eye already is */
+summary .find.none input{color:var(--danger);border-color:var(--danger-line)}
+/* below 16px a touch browser zooms the page into a focused field */
+@media (pointer:coarse){summary .find input{font-size:16px}}
 /* a dictionary's own script threw; the article is intact but inert */
 summary .jserr{margin-left:6px;font-weight:400;color:var(--accent);font-size:12px;cursor:help}
 /* A deferred dictionary's hint (renderSlot, h.deferred). Link-coloured because
@@ -1175,7 +1201,8 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
      submits under the HTML spec's no-submit-button clause and the submit
      listener below runs unchanged — and anything two characters or longer
      never waits for a keypress at all, because the input handler searches
-     as you type. A button would be a magnifier next to a magnifier. -->
+     as you type. Under "List headwords" (D199) a row of the list is the
+     click target. A button would be a magnifier next to a magnifier. -->
 <button type="button" class="btn tools themeBtn" title="Theme" aria-label="Toggle theme">◐</button>
 <button type="button" class="btn" id="wideBtn" title="Toggle wide layout" aria-label="Toggle wide layout">⇔</button>
 <button type="button" class="btn" id="expandBtn" title="Open all results" aria-label="Open all results" aria-pressed="false">⊞</button>
@@ -1259,6 +1286,17 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
          All, with no limit: the reader may trade speed for it. A larger number
          set by hand in state.json is shown as its own choice. Wording in
          ASD-STE100. -->
+    <!-- What typing does (D199). A closed set of two, so a native <select>
+         like "Open" below: the default searches what is typed, the other
+         lists the headwords that match and leaves the search to Enter or a
+         picked row. -->
+    <label class="seg">
+      <span>While you type</span>
+      <select id="typeSel" title="Search as you type, or list the matching headwords under the search box and search on Enter.">
+        <option value="live">Search</option>
+        <option value="list">List headwords</option>
+      </select>
+    </label>
     <label class="seg">
       <span>Open</span>
       <select id="openSel" title="These dictionaries open automatically, in the sequence of your list. Many open dictionaries can make the page slow.">
@@ -1466,7 +1504,7 @@ async function loadPrefs(){
     const st=await r.json(),rows=st.dicts||[];
     // Read before the exists branch below returns: on a first run there is no
     // ui record, but there is also nothing here that can go wrong.
-    if(st.ui){applyFS(st.ui.fontSize,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyOpen(st.ui.fastFirst?"fast":st.ui.openAll?"all":String(st.ui.openN||1),false);applyGroupsOff(st.ui.groupsOff,false);fullOn=!!st.ui.full;modePref=st.ui.mode||"prefix";setMode(modePref);applyHist(!st.ui.historyOff,false)}
+    if(st.ui){applyFS(st.ui.fontSize,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyOpen(st.ui.fastFirst?"fast":st.ui.openAll?"all":String(st.ui.openN||1),false);applyGroupsOff(st.ui.groupsOff,false);fullOn=!!st.ui.full;modePref=st.ui.mode||"prefix";setMode(modePref);applyHist(!st.ui.historyOff,false);applyType(st.ui.listWords,false)}
     uiBase=uiNow();
     dictsBase=rows.map(prefRow);
     // Last, so that a page whose baselines are not both in hand never saves:
@@ -1498,7 +1536,7 @@ let uiBase=null;
    drive) and this page cannot speak for them. */
 let dictsBase=null;
 function uiNow(){
-  return{fontSize:articleFS,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,openN:openN>1?openN:0,openAll,groupsOff:[...groupsOff].sort(),full:fullOn,mode:modePref==="prefix"?"":modePref,historyOff:!histOn};
+  return{fontSize:articleFS,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,openN:openN>1?openN:0,openAll,groupsOff:[...groupsOff].sort(),full:fullOn,mode:modePref==="prefix"?"":modePref,historyOff:!histOn,listWords};
 }
 /* One dictionary's record as it is sent and compared: pin only when set, as
    the server stores it. The title always, "" for none: a record without the
@@ -1590,6 +1628,13 @@ function groupIds(sel){
   // The whole value compared, never split: ids are the names a user wrote in
   // groups.ini (D162), and a name may contain ":" itself.
   return orderedDicts().filter(d=>!disabled.has(d.id)&&(d.groups||[]).some(g=>"g:"+g.f+":"+g.v===sel)).map(d=>d.id);
+}
+/* The picker's choice as a `dict` parameter: one id, or the enabled
+   dictionaries of "All dictionaries" or of a group, in the user's order. ""
+   when that list is empty. */
+function pickedDicts(){
+  const v=$("dict").value||"all";
+  return v==="all"?enabledOrderedIds().join(","):v.startsWith("g:")?groupIds(v).join(","):v;
 }
 /* The label a group is shown under, for a message that has to name it. */
 function groupLabel(sel){
@@ -1732,7 +1777,26 @@ const speakCtx={
     const g=d&&(d.groups||[]).find(g=>g.f==="lang");
     return {a:(d&&d.articleLang)||"",h:(g&&g.v)||""};
   },
-  top(){return $("bar").getBoundingClientRect().bottom}
+  top(){return $("bar").getBoundingClientRect().bottom},
+  // the dictionary's name, for the OS's now-playing panel
+  name(id){const d=dicts.find(x=>x.id===id);return d?dictLabel(d):""},
+  // ⏭ and Keep reading (D192): mark the unit after a tapped one. A frame
+  // finds its own and reports it as a selection; false when there is none.
+  step(st){
+    if(st.kind==="frame"){
+      try{st.frame.contentWindow.postMessage({t:"next"},"*")}catch(_){return false}
+      return true;
+    }
+    const u=window.wuTapNext&&wuTapNext();
+    if(!u)return false;
+    tapMark(u,st.ptr==="touch");
+    return true;
+  },
+  // ✕: the mark goes
+  clear(st){
+    if(st.kind==="frame"){try{st.frame.contentWindow.postMessage({t:"unsel"},"*")}catch(_){}}
+    else if(window.wuTapClear)wuTapClear();
+  }
 };
 function speakDown(e){
   speakPtr=e.pointerType||"mouse";
@@ -1811,6 +1875,17 @@ function applyOpen(v,save){
   if(save&&moved)savePrefs();
   return moved;
 }
+/* What typing in the search box does (D199): a search of what is typed, the
+   default, or the list of headwords that match it under the box, with the
+   search left to Enter or a row of that list. Server state like the ones
+   above: a habit of the person, not a property of this browser. */
+let listWords=false;
+function applyType(on,save){
+  const v=!!on,moved=v!==listWords;
+  listWords=v;
+  $("typeSel").value=v?"list":"live";
+  if(save&&moved)savePrefs();
+}
 /* Which picker sections are hidden, by facet id (D149). Server state like the
    pins, because it describes how this person reads the library, not the
    device. Hiding never drops the group in force: that one option stays in the
@@ -1864,6 +1939,7 @@ $("openSel").addEventListener("change",e=>{
   if(applyOpen(e.target.value,true)&&$("q").value.trim())doSearch();
 });
 applyOpen("1",false);
+$("typeSel").addEventListener("change",e=>applyType(e.target.value==="list",true));
 for(const [id,step] of [["fsDown",-1],["fsUp",1],["fsVal",0]])
   $(id).addEventListener("click",()=>applyFS(step?articleFS+step:FS_DEF,true));
 applyFS(FS_DEF,false);   // paints --wd-fs and the .lim state before any load
@@ -2744,9 +2820,9 @@ function renderPanel(){
        full-text and media each cost real disk, so each is a switch.
        Switching is offered only while the SOURCE is on disk — that is what
        makes it reversible, and why none of this needs a confirmation. */
-    const canToggle=!!d.source;
+    const hasSource=!!d.source;
     const feats=[
-      ["fts","full-text",d.caps?.FTS,0],
+      ["fts","full-text",d.caps?.FTS,d.ftsSize||0],
       ["media","media",!!d.mediaDB,d.mediaSize||0],
     ];
     /* The index itself, first in the run of chips. Two states, because the
@@ -2765,9 +2841,9 @@ function renderPanel(){
        that starts that says so first; D99 is the decision that the size be
        shown before it is spent, not after.
 
-       The estimate is calibrated on the user's own corpus, exactly as
-       ftsAddedBytes is, and for the same reason: bytes-per-entry runs from 107
-       to 94 k across real dictionaries, so no hard-coded multiplier is honest.
+       The estimate is calibrated on the user's own corpus, because
+       bytes-per-entry runs from 107 to 94 k across real dictionaries, so no
+       hard-coded multiplier is honest.
        With nothing to calibrate against it says nothing rather than inventing
        a number.
 
@@ -2778,16 +2854,28 @@ function renderPanel(){
     const est=indexed?0:baseIndexBytes(d);
     let caps=indexed
       ? `<span class="feat on locked" title="Indexed: ${mb(d.dbSize)} on disk">${mb(d.dbSize)}</span>`
-      : canToggle
+      : hasSource
         ? `<span class="feat" data-feat="base" title="Not indexed: searched through its own format, slower and with more memory. Click to index${est?` (about ${mb(est)}, estimated from your indexed dictionaries)`:""}.">🚀 index${est?` · est. ~${mb(est)}`:""}</span>`
         : "";
     for(const[key,label,on,bytes]of feats){
       if(key==="media"&&!on&&!d.hasMedia)continue; // nothing to pack
       const size=on&&bytes?" "+mb(bytes):"";
       const what=FEAT_NAME[key];
-      const tip=!canToggle?"Locked: the dictionary files are gone, and this is the only copy":
-        (on?"Remove the ":"Add the ")+what;
-      caps+=`<span class="feat${on?" on":""}${canToggle?"":" locked"}"`+
+      /* An archive that carries its own full-text index is searched through
+         it (D194): a fact, not a switch - there is nothing of ours to build
+         or remove. */
+      const own=key==="fts"&&d.ownText;
+      /* Without its original files a dictionary's full-text index can still
+         be added and removed: it is built from the prepared text and is a
+         file of its own (D195). One that lies inside an older text.db
+         cannot be taken out, and media needs the files it was packed from. */
+      const canToggle=!!d.source||(key==="fts"&&!!d.dbSize&&(!on||!!d.ftsSize));
+      // What adding it would cost, said before it is spent (D99).
+      const cost=key==="fts"&&!on&&canToggle?ftsAddedBytes([d]):0;
+      const tip=own?"Full-text search uses the index this archive carries":
+        !canToggle?"Locked: the dictionary files are gone, and this is the only copy":
+        (on?"Remove the ":"Add the ")+what+(cost?` (about ${mb(cost)})`:"");
+      caps+=`<span class="feat${on?" on":""}${canToggle&&!own?"":" locked"}"`+
         ` data-feat="${key}" data-on="${on?1:0}"`+
         ` title="${tip}">${label}${size}</span>`;
     }
@@ -3068,23 +3156,28 @@ $("folderBody").addEventListener("click",e=>{
    full-text search that meets a dictionary lacking the index offers to add
    just that one, in context and motivated. */
 function ftsCandidates(){
-  // a dictionary whose source file is gone cannot be re-indexed at all — the
-  // prepared data is the only copy (same rule the per-card chips enforce, and
-  // which "index all" ignored: it queued dictionaries guaranteed to fail)
-  return dicts.filter(d=>!d.error&&!d.caps?.FTS&&d.source);
+  // the index is built from the prepared text, so a dictionary whose source
+  // file is gone can have one too; an unprepared one needs its source
+  return dicts.filter(d=>!d.error&&!d.caps?.FTS&&(d.source||d.dbSize));
 }
-/* Size estimate calibrated on the user's OWN corpus: bytes-per-entry observed
-   across the dictionaries that already have full text. Article length varies
-   far too much between dictionaries for a hard-coded multiplier to be honest,
-   and when there is nothing to calibrate against this says nothing rather
-   than inventing a number — the exact figures below carry the warning fine. */
+/* What full text adds: a share of the text.db it indexes. The index lies in
+   its own file (ftsSize), so the share is read off the user's OWN library -
+   the median over the dictionaries that have one - and until three do, it is
+   the median measured over 45 real dictionaries of five formats (0.78; their
+   shares run 0.14-1.66, and the estimate lands within a factor of two on 43
+   of them, with a median error of 13%). Bytes per entry, which this used to
+   be, missed by a median 108% on the same 45: article length varies far more
+   between dictionaries than the index does against the text it is built of.
+   A dictionary with no index yet has no text.db to take a share of; its own
+   estimate stands in (baseIndexBytes). */
+const FTS_SHARE=0.78;
+let ftsShare=FTS_SHARE,ftsShareFor=null; // memoised on the list, as baseRate is
 function ftsAddedBytes(todo){
-  let bytes=0,entries=0;
-  for(const d of dicts)if(d.caps?.FTS&&d.dbSize&&d.entries){bytes+=d.dbSize;entries+=d.entries}
-  const want=todo.reduce((n,d)=>n+(d.entries||0),0);
-  if(!entries||!want)return 0;
-  const grown=want*(bytes/entries),have=todo.reduce((n,d)=>n+(d.dbSize||0),0);
-  return grown>have?grown-have:0;
+  if(ftsShareFor!==dicts){
+    const shares=dicts.filter(d=>d.ftsSize&&d.dbSize).map(d=>d.ftsSize/d.dbSize).sort((x,y)=>x-y);
+    ftsShare=shares.length>=3?shares[shares.length>>1]:FTS_SHARE;ftsShareFor=dicts;
+  }
+  return Math.round(ftsShare*todo.reduce((n,d)=>n+(d.dbSize||baseIndexBytes(d)),0));
 }
 /* The same calibration as ftsAddedBytes, for the index that has not been built
    yet: bytes per entry across the dictionaries that DO have one, restricted to
@@ -3103,7 +3196,7 @@ function baseIndexBytes(d){
      same list does not. */
   if(baseRateFor!==dicts){
     let bytes=0,entries=0;
-    for(const o of dicts)if(o.dbSize&&o.entries&&!o.caps?.FTS){bytes+=o.dbSize;entries+=o.entries}
+    for(const o of dicts)if(o.dbSize&&o.entries&&(!o.caps?.FTS||o.ownText||o.ftsSize)){bytes+=o.dbSize;entries+=o.entries}
     baseRate=entries?bytes/entries:0;baseRateFor=dicts;
   }
   return baseRate?Math.round(d.entries*baseRate):0;
@@ -3118,7 +3211,7 @@ function openFtsAll(){
     box.innerHTML="<p>Every dictionary that can be indexed already has the full-text index.</p>";
   }else{
     const entries=todo.reduce((n,d)=>n+(d.entries||0),0);
-    const now=dicts.reduce((n,d)=>n+(d.dbSize||0),0),added=ftsAddedBytes(todo);
+    const now=dicts.reduce((n,d)=>n+(d.dbSize||0)+(d.ftsSize||0),0),added=ftsAddedBytes(todo);
     box.innerHTML=
       `<p class="cost">Add full-text index, for searching in article text, to <b>${todo.length}</b> ${plural(todo.length)}`+
         (entries?` (${entries.toLocaleString()} entries)`:"")+
@@ -3730,6 +3823,9 @@ addEventListener("message",e=>{
     // Coalesced, because this message arrives once per frame and again on
     // every reflow inside it.
     if(f&&navDet&&navDet.contains(f)){clearTimeout(navTimer);navTimer=setTimeout(navRefresh,200)}
+    // ...and so do its <details> blocks, which give the section its switch;
+    // the line a press of that switch is holding is put back (fullSettle).
+    if(f){fullInit(f.closest("details.dict"));fullSettle(f)}
   }else if(d.t==="ref"&&d.w){
     // d.xdict is set when the author pointed at ANOTHER dictionary by name.
     searchFor(d.w,{scope:d.xdict?dictIDByName(d.xdict):d.dict,frag:d.frag});
@@ -3771,7 +3867,22 @@ addEventListener("message",e=>{
       return;
     }
     if(d.k==="full"){fullKey();return} // Ctrl+* pressed inside a frame
+    // Space inside a frame: pause or resume read aloud; else what Space does
+    // on a page - a screen down, Shift+Space up (D192 Am. 4)
+    if(d.k==="space"){
+      if(!d.up&&window.wuSpeak&&wuSpeak.space(!!d.r))return;
+      const h=innerHeight-$("bar").getBoundingClientRect().bottom;
+      scrollBy({top:(d.up?-1:1)*Math.max(40,h*0.875),behavior:"smooth"});
+      return;
+    }
 
+    // Escape inside a frame: the same layers as on the page, outermost first
+    if(d.k==="Escape"){
+      if(!$("azAsk").hidden)askAZ(false);
+      else if($("panel").classList.contains("show"))hidePanel();
+      else if(!(window.wuSpeak&&wuSpeak.esc()))escPage();
+      return;
+    }
     const qi=$("q");
     if(qi.disabled)return;
     if(d.k==="/"){qi.focus();qi.select();return}
@@ -3803,9 +3914,16 @@ addEventListener("message",e=>{
     if(!speakOn)return;
     const f=document.querySelector('iframe[data-fid="'+CSS.escape(d.fid)+'"]');
     if(!f||e.source!==f.contentWindow)return;
-    const go=()=>window.wuSpeak.frame(f,String(d.s||""),d.r,d.p);
+    const go=()=>window.wuSpeak.frame(f,d);
     if(window.wuSpeak)go();
     else if(d.s&&speakCan())speakWake().then(go,err=>console.warn("wudict:",err.message));
+  }else if((d.t==="say"||d.t==="hush"||d.t==="nonext")&&d.fid){
+    // A second tap on a mark inside a sandboxed article, Escape or a tap on
+    // nothing there, or no next unit to read (D192).
+    if(!speakOn||!window.wuSpeak)return;
+    const f=document.querySelector('iframe[data-fid="'+CSS.escape(d.fid)+'"]');
+    if(!f||e.source!==f.contentWindow)return;
+    if(d.t==="say")wuSpeak.frameToggle(f);else if(d.t==="hush")wuSpeak.hush();else wuSpeak.noNext();
   }else if(d.t==="anchor"&&d.fid){
     // an in-article jump inside a sandboxed iframe. The iframe is sized to its
     // content and never scrolls itself, so the position it reports is relative
@@ -4114,10 +4232,16 @@ function renderSlot(box,h,mode,q,perDict,group){
   const det=document.createElement("details");det.className="dict";
   const more=h.results.length>=perDict?`<span class="more" data-id="${h.dict}">more…</span>`:"";
   // Only for a multi-word full-text query: a single word has no phrase to fail
-  // at, and every other mode has no ladder at all.
+  // at, and every other mode has no ladder at all. h.partial: the phrase was
+  // looked for in the best matches only (an archive's own index, D194), so
+  // "not found" is said of those. h.more: so was this answer, and the count
+  // is a floor.
   const rung=mode==="fts"&&/\s/.test(q||"")&&(h.rung==="near"||h.rung==="words")
-    ?`<span class="rung">phrase not found · ${h.rung==="near"?"words proximity":"words anywhere"} · </span>`:"";
-  det.innerHTML=`<summary>${esc(hitName(h))}<span class="count">${rung}${h.results.length}${more?"+":""} result${h.results.length===1?"":"s"}</span>${more}</summary>`;
+    ?`<span class="rung">phrase not found${h.partial?" in the best matches":""} · ${h.rung==="near"?"words proximity":"words anywhere"} · </span>`:"";
+  det.innerHTML=`<summary><span class="dname">${esc(hitName(h))}</span><span class="count">${rung}${h.results.length}${more||h.more?"+":""} result${h.results.length===1?"":"s"}</span>${more}</summary>`;
+  // the question this section answers, for asking it again with marks (findRun)
+  det.wuAsk={q,mode,dict:h.dict,per:perDict};
+  det.firstElementChild.appendChild(findButton(det));
   const anchor=anchorOnce&&anchorOnce.dict===h.dict?anchorOnce:null;
   if(anchor)anchorOnce=null;
   det.wuFill=()=>{
@@ -4138,7 +4262,7 @@ function renderSlot(box,h,mode,q,perDict,group){
       if(el){det.open=true;fullReveal(det,el);revealAt(el.getBoundingClientRect().top,det)}
     });
   };
-  det.addEventListener("toggle",()=>{if(det.open)fillSection(det)});
+  det.addEventListener("toggle",()=>{if(det.open)fillSection(det);else if(det===findDet)findClose()});
   det.open=expandAll;
   box.appendChild(det);
   if(det.open||anchor)fillSection(det);
@@ -4444,10 +4568,13 @@ document.addEventListener("click",e=>{
   }).catch(()=>{more.textContent="more…"});
 });
 
-/* live search: debounce while typing */
+/* live search: debounce while typing. Not under "List headwords" (D199):
+   there typing fills the list under the box, and Enter or a picked row
+   searches. */
 let debounce=null;
 $("q").addEventListener("input",()=>{
   clearTimeout(debounce);
+  if(listWords)return;
   const v=$("q").value.trim();
   if(v.length<2)return;
   debounce=setTimeout(doSearch,300);
@@ -4474,16 +4601,34 @@ function typeTarget(){
   if(document.activeElement===$("q")||editable(document.activeElement))return null;
   return $("q").disabled?null:$("q");
 }
+/* Escape with no overlay to close: find in articles closes, and with nothing
+   left to put away the key is "/" - the search box, its text selected. A
+   focused field or <select> keeps the key: the box empties on it, an open
+   mode list closes on it. True when the key was spent. */
+function escPage(){
+  if(editable(document.activeElement))return false;
+  if(findDet){findClose();return true}
+  const q=typeTarget();if(!q)return false;
+  q.focus();q.select();
+  return true;
+}
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape"&&!$("azAsk").hidden){askAZ(false);$("azBtn").focus({preventScroll:true});return}
   if(e.key==="Escape"){
     // Focus return (D102 is about labels, this is the same courtesy for the
     // caret): dismissing an overlay from the keyboard must not drop focus
     // onto <body>, where the next keystroke has nowhere to go.
-    const inPanel=$("panel").classList.contains("show")&&
-      $("panel").contains(document.activeElement);
-    hidePanel();
-    if(inPanel&&!$("q").disabled)$("q").focus();
+    if($("panel").classList.contains("show")){
+      const inPanel=$("panel").contains(document.activeElement);
+      hidePanel();
+      if(inPanel&&!$("q").disabled)$("q").focus();
+      return;
+    }
+    // One press, one layer: read aloud (speak.js, pick.js) spends the key by
+    // preventing its default. Spent here too, so that a hardware Escape on
+    // Android is not also Back.
+    if(e.defaultPrevented||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey||e.isComposing)return;
+    if(escPage())e.preventDefault();
     return;
   }
   /* The same action as the two chevrons, for the hand already on the
@@ -4550,7 +4695,7 @@ function searchFor(term,opts){
   const t=String(term||"").trim();
   if(!t)return;
   $("q").value=t;                       // verbatim: no trimming, ever
-  if(notForWords($("mode").value))$("mode").value="prefix";
+  if(!opts?.keepMode&&notForWords($("mode").value))$("mode").value="prefix";
   const scope=opts?.scope||null,frag=opts?.frag||"";
   scopeOnce=scope;
   // the fragment addresses a place in the SCOPED article; renderSlot matches
@@ -4700,9 +4845,23 @@ function anchorTarget(root,frag){
    reader did not choose - a full-text match or a #fragment inside the zone -
    opens full without changing that choice.
 
-   Only shadow-DOM articles take part: wu-sec is written by the DSL reader
-   alone, and DSL escapes `<`, so an article carrying it never has a script
-   and never renders in a frame. */
+   wu-sec is written by the DSL reader alone, and DSL escapes `<`, so an
+   article carrying it never has a script, never renders in a frame and never
+   holds a <details>.
+
+   Every other format folds the same kind of text - more examples, related
+   words, one block per source - into <details>, and the same switch serves
+   them (D193). A section holds a zone or blocks, never both, so `det.wuFold`
+   names which. Blocks differ from the zone in one way: each has a state of
+   its own, set by the dictionary (`open`) and by the reader's press on its
+   <summary>. So the switch is read from the article, not stored: pressed
+   means no block is closed, a press opens them all while any is closed and
+   closes them all otherwise. `fullOn` keeps its meaning - brief is the
+   article as its dictionary ships it, full is everything shown - so a brief
+   section arrives untouched and a full one with every block open; a block is
+   given that arrival state once (`foldSeen`), which is what lets a frame
+   report its height many times without reopening what the reader closed.
+   Both article shapes take part: a frame's document is read directly. */
 const FULL_SVG='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" focusable="false">'+
   '<path d="M2 3.5h12M2 12.5h12"/><path class="brief" d="M5.5 8h8.5" stroke-dasharray="0 2.8"/><path class="full" d="M5.5 8h8.5"/></svg>';
 function fullRoots(det){
@@ -4710,18 +4869,81 @@ function fullRoots(det){
   for(const host of det.querySelectorAll(".article"))if(host.shadowRoot)out.push(host);
   return out;
 }
-/* A freshly filled section (or one a sub-entry was just added to): give it
-   the switch if it now holds a zone, and its articles the section's state. */
+/* Every article of a section with the tree it is read through: its shadow
+   root, or its frame's document (about:blank, so empty, until it parses). */
+function foldRoots(det){
+  const out=[];
+  for(const host of det.querySelectorAll(".article")){
+    const root=host.shadowRoot||host.contentDocument;
+    if(root)out.push({host,root});
+  }
+  return out;
+}
+function foldList(det,sel){
+  const out=[];
+  for(const a of foldRoots(det))out.push(...a.root.querySelectorAll(sel));
+  return out;
+}
+/* The outermost block whose folded part holds this text node; with `shut`,
+   only a closed block counts - the text is not on the page. A block's own
+   <summary> is not its folded part. */
+function foldOf(t,shut){
+  const p=t.parentElement;
+  if(!p)return null; // a line straight under the shadow root
+  const s=p.closest("summary");
+  let out=null;
+  for(let d=p.closest("details");d;d=d.parentElement&&d.parentElement.closest("details"))
+    if(!(s&&s.parentElement===d)&&!(shut&&d.open))out=d;
+  return out;
+}
+/* Open the closed blocks an element is folded away in; true if any was. */
+function foldOpen(el){
+  const s=el.closest("summary");
+  let did=false;
+  for(let d=el.parentElement&&el.parentElement.closest("details");d;d=d.parentElement&&d.parentElement.closest("details"))
+    if(!d.open&&!(s&&s.parentElement===d)){d.open=true;did=true}
+  return did;
+}
+const foldSeen=new WeakSet(),  // blocks already given their arrival state
+      foldHeard=new WeakSet(); // article trees whose toggles are listened to
+/* What the switch shows: for blocks, read from the articles. */
+function fullShown(det){
+  return det.wuFold?!foldList(det,"details:not([open])").length:det.wuFull;
+}
+function fullMark(det){
+  det.querySelector(":scope>summary .fbtn")?.setAttribute("aria-pressed",fullShown(det)?"true":"false");
+}
+/* A freshly filled section, one a sub-entry was just added to, or one a
+   frame has just parsed in: give it the switch if it now holds a zone or a
+   block, and its articles the section's state. */
 function fullInit(det){
   if(!det)return;
   const hosts=fullRoots(det);
-  if(!hosts.some(h=>h.shadowRoot.querySelector(".wu-sec")))return;
+  const zone=hosts.some(h=>h.shadowRoot.querySelector(".wu-sec"));
+  const arts=zone?[]:foldRoots(det).filter(a=>a.root.querySelector("details"));
+  if(!zone&&!arts.length)return;
   if(det.wuFull===undefined)det.wuFull=fullOn;
-  for(const h of hosts)h.toggleAttribute("data-brief",!det.wuFull);
+  det.wuFold=!zone;
+  if(zone)for(const h of hosts)h.toggleAttribute("data-brief",!det.wuFull);
+  for(const a of arts){
+    if(!foldHeard.has(a.root)){
+      foldHeard.add(a.root);
+      // `toggle` does not bubble; capturing at the tree's root hears them all
+      a.root.addEventListener("toggle",()=>{
+        fullMark(det);
+        // a mark inside a block appears or goes
+        if(det===navDet){clearTimeout(navTimer);navTimer=setTimeout(navRefresh,200)}
+      },true);
+    }
+    for(const d of a.root.querySelectorAll("details")){
+      if(foldSeen.has(d))continue;
+      foldSeen.add(d);
+      if(det.wuFull)d.open=true;
+    }
+  }
   const sum=det.querySelector(":scope>summary");
-  let b=sum&&sum.querySelector(".fbtn");
-  if(sum&&!b){
-    b=document.createElement("span");
+  if(sum&&!sum.querySelector(".fbtn")){
+    const b=document.createElement("span");
     b.className="fbtn";b.setAttribute("role","button");b.tabIndex=0;
     b.setAttribute("aria-label","Show examples and other secondary text");
     b.title="Show examples and other secondary text (Ctrl+*)";
@@ -4729,65 +4951,108 @@ function fullInit(det){
     const hit=e=>{
       // inside a <summary>: the default action would fold the section
       e.preventDefault();e.stopPropagation();
-      fullSet(det,!det.wuFull,true);
+      fullSet(det,!fullShown(det),true);
     };
     b.addEventListener("click",hit);
     b.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" ")hit(e)});
     b.addEventListener("pointerdown",freezeBar); // the row must not slide away mid-tap
     sum.appendChild(b);
   }
-  if(b)b.setAttribute("aria-pressed",det.wuFull?"true":"false");
+  fullMark(det);
   // A full-text match inside the zone is the reason this article is here.
-  if(!det.wuFull&&hosts.some(h=>h.shadowRoot.querySelector(".wu-sec .wu-hl")))fullSet(det,true,false);
+  if(zone&&!det.wuFull&&hosts.some(h=>h.shadowRoot.querySelector(".wu-sec .wu-hl")))fullSet(det,true,false);
 }
 /* Switch one section. `chosen` is the reader's own press, which also becomes
    the state the next section opens in. */
+let fullKeep=null; // the line a press is still holding while frames resize (fullSettle)
 function fullSet(det,full,chosen){
   if(chosen&&fullOn!==full){fullOn=full;savePrefs()}
-  if(!det||det.wuFull===undefined||det.wuFull===full)return;
+  if(!det||det.wuFull===undefined)return;
+  // A zone has the one state; blocks each have their own, so `wuFull` says
+  // only how the next block to arrive opens.
+  if(!det.wuFold&&det.wuFull===full)return;
   const keep=fullAnchor(det,full);
   det.wuFull=full;
-  for(const h of fullRoots(det))h.toggleAttribute("data-brief",!full);
-  det.querySelector(":scope>summary .fbtn")?.setAttribute("aria-pressed",full?"true":"false");
+  if(det.wuFold)for(const d of foldList(det,"details"))d.open=full;
+  else for(const h of fullRoots(det))h.toggleAttribute("data-brief",!full);
+  fullMark(det);
+  fullKeep=null;
   if(keep){
-    const top=fullTop(keep.node),d=top===null?0:top-keep.top;
-    if(d){freezeBar();scrollBy(0,d)}
+    fullHold(keep);
+    if(det.wuFold&&det.querySelector("iframe.article")){
+      keep.det=det;keep.until=performance.now()+800;fullKeep=keep;
+    }
   }
-  if(det===navDet)navRefresh(); // a mark inside the zone appears or goes
+  if(det===navDet)navRefresh(); // a mark inside the zone or a block appears or goes
 }
-/* A target inside the zone: show the zone before scrolling to it. */
+/* Put the kept line back where it was measured. */
+function fullHold(keep){
+  const top=fullTop(keep),d=top===null?0:top-keep.top;
+  if(d){freezeBar();scrollBy(0,d)}
+  keep.sy=scrollY;
+}
+/* A frame's text reflows at once, but its height follows by message, and
+   everything below it moves only then. Until the frames of the switched
+   section have reported, each report puts the kept line back - unless the
+   page has been scrolled since, by the reader or by the browser's own scroll
+   anchoring, and the line is no longer ours to place. */
+function fullSettle(f){
+  const k=fullKeep;
+  if(!k||!k.det.contains(f))return;
+  if(performance.now()>k.until||!k.node.isConnected||Math.abs(scrollY-k.sy)>1){fullKeep=null;return}
+  fullHold(k);
+}
+/* A target inside the zone or a closed block: show it before scrolling to it. */
 function fullReveal(det,el){
   if(det&&det.wuFull===false&&el.closest(".wu-sec"))fullSet(det,true,false);
+  foldOpen(el);
 }
-/* Keeping the place being read. Showing or hiding a zone above the line
-   being read would push that line off screen, so the first line of text at
-   or below the sticky header that survives the switch is measured before and
+/* Keeping the place being read. Showing or hiding text above the line being
+   read would push that line off screen, so the first line of text at or
+   below the sticky header that survives the switch is measured before and
    put back after. Text nodes are walked rather than hit-tested: a DSL line
    with no paragraph of its own is a bare text node of the shadow root, which
    elementFromPoint answers with the host. Measured, not left to CSS scroll
-   anchoring, which Android WebViews of different ages do differently. */
+   anchoring, which Android WebViews of different ages do differently.
+
+   Closing blocks, a line inside one does not survive: the block's own
+   <summary> is kept instead, brought under the header if it was above it, so
+   the reader is left looking at the block they were in. Text inside a closed
+   block is skipped in both directions - Chromium still answers it with a
+   plausible box (see revealFirstMark). */
 function fullAnchor(det,full){
   const sum=det.querySelector(":scope>summary");
   if(!sum)return null;
   const y=sum.getBoundingClientRect().bottom+4;
   if(det.getBoundingClientRect().top>=y)return null; // starts below the line: nothing above it moves
-  for(const host of fullRoots(det)){
+  for(const {host,root} of foldRoots(det)){
     if(host.getBoundingClientRect().bottom<y)continue;
-    const w=document.createTreeWalker(host.shadowRoot,NodeFilter.SHOW_TEXT);
+    const w=(root.ownerDocument||root).createTreeWalker(root.body||root,NodeFilter.SHOW_TEXT);
     for(let t=w.nextNode();t;t=w.nextNode()){
       if(!t.data.trim()||t.parentNode.nodeName==="STYLE")continue;
+      if(det.wuFold){if(foldOf(t,true))continue} // not on the page
       // parentElement is null for a line straight under the shadow root
-      if(!full&&t.parentElement?.closest(".wu-sec"))continue; // about to hide
-      const top=fullTop(t);
-      if(top!==null&&top>=y)return{node:t,top};
+      else if(!full&&t.parentElement?.closest(".wu-sec"))continue; // about to hide
+      const k={node:t,host},top=fullTop(k);
+      if(top===null||top<y)continue;
+      const d=det.wuFold&&!full?foldOf(t,false):null;
+      if(!d){k.top=top;return k}
+      k.node=d.querySelector(":scope>summary")||d;
+      const st=fullTop(k);
+      k.top=st===null?y:Math.max(y,st);
+      return k;
     }
   }
   return null;
 }
-function fullTop(node){
-  const rg=document.createRange();rg.selectNodeContents(node);
+/* Where a kept node is now, in page viewport coordinates: a frame's own are
+   offset by the frame. */
+function fullTop(k){
+  const n=k.node,off=k.host.shadowRoot?0:k.host.getBoundingClientRect().top;
+  if(n.nodeType===1)return n.getClientRects().length?n.getBoundingClientRect().top+off:null;
+  const rg=n.ownerDocument.createRange();rg.selectNodeContents(n);
   const rs=rg.getClientRects();
-  return rs.length?rs[0].top:null;
+  return rs.length?rs[0].top+off:null;
 }
 /* Ctrl+*: the section under the line being read, else the first one on
    screen that has the switch. */
@@ -4801,7 +5066,7 @@ function fullKey(){
     if(!pick&&r.bottom>0&&r.top<innerHeight)pick=det;
   }
   if(!pick)return false;
-  fullSet(pick,!pick.wuFull,true);
+  fullSet(pick,!fullShown(pick),true);
   return true;
 }
 
@@ -4823,13 +5088,13 @@ function fullKey(){
    Hidden below two matches: with one there is nowhere to go, and a control
    that cannot act is furniture (D102). */
 let navEl=null,navDet=null,navList=null,navIdx=0,navTimer=0,markedAnswer=false;
-function markList(det){
+function markList(det,all){
   const out=[];
   for(const host of det.querySelectorAll(".article")){
     const root=host.shadowRoot||host.contentDocument;
     if(!root)continue;
     for(const m of root.querySelectorAll(".wu-hl"))
-      if(!m.checkVisibility||m.checkVisibility())out.push({host,el:m});
+      if(all||!m.checkVisibility||m.checkVisibility())out.push({host,el:m});
   }
   return out; // DOM order across articles is reading order
 }
@@ -4881,6 +5146,7 @@ function navRefresh(){
   navIdx=at<0?0:at;
   navEl.hidden=navList.length<2;
   navPos();
+  findNote();
 }
 function navPos(){
   const p=navEl&&navEl.querySelector(".mpos");
@@ -4905,6 +5171,150 @@ function navGo(step){
   // glide over 18000px of text is not orientation, it is waiting.
   revealAt(top,navDet,Math.abs(top)>innerHeight*2);
   navPos();
+}
+/* Find in the open section (D198): a word or a phrase, looked for inside the
+   articles already on screen.
+
+   Nothing here matches text. The section is asked for again with `mark=`, and
+   the server paints the words in the pass that already rewrites every article
+   (internal/hilite) - so a find is a full-text answer's marks on any answer,
+   and everything that serves those serves this: the walk above, the jump to
+   the first match, the blocks and zones that open around one, the cap. The
+   words are one phrase, the last one open, whole words before it.
+
+   One repaint per Enter, none per keystroke: an article that came with
+   scripts is an iframe, and repainting it restarts them. Enter on words
+   already found is the walk's next step, Shift-Enter its previous one.
+
+   Closing takes the marks out of the articles in place - they are the only
+   thing the find added - so leaving costs no second repaint. */
+const FIND_SVG='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2l3.6 3.6"/></svg>';
+let findEl=null,findDet=null,findText="",findAC=null,findNoneT=0;
+function findButton(det){
+  const b=document.createElement("span");
+  b.className="sbtn";b.setAttribute("role","button");b.tabIndex=0;
+  b.setAttribute("aria-label","Find in these articles");
+  b.title="Find in these articles";
+  b.innerHTML=FIND_SVG;
+  const hit=e=>{
+    // inside a <summary>: the default action would fold the section
+    e.preventDefault();e.stopPropagation();
+    findOpen(det);
+  };
+  b.addEventListener("click",hit);
+  b.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" ")hit(e)});
+  b.addEventListener("pointerdown",freezeBar); // the row must not slide away mid-tap
+  return b;
+}
+function findBuild(){
+  if(findEl)return findEl;
+  findEl=document.createElement("form");
+  findEl.className="find";findEl.setAttribute("role","search");
+  // type=text: a search field draws its own ✕, which empties it, beside ours, which closes it
+  findEl.innerHTML=
+    '<input type="text" maxlength="200" placeholder="\u2192 word or phrase" enterkeyhint="search" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="Find in these articles">'+
+    '<span class="mbtn" role="button" tabindex="0" aria-label="Close">\u2715</span>';
+  const go=e=>{e.preventDefault();e.stopPropagation();findRun(e.shiftKey?-1:1)};
+  // The keyboard's own Search key submits without a keydown on some IMEs;
+  // a hardware Enter is taken below, where Shift is still known.
+  findEl.addEventListener("submit",go);
+  findEl.addEventListener("keydown",e=>{
+    const x=e.target.closest(".mbtn");
+    if(e.key==="Escape"||(x&&(e.key==="Enter"||e.key===" "))){
+      // Escape is spent here: the page's own would also take focus to the search box
+      e.preventDefault();e.stopPropagation();findClose();
+    }else if(e.key==="Enter"&&!x&&!e.isComposing)go(e);
+  });
+  // Every event that lands on the row is spent on it: the field is inside a
+  // <summary>, whose default action - a click, or a space released over it -
+  // folds the very section being searched.
+  findEl.addEventListener("keyup",e=>{if(e.key===" ")e.preventDefault()});
+  findEl.addEventListener("click",e=>{
+    e.preventDefault();e.stopPropagation();
+    if(e.target.closest(".mbtn"))findClose();
+  });
+  findEl.addEventListener("input",()=>{clearTimeout(findNoneT);findEl.classList.remove("none")});
+  findEl.addEventListener("pointerdown",freezeBar);
+  return findEl;
+}
+function findOpen(det){
+  if(findDet&&findDet!==det)findClose(); // one field: it follows the section being read
+  const sum=det&&det.isConnected&&det.querySelector(":scope>summary");
+  if(!sum)return;
+  const el=findBuild();
+  findDet=det;det.classList.add("finding");
+  sum.prepend(el);
+  el.firstElementChild.focus({preventScroll:true});
+}
+/* The marks a find painted, taken out of the articles where they stand. */
+function findStrip(det){
+  for(const m of markList(det,true)){
+    const p=m.el.parentNode;
+    m.el.replaceWith(...m.el.childNodes);
+    if(p)p.normalize();
+  }
+  if(det===navDet)navDetach();
+}
+function findClose(){
+  const det=findDet,found=findText;
+  if(findAC){findAC.abort();findAC=null}
+  clearTimeout(findNoneT);
+  findDet=null;findText="";
+  if(findEl){findEl.remove();findEl.classList.remove("none");findEl.firstElementChild.value=""}
+  if(!det||!det.isConnected)return; // a new answer took the section with it
+  det.classList.remove("finding");
+  if(found)findStrip(det);
+  if(det.open)det.querySelector(":scope>summary .sbtn")?.focus({preventScroll:true});
+}
+/* "Nothing found", said by the field. Late, because an article in a frame has
+   no marks to count until it has parsed, and a field that turned red and back
+   on every find would be crying wolf. */
+function findNote(){
+  clearTimeout(findNoneT);
+  if(!findEl)return;
+  if(!findText||!findDet||navDet!==findDet||(navList&&navList.length)){findEl.classList.remove("none");return}
+  findNoneT=setTimeout(()=>{if(findEl&&findText)findEl.classList.add("none")},400);
+}
+function findRun(step){
+  const det=findDet;
+  if(!det||!det.isConnected)return findClose();
+  const input=findEl.firstElementChild,text=input.value.trim();
+  if(text===findText){
+    // the same words again: the next match, as every find bar reads a second Enter
+    if(text&&navDet===det&&navWalkable())navGo(step);
+    return;
+  }
+  if(findAC){findAC.abort();findAC=null}
+  if(!text){ // the field was emptied: the marks go, the field stays
+    findText="";findStrip(det);findNote();
+    return;
+  }
+  const ask=det.wuAsk,box=det.parentElement;
+  if(!ask||!box)return;
+  const ac=findAC=new AbortController();
+  fetchStream("/api/search?q="+encodeURIComponent(ask.q)+"&mode="+ask.mode+
+      "&dict="+encodeURIComponent(ask.dict)+"&n="+Math.min(ask.per,100)+"&mark="+encodeURIComponent(text),msg=>{
+    // An empty hit is the first wave of an answer the lemma wave gave: it is
+    // not this section. And only the section still being searched is repainted.
+    if(msg.t!=="hit"||!msg.results?.length||findDet!==det||!box.isConnected)return;
+    const typing=document.activeElement===input;
+    // The page keeps its length while the section is rebuilt; without the
+    // floor the document would shrink under the reader and the scroll
+    // position would be clamped to somewhere they never were.
+    box.style.minHeight=box.offsetHeight+"px";
+    setTimeout(()=>{box.style.minHeight=""},1500);
+    renderSlot(box,msg,ask.mode,ask.q,ask.per);
+    const nd=box.querySelector("details.dict");
+    if(!nd){findClose();return}
+    nd.open=true;fillSection(nd);
+    findDet=nd;findText=text;nd.classList.add("finding");
+    nd.querySelector(":scope>summary").prepend(findEl);
+    // On a touch screen the keyboard has done its work and covers half of
+    // what was found; with a real one the next Enter belongs to the field.
+    if(typing&&!TAPS)input.focus({preventScroll:true});
+    navAttach(nd);
+    revealFirstMark(nd);
+  },ac.signal).catch(()=>{}).finally(()=>{if(findAC===ac)findAC=null});
 }
 let markSettle=null;
 function revealFirstMark(det){
@@ -4933,9 +5343,17 @@ function revealFirstMark(det){
          purpose: contentVisibilityAuto:true would also reject the marks inside
          OUR OWN content-visibility:auto result list, which are precisely the
          off-screen ones worth scrolling to. */
+      const marks=root.querySelectorAll(".wu-hl");
       let el=null;
-      for(const m of root.querySelectorAll(".wu-hl"))
+      for(const m of marks)
         if(!m.checkVisibility||m.checkVisibility()){el=m;break}
+      /* Every match of this article is folded away: the blocks around the
+         first one that sits in a closed block are opened, and nothing else
+         (D193). Only then - an article with a match on the page keeps its
+         blocks as they are, which is what leaves a wiki's collapsed table of
+         contents alone. */
+      if(!el)for(const m of marks)
+        if(foldOpen(m)){if(!m.checkVisibility||m.checkVisibility())el=m;break}
       if(!el)continue; // no match in this article, or none of them is rendered
       const top=el.getBoundingClientRect().top+
         (host.shadowRoot?0:host.getBoundingClientRect().top);
@@ -5050,9 +5468,47 @@ document.addEventListener("dblclick",e=>{
   const root=path.find(el=>el instanceof ShadowRoot);
   let sel="";
   try{sel=(root&&root.getSelection?root.getSelection():document.getSelection()).toString().trim()}catch(_){ }
-  // a double TAP selects nothing on Android: the word under it (pick.js)
-  if(!sel&&root&&window.wuWordAt)sel=wuWordAt(e,root);
+  // A double tap leaves a tapped mark selected (D192): the lookup is the
+  // word under it, never the whole mark.
+  const u=window.wuTapUnit&&wuTapUnit();
+  if(u&&sel.replace(/\s+/g," ")===u.sel)sel="";
+  // a double TAP selects nothing on Android: the word under it, selected as
+  // a desktop browser selects it, so the reader sees what was looked up (pick.js)
+  if(!sel&&root)sel=window.wuSelectWordAt?wuSelectWordAt(e,root):window.wuWordAt?wuWordAt(e,root):"";
   if(sel)lookupSelection(sel);
+});
+
+/* Tap to mark, tap again to read (D192). A single tap on article text or a
+   headword selects the unit it most likely means (pick.js), so read aloud
+   offers it like any selection; a second tap on the mark reads it. Registered
+   after the article and audio handlers, whose clicks are theirs. */
+function tapMark(u,touch){
+  const r=u.range,top=r.startContainer.getRootNode();
+  const host=top instanceof ShadowRoot?top.host:null;
+  let dict="";
+  if(host)dict=host.dataset.dict||"";
+  else{
+    const n=r.startContainer,el=n.nodeType===1?n:n.parentElement;
+    const dt=el&&el.closest("details.dict>dl>dt"),dd=dt&&dt.nextElementSibling;
+    if(!dt)return;
+    dict=(dd&&dd.dataset.dict)||"";
+  }
+  const st={kind:host?"shadow":"head",text:u.sel,say:u.say,range:r,dict,ptr:touch?"touch":"mouse",unit:u.kind,hint:u.lang,next:u.next};
+  const go=()=>window.wuSpeak.unit(st,host&&host.shadowRoot);
+  if(window.wuSpeak)go();
+  else speakWake().then(go,err=>console.warn("wudict:",err.message));
+}
+window.wuTapUnits&&wuTapUnits({
+  root(e){
+    const path=e.composedPath();
+    const host=path.find(el=>el.classList&&el.classList.contains("article"));
+    if(host)return host.shadowRoot||null; // an iframe article runs its own (frame.js)
+    return path.some(el=>el.matches&&el.matches("details.dict>dl>dt"))?document:null;
+  },
+  enabled(){return speakOn&&speakCan()},
+  mark:tapMark,
+  toggle(){if(window.wuSpeak)wuSpeak.toggle()},
+  stop(){if(window.wuSpeak)wuSpeak.hush()}
 });
 
 /* Audio, in the CAPTURE phase and owned outright — the click never reaches the
@@ -5283,6 +5739,7 @@ $("frm").removeEventListener("submit",_doSearch);
    input has none. */
 $("q").addEventListener("keydown",e=>{
   if(e.key!=="Enter"||e.isComposing||e.ctrlKey||e.metaKey||e.altKey)return;
+  if(!recall.hidden&&recallSel>=0)return; // Enter picks the highlighted row
   if(!navWalkable()||$("q").value.trim()!==lastQuery)return;
   e.preventDefault();navGo(e.shiftKey?-1:1);
 });
@@ -5295,6 +5752,7 @@ $("frm").addEventListener("submit",e=>{
      nothing is covering anything and refining the term is the next thing a
      mouse user does. */
   if(!matchMedia("(hover:hover)").matches)$("q").blur();
+  closeRecall(); // and a list still open, or on its way, would cover the answer
   commitOnce=true; // the one moment the query is finished: this search may scroll
   return doSearch(e);
 });
@@ -5395,12 +5853,36 @@ $("histClear").addEventListener("click",()=>{
 });
 $("qstar").addEventListener("click",toggleFav);
 
-/* The list under the empty box. Built when it opens - at most 2×RECALL_MAX
-   rows - and thrown away when it closes; nothing about it runs while it is
-   shut. */
+/* The list under the box. Built when it opens - at most 2×RECALL_MAX rows -
+   and thrown away when it closes; nothing about it runs while it is shut.
+   Under the empty box it is the favourites and the history. Under a box with
+   text it is the headwords that match the text (D199, /api/suggest): by
+   itself while typing under "List headwords", and on ↓ otherwise. `sug` says
+   which of the two is open: a headword row is picked like any row, and is
+   never forgotten like a history row. */
 const recall=$("recall");
-let recallSel=-1;
+let recallSel=-1,sug=false;
 const recallRows=()=>recall.querySelectorAll("li[data-w]");
+/* rows: [word, class] pairs. None closes the list: "no headword starts like
+   this" is not "nothing will be found", since the search also lemmatizes. */
+function fillRecall(rows,isSug){
+  if(!rows.length){closeRecall();return}
+  const f=document.createDocumentFragment();
+  rows.forEach(([w,cls],n)=>{
+    const li=document.createElement("li");
+    li.id="rc"+n;li.dataset.w=w;li.textContent=w;
+    li.setAttribute("role","option");
+    if(cls)li.className=cls;
+    f.appendChild(li);
+  });
+  recall.replaceChildren(f);
+  recall.scrollTop=0;
+  recallSel=-1;sug=isSug;
+  recall.setAttribute("aria-label",isSug?"Matching headwords":"Favourites and history");
+  recall.hidden=false;
+  $("q").setAttribute("aria-expanded","true");
+  $("q").removeAttribute("aria-activedescendant");
+}
 function openRecall(){
   if($("q").value.trim()||$("q").disabled)return;
   // "Keep history" off hides the list too: a switch drawn off that still
@@ -5408,27 +5890,14 @@ function openRecall(){
   // it back on brings them back; Clear history is the deletion.
   const rest=histOn?hist.filter(w=>!favSet.has(wordKey(w))).slice(0,RECALL_MAX):[];
   if(!favs.length&&!rest.length)return;
-  const f=document.createDocumentFragment();
-  let n=0;
-  const row=(w,cls)=>{
-    const li=document.createElement("li");
-    li.id="rc"+n++;li.dataset.w=w;li.textContent=w;
-    li.setAttribute("role","option");
-    if(cls)li.className=cls;
-    f.appendChild(li);
-  };
-  for(const w of favs.slice(0,RECALL_MAX))row(w,"fav");
-  for(const w of rest)row(w);
-  recall.replaceChildren(f);
-  recallSel=-1;
-  recall.hidden=false;
-  $("q").setAttribute("aria-expanded","true");
+  fillRecall([...favs.slice(0,RECALL_MAX).map(w=>[w,"fav"]),...rest.map(w=>[w,""])],false);
 }
 function closeRecall(){
+  sugCancel(); // also a list that is still on its way
   if(recall.hidden)return;
   recall.hidden=true;
   recall.replaceChildren();
-  recallSel=-1;
+  recallSel=-1;sug=false;
   $("q").setAttribute("aria-expanded","false");
   $("q").removeAttribute("aria-activedescendant");
 }
@@ -5443,20 +5912,83 @@ function moveRecall(d){
   li.scrollIntoView({block:"nearest"});
   $("q").setAttribute("aria-activedescendant",li.id);
 }
+/* The headwords that match the text in the box. Asked SUG_MS after the last
+   key: shorter than the search's 300 ms, because the answer is a glance at a
+   few words and no article is read for it. Each request cancels the one
+   before; an answer is shown only to the text it was asked for, and only
+   while the box still has the caret. */
+const SUG_MS=150,SUG_MIN=2;
+let sugTimer=0,sugAC=null,sugSeq=0;
+/* The mode the list is asked in, or "" for a text that gets none: under
+   SUG_MIN characters, as the search itself; and in full-text mode, where a
+   match is not a headword. Exact lists by prefix, since a word still being
+   typed matches nothing exactly. */
+function sugMode(v){
+  if(v.length<SUG_MIN||$("q").disabled)return "";
+  const m=$("mode").value;
+  return m==="fts"?"":m==="wildcard"?"wildcard":"prefix";
+}
+function sugCancel(){
+  clearTimeout(sugTimer);
+  sugSeq++;
+  if(sugAC){sugAC.abort();sugAC=null}
+}
+function sugSoon(){sugCancel();sugTimer=setTimeout(sugFetch,SUG_MS)}
+async function sugFetch(){
+  sugCancel();
+  const seq=sugSeq,v=$("q").value.trim(),m=sugMode(v),ds=pickedDicts();
+  if(!m||!ds){closeRecall();return}
+  // Wildcard mode matches whole headwords, so a text without a wildcard
+  // character lists what it starts: the pattern `text*`.
+  const ask=m==="wildcard"&&!/[*?]/.test(v)?v+"*":v;
+  const ac=sugAC=new AbortController();
+  let words=[];
+  try{
+    const r=await fetch("/api/suggest?q="+encodeURIComponent(ask)+"&mode="+m+"&dict="+encodeURIComponent(ds),{signal:ac.signal});
+    if(r.ok)words=(await r.json()).words||[];
+  }catch(_){}
+  if(seq!==sugSeq||document.activeElement!==$("q")||$("q").value.trim()!==v)return;
+  fillRecall(words.map(w=>[w,""]),true);
+}
 /* A pick is a submit: on a touch device the soft keyboard is standing over the
-   answer, so the box lets go of it, as the form's submit does. */
+   answer, so the box lets go of it, as the form's submit does. A headword
+   listed for a wildcard pattern is looked up in that mode, as itself, where
+   searchFor would move the mode to prefix - unless it holds a wildcard
+   character, which that mode would read as a pattern. */
 function pickRecall(w){
+  const keepMode=sug&&$("mode").value==="wildcard"&&!/[*?]/.test(w);
   closeRecall();
   if(!matchMedia("(hover:hover)").matches)$("q").blur();
-  searchFor(w);
+  searchFor(w,{keepMode});
 }
-$("q").addEventListener("click",()=>{if(recall.hidden)openRecall()});
+/* A click in the box opens the list the box has: the favourites and history
+   when it is empty, and under "List headwords" the headwords for its text. */
+$("q").addEventListener("click",()=>{
+  if(!recall.hidden)return;
+  if(!$("q").value.trim())openRecall();
+  else if(listWords)sugFetch();
+});
 $("q").addEventListener("blur",closeRecall);
-$("q").addEventListener("input",()=>{if($("q").value)closeRecall();syncStar()});
+/* Typing. Under "List headwords" the list follows the text: the favourites
+   and history go at the first character, and headword rows stay, with nothing
+   highlighted, until the next ones replace them - so the list does not blink
+   between two keys. Otherwise typing closes the list, since the search
+   answers it. */
+$("q").addEventListener("input",()=>{
+  if(listWords&&sugMode($("q").value.trim())){
+    if(sug&&recallSel>=0)moveRecall(-recallSel-1);
+    else if(!sug)closeRecall();
+    sugSoon();
+  }else if($("q").value||sug)closeRecall();
+  syncStar();
+});
 $("q").addEventListener("keydown",e=>{
   if(e.isComposing||e.ctrlKey||e.metaKey||e.altKey)return;
   if(recall.hidden){
-    if(e.key==="ArrowDown"&&!$("q").value){e.preventDefault();openRecall()}
+    // ↓ opens the list the box has; with text, in either typing mode
+    if(e.key!=="ArrowDown")return;
+    if(!$("q").value){e.preventDefault();openRecall()}
+    else if(sugMode($("q").value.trim())){e.preventDefault();sugFetch()}
     return;
   }
   const rows=recallRows();
@@ -5471,7 +6003,7 @@ $("q").addEventListener("keydown",e=>{
   case "Delete":
     // Shift+Delete forgets the selected history word, as a browser's own
     // address-bar suggestions do; a favourite is unstarred with the star.
-    if(e.shiftKey&&recallSel>=0&&!rows[recallSel].classList.contains("fav")){
+    if(e.shiftKey&&!sug&&recallSel>=0&&!rows[recallSel].classList.contains("fav")){
       e.preventDefault();
       const w=rows[recallSel].dataset.w;
       const at=recallSel;
@@ -5502,7 +6034,7 @@ recall.addEventListener("pointerdown",e=>{
   e.preventDefault();
   held=false;
   dropHold();
-  const li=e.pointerType!=="mouse"&&e.target.closest("li[data-w]:not(.fav)");
+  const li=!sug&&e.pointerType!=="mouse"&&e.target.closest("li[data-w]:not(.fav)");
   if(!li)return;
   holdAt={x:e.clientX,y:e.clientY};
   holdTimer=setTimeout(()=>{

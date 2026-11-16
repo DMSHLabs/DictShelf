@@ -61,7 +61,7 @@ func (e *NoRoomError) Is(target error) bool { return target == ErrTooLarge }
 type Caps struct {
 	Exact    bool
 	Prefix   bool // starts-with (accent-insensitive on ingested backends)
-	FTS      bool // FTS5 over headwords + article text - Searcher only
+	FTS      bool // full text: FTS5 over headwords + article text (Searcher), or the file's own index (D194)
 	Wildcard bool // `?` and `*` over headwords (D167) - Searcher only
 }
 
@@ -206,6 +206,16 @@ type Searcher interface {
 	// WildcardContext matches whole headwords against a wildcard pattern
 	// (internal/wildcard): `?` is one character, `*` any run of characters.
 	WildcardContext(ctx context.Context, pattern string, limit int) ([]Result, error)
+}
+
+// Keyer lists the keys a prepared database would answer a query with, without
+// reading an article: what the list of matching words under the search box is
+// made of (D199). One key for each entry the Searcher method of the same name
+// returns, in the same order - the headword, or for a prefix the alias that
+// was typed. Both read the headword index only.
+type Keyer interface {
+	PrefixKeys(ctx context.Context, word string, limit int) ([]string, error)
+	WildcardKeys(ctx context.Context, pattern string, limit int) ([]string, error)
 }
 
 // Letter is one chip of the browse strip: a run of headwords sharing an

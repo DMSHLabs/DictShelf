@@ -28,6 +28,8 @@ Type `wudict help` in the search box for quick access, and [browse](/browse?dict
 - Instant search across all dictionaries with four [search modes](<entry://wudict search>): prefix, exact, [wildcard](<entry://wudict wildcard>), and full-text search
 - Dictionaries are automatically grouped by language, language pair, content and publisher; add your own groups in <kbd>☰</kbd> → ![](cog.svg) → [Edit groups](/groups).
 - Double-tap any word in a wudict dictionary article to instantly look up its definition
+- [List the headwords](<entry://wudict headword list>) that match what you type, and pick one
+- [Find a word](<entry://wudict find>) inside the articles you have open: ![](find.svg) in the dictionary's header
 - Adjust the font size via the <kbd>☰</kbd> → <kbd>−</kbd> <kbd>+</kbd> widget
 - [Lemmatization](<entry://wudict lemmatization>) for 24 languages: <kbd>☰</kbd> → ![](cog.svg) → <kbd>Lemmatization…</kbd>; English is built in
 - Android: full screen, hiding the system bars while you read and drawing content edge-to-edge, into the camera cutout: long-tap the wudict icon in the launcher → **Settings** → **Screen**
@@ -96,7 +98,7 @@ wudict keeps the mode that you select. A word from a link or from a different ap
 ## wudict fts
 ## wudict full-text syntax
 
-**Several words are a phrase; quotes make it exact**. `no pun intended` finds the phrase, then, only if nothing matches, the words in proximity, then the words anywhere, and the section header indicates which stage answered. Full-text searches only dictionaries whose full-text [index](<entry://wudict index>) is on. Dictionaries without a FTS are offered for indexing.
+**Several words are a phrase; quotes make it exact**. `no pun intended` finds the phrase, then, only if nothing matches, the words in proximity, then the words anywhere, and the section header indicates which stage answered. Full-text searches only dictionaries whose full-text [index](<entry://wudict index>) is on. Dictionaries without a FTS are offered for indexing. A ZIM archive that carries its own full-text index needs none: wudict searches it at once, and there a word also finds its other forms (`walks` finds *walked*).
 
 | You type | You get |
 | --- | --- |
@@ -170,8 +172,9 @@ Each language is a small download (33 kB to 2.5 MB) and is used only for diction
 In <kbd>☰</kbd> → ![](cog.svg):
 
 - ![](highlight.svg) <kbd>Highlight matches</kbd>: mark the words a [full-text](<entry://wudict full-text>) search found.
-- ![](speak.svg) <kbd>Read aloud</kbd>: select text in an article or its headword to speak it using the OS's Text-to-speech engine. Use the chevron next to the speaker icon to pick a voice or another language, see more details under [wudict Text-to-speech](<entry://wudict Text-to-speech>)
+- ![](speak.svg) <kbd>Read aloud</kbd>: click a sentence in an article or a headword, then click it again (📱 tap, tap again) to hear it in the OS's Text-to-speech voice; any other text: select it and press the speaker icon. Use the chevron next to the speaker icon to pick a voice or another language, see more details under [wudict Text-to-speech](<entry://wudict Text-to-speech>)
 - <kbd>Keep history</kbd>, <kbd>Clear history</kbd>: see [wudict history](<entry://wudict history>).
+- **While you type**: see [wudict headword list](<entry://wudict headword list>).
 - **Open**: see [wudict welcome](<entry://wudict welcome>).
 - **Group by**: which groups the dictionary picker offers (language, language pair, content, publisher). [Edit groups](/groups) changes them or adds your own: one line per group, `MyGroup = text, other text`, and a dictionary joins it when one of the texts is anywhere in its title or file name. Between backticks, a regular expression: `` MyGroup = `^the\b` ``.
 
@@ -293,6 +296,25 @@ Every search has its own address, so you can bookmark it: `/?q=word&mode=exact`.
 
 - [index](/browse?dict=wudict-howto)
 
+## wudict headword list
+## wudict suggestions
+## wudict autocomplete
+## wudict while you type
+
+**wudict searches as you type; it can list the matching headwords first**: set <kbd>While you type</kbd> to <kbd>List headwords</kbd> in <kbd>☰</kbd> → ![](cog.svg). The headwords of all the dictionaries in your search then show in one list under the search box, and the results change only when you select one.
+
+- 💻 <kbd>↓</kbd> and <kbd>↑</kbd> move through the list; <kbd>Enter</kbd> looks up the highlighted headword. 📱 Tap a headword.
+- <kbd>Enter</kbd> with no headword highlighted searches for your text as you typed it.
+- <kbd>Esc</kbd> closes the list.
+
+💻 With <kbd>While you type</kbd> set to <kbd>Search</kbd>, the default, <kbd>↓</kbd> opens the same list for the text in the search box.
+
+The list starts at 2 characters and shows at most 20 headwords: type more letters to narrow it. In wildcard mode it lists the headwords that fit your pattern. Full-text mode has no list: press <kbd>Enter</kbd> to search.
+
+***
+
+- [index](/browse?dict=wudict-howto)
+
 ## wudict history
 ## wudict favourites
 ## wudict star
@@ -314,6 +336,20 @@ Both lists are text files next to `wudict.toml`, one word per line: `history.txt
 
 **Press ![](full.svg) at the right of a dictionary's header to show its examples**; press again to hide them. Lingvo DSL dictionaries mark examples, sub-entry links and other secondary text, and an article opens with it hidden: the dotted line in the icon is the hidden text. Shown, it is grey. The next result opens the way you left the last one. A [full-text](<entry://wudict full-text>) match inside secondary text shows it for that result. 💻 <kbd>Ctrl</kbd>+<kbd>\*</kbd> switches the section you are reading.
 
+In other dictionaries the same button opens every collapsed block of the articles, such as <kbd>More examples</kbd>, and closes them all when none is closed. A block still opens and closes by its own title. With the button on, the next result opens with all its blocks open; with it off, as the dictionary has them.
+
+***
+
+- [index](/browse?dict=wudict-howto)
+
+## wudict find
+## wudict find in page
+## wudict find in article
+
+**Press ![](find.svg) in the header of an open dictionary to find a word in its articles**. Type a word or a phrase and press <kbd>Enter</kbd>: every match is marked and the first one comes into view. Step through the matches with the chevrons or with <kbd>Enter</kbd> again (💻 <kbd>Shift</kbd>+<kbd>Enter</kbd> steps back; <kbd>←</kbd> <kbd>→</kbd> and <kbd>F3</kbd> work too). <kbd>✕</kbd> or 💻 <kbd>Esc</kbd> closes the field and removes the marks.
+
+A word matches from its start: `gate` finds *gate* and *gateway*, not *navigate*. Several words are a phrase, found only side by side and in that sequence. Capitals and accents make no difference. The field turns red when nothing matches.
+
 ***
 
 - [index](/browse?dict=wudict-howto)
@@ -324,9 +360,9 @@ Both lists are text files next to `wudict.toml`, one word per line: `history.txt
 ## wudict TTS
 ## wudict Text-to-speech
 
-**Select text in an article or its headword and press the speaker icon that appears to hear it** in a system voice for its language. If wudict does not know the dictionary's language, it uses the language of the system's default voice when that language uses the script of the selection. The chevron next to the speaker icon offers the dictionary's other language, the voices for the language, and <kbd>Other languages…</kbd>; a language picked there is kept for that dictionary. The TTS feature can be disabled via the ![](speak.svg) <kbd>Read aloud</kbd> in <kbd>☰</kbd> → ![](cog.svg). A dictionary's own recordings play with a click on their speaker icon.
+**Click a sentence in an article, or a headword, then click it again to hear it** (📱 tap, tap again) in a system voice for its language. The first click marks what will be read — the example or the sentence you clicked, or the headword — and the speaker icon appears; click somewhere else to mark something else, or the mark again while it is read to stop. The ⏭ next to the speaker icon reads on: the next sentence or example, or after a headword, its article. Turn on <kbd>Keep reading</kbd> in the chevron menu to go on by itself to the end of the article. To put the mark away, click an empty spot (📱 or tap the ✕). With a keyboard, <kbd>Esc</kbd> stops the reading and puts the speaker icon away, and <kbd>Space</kbd> pauses and resumes the reading; when nothing is being read, it scrolls as usual. The media keys of a keyboard or a headset work too: play/pause, next (⏭), and previous to hear the unit again from its start. Abbreviations are read in full and phonetic transcriptions are skipped. To hear any other text, select it and press the speaker icon. If wudict does not know the dictionary's language, it uses the language of the system's default voice when that language uses the script of the selection. The chevron next to the speaker icon offers the dictionary's other language, the voices for the language, and <kbd>Other languages…</kbd>; a language picked there is kept for that dictionary. The TTS feature can be disabled via the ![](speak.svg) <kbd>Read aloud</kbd> in <kbd>☰</kbd> → ![](cog.svg). A dictionary's own recordings play with a click on their speaker icon.
 
-To see in action, select the text below, and then click the speaker icon to hear it read aloud by the system Text-to-speech engine:
+To see it in action, click the text below, then click it again:
 
 > For a moment, nothing happened. Then, after a second or so, nothing continued to happen.
 
@@ -383,7 +419,7 @@ To exclude a dictionary from *All dictionaries* searches, just untick its checkm
 | Key | Action |
 | --- | --- |
 | <kbd>/</kbd> | go to the search box; typing anywhere does too |
-| <kbd>Esc</kbd> | in <kbd>☰</kbd>: the first press makes the find field empty, the next press closes the panel |
+| <kbd>Esc</kbd> | closes what is open, one press each: read aloud, find in articles; with nothing open, goes to the search box. In <kbd>☰</kbd>: the first press makes the find field empty, the next press closes the panel |
 | <kbd>←</kbd> <kbd>→</kbd> · <kbd>F3</kbd> · <kbd>Ctrl</kbd> <kbd>G</kbd> | step through [full-text](<entry://wudict full-text>) matches |
 
 - **wuDict Hover** (Chrome, Firefox): hover a word on any web page (optionally holding <kbd>Alt</kbd>) to see its definition in a popup.
