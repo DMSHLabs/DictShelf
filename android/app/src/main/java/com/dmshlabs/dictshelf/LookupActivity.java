@@ -160,6 +160,8 @@ public class LookupActivity extends Activity {
     private boolean pageReady;
     private boolean lookupPending;
     private boolean retained;
+    private boolean readerBackgroundPending;
+    private int readerBackgroundRequest;
     private volatile boolean gone;
     private OnBackInvokedCallback readerBack;
 
@@ -753,7 +755,7 @@ public class LookupActivity extends Activity {
     public boolean dispatchTouchEvent(MotionEvent event) {
         if (event.getActionMasked() == MotionEvent.ACTION_OUTSIDE && readerCall(getIntent())) {
             SystemLog.reader("lookup outside tap to reader task=" + getTaskId());
-            moveTaskToBack(true);
+            returnToReader();
             return true;
         }
         return super.dispatchTouchEvent(event);
@@ -770,7 +772,7 @@ public class LookupActivity extends Activity {
         if (readerCall(intent)) {
             readerBack = () -> {
                 SystemLog.reader("lookup back to reader task=" + getTaskId());
-                moveTaskToBack(true);
+                returnToReader();
             };
             dispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, readerBack);
         }
@@ -781,22 +783,49 @@ public class LookupActivity extends Activity {
     public void onBackPressed() {
         if (readerCall(getIntent())) {
             SystemLog.reader("lookup back to reader task=" + getTaskId());
-            moveTaskToBack(true);
+            returnToReader();
         } else super.onBackPressed();
+    }
+
+    /** Abort the hidden popup's dictionary fan-out while its WebView can still
+     * run JavaScript, then return to the reader. evaluateJavascript from
+     * onStop is too late: Android has already backgrounded the renderer, so
+     * the abort may wait until the next lookup wakes it. */
+    private void returnToReader() {
+        final int request = ++readerBackgroundRequest;
+        readerBackgroundPending = true;
+        if (web == null) {
+            finishReturnToReader(request, "no_webview");
+            return;
+        }
+        web.evaluateJavascript(
+                "(()=>{const f=window.wudictCancelLookupSearch;"
+                        + "if(typeof f==='function'){f();return 'cancel_requested'}"
+                        + "return 'no_active_search'})()",
+                result -> finishReturnToReader(request, "javascript=" + result));
+        // A renderer can be busy; keep the existing Back gesture responsive
+        // even if the JavaScript callback is delayed.
+        web.postDelayed(() -> finishReturnToReader(request, "timeout"), 250);
+    }
+
+    private void finishReturnToReader(int request, String reason) {
+        if (request != readerBackgroundRequest || !readerBackgroundPending) return;
+        readerBackgroundPending = false;
+        SystemLog.reader("lookup return to reader task=" + getTaskId() + " reason=" + reason);
+        moveTaskToBack(true);
     }
 
     @Override
     protected void onStart() {
         super.onStart();
+        readerBackgroundRequest++;
+        readerBackgroundPending = false;
         Power.enter(this);
         Notif.top(this); // a window the one permission ask can be made from
     }
 
     @Override
     protected void onStop() {
-        if (web != null) {
-            web.evaluateJavascript("window.wudictCancelLookupSearch?.()", null);
-        }
         super.onStop();
         SystemLog.reader("lookup stop task=" + getTaskId() + " finishing=" + isFinishing());
         Power.exit(this);
