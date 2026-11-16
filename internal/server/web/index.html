@@ -8440,11 +8440,12 @@ function finishSearchProgress(seq){
 /* read a newline-delimited JSON response, invoking onMsg per record as it
    arrives — this is what lets each dictionary render the instant it is
    ready instead of waiting for the whole fan-out (progressive results). */
-async function androidGoStream(start,onMsg,signal){
+async function androidGoStream(start,onMsg,signal,yieldFirstHit=false){
   if(signal?.aborted)throw new DOMException("Aborted","AbortError");
   const id=start();
   if(id<=0)throw new Error("Go runtime is unavailable");
   let aborted=false;
+  let firstHitYielded=false;
   const abort=()=>{aborted=true;window.wudictAndroidGo.cancelDictStream(id)};
   if(signal)signal.addEventListener("abort",abort,{once:true});
   try{
@@ -8454,6 +8455,23 @@ async function androidGoStream(start,onMsg,signal){
       for(const message of packet.messages||[]){
         if(aborted)throw new DOMException("Aborted","AbortError");
         onMsg(message);
+        // A reader lookup can receive several complete articles in one JNI
+        // packet. Give the first one a paint before parsing the rest of that
+        // packet; otherwise a busy dictionary can keep the new word invisible.
+        if(yieldFirstHit&&!firstHitYielded&&message.t==="hit"&&message.results?.length){
+          firstHitYielded=true;
+          await new Promise(resolve=>{
+            let finished=false,timer=0;
+            const finish=()=>{
+              if(finished)return;
+              finished=true;clearTimeout(timer);signal?.removeEventListener("abort",finish);resolve();
+            };
+            timer=setTimeout(finish,50);
+            if(signal?.aborted)finish();
+            else signal?.addEventListener("abort",finish,{once:true});
+            requestAnimationFrame(()=>setTimeout(finish,0));
+          });
+        }
       }
       if(packet.done){if(packet.error)throw new Error(packet.error);return}
       await new Promise(resolve=>setTimeout(resolve,16));
@@ -8486,7 +8504,8 @@ async function fetchStream(url,onMsg,signal,options){
       const params=requestURL.searchParams,n=Number.parseInt(params.get("n"),10);
       const flag=(value)=>!!value&&!/^(0|false|no|off)$/i.test(value.trim());
       const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),suggest:flag(params.get("suggest")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),pageCacheDiagnostics:flag(params.get("pageCacheDiagnostics")||""),searchDiagnostics:flag(params.get("searchDiagnostics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",returnCacheID:params.get("returnCacheID")||"",returnCacheStorage:params.get("returnCacheStorage")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
-      await androidGoStream(()=>window.wudictAndroidGo.startSearchStream(window.location.origin,JSON.stringify(request)),onMsg,signal);
+      await androidGoStream(()=>window.wudictAndroidGo.startSearchStream(window.location.origin,JSON.stringify(request)),onMsg,signal,
+        inLookupWindow()&&!request.suggest);
       return;
     }
   }
