@@ -1386,6 +1386,7 @@
   "articleFind.traceBackward": "From the end to the start",
   "articleFind.traceSeeks": "Jump around",
   "articleFind.traceFull": "Full run",
+  "articleFind.traceArticles": "All articles",
   "articleFind.wordInArticle": "Word in article",
   "articleFind.kindWalk": "Jump over the matches",
   "articleFind.kindSearch": "Search the found articles",

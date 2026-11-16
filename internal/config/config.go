@@ -40,11 +40,10 @@ type Config struct {
 	Tray    *bool // TRAY
 	Verbose bool  // VERBOSE=1: verbose logging
 
-	// FindTrace (TEST_FIND_TRACE) shows the "Trace all" controls on the Find in
-	// articles strip. It is a developer switch, not a feature: the trace walks
-	// every match of both layers and writes each step to the system log, which
-	// is how this fork checks its own navigation. Hidden in a release unless the
-	// installation asks for it explicitly.
+	// FindTrace (TEST_FIND_TRACE) shows the trace controls on the Find in
+	// articles strip. It is a developer switch, not a feature: its traces walk
+	// found matches or every result article in both directions and write each
+	// step to the system log. Hidden unless the installation asks for it.
 	FindTrace    bool   // TEST_FIND_TRACE=ON
 	Speexdec     string // SPEEXDEC: path to the external speexdec binary (.spx audio)
 	SpeexBackend string // SPEEX_BACKEND: internal (in-process libspeex, default) | external (speexdec binary)

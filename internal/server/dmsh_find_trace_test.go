@@ -30,6 +30,9 @@ func TestThePageCarriesTheFindTraceSwitch(t *testing.T) {
 			t.Errorf("%s does not start hidden: it would show for a moment in a release", id)
 		}
 	}
+	if !strings.Contains(string(page), `<option value="articles">`) {
+		t.Error("the trace picker lost the all-articles run")
+	}
 
 	asked := newTestServer(t)
 	asked.FindTrace = true

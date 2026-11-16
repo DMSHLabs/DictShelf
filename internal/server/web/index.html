@@ -1041,6 +1041,7 @@ window.wudictFontScale=(function(){
     <option value="backward">{{T:articleFind.traceBackward}}</option>
     <option value="seeks">{{T:articleFind.traceSeeks}}</option>
     <option value="full">{{T:articleFind.traceFull}}</option>
+    <option value="articles">{{T:articleFind.traceArticles}}</option>
   </select>
 </div>
 <dialog id="articleFindDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="articleFindTitle">
@@ -11255,14 +11256,17 @@ async function fetchSearchPortion(det,start,options={}){
   const box=det.parentElement,mode=det.dataset.searchMode||"prefix",query=det.dataset.searchQuery||"",id=det.dataset.searchDict||"";
   const initial=Number(det.dataset.searchInitial)||5;
   const configuredSize=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
-  // The first answer is one article; keep that request at one even though
-  // user-configured navigation portions start at five.
-  const size=options.size===1?1:normalizedSearchPortionSize(options.size??configuredSize);
-  const pageSize=normalizedSearchPortionSize(options.pageSize??configuredSize);
   const cached=articleResultCaches.get(id);
   const savedFirstPageSize=Math.max(0,Number(options.firstPageSize??det.dataset.searchFirstPageSize)||0);
   const firstPageSize=savedFirstPageSize||
     (cached&&cached.displayQuery===query&&cached.mode===mode?cached.initial:0);
+  // The first result block stays at its initial five entries when a reader
+  // returns to it. Later blocks use the page size from Settings.
+  // An explicit size of one is kept for single-article restoration requests.
+  const size=options.size===1?1:options.size!==undefined
+    ?normalizedSearchPortionSize(options.size)
+    :start===0&&firstPageSize?firstPageSize:configuredSize;
+  const pageSize=normalizedSearchPortionSize(options.pageSize??configuredSize);
   if(cached&&cached.displayQuery===query&&cached.mode===mode&&!cached.error&&
      (cached.background||cached.started||cached.done)){
     let loaded=null;
@@ -12510,8 +12514,14 @@ function sbarEndsPaint(){
   const articles=sbarArticles();
   if(articles.length){
     const at=sbarAt(articles,sbarArticleLine());
-    $("sbarArticlePrev").classList.toggle("lim",at<=0);
-    $("sbarArticleNext").classList.toggle("lim",at>=articles.length-1);
+    const current=articles[sbarAimed&&articles.includes(sbarAimed)?articles.indexOf(sbarAimed):at];
+    const section=current?.closest("details.dict");
+    const within=section?[...section.querySelectorAll(":scope > dl > dt")]:[];
+    const local=within.indexOf(current);
+    const prevBlock=local===0&&!!window.wudictArticleBlockHasMore?.(section,-1);
+    const nextBlock=local===within.length-1&&!!window.wudictArticleBlockHasMore?.(section,1);
+    $("sbarArticlePrev").classList.toggle("lim",at<=0&&!prevBlock);
+    $("sbarArticleNext").classList.toggle("lim",at>=articles.length-1&&!nextBlock);
   }
 }
 function sbarGo(step){
@@ -12522,14 +12532,63 @@ function sbarGo(step){
   if(to<0||to>list.length-1)return;   // the end of the list: nothing to do
   jumpToSection(list[to]);
 }
-function sbarArticleGo(step){
-  const list=sbarArticles();
-  if(list.length<2)return;
-  const at=sbarAt(list,sbarArticleLine());
-  const to=at+step;
-  if(to<0||to>list.length-1)return;   // the end of the answer: nothing to do
-  jumpToArticle(list[to]);
+let sbarArticleBusy=false;
+function sbarArticlePosition(dt){
+  if(!dt)return null;
+  const det=dt.closest("details.dict"),rows=det?[...det.querySelectorAll(":scope > dl > dt")]:[];
+  const local=rows.indexOf(dt),start=Number(det?.dataset.searchPageStart)||0;
+  return {dict:det?.dataset.searchDict||"",headword:dt.textContent.trim(),start,
+    index:start+Math.max(0,local),local,total:Number(det?.dataset.searchTotal)||0};
 }
+function sbarArticleCurrent(){
+  const list=sbarArticles(),at=sbarAt(list,sbarArticleLine());
+  return list[sbarAimed&&list.includes(sbarAimed)?list.indexOf(sbarAimed):at]||null;
+}
+async function sbarArticleGo(step){
+  if(sbarArticleBusy||![-1,1].includes(step))return {moved:false,reason:"busy"};
+  const list=sbarArticles();
+  if(!list.length)return {moved:false,reason:"no_articles"};
+  const current=sbarArticleCurrent(),det=current?.closest("details.dict");
+  if(!current||!det)return {moved:false,reason:"no_current_article"};
+  const local=[...det.querySelectorAll(":scope > dl > dt")],localAt=local.indexOf(current);
+  const at=list.indexOf(current),to=at+step;
+  const atBlockEdge=step<0?localAt===0:localAt===local.length-1;
+  if(atBlockEdge&&window.wudictArticleBlockHasMore?.(det,step)){
+    sbarArticleBusy=true;
+    try{
+      const replacement=await window.wudictRequestArticleBlock?.(det,step);
+      const rows=replacement?[...replacement.querySelectorAll(":scope > dl > dt")]:[];
+      const target=step>0?rows[0]:rows[rows.length-1];
+      if(!target)return {moved:false,reason:"block_load_failed",from:sbarArticlePosition(current)};
+      jumpToArticle(target);
+      return {moved:true,from:sbarArticlePosition(current),to:sbarArticlePosition(target),crossedBlock:true};
+    }finally{sbarArticleBusy=false;sbarEndsChanged()}
+  }
+  if(to<0||to>list.length-1)return {moved:false,reason:"end",from:sbarArticlePosition(current)};
+  const target=list[to];
+  jumpToArticle(target);
+  return {moved:true,from:sbarArticlePosition(current),to:sbarArticlePosition(target),crossedBlock:false};
+}
+window.wudictStepSearchArticle=sbarArticleGo;
+window.wudictSearchArticleCurrent=()=>sbarArticlePosition(sbarArticleCurrent());
+window.wudictSearchArticleEdge=direction=>{
+  const list=sbarArticles(),target=direction<0?list[list.length-1]:list[0];
+  if(!target)return null;
+  jumpToArticle(target);
+  return sbarArticlePosition(target);
+};
+window.wudictRestoreSearchArticle=async position=>{
+  if(!position?.dict)return false;
+  let det=[...document.querySelectorAll("details.dict")].find(row=>row.dataset.searchDict===position.dict);
+  if(!det)return false;
+  if((Number(det.dataset.searchPageStart)||0)!==position.start)
+    det=await window.wudictRestoreArticleBlock?.(det,position.start);
+  const rows=det?[...det.querySelectorAll(":scope > dl > dt")]:[];
+  const target=rows[position.local];
+  if(!target)return false;
+  jumpToArticle(target);
+  return true;
+};
 $("sbarArticlePrev").onclick=()=>sbarArticleGo(-1);
 $("sbarOpenApp").onclick=()=>{
   try{window.prompt("wudict:lookup-open-app","")}catch(error){console.warn("open full app:",error)}

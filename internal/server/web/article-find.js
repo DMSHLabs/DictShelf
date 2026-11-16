@@ -1004,6 +1004,65 @@ async function traceWaitForPosition(expected,timeout=5000){
   }
   return Number(fullTextNavigation?.current)||0;
 }
+async function runSearchArticleWalkTrace(){
+  if(remoteFindTraceActive||!remoteFindTraceAvailable())return;
+  const origin=window.wudictSearchArticleCurrent?.();
+  if(!origin)return;
+  remoteFindTraceActive=true;remoteFindTraceStop=false;
+  const record={diagnosticRun:++remoteFindDiagnosticRun,diagnosticStarted:performance.now(),traceRun:++remoteFindTraceRun};
+  const forward=[],backward=[];let reason="done",steps=0;
+  const key=position=>position?`${position.dict}:${position.index}`:"";
+  const walk=async(direction,sequence)=>{
+    const name=direction>0?"forward":"backward";
+    await remoteFindDiagnostic(record,"navigation_trace_articles_start",{
+      detail:`trace=${record.traceRun}; run=${name}; from=${key(window.wudictSearchArticleCurrent?.())}`});
+    while(!remoteFindTraceStop&&steps<100000){
+      const t0=performance.now(),move=await window.wudictStepSearchArticle?.(direction);
+      if(!move?.moved){
+        if(move?.reason!=="end")reason=move?.reason||"navigation_unavailable";
+        break;
+      }
+      steps++;
+      const from=move.from,to=move.to;sequence.push(to);
+      await remoteFindDiagnostic(record,"navigation_trace_article_step",{
+        completed:steps,detail:`trace=${record.traceRun}; run=${name}; step=${steps}; from=${String(key(from)).slice(0,180)}; to=${String(key(to)).slice(0,180)}; headword=${encodeURIComponent(to.headword||"").slice(0,160)}; block=${to.start}; crossed_block=${!!move.crossedBlock}; step_ms=${Math.round(performance.now()-t0)}`});
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    }
+    if(steps>=100000)reason="step_limit";
+    if(remoteFindTraceStop)reason="stopped";
+    await remoteFindDiagnostic(record,"navigation_trace_articles_end",{
+      completed:sequence.length,detail:`trace=${record.traceRun}; run=${name}; steps=${sequence.length}; reason=${reason}`});
+  };
+  try{
+    const first=window.wudictSearchArticleEdge?.(1);
+    if(!first){reason="no_articles";return}
+    forward.push(first);
+    await walk(1,forward);
+    if(reason==="done"&&!remoteFindTraceStop){
+      const last=window.wudictSearchArticleCurrent?.();
+      if(last)backward.push(last);
+      await walk(-1,backward);
+    }
+    const reversed=[...forward].reverse().map(key),back=backward.map(key);
+    let mismatch=-1;
+    for(let index=0;index<Math.min(reversed.length,back.length);index++)
+      if(reversed[index]!==back[index]){mismatch=index;break}
+    const agreement=mismatch<0&&reversed.length===back.length?"same":
+      mismatch<0?`length_${reversed.length}_${back.length}`:`at_${mismatch+1}_${reversed[mismatch]}_${back[mismatch]}`;
+    const duplicates=sequence=>sequence.length-new Set(sequence.map(key)).size;
+    const boundaries=forward.slice(1).filter((item,index)=>item.dict!==forward[index].dict||item.start!==forward[index].start).length;
+    await remoteFindDiagnostic(record,"navigation_trace_articles_summary",{
+      completed:Math.min(100000,forward.length+backward.length),
+      detail:`trace=${record.traceRun}; forward=${forward.length}; backward=${backward.length}; boundaries=${boundaries}; duplicate_forward=${duplicates(forward)}; duplicate_backward=${duplicates(backward)}; agreement=${agreement}; reason=${reason}`});
+  }catch(error){
+    reason="error";
+    await remoteFindDiagnostic(record,"navigation_trace_articles_error",{
+      detail:`trace=${record.traceRun}; error=${String(error?.message||error).slice(0,700)}`});
+  }finally{
+    if(!remoteFindTraceStop)await window.wudictRestoreSearchArticle?.(origin);
+    remoteFindTraceActive=false;remoteFindTraceStop=false;syncRemoteFindTraceButton();
+  }
+}
 async function runTraceRun(record,run){
   const navigation=fullTextNavigation,generation=navigation?.generation;
   const started=performance.now(),timings=[];
@@ -1366,6 +1425,7 @@ $("articleFindTraceRun").addEventListener("change",()=>{
   select.value="";
   window.wudictThemedSelects?.articleFindTraceRun?.sync();
   if(remoteFindTraceActive)return;
+  if(run==="articles"){void runSearchArticleWalkTrace();return}
   if(stripLayer==="found"){void runRemoteFindTrace(run||"forward");return}
   if(!run)return;
   void runFullTextTrace(run);
