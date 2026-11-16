@@ -315,7 +315,6 @@ func StreamOpenWithTerms(ctx context.Context, openers []Opener, mode Mode, term 
 	// the full result set (article bodies included) in memory.
 	results := make(chan completedSearch, workerCount)
 	send := func(i int, h Hit) time.Time {
-		started := time.Now()
 		results <- completedSearch{index: i, hit: h}
 		return time.Now()
 	}
