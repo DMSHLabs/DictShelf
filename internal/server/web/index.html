@@ -12574,6 +12574,11 @@ async function sbarArticleGo(step){
 }
 window.wudictStepSearchArticle=sbarArticleGo;
 window.wudictSearchArticleCurrent=()=>sbarArticlePosition(sbarArticleCurrent());
+window.wudictSearchArticleTotals=()=>{
+  const rows=[...document.querySelectorAll("details.dict[data-search-dict]")];
+  return {exact:rows.length>0&&rows.every(row=>row.dataset.searchExact==="true"),
+    count:rows.reduce((sum,row)=>sum+(Number(row.dataset.searchTotal)||0),0)};
+};
 window.wudictSearchArticleEdge=direction=>{
   const list=sbarArticles(),target=direction<0?list[list.length-1]:list[0];
   if(!target)return null;

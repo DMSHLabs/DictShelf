@@ -1008,6 +1008,7 @@ async function runSearchArticleWalkTrace(){
   if(remoteFindTraceActive||!remoteFindTraceAvailable())return;
   const origin=window.wudictSearchArticleCurrent?.();
   if(!origin)return;
+  const expected=window.wudictSearchArticleTotals?.()||{exact:false,count:0};
   remoteFindTraceActive=true;remoteFindTraceStop=false;
   const record={diagnosticRun:++remoteFindDiagnosticRun,diagnosticStarted:performance.now(),traceRun:++remoteFindTraceRun};
   const forward=[],backward=[];let reason="done",steps=0;
@@ -1051,9 +1052,12 @@ async function runSearchArticleWalkTrace(){
       mismatch<0?`length_${reversed.length}_${back.length}`:`at_${mismatch+1}_${reversed[mismatch]}_${back[mismatch]}`;
     const duplicates=sequence=>sequence.length-new Set(sequence.map(key)).size;
     const boundaries=forward.slice(1).filter((item,index)=>item.dict!==forward[index].dict||item.start!==forward[index].start).length;
+    const coverage=expected.exact
+      ?forward.length===expected.count&&backward.length===expected.count?"complete":"incomplete"
+      :"unknown";
     await remoteFindDiagnostic(record,"navigation_trace_articles_summary",{
       completed:Math.min(100000,forward.length+backward.length),
-      detail:`trace=${record.traceRun}; forward=${forward.length}; backward=${backward.length}; boundaries=${boundaries}; duplicate_forward=${duplicates(forward)}; duplicate_backward=${duplicates(backward)}; agreement=${agreement}; reason=${reason}`});
+      detail:`trace=${record.traceRun}; expected=${expected.exact?expected.count:"unknown"}; coverage=${coverage}; forward=${forward.length}; backward=${backward.length}; boundaries=${boundaries}; duplicate_forward=${duplicates(forward)}; duplicate_backward=${duplicates(backward)}; agreement=${agreement}; reason=${reason}`});
   }catch(error){
     reason="error";
     await remoteFindDiagnostic(record,"navigation_trace_articles_error",{
