@@ -1910,6 +1910,10 @@ const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
    attribute and turns the rest of the path into markup. */
 const escAttr=s=>esc(s).replace(/"/g,"&quot;");
 let dicts=[],lastQuery=null,searchSeq=0,searchAC=null;
+// A floating lookup is hidden while the reader is foregrounded. Keep the
+// already-rendered answer, but stop its 45-dictionary fan-out so it cannot
+// compete with the next in-place lookup.
+window.wudictCancelLookupSearch=()=>{if(searchAC)searchAC.abort()};
 let favouriteCollections=[],selectedFavourite="";
 function favouriteCollectionLabel(id){
   const d=dicts.find(item=>item.id===id),collection=favouriteCollections.find(item=>item.id===id);

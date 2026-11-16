@@ -794,6 +794,9 @@ public class LookupActivity extends Activity {
 
     @Override
     protected void onStop() {
+        if (web != null) {
+            web.evaluateJavascript("window.wudictCancelLookupSearch?.()", null);
+        }
         super.onStop();
         SystemLog.reader("lookup stop task=" + getTaskId() + " finishing=" + isFinishing());
         Power.exit(this);
