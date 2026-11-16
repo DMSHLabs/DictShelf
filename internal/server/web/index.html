@@ -1684,6 +1684,11 @@ function normalizedSearchPortionSize(value){
   const n=Math.floor(Number(value));
   return Number.isFinite(n)?Math.max(5,Math.min(500,Math.round(n/5)*5)):20;
 }
+function searchPortionRequestSize(start,firstPageSize,configuredSize,requestedSize){
+  if(requestedSize===1)return 1;
+  if(requestedSize!==undefined)return normalizedSearchPortionSize(requestedSize);
+  return start===0&&firstPageSize>0?firstPageSize:configuredSize;
+}
 function searchPortionPages(total,size,firstPageSize=0){
   if(firstPageSize>0&&total>firstPageSize)return 1+Math.ceil((total-firstPageSize)/size);
   return Math.max(1,Math.ceil(total/size));
@@ -11263,9 +11268,7 @@ async function fetchSearchPortion(det,start,options={}){
   // The first result block stays at its initial five entries when a reader
   // returns to it. Later blocks use the page size from Settings.
   // An explicit size of one is kept for single-article restoration requests.
-  const size=options.size===1?1:options.size!==undefined
-    ?normalizedSearchPortionSize(options.size)
-    :start===0&&firstPageSize?firstPageSize:configuredSize;
+  const size=searchPortionRequestSize(start,firstPageSize,configuredSize,options.size);
   const pageSize=normalizedSearchPortionSize(options.pageSize??configuredSize);
   if(cached&&cached.displayQuery===query&&cached.mode===mode&&!cached.error&&
      (cached.background||cached.started||cached.done)){
