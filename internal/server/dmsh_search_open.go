@@ -5,6 +5,8 @@
 package server
 
 import (
+	"time"
+
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/store"
 )
@@ -27,11 +29,27 @@ import (
 // archive's own (ZIM's title index), it needs nothing prepared, and searching
 // them costs no more than searching a prepared one.
 func (e *entry) searchOpen() (dict.Dictionary, error) {
+	if e.indexBlocked() {
+		return nil, errIndexNotReady
+	}
+	if e.rebuilding.Load() {
+		return nil, errReindexing
+	}
 	if !entryHasSelfIndex(e) {
+		// Once a prepared backend is open, its source was checked when the
+		// registry resolved it. Rechecking a 1 MiB source sample on every word
+		// costs tens of milliseconds on Android storage; Rescan is the boundary
+		// that refreshes this state while the app is running.
+		e.dMu.RLock()
+		cached := e.d
+		e.dMu.RUnlock()
+		if _, ok := cached.(storeBacked); ok {
+			e.lastUse.Store(time.Now().UnixNano())
+			return cached, nil
+		}
 		// Search asks this once per dictionary on every lookup. Prefer the
-		// prepared folder's receipt so the hot path can validate the source
-		// without opening text.db just to read its meta; keep the full check as
-		// a fallback for older libraries whose receipt is incomplete.
+		// prepared folder's receipt to validate a source that has not been
+		// opened yet; keep the full check as a fallback for older receipts.
 		prepared := store.IsTextDB(e.Path)
 		if !prepared {
 			_, prepared = store.FindPreparedFromReceipt(e.Path)

@@ -389,7 +389,9 @@ func SourceChanged(textDB, srcPath string) bool {
 	return sourceChangedMeta(meta, srcPath)
 }
 
-// sourceChangedMeta is SourceChanged for a meta table already in hand.
+// sourceChangedMeta is SourceChanged for a meta table already in hand. Size
+// and modification time are the cheap first check; the first-MiB sample is
+// read only when the timestamp changed (or an older receipt has no timestamp).
 // sourceSizeChanged is sourceChangedMeta without the content sample: the
 // recorded revision, else the size. A listing asks this one (CheapStale).
 func sourceSizeChanged(meta map[string]string, srcPath string) bool {
@@ -423,6 +425,11 @@ func sourceChangedMeta(meta map[string]string, srcPath string) bool {
 	if size := meta["source_size"]; size != "" {
 		if n, err := strconv.ParseInt(size, 10, 64); err == nil && n != st.Size() {
 			return true
+		}
+	}
+	if recorded := meta["source_mtime"]; recorded != "" {
+		if _, err := time.Parse(time.RFC3339, recorded); err == nil && recorded == st.ModTime().UTC().Format(time.RFC3339) {
+			return false
 		}
 	}
 	want := meta["source_sha256_1M"]

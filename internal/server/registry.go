@@ -1878,18 +1878,25 @@ func backingDB(path string) string {
 // needs a new connection, then failing with "unable to open database file".
 //
 // The same holds for the SOURCE: a file replaced in place keeps its path and
-// its library folder, so backing alone cannot see it. Its source signature
-// (size plus the first-MiB hash) is compared with the one the backend was
-// opened against (srcSig); a difference drops the handle, and the next open
-// resolves afresh -
+// its library folder, so backing alone cannot see it. Size and modification
+// time are compared first; a prepared source whose metadata changed is checked
+// against the receipt's first-MiB sample before its backend is dropped.
+//
 // store.PreparedFor no longer vouches for an index built from the old
 // edition, so it is served from the new source until it is prepared again.
 func (e *entry) revalidate() {
 	now, sig := backingDB(e.Path), sourceSig(e.Path)
 	e.dMu.Lock()
 	e.err = nil
-	changed := now != e.backing || (e.d != nil && e.srcSig != sig)
 	open := e.d != nil
+	sourceChanged := open && e.srcSig != sig
+	preparedDB := e.backing
+	e.dMu.Unlock()
+	if sourceChanged && preparedDB != "" && !store.IsTextDB(e.Path) && !store.SourceChanged(preparedDB, e.Path) {
+		sourceChanged = false
+	}
+	e.dMu.Lock()
+	changed := now != e.backing || sourceChanged
 	if !changed || !open {
 		// Nothing to let go of: record the resolution and be done. Doing it
 		// under the same lock keeps "backing describes e.d" true for readers.
@@ -1920,32 +1927,16 @@ func (e *entry) revalidate() {
 		filepath.Base(e.Path), now != "")
 }
 
-// sourceSig identifies a dictionary source by size and the hash of its first
-// MiB. Reading and hashing the whole dictionary on every rescan would be slow;
-// size cheaply distinguishes most files, and the first-MiB hash guards against
-// same-size files that differ at the start. Modification time is deliberately
-// excluded: a file can be overwritten and get a new timestamp without being a
-// new dictionary, so time alone is not evidence that its contents changed.
-// This bounded check does not detect an in-place edit beyond the first MiB when
-// the file size stays the same. For a prepared dictionary whose source is gone
-// (a loose text.db), the signature describes text.db, which is what that
-// entry's backend reads.
+// sourceSig is the cheap part of source identity used for row-cache keys and
+// rescan comparisons. A changed size or timestamp prompts a prepared-receipt
+// check, which reads the first-MiB sample only then. For a prepared dictionary
+// whose source is gone (a loose text.db), the signature describes text.db.
 func sourceSig(path string) string {
 	st, err := os.Stat(path)
 	if err != nil {
 		return ""
 	}
-	f, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	h := sha256.New()
-	_, copyErr := io.Copy(h, io.LimitReader(f, 1<<20))
-	closeErr := f.Close()
-	if copyErr != nil || closeErr != nil {
-		return ""
-	}
-	return fmt.Sprintf("%d:%x", st.Size(), h.Sum(nil))
+	return fmt.Sprintf("%d:%s", st.Size(), st.ModTime().UTC().Format(time.RFC3339Nano))
 }
 
 // SourcePaths lists the path of every dictionary the user has, in every
