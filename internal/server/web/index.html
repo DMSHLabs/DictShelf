@@ -12600,6 +12600,14 @@ function setBarHidden(hide,explicit=false){
   $("bar").classList.toggle("hidden",hide);
   document.body.classList.toggle("barhidden",hide);
   barEarPaint(!hide);
+  // In the reader window the search bar can be folded while the lower
+  // controls remain visible. That changes the space available to the dock,
+  // but does not resize #sbar itself, so its ResizeObserver cannot update the
+  // Examples label. Refit after the layout has settled in the new state.
+  if(lookup)requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    sbarFitRow(sbarSections().length>=2);
+    sbarMeasure();
+  }));
   // The scroll handler calls this on every event; only a real change is worth a
   // write, and localStorage on a scroll throttles the frame it lands in.
   if(hide===barHiddenState)return;
@@ -12702,7 +12710,10 @@ function setSbarHidden(hide){
   document.body.classList.toggle("sbarhidden",hide);
   $("sbarToggle").setAttribute("aria-expanded",hide?"false":"true");
   $("sbarToggle").setAttribute("aria-label",tx(hide?"system.showStatusBar":"system.hideStatusBar"));
-  sbarMeasure();
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    sbarFitRow(sbarSections().length>=2);
+    sbarMeasure();
+  }));
   try{localStorage.setItem("wudict_sbar_hidden",hide?"1":"0")}catch(_){}
 }
 function restoreBarTongues(){

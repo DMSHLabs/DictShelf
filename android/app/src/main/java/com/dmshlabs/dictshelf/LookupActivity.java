@@ -234,7 +234,7 @@ public class LookupActivity extends Activity {
         // is no WebView to tear down and no server call to cancel.
         if (opensApp(i, data)) {
             SystemLog.reader("lookup forward reason=setting task=" + getTaskId());
-            forward();
+            forward(false);
             return;
         }
         // Reader lookups are a quick-switch companion: an outside tap is the
@@ -532,7 +532,7 @@ public class LookupActivity extends Activity {
      * advertise a screen the user did not ask for.
      */
     @SuppressWarnings("deprecation") // overridePendingTransition, pre-API-34 only
-    private void forward() {
+    private void forward(boolean keepFloatingWindow) {
         startActivity(new Intent(this, MainActivity.class)
                 .putExtra(MainActivity.EXTRA_QUERY, query)
                 .putExtra(MainActivity.EXTRA_MODE, mode)
@@ -544,7 +544,12 @@ public class LookupActivity extends Activity {
         } else {
             overridePendingTransition(0, 0);
         }
-        finish();
+        // The status-bar book button hands control to the full app, but the
+        // reader's floating window is a quick-switch companion. Keep its
+        // WebView and Go runtime alive underneath the app so the next reader
+        // selection can reuse this exact instance instead of showing Starting
+        // and loading the page again.
+        if (!keepFloatingWindow) finish();
     }
 
     // ── the window ───────────────────────────────────────────────────────
@@ -706,7 +711,7 @@ public class LookupActivity extends Activity {
                 + getTaskId() + " elapsed_ms=" + (SystemClock.elapsedRealtime() - dispatchedAt)));
     }
 
-    void openFullApp() { forward(); }
+    void openFullApp() { forward(true); }
 
     private void showFailure(String message) {
         runOnUiThread(() -> {
@@ -740,7 +745,7 @@ public class LookupActivity extends Activity {
         // to be open: a second selection from an entry point that says "in app"
         // forwards, even though the first one floated.
         if (opensApp(intent, data)) {
-            forward();
+            forward(false);
             return;
         }
         if (!gone && web != null && web.getParent() != null) {
