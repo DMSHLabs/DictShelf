@@ -9,10 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 	"unicode"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
+	"golang.org/x/text/unicode/norm"
 )
 
 // ErrNoStemmer says the index was built with a stemmer this reader does not
@@ -322,10 +322,11 @@ func dropStopwords(words []string, stops map[string]bool) (kept, skipped []strin
 	return kept, skipped
 }
 
-// FoldTerms splits a query the way the index was written: on everything that is
-// not a letter or a digit, folded (lowercased, accents removed), without empty
-// pieces and without duplicates. What it does not do is stem - that needs the
-// index's language, so it happens inside Search.
+// FoldTerms converts a query into the set of folded terms the index holds,
+// preserving first appearance and omitting duplicates. Runs in Xapian's
+// unbroken CJK ranges become alternating unigrams and bigrams; ordinary words
+// remain whole. What it does not do is stem - that needs the index's language,
+// so it happens inside Search.
 //
 // The folding is dict.Fold, which is libzim's own recipe but for one class of
 // marks: libzim removes every Unicode mark class (ICU's [:M:] is Mn, Mc and Me)
@@ -336,12 +337,10 @@ func dropStopwords(words []string, stops map[string]bool) (kept, skipped []strin
 // index build, and an archive in such a script (Tamil vowel signs, for one) can
 // mismatch.
 //
-// A CJK archive is a larger case: libzim indexed it with Xapian's FLAG_NGRAMS
-// (src/writer/xapianWorker.cpp:46), so what the index holds for a run of Chinese
-// or Japanese is n-grams, not words, and splitting a query into words cannot
-// match them. Nothing here handles that yet.
-// FoldText folds a document into the words the index holds for it: the same
-// folding FoldTerms applies to a query, but keeping every occurrence, in order.
+// CJK indexes use Xapian's FLAG_CJK_NGRAM (libzim/src/writer/xapianWorker.cpp),
+// so a run of Chinese, Japanese or Korean yields unigrams and bigrams rather
+// than word tokens. FoldText emits those terms in position order and keeps
+// repeats, which lets strict article-text readings verify the same sequence.
 //
 // A document is a sequence and a query is a set, and the difference is not
 // cosmetic: a strict reading asks where the query's words stand relative to one
@@ -352,17 +351,62 @@ func dropStopwords(words []string, stops map[string]bool) (kept, skipped []strin
 // plainly in the text verifies as absent (found on a live Wikipedia article,
 // 2026-11-02, after the same class of bug had already emptied the reading once).
 func FoldText(text string) []string {
+	// libzim normalizes to NFD, removes marks and returns to NFC. dict.Fold
+	// performs the same accent removal for the marks it supports but leaves
+	// NFD output; NFC is essential for Hangul, whose decomposed Jamo are outside
+	// Xapian's unbroken-script ranges.
+	runes := []rune(norm.NFC.String(dict.Fold(text)))
 	var out []string
-	for _, word := range strings.FieldsFunc(dict.Fold(text), notWord) {
-		if word != "" {
-			out = append(out, word)
+	for i := 0; i < len(runes); {
+		if isUnbrokenScript(runes[i]) && xapianWordChar(runes[i]) {
+			start := i
+			for i < len(runes) && isUnbrokenScript(runes[i]) && xapianWordChar(runes[i]) {
+				i++
+			}
+			for j := start; j < i; j++ {
+				out = append(out, string(runes[j]))
+				if j+1 < i {
+					out = append(out, string(runes[j:j+2]))
+				}
+			}
+			continue
 		}
+		if notWord(runes[i]) {
+			i++
+			continue
+		}
+		start := i
+		i++
+		for i < len(runes) && !notWord(runes[i]) && !(isUnbrokenScript(runes[i]) && xapianWordChar(runes[i])) {
+			i++
+		}
+		out = append(out, string(runes[start:i]))
 	}
 	return out
 }
 
-// notWord is the split predicate both foldings share: everything that is not a
-// letter or a digit separates words.
+// isUnbrokenScript mirrors Xapian's CJK n-gram ranges (queryparser/word-breaker.cc).
+// Xapian combines these code points only when Unicode classifies them as
+// word characters; punctuation in the ranges remains a separator.
+func isUnbrokenScript(r rune) bool {
+	return r >= 0x2E80 && r <= 0x2EFF ||
+		r >= 0x3000 && r <= 0x9FFF ||
+		r >= 0xA700 && r <= 0xA71F ||
+		r >= 0xAC00 && r <= 0xD7AF ||
+		r >= 0xF900 && r <= 0xFAFF ||
+		r >= 0xFE30 && r <= 0xFE4F ||
+		r >= 0xFF00 && r <= 0xFFEF ||
+		r >= 0x20000 && r <= 0x2A6DF ||
+		r >= 0x2F800 && r <= 0x2FA1F
+}
+
+// xapianWordChar mirrors Xapian::Unicode::is_wordchar for CJK n-gram runs.
+func xapianWordChar(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsMark(r) || unicode.IsNumber(r) || unicode.Is(unicode.Categories["Pc"], r)
+}
+
+// notWord preserves the existing word split for scripts with explicit word
+// breaks. CJK runs use xapianWordChar instead.
 func notWord(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }
 
 // FoldTerms is FoldText as a SET, in first-appearance order: the terms a query

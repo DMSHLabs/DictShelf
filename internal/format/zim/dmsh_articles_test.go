@@ -76,3 +76,15 @@ func TestNearSeesTheSentencesOccurrence(t *testing.T) {
 		t.Errorf("a pair two words apart did not verify as near: %v", tokens)
 	}
 }
+
+func TestCJKArticleTokensVerifyNgramPhrase(t *testing.T) {
+	const text = "甲中华人民共和国乙"
+	tokens := articleTokens([]byte(text))
+	phrase := glass.FoldText("中华人民共和国")
+	if !phraseIn(tokens, phrase) {
+		t.Errorf("CJK n-gram phrase did not verify; tokens=%v phrase=%v", tokens, phrase)
+	}
+	if phraseIn(tokens, glass.FoldText("中华人民共国和")) {
+		t.Errorf("reordered CJK n-grams verified as a phrase; tokens=%v", tokens)
+	}
+}
