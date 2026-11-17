@@ -7,10 +7,12 @@ package server
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/DMSHLabs/DictShelf/internal/dict"
 	"github.com/DMSHLabs/DictShelf/internal/store"
@@ -21,12 +23,16 @@ import (
 // the test can tell "the archive answered" from "the database did".
 type archiveSource struct {
 	*fakeDict
-	calls int
-	body  string
+	calls    int
+	body     string
+	onSearch func(context.Context) error
 }
 
-func (a *archiveSource) FullText(query string, limit int) ([]dict.Result, error) {
+func (a *archiveSource) FullTextContext(ctx context.Context, query string, limit int) ([]dict.Result, error) {
 	a.calls++
+	if a.onSearch != nil {
+		return nil, a.onSearch(ctx)
+	}
 	return []dict.Result{{Headword: strings.ToLower(query), Body: a.body}}, nil
 }
 
@@ -149,6 +155,31 @@ func TestArchiveFullTextRouting(t *testing.T) {
 	got, err := u.FullTextContext(context.Background(), "Beta", 5)
 	if err != nil || len(got) != 1 || got[0].Body != "<p>from the archive</p>" {
 		t.Fatalf("FullTextContext = %+v, %v; want the archive's own answer", got, err)
+	}
+
+	source, err := u.source()
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := make(chan struct{})
+	source.(*archiveSource).onSearch = func(ctx context.Context) error { close(started); <-ctx.Done(); return ctx.Err() }
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { _, err := u.FullTextContext(ctx, "Beta", 5); done <- err }()
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("archive search did not start")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancelled source: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("source kept running after cancellation")
 	}
 
 	// The same handle with a source that cannot answer full text at all (any

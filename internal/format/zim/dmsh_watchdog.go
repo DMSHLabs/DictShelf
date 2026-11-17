@@ -4,6 +4,7 @@
 package zim
 
 import (
+	"context"
 	"os"
 
 	"github.com/DMSHLabs/DictShelf/internal/format/zim/glass"
@@ -41,9 +42,13 @@ func (d *Dict) watch(surface string) *watchdog.Watch {
 // the database carries no idea of who is reading it, and the walk reports
 // movement through it (glass.DB.Progress).
 func (d *Dict) searchIndex(db *glass.DB, query string) (glass.Result, error) {
+	return d.searchIndexContext(context.Background(), db, query)
+}
+
+func (d *Dict) searchIndexContext(ctx context.Context, db *glass.DB, query string) (glass.Result, error) {
 	watch := d.watch("archive-index")
 	db.Progress = func(docid uint32) { watch.Moved(int64(docid)) }
-	res, err := db.Search(query)
+	res, err := db.SearchContext(ctx, query)
 	db.Progress = nil
 	watch.Done()
 	return res, err

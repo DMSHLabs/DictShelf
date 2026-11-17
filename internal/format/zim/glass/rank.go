@@ -4,6 +4,8 @@
 
 package glass
 
+import "context"
+
 // Document lengths, and the ranking that needs them.
 //
 // Xapian keeps every document's length in a postlist of its own, under an EMPTY
@@ -56,8 +58,30 @@ func (db *DB) DocLengths() (docids, lens []uint32, err error) {
 // in an index Xapian wrote - every document has a length - and if it somehow
 // does, scoring it as short is the honest reading of "no length recorded".
 func (db *DB) assignDocLengths(hits []Hit) error {
+	return db.assignDocLengthsContext(context.Background(), hits)
+}
+
+func (db *DB) assignDocLengthsContext(ctx context.Context, hits []Hit) error {
+	if len(hits) <= int(db.Stats.DocCount)/sparseLengthRatio {
+		lengths, err := db.selectedPostings(ctx, DocLenTerm, docLenPrefix, hits)
+		if err != nil && ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err == nil {
+			j := 0
+			for i := range hits {
+				if j < len(lengths) && lengths[j].DocID == hits[i].DocID {
+					hits[i].DocLen = lengths[j].WDF
+					j++
+				}
+			}
+			return ctx.Err()
+		}
+		// Preserve the sequential reader's handling of a damaged length list.
+	}
+
 	next := 0
-	_, _, _, err := db.walkPostings(DocLenTerm, docLenPrefix, func(docid, length uint32) bool {
+	_, _, _, err := db.walkPostingsContext(ctx, DocLenTerm, docLenPrefix, func(docid, length uint32) bool {
 		for next < len(hits) && hits[next].DocID < docid {
 			next++
 		}

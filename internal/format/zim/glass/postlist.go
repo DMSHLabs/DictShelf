@@ -6,6 +6,7 @@ package glass
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 )
 
@@ -51,8 +52,12 @@ func chunkTermKey(term string) []byte {
 // stores: lowercase, unaccented and stemmed with the archive's own stemmer
 // (stem.go; docs/GLASS.md, "The glass format").
 func (db *DB) Lookup(term string) (Term, error) {
+	return db.lookupContext(context.Background(), term)
+}
+
+func (db *DB) lookupContext(ctx context.Context, term string) (Term, error) {
 	var out Term
-	docFreq, collFreq, complete, err := db.walkPostings(term, chunkTermKey(term), func(docid, wdf uint32) bool {
+	docFreq, collFreq, complete, err := db.walkPostingsContext(ctx, term, chunkTermKey(term), func(docid, wdf uint32) bool {
 		out.Postings = append(out.Postings, Posting{DocID: docid, WDF: wdf})
 		return true
 	})
@@ -88,6 +93,13 @@ func (db *DB) Lookup(term string) (Term, error) {
 // describes, rather than stopping because the caller asked it to, because a
 // chunk's bytes ran out, or because the next key belonged to another term.
 func (db *DB) walkPostings(term string, chunkPrefix []byte, fn func(docid, wdf uint32) bool) (docFreq, collFreq uint32, complete bool, err error) {
+	return db.walkPostingsContext(context.Background(), term, chunkPrefix, fn)
+}
+
+func (db *DB) walkPostingsContext(ctx context.Context, term string, chunkPrefix []byte, fn func(docid, wdf uint32) bool) (docFreq, collFreq uint32, complete bool, err error) {
+	if err := ctx.Err(); err != nil {
+		return 0, 0, false, err
+	}
 	tag, found, err := db.keyTag(TablePostlist, []byte(term))
 	if err != nil || !found {
 		return 0, 0, false, err
@@ -130,6 +142,9 @@ func (db *DB) walkPostings(term string, chunkPrefix []byte, fn func(docid, wdf u
 			return 0, 0, false, fmt.Errorf("glass: term %q: first frequency: %w", term, err)
 		}
 		for {
+			if err := ctx.Err(); err != nil {
+				return 0, 0, false, err
+			}
 			if progress != nil {
 				progress(did)
 			}

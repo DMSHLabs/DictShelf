@@ -269,11 +269,18 @@ func (d *Dict) Prefix(word string, limit int) ([]dict.Result, error) {
 // entry is read and its cluster decompressed, which is where a corrupt archive
 // stops moving. The record is the entry's own index in the archive's directory.
 func (d *Dict) results(idxs []int, limit int) ([]dict.Result, error) {
+	return d.resultsContext(context.Background(), idxs, limit)
+}
+
+func (d *Dict) resultsContext(ctx context.Context, idxs []int, limit int) ([]dict.Result, error) {
 	var out []dict.Result
 	seen := map[int]bool{}
 	records := d.watch("archive-records")
 	defer records.Done()
 	for _, i := range idxs {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		records.Moved(int64(i))
 		src, err := d.c.entry(i)
 		if err != nil {
@@ -298,6 +305,9 @@ func (d *Dict) results(idxs []int, limit int) ([]dict.Result, error) {
 		if limit > 0 && len(out) >= limit {
 			break
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

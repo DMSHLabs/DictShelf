@@ -5,6 +5,7 @@
 package glass
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -81,6 +82,15 @@ type indexMeta struct {
 // ranking the index was built for, and the one that keeps a long article that
 // merely repeats a word from outranking the article that is about it.
 func (db *DB) Search(query string) (Result, error) {
+	return db.SearchContext(context.Background(), query)
+}
+
+// SearchContext searches the same index and ranking as Search, stopping its walks
+// when the caller cancels. It returns no partial answer on cancellation.
+func (db *DB) SearchContext(ctx context.Context, query string) (Result, error) {
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
 	words := FoldTerms(query)
 	if len(words) == 0 {
 		return Result{Complete: true}, nil
@@ -135,7 +145,20 @@ func (db *DB) Search(query string) (Result, error) {
 	lists := make([][]Hit, len(asked))
 	var acc []Hit
 	for i, w := range asked {
-		hits, empty, err := db.wordHits(w.terms)
+		var hits []Hit
+		var empty bool
+		var err error
+		if i > 0 && len(acc) <= int(w.freq)/sparsePostingRatio {
+			hits, err = db.selectedWordHits(ctx, w.terms, acc)
+			empty = true
+			// A damaged selected chunk must retain the collecting reader's
+			// partial-answer/error handling. Cancellation never retries.
+			if err != nil && ctx.Err() == nil {
+				hits, empty, err = db.wordHits(ctx, w.terms)
+			}
+		} else {
+			hits, empty, err = db.wordHits(ctx, w.terms)
+		}
 		if err != nil {
 			return Result{}, err
 		}
@@ -148,7 +171,10 @@ func (db *DB) Search(query string) (Result, error) {
 			// argument, and every word's list is needed again for scoring.
 			acc = append([]Hit(nil), hits...)
 		} else {
-			acc = intersect(acc, hits)
+			acc, err = intersectContext(ctx, acc, hits)
+			if err != nil {
+				return Result{}, err
+			}
 		}
 		if len(acc) == 0 {
 			res.Hits = nil
@@ -157,7 +183,7 @@ func (db *DB) Search(query string) (Result, error) {
 	}
 	// Rank by Xapian's own BM25, which needs every document's length - the one
 	// extra pass, walked in step with the hits (bm25.go, rank.go).
-	if err := db.assignDocLengths(acc); err != nil {
+	if err := db.assignDocLengthsContext(ctx, acc); err != nil {
 		return Result{}, err
 	}
 	lenFactor := bm25LengthFactor(db.Stats.DocCount, db.Stats.TotalDocLen)
@@ -167,8 +193,18 @@ func (db *DB) Search(query string) (Result, error) {
 		// pass is O(hits + candidates) with nothing allocated.
 		j := 0
 		for k := range acc {
+			if k&1023 == 0 {
+				if err := ctx.Err(); err != nil {
+					return Result{}, err
+				}
+			}
 			for j < len(lists[i]) && lists[i][j].DocID < acc[k].DocID {
 				j++
+				if j&1023 == 0 {
+					if err := ctx.Err(); err != nil {
+						return Result{}, err
+					}
+				}
 			}
 			if j < len(lists[i]) && lists[i][j].DocID == acc[k].DocID {
 				acc[k].Score += bm25Part(weight, lists[i][j].WDF, acc[k].DocLen, lenFactor)
@@ -176,13 +212,18 @@ func (db *DB) Search(query string) (Result, error) {
 		}
 	}
 	// Best first, and by document id within a tie so the answer is stable.
-	sort.SliceStable(acc, func(i, j int) bool {
+	if err := sortHits(ctx, acc, func(i, j int) bool {
 		if acc[i].Score != acc[j].Score {
 			return acc[i].Score > acc[j].Score
 		}
 		return acc[i].DocID < acc[j].DocID
-	})
+	}); err != nil {
+		return Result{}, err
+	}
 
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
 	res.Hits = acc
 	return res, nil
 }
@@ -201,10 +242,10 @@ func (db *DB) TermFreq(term string) (uint32, error) {
 
 // wordHits unions the posting lists of one word's candidate terms. empty
 // reports whether every candidate term was read whole.
-func (db *DB) wordHits(terms []string) (hits []Hit, empty bool, err error) {
+func (db *DB) wordHits(ctx context.Context, terms []string) (hits []Hit, empty bool, err error) {
 	empty = true
 	for _, term := range terms {
-		t, err := db.Lookup(term)
+		t, err := db.lookupContext(ctx, term)
 		if err != nil {
 			return nil, false, fmt.Errorf("glass: %q: %w", term, err)
 		}
@@ -214,7 +255,12 @@ func (db *DB) wordHits(terms []string) (hits []Hit, empty bool, err error) {
 		if !t.Complete {
 			empty = false
 		}
-		for _, p := range t.Postings {
+		for i, p := range t.Postings {
+			if i&1023 == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, false, err
+				}
+			}
 			hits = append(hits, Hit{DocID: p.DocID, WDF: p.WDF})
 		}
 		if len(terms) == 1 {
@@ -222,7 +268,9 @@ func (db *DB) wordHits(terms []string) (hits []Hit, empty bool, err error) {
 		}
 	}
 	if len(hits) > 1 {
-		sort.Slice(hits, func(i, j int) bool { return hits[i].DocID < hits[j].DocID })
+		if err := sortHits(ctx, hits, func(i, j int) bool { return hits[i].DocID < hits[j].DocID }); err != nil {
+			return nil, false, err
+		}
 		hits = coalesce(hits)
 	}
 	return hits, empty, nil
@@ -283,7 +331,7 @@ func dropStopwords(words []string, stops map[string]bool) (kept, skipped []strin
 // marks: libzim removes every Unicode mark class (ICU's [:M:] is Mn, Mc and Me)
 // while Fold removes non-spacing marks only. The two agree for the Latin,
 // Cyrillic and Greek marks that carry accents - including the breve of the
-// Russian "й", which both take off - so a Russian or English archive needs
+// Russian "Р в„–", which both take off - so a Russian or English archive needs
 // nothing more, but a spacing mark survives Fold and would not have survived the
 // index build, and an archive in such a script (Tamil vowel signs, for one) can
 // mismatch.
@@ -298,8 +346,8 @@ func dropStopwords(words []string, stops map[string]bool) (kept, skipped []strin
 // A document is a sequence and a query is a set, and the difference is not
 // cosmetic: a strict reading asks where the query's words stand relative to one
 // another, so a check that sees each word once cannot answer it. The article
-// below says "канадский джазовый кларнетист" in its first sentence and names
-// the profession "кларнетист" in its infobox a moment later - de-duplicated,
+// below says "Р С”Р В°Р Р…Р В°Р Т‘РЎРѓР С”Р С‘Р в„– Р Т‘Р В¶Р В°Р В·Р С•Р Р†РЎвЂ№Р в„– Р С”Р В»Р В°РЎР‚Р Р…Р ВµРЎвЂљР С‘РЎРѓРЎвЂљ" in its first sentence and names
+// the profession "Р С”Р В»Р В°РЎР‚Р Р…Р ВµРЎвЂљР С‘РЎРѓРЎвЂљ" in its infobox a moment later - de-duplicated,
 // the word survives only where it stands earlier, and the phrase that is
 // plainly in the text verifies as absent (found on a live Wikipedia article,
 // 2026-11-02, after the same class of bug had already emptied the reading once).
@@ -370,9 +418,19 @@ func (db *DB) indexMeta() (*indexMeta, error) {
 // Both lists are ascending by document id, as the index stores them and as
 // wordHits leaves them.
 func intersect(a, b []Hit) []Hit {
+	out, _ := intersectContext(context.Background(), a, b)
+	return out
+}
+
+func intersectContext(ctx context.Context, a, b []Hit) ([]Hit, error) {
 	out := a[:0]
 	i, j := 0, 0
 	for i < len(a) && j < len(b) {
+		if (i+j)&1023 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		switch {
 		case a[i].DocID == b[j].DocID:
 			out = append(out, Hit{DocID: a[i].DocID, WDF: a[i].WDF + b[j].WDF})
@@ -384,7 +442,7 @@ func intersect(a, b []Hit) []Hit {
 			j++
 		}
 	}
-	return out
+	return out, ctx.Err()
 }
 
 // IndexLanguage reports the language the index was built for, "" when it
@@ -396,4 +454,24 @@ func (db *DB) IndexLanguage() (string, error) {
 		return "", err
 	}
 	return meta.language, nil
+}
+
+// selectedWordHits preserves the union and summed frequencies of wordHits,
+// while selecting only documents surviving the preceding intersections.
+func (db *DB) selectedWordHits(ctx context.Context, terms []string, candidates []Hit) ([]Hit, error) {
+	var hits []Hit
+	for _, term := range terms {
+		selected, err := db.selectedPostings(ctx, term, chunkTermKey(term), candidates)
+		if err != nil {
+			return nil, err
+		}
+		hits = append(hits, selected...)
+	}
+	if len(hits) > 1 {
+		if err := sortHits(ctx, hits, func(i, j int) bool { return hits[i].DocID < hits[j].DocID }); err != nil {
+			return nil, err
+		}
+		hits = coalesce(hits)
+	}
+	return hits, nil
 }

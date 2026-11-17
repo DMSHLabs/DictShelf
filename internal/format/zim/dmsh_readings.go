@@ -32,6 +32,7 @@
 package zim
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -57,11 +58,16 @@ var ErrCheckBound = errors.New("the strict reading reached its bound with candid
 // callers that must report it - the search's streaming path - read the
 // streaming form instead.
 func (d *Dict) FullTextPhrase(query string, limit, maxCheck int) ([]dict.Result, error) {
+	return d.FullTextPhraseContext(context.Background(), query, limit, maxCheck)
+}
+
+// FullTextPhraseContext is the cancellable reading.
+func (d *Dict) FullTextPhraseContext(ctx context.Context, query string, limit, maxCheck int) ([]dict.Result, error) {
 	words := glass.FoldText(query)
 	if len(words) == 0 {
 		return nil, nil
 	}
-	return d.verifiedFullText(query, limit, maxCheck, func(tokens []string) bool {
+	return d.verifiedFullText(ctx, query, limit, maxCheck, func(tokens []string) bool {
 		return phraseIn(tokens, words)
 	})
 }
@@ -69,18 +75,26 @@ func (d *Dict) FullTextPhrase(query string, limit, maxCheck int) ([]dict.Result,
 // FullTextNear answers with the articles that hold the words of query within
 // distance other words of one another, in any order, best first.
 func (d *Dict) FullTextNear(distance int, query string, limit, maxCheck int) ([]dict.Result, error) {
+	return d.FullTextNearContext(context.Background(), distance, query, limit, maxCheck)
+}
+
+// FullTextNearContext is the cancellable reading.
+func (d *Dict) FullTextNearContext(ctx context.Context, distance int, query string, limit, maxCheck int) ([]dict.Result, error) {
 	words := glass.FoldText(query)
 	if len(words) == 0 {
 		return nil, nil
 	}
-	return d.verifiedFullText(query, limit, maxCheck, func(tokens []string) bool {
+	return d.verifiedFullText(ctx, query, limit, maxCheck, func(tokens []string) bool {
 		return nearIn(tokens, words, distance)
 	})
 }
 
 // verifiedFullText is the shared walk: the archive's own ranking decides which
 // candidates are looked at, and keep decides which of them answer.
-func (d *Dict) verifiedFullText(query string, limit, maxCheck int, keep func(tokens []string) bool) ([]dict.Result, error) {
+func (d *Dict) verifiedFullText(ctx context.Context, query string, limit, maxCheck int, keep func(tokens []string) bool) ([]dict.Result, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	window, size, err := d.XapianIndex()
 	if err != nil {
 		return nil, err
@@ -89,7 +103,7 @@ func (d *Dict) verifiedFullText(query string, limit, maxCheck int, keep func(tok
 	if err != nil {
 		return nil, err
 	}
-	res, err := d.searchIndex(db, query)
+	res, err := d.searchIndexContext(ctx, db, query)
 	if err != nil {
 		return nil, err
 	}
@@ -105,6 +119,9 @@ func (d *Dict) verifiedFullText(query string, limit, maxCheck int, keep func(tok
 	records := d.watch("archive-records")
 	defer records.Done()
 	for _, h := range res.Hits {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if checked >= maxCheck || len(out) >= limit {
 			if checked >= maxCheck && checked < len(res.Hits) {
 				bound = fmt.Errorf("%w: %d candidates, %d read", ErrCheckBound, len(res.Hits), checked)
@@ -139,6 +156,9 @@ func (d *Dict) verifiedFullText(query string, limit, maxCheck int, keep func(tok
 			continue
 		}
 		out = append(out, dict.Result{Headword: src.headword(), Body: d.articleHTML(de, body)})
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return out, bound
 }
@@ -270,8 +290,13 @@ const ReadingNearDistance = 10
 // costs, and a caller that hits the bound knows its list is a head of the
 // answer rather than the answer.
 func (d *Dict) StreamHeadwords(query string, reading Reading, maxCheck int, emit func(headword string) error) error {
+	return d.StreamHeadwordsContext(context.Background(), query, reading, maxCheck, emit)
+}
+
+// StreamHeadwordsContext stops the index and candidate walks on cancellation.
+func (d *Dict) StreamHeadwordsContext(ctx context.Context, query string, reading Reading, maxCheck int, emit func(headword string) error) error {
 	if reading == ReadingWords {
-		return d.streamHeadwords(query, 0, nil, emit)
+		return d.streamHeadwords(ctx, query, 0, nil, emit)
 	}
 	// The query as a SEQUENCE, not as a set: these readings ask where the words
 	// stand relative to one another, and a word the reader typed twice is two
@@ -284,13 +309,16 @@ func (d *Dict) StreamHeadwords(query string, reading Reading, maxCheck int, emit
 	if reading == ReadingNear {
 		keep = func(tokens []string) bool { return nearIn(tokens, words, ReadingNearDistance) }
 	}
-	return d.streamHeadwords(query, maxCheck, keep, emit)
+	return d.streamHeadwords(ctx, query, maxCheck, keep, emit)
 }
 
 // streamHeadwords is the walk both readings share: the archive's rank order,
 // the article read only when keep is given, and the bound applied to the
 // articles read rather than to the headwords emitted.
-func (d *Dict) streamHeadwords(query string, maxCheck int, keep func(tokens []string) bool, emit func(headword string) error) error {
+func (d *Dict) streamHeadwords(ctx context.Context, query string, maxCheck int, keep func(tokens []string) bool, emit func(headword string) error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	window, size, err := d.XapianIndex()
 	if err != nil {
 		return err
@@ -299,7 +327,7 @@ func (d *Dict) streamHeadwords(query string, maxCheck int, keep func(tokens []st
 	if err != nil {
 		return err
 	}
-	res, err := d.searchIndex(db, query)
+	res, err := d.searchIndexContext(ctx, db, query)
 	if err != nil {
 		return err
 	}
@@ -307,6 +335,9 @@ func (d *Dict) streamHeadwords(query string, maxCheck int, keep func(tokens []st
 	records := d.watch("archive-records")
 	defer records.Done()
 	for _, h := range res.Hits {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if keep != nil && maxCheck > 0 && checked >= maxCheck {
 			// The bound, and the honest half of it: the caller is told that the
 			// list it received is a head of the answer. It used to return nil
@@ -338,11 +369,14 @@ func (d *Dict) streamHeadwords(query string, maxCheck int, keep func(tokens []st
 				continue
 			}
 		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err := emit(de.headword()); err != nil {
 			return err
 		}
 	}
-	return nil
+	return ctx.Err()
 }
 
 // ReadingHeadwordsFor is the reading a caller asked for by name, as the two

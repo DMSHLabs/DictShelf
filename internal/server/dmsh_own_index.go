@@ -67,7 +67,7 @@ func (u *upgraded) archiveFullText(ctx context.Context, query string, limit int)
 		return nil, true, err
 	}
 	searcher, has := src.(interface {
-		FullText(string, int) ([]dict.Result, error)
+		FullTextContext(context.Context, string, int) ([]dict.Result, error)
 	})
 	if !has {
 		// A source that cannot answer full text (another format, or some
@@ -77,7 +77,7 @@ func (u *upgraded) archiveFullText(ctx context.Context, query string, limit int)
 	if err := ctx.Err(); err != nil {
 		return nil, true, err
 	}
-	res, err = searcher.FullText(query, limit)
+	res, err = searcher.FullTextContext(ctx, query, limit)
 	return res, true, err
 }
 
@@ -141,7 +141,7 @@ func (u *upgraded) archiveArticleIDs(ctx context.Context, query, mode string, em
 		return dict.ErrUnsupported
 	}
 	streamer, ok := src.(interface {
-		StreamHeadwords(string, zimformat.Reading, int, func(string) error) error
+		StreamHeadwordsContext(context.Context, string, zimformat.Reading, int, func(string) error) error
 	})
 	if !ok {
 		return dict.ErrUnsupported
@@ -183,7 +183,7 @@ func (u *upgraded) archiveArticleIDs(ctx context.Context, query, mode string, em
 		}
 		return nil
 	}
-	err = streamer.StreamHeadwords(query, reading, check, func(headword string) error {
+	err = streamer.StreamHeadwordsContext(ctx, query, reading, check, func(headword string) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -245,15 +245,15 @@ func (u *upgraded) archiveReading(ctx context.Context, mode string, distance int
 	switch {
 	case mode == "phrase":
 		if s, ok := src.(interface {
-			FullTextPhrase(string, int, int) ([]dict.Result, error)
+			FullTextPhraseContext(context.Context, string, int, int) ([]dict.Result, error)
 		}); ok {
-			return drop(s.FullTextPhrase(query, limit, maxCheck))
+			return drop(s.FullTextPhraseContext(ctx, query, limit, maxCheck))
 		}
 	case mode == "near":
 		if s, ok := src.(interface {
-			FullTextNear(int, string, int, int) ([]dict.Result, error)
+			FullTextNearContext(context.Context, int, string, int, int) ([]dict.Result, error)
 		}); ok {
-			return drop(s.FullTextNear(distance, query, limit, maxCheck))
+			return drop(s.FullTextNearContext(ctx, distance, query, limit, maxCheck))
 		}
 	}
 	return nil, dict.ErrUnsupported

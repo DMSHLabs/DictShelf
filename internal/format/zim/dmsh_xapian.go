@@ -11,6 +11,8 @@
 package zim
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -125,6 +127,14 @@ func HasOwnFullTextIndex(path string) (bool, error) {
 // in a language this reader cannot stem, and a plain error when the index is
 // unreadable.
 func (d *Dict) FullText(query string, limit int) ([]dict.Result, error) {
+	return d.FullTextContext(context.Background(), query, limit)
+}
+
+// FullTextContext stops the index and article walks when the request ends.
+func (d *Dict) FullTextContext(ctx context.Context, query string, limit int) ([]dict.Result, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	window, size, err := d.XapianIndex()
 	if err != nil {
 		return nil, err
@@ -133,8 +143,11 @@ func (d *Dict) FullText(query string, limit int) ([]dict.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	res, err := d.searchIndex(db, query)
+	res, err := d.searchIndexContext(ctx, db, query)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
 		return nil, fmt.Errorf("%w: %w", dict.ErrUnsupported, err)
 	}
 	if len(res.Hits) == 0 {
@@ -165,6 +178,9 @@ func (d *Dict) FullText(query string, limit int) ([]dict.Result, error) {
 	records := d.watch("archive-records")
 	defer records.Done()
 	for _, h := range candidates {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		records.Moved(int64(h.DocID))
 		path, err := db.DocPath(h.DocID)
 		if err != nil {
@@ -185,5 +201,5 @@ func (d *Dict) FullText(query string, limit int) ([]dict.Result, error) {
 	// or this finished loop would look like a stopped one while results() runs
 	// (its own watch is the one that names a stall there).
 	records.Done()
-	return d.results(idxs, 0)
+	return d.resultsContext(ctx, idxs, 0)
 }
