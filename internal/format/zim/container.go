@@ -92,6 +92,11 @@ const (
 	// entry just inserted would make every blob read decompress again.
 	clusterCacheBytes = 16 << 20
 
+	// directTableCacheBytes bounds offset-table bytes retained for stored
+	// clusters. Large tables are still read normally, but not kept in this cache.
+	directTableCacheBytes   = 16 << 20
+	directTableCacheEntries = 64
+
 	// A sequential path-pointer walk reads 4 KiB at a time instead of keeping
 	// the full pointer list in memory.
 	ptrPageLen = 512
@@ -160,6 +165,18 @@ type clusterData struct {
 	n        uint64
 }
 
+type clusterLoad struct {
+	done chan struct{}
+	data *clusterData
+	err  error
+}
+
+type directTableLoad struct {
+	done  chan struct{}
+	table []byte
+	err   error
+}
+
 func (cd *clusterData) size() uint64 {
 	if cd.direct {
 		return cd.n
@@ -194,6 +211,12 @@ type container struct {
 	cache      map[uint32]*clusterData
 	order      []uint32
 	cacheBytes int64
+	loads      map[uint32]*clusterLoad
+
+	directTables     map[uint32][]byte
+	directTableOrder []uint32
+	directTableBytes int64
+	directTableLoads map[uint32]*directTableLoad
 }
 
 func openContainer(path string) (*container, error) {
@@ -640,7 +663,8 @@ func (c *container) resolve(i int) (int, dirent, error) {
 }
 
 // cluster returns one decompressed cluster body (everything after the info
-// byte), through a byte-bounded LRU.
+// byte), through a byte-bounded LRU. Concurrent misses for the same cluster
+// share one read and decompression.
 func (c *container) cluster(i uint32) (*clusterData, error) {
 	c.mu.Lock()
 	if cd, ok := c.cache[i]; ok {
@@ -648,8 +672,46 @@ func (c *container) cluster(i uint32) (*clusterData, error) {
 		c.mu.Unlock()
 		return cd, nil
 	}
+	if load, ok := c.loads[i]; ok {
+		c.mu.Unlock()
+		<-load.done
+		return load.data, load.err
+	}
+	if c.loads == nil {
+		c.loads = make(map[uint32]*clusterLoad)
+	}
+	load := &clusterLoad{done: make(chan struct{})}
+	c.loads[i] = load
 	c.mu.Unlock()
 
+	cd, err := c.loadCluster(i)
+	c.mu.Lock()
+	if err == nil && !cd.direct {
+		c.cache[i] = cd
+		c.order = append(c.order, i)
+		c.cacheBytes += int64(len(cd.data))
+		// Evict oldest first, but never the entry just inserted: one cluster
+		// can exceed the whole budget, and dropping it would make every blob
+		// read of that cluster decompress it again.
+		for c.cacheBytes > clusterCacheBytes && len(c.order) > 1 {
+			old := c.order[0]
+			c.order = c.order[1:]
+			if prev, ok := c.cache[old]; ok {
+				c.cacheBytes -= int64(len(prev.data))
+				delete(c.cache, old)
+			}
+		}
+	}
+	load.data, load.err = cd, err
+	delete(c.loads, i)
+	close(load.done)
+	c.mu.Unlock()
+	return cd, err
+}
+
+// loadCluster reads and decompresses one cluster. The caller serializes cache
+// misses for each cluster and publishes its result to any waiters.
+func (c *container) loadCluster(i uint32) (*clusterData, error) {
 	if i >= c.clusterCount {
 		return nil, fmt.Errorf("cluster %d out of range (%d clusters)", i, c.clusterCount)
 	}
@@ -686,25 +748,6 @@ func (c *container) cluster(i uint32) (*clusterData, error) {
 		return nil, fmt.Errorf("cluster %d: %w", i, err)
 	}
 	cd := &clusterData{data: data, extended: extended}
-
-	c.mu.Lock()
-	if _, ok := c.cache[i]; !ok {
-		c.cache[i] = cd
-		c.order = append(c.order, i)
-		c.cacheBytes += int64(len(cd.data))
-		// Evict oldest first, but never the entry just inserted: one cluster
-		// can exceed the whole budget, and dropping it would make every blob
-		// read of that cluster decompress it again.
-		for c.cacheBytes > clusterCacheBytes && len(c.order) > 1 {
-			old := c.order[0]
-			c.order = c.order[1:]
-			if prev, ok := c.cache[old]; ok {
-				c.cacheBytes -= int64(len(prev.data))
-				delete(c.cache, old)
-			}
-		}
-	}
-	c.mu.Unlock()
 	return cd, nil
 }
 
@@ -934,9 +977,17 @@ func (c *container) blobSpan(cl, bl uint32) (cd *clusterData, lo, hi uint64, err
 	if size < w {
 		return nil, 0, 0, fmt.Errorf("cluster %d: no offset table", cl)
 	}
-	first, err := c.tableAt(cd, 0, w)
-	if err != nil {
-		return nil, 0, 0, fmt.Errorf("cluster %d: %w", cl, err)
+	var table []byte
+	if cd.direct {
+		table = c.cachedDirectTable(cl)
+	}
+	var first uint64
+	if table != nil {
+		first = tableValue(table, 0, w)
+	} else {
+		if first, err = c.tableAt(cd, 0, w); err != nil {
+			return nil, 0, 0, fmt.Errorf("cluster %d: %w", cl, err)
+		}
 	}
 	if first < w || first%w != 0 || first > size {
 		return nil, 0, 0, fmt.Errorf("cluster %d: bad offset table header %d", cl, first)
@@ -945,8 +996,23 @@ func (c *container) blobSpan(cl, bl uint32) (cd *clusterData, lo, hi uint64, err
 	if uint64(bl) >= count {
 		return nil, 0, 0, fmt.Errorf("cluster %d: blob %d out of range (%d blobs)", cl, bl, count)
 	}
-	if lo, err = c.tableAt(cd, uint64(bl)*w, w); err == nil {
-		hi, err = c.tableAt(cd, (uint64(bl)+1)*w, w)
+	if cd.direct && table == nil && first <= directTableCacheBytes {
+		// This cache is only an optimization: if reading the entire table fails,
+		// retain the old per-offset reads. A partially damaged table may still
+		// have the particular offsets this blob needs.
+		cached, cacheErr := c.directOffsetTable(cl, cd, first)
+		if cacheErr == nil {
+			table = cached
+		}
+	}
+	readOffset := func(off uint64) (uint64, error) {
+		if table != nil {
+			return tableValue(table, off, w), nil
+		}
+		return c.tableAt(cd, off, w)
+	}
+	if lo, err = readOffset(uint64(bl) * w); err == nil {
+		hi, err = readOffset((uint64(bl) + 1) * w)
 	}
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("cluster %d: %w", cl, err)
@@ -955,6 +1021,88 @@ func (c *container) blobSpan(cl, bl uint32) (cd *clusterData, lo, hi uint64, err
 		return nil, 0, 0, fmt.Errorf("cluster %d blob %d: bad extent %d..%d", cl, bl, lo, hi)
 	}
 	return cd, lo, hi, nil
+}
+
+// cachedDirectTable returns a stored-cluster offset table from its bounded
+// byte LRU. The returned bytes remain valid if another table evicts the entry.
+func (c *container) cachedDirectTable(i uint32) []byte {
+	c.mu.Lock()
+	table, ok := c.directTables[i]
+	if ok {
+		c.touchDirectTable(i)
+	}
+	c.mu.Unlock()
+	return table
+}
+
+// directOffsetTable reads and caches the complete offset table of a stored
+// cluster. Same-cluster misses share the read; oversized tables are left
+// uncached by blobSpan so this cache stays within its fixed memory budget.
+func (c *container) directOffsetTable(i uint32, cd *clusterData, n uint64) ([]byte, error) {
+	c.mu.Lock()
+	if table, ok := c.directTables[i]; ok {
+		c.touchDirectTable(i)
+		c.mu.Unlock()
+		return table, nil
+	}
+	if load, ok := c.directTableLoads[i]; ok {
+		c.mu.Unlock()
+		<-load.done
+		return load.table, load.err
+	}
+	if c.directTableLoads == nil {
+		c.directTableLoads = make(map[uint32]*directTableLoad)
+	}
+	load := &directTableLoad{done: make(chan struct{})}
+	c.directTableLoads[i] = load
+	c.mu.Unlock()
+
+	table := make([]byte, int(n))
+	read, err := c.f.ReadAt(table, cd.body)
+	if err == nil && read != len(table) {
+		err = io.ErrUnexpectedEOF
+	}
+	c.mu.Lock()
+	if err == nil {
+		if c.directTables == nil {
+			c.directTables = make(map[uint32][]byte)
+		}
+		c.directTables[i] = table
+		c.directTableOrder = append(c.directTableOrder, i)
+		c.directTableBytes += int64(len(table))
+		for (c.directTableBytes > directTableCacheBytes || len(c.directTables) > directTableCacheEntries) && len(c.directTableOrder) > 1 {
+			old := c.directTableOrder[0]
+			c.directTableOrder = c.directTableOrder[1:]
+			if previous, ok := c.directTables[old]; ok {
+				c.directTableBytes -= int64(len(previous))
+				delete(c.directTables, old)
+			}
+		}
+	}
+	load.table, load.err = table, err
+	delete(c.directTableLoads, i)
+	close(load.done)
+	c.mu.Unlock()
+	return table, err
+}
+
+// touchDirectTable moves i to the back of the direct offset-table LRU. Called
+// under c.mu.
+func (c *container) touchDirectTable(i uint32) {
+	for k, v := range c.directTableOrder {
+		if v == i {
+			c.directTableOrder = append(c.directTableOrder[:k], c.directTableOrder[k+1:]...)
+			c.directTableOrder = append(c.directTableOrder, i)
+			return
+		}
+	}
+}
+
+func tableValue(b []byte, off, w uint64) uint64 {
+	if w == 8 {
+		return binary.LittleEndian.Uint64(b[off:])
+	}
+	return uint64(binary.LittleEndian.Uint32(b[off:]))
 }
 
 func (c *container) tableAt(cd *clusterData, off, w uint64) (uint64, error) {
@@ -966,10 +1114,7 @@ func (c *container) tableAt(cd *clusterData, off, w uint64) (uint64, error) {
 		}
 		b, off = buf[:w], 0
 	}
-	if w == 8 {
-		return binary.LittleEndian.Uint64(b[off:]), nil
-	}
-	return uint64(binary.LittleEndian.Uint32(b[off:])), nil
+	return tableValue(b, off, w), nil
 }
 
 func (c *container) blob(cl, bl uint32) ([]byte, error) {
