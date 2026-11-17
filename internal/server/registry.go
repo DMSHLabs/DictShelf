@@ -493,6 +493,12 @@ type entry struct {
 	// routing to an index built from it (prepared), until the process restarts.
 	srcSig string
 
+	// Cached source identity for row validators. Protected separately because
+	// row keys are computed concurrently.
+	rowSourceMu   sync.Mutex
+	rowSourceStat string
+	rowSourceKey  string
+
 	// retired holds the backends this entry superseded or evicted while they
 	// sit out closeGrace; closeNow and releasePrepared close them at once.
 	retired retiring
@@ -1890,10 +1896,12 @@ func (e *entry) revalidate() {
 	e.err = nil
 	open := e.d != nil
 	sourceChanged := open && e.srcSig != sig
+	sourceConfirmedSame := false
 	preparedDB := e.backing
 	e.dMu.Unlock()
 	if sourceChanged && preparedDB != "" && !store.IsTextDB(e.Path) && !store.SourceChanged(preparedDB, e.Path) {
 		sourceChanged = false
+		sourceConfirmedSame = true
 	}
 	e.dMu.Lock()
 	changed := now != e.backing || sourceChanged
@@ -1903,6 +1911,16 @@ func (e *entry) revalidate() {
 		e.backing, e.srcSig = now, sig
 	}
 	e.dMu.Unlock()
+	e.rowSourceMu.Lock()
+	if sourceConfirmedSame && e.rowSourceKey != "" {
+		// The stat moved, but the prepared receipt says the source bytes did
+		// not. Move the cache's stat key while retaining the row identity.
+		e.rowSourceStat = sig
+	} else if changed || !open {
+		e.rowSourceStat = ""
+		e.rowSourceKey = ""
+	}
+	e.rowSourceMu.Unlock()
 	if !changed {
 		return
 	}

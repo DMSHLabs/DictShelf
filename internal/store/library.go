@@ -428,7 +428,7 @@ func sourceChangedMeta(meta map[string]string, srcPath string) bool {
 		}
 	}
 	if recorded := meta["source_mtime"]; recorded != "" {
-		if _, err := time.Parse(time.RFC3339, recorded); err == nil && recorded == st.ModTime().UTC().Format(time.RFC3339) {
+		if recordedTime, err := time.Parse(time.RFC3339Nano, recorded); err == nil && recordedTime.Equal(st.ModTime()) {
 			return false
 		}
 	}

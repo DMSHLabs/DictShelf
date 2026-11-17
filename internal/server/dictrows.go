@@ -135,7 +135,7 @@ func rowKey(e *entry, global string) string {
 	var b strings.Builder
 	sig := func(p string) { b.WriteString("|" + p + "=" + sourceSig(p)) }
 	fmt.Fprintf(&b, "%s|%d", global, e.gen.Load())
-	sig(e.Path)
+	b.WriteString("|" + e.Path + "=" + e.rowSourceSignature())
 	sig(filepath.Dir(e.Path))
 	if p, ok := dict.AbbrevCompanion(e.Path); ok {
 		sig(p)
@@ -155,6 +155,24 @@ func rowKey(e *entry, global string) string {
 		}
 	}
 	return b.String()
+}
+
+// rowSourceSignature is the cached stat identity for the source dictionary.
+// Rescan can preserve that identity across a timestamp-only touch after the
+// prepared receipt confirms that the source bytes did not change.
+func (e *entry) rowSourceSignature() string {
+	stat := sourceSig(e.Path)
+	if stat == "" {
+		return ""
+	}
+	e.rowSourceMu.Lock()
+	defer e.rowSourceMu.Unlock()
+	if stat == e.rowSourceStat {
+		return e.rowSourceKey
+	}
+	e.rowSourceStat = stat
+	e.rowSourceKey = stat
+	return stat
 }
 
 // rowKeys keys every entry, as wide as the row fan-out itself

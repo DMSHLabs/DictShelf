@@ -402,7 +402,7 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	}
 	if st, err2 := os.Stat(srcMeta.Path); err2 == nil {
 		metaKV["source_size"] = fmt.Sprint(st.Size())
-		metaKV["source_mtime"] = st.ModTime().UTC().Format(time.RFC3339)
+		metaKV["source_mtime"] = st.ModTime().UTC().Format(time.RFC3339Nano)
 	}
 	// A format may have absorbed an auxiliary file of its own - DSL's
 	// abbreviation glossary - and needs to record what it absorbed so a later
