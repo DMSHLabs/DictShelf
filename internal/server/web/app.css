@@ -228,8 +228,8 @@ body.barpinned.barhidden{--stick:0px;padding-top:var(--tabh)}
 #lookupBarToggle[hidden]{display:none}
 /* The mark needs a home that is not the field: 16px of lower padding make a
    separate band below the input and above the bar's hairline. */
-body.barpinned .bar,body.android-lookup-window .bar{padding-bottom:16px}
-body.barpinned.barhidden .bar,body.android-lookup-window.barhidden .bar{padding-bottom:var(--tabh)}
+body.android-lookup-window .bar{padding-bottom:16px}
+body.android-lookup-window.barhidden .bar{padding-bottom:var(--tabh)}
 /* With the search row open, the triangle sits in its own lower band, below the
    field. When the row is tucked, the opaque strip stays at the top; its height
    is also reserved in the page so the first dictionary header joins it. The
@@ -261,6 +261,7 @@ body.barhidden details.dict{scroll-margin-top:var(--tabh)}
    the same thin strip when the bar is away. It is in flow inside the dock, so
    the strip is what the dock holds then. */
 #sbarToggle{position:relative;z-index:2;display:grid;place-items:center;width:100%;height:16px;margin:0 auto;border:0;background:none;padding:0;cursor:pointer;line-height:0;-webkit-tap-highlight-color:transparent}
+#sbarToggle[hidden]{display:none}
 body.sbarhidden #sbarToggle{height:var(--tabh);margin-bottom:0;background:none;border:0;position:relative}
 body.sbarhidden #sbarToggle::after{content:"";position:absolute;z-index:0;inset:0;background:var(--bg);border-top:1px solid var(--line)}
 body.sbarhidden #sbarToggle::before{position:relative;z-index:1}

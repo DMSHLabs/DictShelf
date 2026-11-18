@@ -2577,14 +2577,12 @@ $("wideBtn").onclick=()=>{
 };
 applyWide(localStorage.getItem("wudict_wide")==="1");
 
-/* The bar's tongue is shown where a strip exists for it: the floating window,
-   and the full app's pinned bar. Everywhere else the bar hides on scroll and a
-   second switch would only compete with the first. */
+/* The top-bar tongue belongs to the floating reader only. The full app keeps
+   its normal scroll behavior and has no second control for the same bar. */
 function updateBarEar(){
   const b=$("lookupBarToggle");
   if(!b)return;
-  const wanted=document.body.classList.contains("android-lookup-window")||
-    document.body.classList.contains("barpinned");
+  const wanted=inLookupWindow();
   b.hidden=!wanted;
   if(wanted)barEarPaint(!document.body.classList.contains("barhidden"));
 }
@@ -2606,9 +2604,8 @@ function applyBarPinned(on){
   const label=on?tx("search.unpin"):tx("search.pin");
   b.title=label;
   b.setAttribute("aria-label",label);
-  // Pinning is what buys the bar its strip, and the strip is where the tongue
-  // lives. Unpinning takes both away, so a bar left tucked has to come back
-  // with them or the only way back would be gone.
+  // Unpinning restores the normal scroll behavior; a tucked bar must return
+  // because the full app has no manual tongue for it.
   if(!on&&document.body.classList.contains("barhidden"))setBarHidden(false,true);
   updateBarEar();
 }
@@ -3877,6 +3874,7 @@ window.wudictPickerDictionarySelected=id=>{
 $("out").addEventListener("click",e=>{
   const sum=e.target.closest("details.dict:not(.noindex)>summary");
   if(!sum)return; // the no-index group is not an answer: opening it decides nothing
+  if(sum.parentElement.classList.contains("search-pending-slot")){e.preventDefault();return}
   // these live inside the summary, run their own handlers and preventDefault
   // the toggle — but not before this listener, which is nearer the target
   if(e.target.closest(".priority-index,.upgrade,.result-page-action,.search-browse"))return;
@@ -8612,6 +8610,12 @@ function hitName(h){
   const d=dicts.find(x=>x.id===h.dict);
   return (d&&dictLabel(d))||h.name||h.dict;
 }
+function renderPendingSearchSlot(box,slot){
+  if(!box||!slot)return;
+  const d=dicts.find(x=>x.id===slot.dict);
+  const name=(d&&dictLabel(d))||slot.name||slot.dict;
+  box.innerHTML=`<details class="dict search-pending-slot" open aria-busy="true"><summary class="search-result-summary"><span class="search-dict-identity">${dictIconHTML(slot.dict)}<span class="search-dict-name dict-info-name" data-dict="${escAttr(slot.dict)}">${esc(name)}</span></span></summary></details>`;
+}
 /* Whether this device is touched or pointed at, which is the difference
    between "tap" and "click" and nothing else. Read once: it does not change
    under a running page in any way worth re-rendering for. */
@@ -11033,6 +11037,10 @@ async function doSearch(ev){
         navSuppressed=false;
         stale=[...out.childNodes];
         boxes=(msg.slots||[]).map(()=>{const b=document.createElement("div");out.appendChild(b);return b});
+        // Keep the first dictionary's header in place while its answer is
+        // pending. Later dictionaries can paint immediately in their own
+        // slots, without a late first header appearing above them.
+        if(inLookupWindow()&&boxes.length)renderPendingSearchSlot(boxes[0],msg.slots[0]);
         liveSearchBoxes=boxes;
         openedIdx=null; // re-arm the latch: a new generation, a new decision
         resolved=boxes.map(()=>false);ready=boxes.map(()=>null);frontier=0;
@@ -11056,6 +11064,7 @@ async function doSearch(ev){
         for(const value of indices){
           const i=Number(value);
           if(!Number.isInteger(i)||i<0||i>=boxes.length)continue;
+          if(inLookupWindow()&&i===0&&boxes[0]?.querySelector(".search-pending-slot"))boxes[0].replaceChildren();
           resolved[i]=true;
           if(i===preferredSlot)preferredDone=true;
         }
@@ -12780,21 +12789,25 @@ function bindLookupChrome(){
    assembles (#bottomDock) — inserted before the bar, it hangs above it. Hiding
    the bar collapses that dock to the tongue alone, which is how the reading
    area gets the bar's height back: the dock measures itself (--bottomdockh) and
-   the page follows. Both switches remember their last state in localStorage, so
-   a word opened tomorrow arrives with the reader's own layout, not the default.
+   the page follows. This switch exists only in the floating window, and its
+   saved state is separate from the full app's layout.
    The dock is assembled by a deferred script, so the first attempt waits for
    DOMContentLoaded; the lookup window's ready hook runs later and just finds it. */
 function ensureSbarToggle(){
   if($("sbarToggle")||!$("sbar")||!$("sbar").parentNode)return;
   const b=document.createElement("button");
   b.type="button";b.id="sbarToggle";
+  b.hidden=!inLookupWindow();
   b.setAttribute("aria-controls","sbar");b.setAttribute("aria-expanded","true");
   b.setAttribute("aria-label",tx("system.hideStatusBar"));
   b.addEventListener("click",()=>setSbarHidden(!$("sbar").hidden));
   $("sbar").parentNode.insertBefore(b,$("sbar"));
 }
 function setSbarHidden(hide){
+  const lookup=inLookupWindow();
+  if(!lookup)hide=false;
   $("sbar").hidden=hide;
+  $("sbarToggle").hidden=!lookup;
   document.body.classList.toggle("sbarhidden",hide);
   $("sbarToggle").setAttribute("aria-expanded",hide?"false":"true");
   $("sbarToggle").setAttribute("aria-label",tx(hide?"system.showStatusBar":"system.hideStatusBar"));
@@ -12802,19 +12815,20 @@ function setSbarHidden(hide){
     sbarFitRow(sbarSections().length>=2);
     sbarMeasure();
   }));
-  try{localStorage.setItem("wudict_sbar_hidden",hide?"1":"0")}catch(_){}
+  if(lookup)try{localStorage.setItem("wudict_lookup_sbar_hidden",hide?"1":"0")}catch(_){}
 }
 function restoreBarTongues(){
   ensureSbarToggle();
-  if(document.body.classList.contains("barpinned")){
-    let tucked=false;
-    try{tucked=localStorage.getItem("wudict_bar_hidden")==="1"}catch(_){}
-    if(tucked&&!document.body.classList.contains("barhidden"))setBarHidden(true,true);
+  const lookup=inLookupWindow();
+  $("sbarToggle").hidden=!lookup;
+  if(!lookup){
+    if(document.body.classList.contains("barhidden"))setBarHidden(false,true);
+    if($("sbar").hidden)setSbarHidden(false);
+    return;
   }
-  if(!$("sbarToggle"))return;
   let hide=false;
-  try{hide=localStorage.getItem("wudict_sbar_hidden")==="1"}catch(_){}
-  if(hide&&!$("sbar").hidden)setSbarHidden(true);
+  try{hide=localStorage.getItem("wudict_lookup_sbar_hidden")==="1"}catch(_){}
+  if(hide!==$("sbar").hidden)setSbarHidden(hide);
 }
 addEventListener("DOMContentLoaded",restoreBarTongues);
 window.wudictAndroidLookupWindowReady=()=>{
